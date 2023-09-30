@@ -1,6 +1,9 @@
-  
-send_command:
-  description: Send device command through Cover.
+set_known_position:
+  description: Sets cover internal position 
   fields:
-    command: {description: The command to be sent., example: 'open_cover'}
-    device_id: {description: device ID.}
+    entity_id:
+      description: entity id of cover to set position for
+      example: cover.garage_door
+    position:
+      description: position of cover, between 0 and 100
+      example: 50

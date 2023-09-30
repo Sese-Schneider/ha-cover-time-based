@@ -1,18 +1,39 @@
-# Cover Time Based Component
-Cover Time Based Component for your Home-Assistant (http://www.home-assistant.io)
+# Cover time based integration by [@Sese-Schneider](https://www.github.com/Sese-Schneider)
 
-With this component you can add a time-based cover. You can set a switch to open and another to close the cover. 
-For example, you can use an Aqara Wall Switch Double Key and standard 4 wire motor roller shutters to do this.
+A Home Assistant integration to control your cover based on time.
+This integration is based on https://github.com/davidramosweb/home-assistant-custom-components-cover-time-based
 
-<a href='https://ko-fi.com/A0A12HZT1' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://cdn.ko-fi.com/cdn/kofi4.png?v=2' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
-## Installation
-* Copy all files in custom_components/cover_time_based to your <config directory>/custom_components/cover_time_based/ directory.
-* Restart Home-Assistant.
-* Add the configuration to your configuration.yaml file.
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Sese-Schneider&repository=ha-cover-time-based&category=integration)
+[![GitHub Release][releases-shield]][releases]
+![GitHub Downloads][downloads-shield]
 
-### Usage
-To use this component in your installation, add the following to your configuration.yaml file:
+[![License][license-shield]](LICENSE)
+![Project Maintenance][maintenance-shield]
+[![GitHub Activity][commits-shield]][commits]
+
+**Features:**
+
+- Control the height of your cover based on time.
+- control the tilt of your cover based on time.
+
+## Install
+
+### HACS
+
+*This repo is available for install through the HACS.*
+
+* Go to HACS → Integrations
+* Use the FAB "Explore and download repositories" to search "cover-time-based".
+
+_or_
+
+Click here:
+
+[![](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Sese-Schneider&repository=ha-cover-time-based&category=integration)
+
+
+## Setup
 
 ### Example configuration.yaml entry
 
@@ -29,3 +50,11 @@ cover:
 	   aliases:
 	    - room_rolling_shutter
 ```
+
+[commits-shield]: https://img.shields.io/github/commit-activity/y/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
+[commits]: https://github.com/Sese-Schneider/ha-cover-time-based/commits/master
+[downloads-shield]: https://img.shields.io/github/downloads/Sese-Schneider/ha-cover-time-based/total.svg?style=for-the-badge
+[license-shield]: https://img.shields.io/github/license/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2023.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/release/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
+[releases]: https://github.com/Sese-Schneider/ha-cover-time-based/releases

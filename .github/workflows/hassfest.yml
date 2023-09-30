@@ -1,0 +1,14 @@
+name: hassfest
+
+on:
+  workflow_dispatch:
+  pull_request:
+  schedule:
+    - cron:  '0 0 * * *'
+
+jobs:
+  validate:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v2"
+      - uses: home-assistant/actions/hassfest@master

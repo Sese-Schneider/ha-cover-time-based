@@ -1,2 +1,9 @@
+/node_modules/
+/.rpt2_cache/
+/.idea/
+/.vscode/
+/dist/
 
-.DS_Store
+__pycache__/
+
+*.iml
