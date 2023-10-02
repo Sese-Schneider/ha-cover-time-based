@@ -1,18 +1,12 @@
 set_known_position:
-  description: Sets cover internal position 
   fields:
     entity_id:
-      description: entity id of cover to set position for
       example: cover.blinds
     position:
-      description: position of cover, between 0 and 100
       example: 50
 set_known_tilt_position:
-  description: Sets cover internal tilt position 
   fields:
     entity_id:
-      description: entity id of cover to set position for
       example: cover.blinds
     position:
-      description: tilt of cover, between 0 and 100
       example: 50
