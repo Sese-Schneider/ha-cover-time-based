@@ -1,9 +1,11 @@
 """Cover Time based."""
 import logging
 
+from datetime import timedelta
+
 import voluptuous as vol
 
-from datetime import timedelta
+from xknx.devices import TravelStatus
 
 from homeassistant.core import callback
 from homeassistant.helpers import entity_platform
@@ -13,10 +15,13 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
+    ATTR_CURRENT_TILT_POSITION,
     ATTR_POSITION,
+    ATTR_TILT_POSITION,
     PLATFORM_SCHEMA,
     DEVICE_CLASSES_SCHEMA,
     CoverEntity,
+    CoverEntityFeature,
 )
 from homeassistant.const import (
     CONF_NAME,
@@ -34,15 +39,17 @@ from homeassistant.helpers.restore_state import RestoreEntity
 _LOGGER = logging.getLogger(__name__)
 
 CONF_DEVICES = "devices"
-CONF_ALIASES = "aliases"
 CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
+CONF_TILTING_TIME_DOWN = "tilting_time_down"
+CONF_TILTING_TIME_UP = "tilting_time_up"
 DEFAULT_TRAVEL_TIME = 30
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
 CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
 
 SERVICE_SET_KNOWN_POSITION = "set_known_position"
+SERVICE_SET_KNOWN_TILT_POSITION = "set_known_tilt_position"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
@@ -52,15 +59,20 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
                     vol.Required(CONF_NAME): cv.string,
                     vol.Required(CONF_OPEN_SWITCH_ENTITY_ID): cv.string,
                     vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.string,
-                    vol.Optional(CONF_ALIASES, default=[]): vol.All(
-                        cv.ensure_list, [cv.string]
-                    ),
                     vol.Optional(
                         CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
                     ): cv.positive_int,
                     vol.Optional(
                         CONF_TRAVELLING_TIME_UP, default=DEFAULT_TRAVEL_TIME
                     ): cv.positive_int,
+                    vol.Optional(
+                        CONF_TILTING_TIME_DOWN,
+                        default=None,
+                    ): vol.Any(cv.positive_float, None),
+                    vol.Optional(
+                        CONF_TILTING_TIME_UP,
+                        default=None,
+                    ): vol.Any(cv.positive_float, None),
                 }
             }
         ),
@@ -71,6 +83,12 @@ POSITION_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
         vol.Required(ATTR_POSITION): cv.positive_int,
+    }
+)
+TILT_POSITION_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
+        vol.Required(ATTR_TILT_POSITION): cv.positive_int,
     }
 )
 
@@ -84,6 +102,8 @@ def devices_from_config(domain_config):
         name = config.pop(CONF_NAME)
         travel_time_down = config.pop(CONF_TRAVELLING_TIME_DOWN)
         travel_time_up = config.pop(CONF_TRAVELLING_TIME_UP)
+        tilt_time_down = config.pop(CONF_TILTING_TIME_DOWN)
+        tilt_time_up = config.pop(CONF_TILTING_TIME_UP)
         open_switch_entity_id = config.pop(CONF_OPEN_SWITCH_ENTITY_ID)
         close_switch_entity_id = config.pop(CONF_CLOSE_SWITCH_ENTITY_ID)
         device = CoverTimeBased(
@@ -91,6 +111,8 @@ def devices_from_config(domain_config):
             name,
             travel_time_down,
             travel_time_up,
+            tilt_time_down,
+            tilt_time_up,
             open_switch_entity_id,
             close_switch_entity_id,
         )
@@ -107,6 +129,9 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     platform.async_register_entity_service(
         SERVICE_SET_KNOWN_POSITION, POSITION_SCHEMA, "set_known_position"
     )
+    platform.async_register_entity_service(
+        SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
+    )
 
 
 class CoverTimeBased(CoverEntity, RestoreEntity):
@@ -116,6 +141,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         name,
         travel_time_down,
         travel_time_up,
+        tilt_time_down,
+        tilt_time_up,
         open_switch_entity_id,
         close_switch_entity_id,
     ):
@@ -124,6 +151,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         self._travel_time_down = travel_time_down
         self._travel_time_up = travel_time_up
+        self._tilting_time_down = tilt_time_down
+        self._tilting_time_up = tilt_time_up
         self._open_switch_entity_id = open_switch_entity_id
         self._close_switch_entity_id = close_switch_entity_id
         self._unique_id = device_id
@@ -135,25 +164,47 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         self._unsubscribe_auto_updater = None
 
-        self.tc = TravelCalculator(self._travel_time_down, self._travel_time_up)
+        self.travel_calc = TravelCalculator(
+            self._travel_time_down,
+            self._travel_time_up,
+        )
+        if self._has_tilt_support():
+            self.tilt_calc = TravelCalculator(
+                self._tilting_time_down,
+                self._tilting_time_up,
+            )
 
     async def async_added_to_hass(self):
-        """Only cover's position matters."""
-        """ The rest is calculated from this attribute."""
+        """Only cover's position and tilt matters."""
         old_state = await self.async_get_last_state()
         _LOGGER.debug("async_added_to_hass :: oldState %s", old_state)
         if (
             old_state is not None
-            and self.tc is not None
+            and self.travel_calc is not None
             and old_state.attributes.get(ATTR_CURRENT_POSITION) is not None
         ):
-            self.tc.set_position(int(old_state.attributes.get(ATTR_CURRENT_POSITION)))
+            self.travel_calc.set_position(
+                int(old_state.attributes.get(ATTR_CURRENT_POSITION))
+            )
+
+            if (
+                self._has_tilt_support()
+                and old_state.attributes.get(ATTR_CURRENT_TILT_POSITION) is not None
+            ):
+                self.tilt_calc.set_position(
+                    int(old_state.attributes.get(ATTR_CURRENT_TILT_POSITION))
+                )
 
     def _handle_stop(self):
         """Handle stop"""
-        if self.tc.is_traveling():
-            _LOGGER.debug("_handle_stop :: button stops cover")
-            self.tc.stop()
+        if self.travel_calc.is_traveling():
+            _LOGGER.debug("_handle_stop :: button stops cover movement")
+            self.travel_calc.stop()
+            self.stop_auto_updater()
+
+        if self.tilt_calc.is_traveling():
+            _LOGGER.debug("_handle_stop :: button stops tilt movement")
+            self.tilt_calc.stop()
             self.stop_auto_updater()
 
     @property
@@ -169,7 +220,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     @property
     def device_class(self):
         """Return the device class of the cover."""
-        return "shutter"
+        return None
 
     @property
     def extra_state_attributes(self):
@@ -179,21 +230,32 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             attr[CONF_TRAVELLING_TIME_DOWN] = self._travel_time_down
         if self._travel_time_up is not None:
             attr[CONF_TRAVELLING_TIME_UP] = self._travel_time_up
+        if self._tilting_time_down is not None:
+            attr[CONF_TILTING_TIME_DOWN] = self._tilting_time_down
+        if self._tilting_time_up is not None:
+            attr[CONF_TILTING_TIME_UP] = self._tilting_time_up
         return attr
 
     @property
-    def current_cover_position(self):
+    def current_cover_position(self) -> int | None:
         """Return the current position of the cover."""
-        return self.tc.current_position()
+        return self.travel_calc.current_position()
+
+    @property
+    def current_cover_tilt_position(self) -> int | None:
+        """Return the current tilt of the cover."""
+        return self.tilt_calc.current_position()
 
     @property
     def is_opening(self):
         """Return if the cover is opening or not."""
-        from xknx.devices import TravelStatus
-
         return (
-            self.tc.is_traveling()
-            and self.tc.travel_direction == TravelStatus.DIRECTION_UP
+            self.travel_calc.is_traveling()
+            and self.travel_calc.travel_direction == TravelStatus.DIRECTION_UP
+        ) or (
+            self._has_tilt_support()
+            and self.tilt_calc.is_traveling()
+            and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_UP
         )
 
     @property
@@ -202,19 +264,43 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         from xknx.devices import TravelStatus
 
         return (
-            self.tc.is_traveling()
-            and self.tc.travel_direction == TravelStatus.DIRECTION_DOWN
+            self.travel_calc.is_traveling()
+            and self.travel_calc.travel_direction == TravelStatus.DIRECTION_DOWN
+        ) or (
+            self._has_tilt_support()
+            and self.tilt_calc.is_traveling()
+            and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_DOWN
         )
 
     @property
     def is_closed(self):
         """Return if the cover is closed."""
-        return self.tc.is_closed()
+        return self.travel_calc.is_closed()
 
     @property
     def assumed_state(self):
         """Return True because covers can be stopped midway."""
         return True
+
+    @property
+    def supported_features(self) -> CoverEntityFeature:
+        """Flag supported features."""
+        supported_features = (
+            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
+        )
+        if self.current_cover_position is not None:
+            supported_features |= CoverEntityFeature.SET_POSITION
+
+        if self._has_tilt_support():
+            supported_features |= (
+                CoverEntityFeature.OPEN_TILT
+                | CoverEntityFeature.CLOSE_TILT
+                | CoverEntityFeature.STOP_TILT
+            )
+            if self.current_cover_tilt_position is not None:
+                supported_features |= CoverEntityFeature.SET_TILT_POSITION
+
+        return supported_features
 
     async def async_set_cover_position(self, **kwargs):
         """Move the cover to a specific position."""
@@ -223,20 +309,44 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             _LOGGER.debug("async_set_cover_position: %d", position)
             await self.set_position(position)
 
+    async def async_set_cover_tilt_position(self, **kwargs):
+        """Move the cover tilt to a specific position."""
+        if ATTR_TILT_POSITION in kwargs:
+            position = kwargs[ATTR_TILT_POSITION]
+            _LOGGER.debug("async_set_cover_tilt_position: %d", position)
+            await self.set_tilt_position(position)
+
     async def async_close_cover(self, **kwargs):
         """Turn the device close."""
         _LOGGER.debug("async_close_cover")
-        if self.tc.current_position() > 0:
-            self.tc.start_travel_down()
+        if self.travel_calc.current_position() > 0:
+            self.travel_calc.start_travel_down()
             self.start_auto_updater()
+            self._update_tilt_before_travel(SERVICE_CLOSE_COVER)
             await self._async_handle_command(SERVICE_CLOSE_COVER)
 
     async def async_open_cover(self, **kwargs):
         """Turn the device open."""
         _LOGGER.debug("async_open_cover")
+        if self.travel_calc.current_position() < 100:
+            self.travel_calc.start_travel_up()
+            self.start_auto_updater()
+            self._update_tilt_before_travel(SERVICE_OPEN_COVER)
+            await self._async_handle_command(SERVICE_OPEN_COVER)
 
-        if self.tc.current_position() < 100:
-            self.tc.start_travel_up()
+    async def async_close_cover_tilt(self, **kwargs):
+        """Turn the device close."""
+        _LOGGER.debug("async_close_cover_tilt")
+        if self.tilt_calc.current_position() > 0:
+            self.tilt_calc.start_travel_down()
+            self.start_auto_updater()
+            await self._async_handle_command(SERVICE_CLOSE_COVER)
+
+    async def async_open_cover_tilt(self, **kwargs):
+        """Turn the device open."""
+        _LOGGER.debug("async_open_cover_tilt")
+        if self.tilt_calc.current_position() < 100:
+            self.tilt_calc.start_travel_up()
             self.start_auto_updater()
             await self._async_handle_command(SERVICE_OPEN_COVER)
 
@@ -247,9 +357,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         await self._async_handle_command(SERVICE_STOP_COVER)
 
     async def set_position(self, position):
-        _LOGGER.debug("set_position")
         """Move cover to a designated position."""
-        current_position = self.tc.current_position()
+        _LOGGER.debug("set_position")
+        current_position = self.travel_calc.current_position()
         _LOGGER.debug(
             "set_position :: current_position: %d, new_position: %d",
             current_position,
@@ -262,8 +372,30 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             command = SERVICE_OPEN_COVER
         if command is not None:
             self.start_auto_updater()
-            self.tc.start_travel(position)
+            self.travel_calc.start_travel(position)
             _LOGGER.debug("set_position :: command %s", command)
+            self._update_tilt_before_travel(command)
+            await self._async_handle_command(command)
+        return
+
+    async def set_tilt_position(self, position):
+        """Move cover tilt to a designated position."""
+        _LOGGER.debug("set_tilt_position")
+        current_position = self.tilt_calc.current_position()
+        _LOGGER.debug(
+            "set_tilt_position :: current_position: %d, new_position: %d",
+            current_position,
+            position,
+        )
+        command = None
+        if position < current_position:
+            command = SERVICE_CLOSE_COVER
+        elif position > current_position:
+            command = SERVICE_OPEN_COVER
+        if command is not None:
+            self.start_auto_updater()
+            self.tilt_calc.start_travel(position)
+            _LOGGER.debug("set_tilt_position :: command %s", command)
             await self._async_handle_command(command)
         return
 
@@ -296,13 +428,30 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     def position_reached(self):
         """Return if cover has reached its final position."""
-        return self.tc.position_reached()
+        return self.travel_calc.position_reached() and (
+            not self._has_tilt_support() or self.tilt_calc.position_reached()
+        )
+
+    def _has_tilt_support(self):
+        """Return if cover has tilt support."""
+        return self._tilting_time_down is not None and self._tilting_time_up is not None
+
+    def _update_tilt_before_travel(self, command):
+        """Updating tilt before travel."""
+        if self._has_tilt_support():
+            _LOGGER.debug("_update_tilt_before_travel :: command %s", command)
+            if command == SERVICE_OPEN_COVER:
+                self.tilt_calc.set_position(100)
+            elif command == SERVICE_CLOSE_COVER:
+                self.tilt_calc.set_position(0)
 
     async def auto_stop_if_necessary(self):
         """Do auto stop if necessary."""
         if self.position_reached():
             _LOGGER.debug("auto_stop_if_necessary :: calling stop command")
-            self.tc.stop()
+            self.travel_calc.stop()
+            if self._has_tilt_support():
+                self.tilt_calc.stop()
             await self._async_handle_command(SERVICE_STOP_COVER)
 
     async def set_known_position(self, **kwargs):
@@ -310,10 +459,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         position = kwargs[ATTR_POSITION]
         self._handle_stop()
         await self._async_handle_command(SERVICE_STOP_COVER)
-        self.tc.set_position(position)
+        self.travel_calc.set_position(position)
+
+    async def set_known_tilt_position(self, **kwargs):
+        """We want to do a few things when we get a position"""
+        position = kwargs[ATTR_TILT_POSITION]
+        await self._async_handle_command(SERVICE_STOP_COVER)
+        self.tilt_calc.set_position(position)
 
     async def _async_handle_command(self, command, *args):
-        if command == "close_cover":
+        if command == SERVICE_CLOSE_COVER:
             cmd = "DOWN"
             self._state = False
             await self.hass.services.async_call(
@@ -329,7 +484,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 False,
             )
 
-        elif command == "open_cover":
+        elif command == SERVICE_OPEN_COVER:
             cmd = "UP"
             self._state = True
             await self.hass.services.async_call(
@@ -345,7 +500,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 False,
             )
 
-        elif command == "stop_cover":
+        elif command == SERVICE_STOP_COVER:
             cmd = "STOP"
             self._state = True
             await self.hass.services.async_call(
