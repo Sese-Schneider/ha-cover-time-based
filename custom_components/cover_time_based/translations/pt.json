@@ -1,0 +1,32 @@
+{
+  "services": {
+    "set_known_position": {
+      "name": "Definir a posição do estore",
+      "description": "Definir a posição conhecida do estore.",
+      "fields": {
+        "entity_id": {
+          "name": "Identificador",
+          "description": "Esta entidade guarda o identificador do estore."
+        },
+        "position": {
+            "name": "Posição",
+            "description": "A posição tem de ser definida de 0 até 100."
+        }
+      }
+    },
+    "set_known_tilt_position": {
+      "name": "Rotação",
+      "description": "Selecionar a posição de rotação.",
+      "fields": {
+        "entity_id": {
+          "name": "Indentificador",
+          "description": "O identificador define a posição."
+        },
+        "position": {
+            "name": "Posição",
+            "description": "A rotação deve ser definida com um valor , entre 0 e 100."
+        }
+      }
+    }
+  }
+}
