@@ -1,4 +1,5 @@
-"""Cover Time based."""
+"""Cover time based"""
+
 import logging
 
 from datetime import timedelta
@@ -47,6 +48,7 @@ DEFAULT_TRAVEL_TIME = 30
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
 CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
+CONF_STOP_SWITCH_ENTITY_ID = "stop_switch_entity_id"
 
 SERVICE_SET_KNOWN_POSITION = "set_known_position"
 SERVICE_SET_KNOWN_TILT_POSITION = "set_known_tilt_position"
@@ -57,8 +59,9 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
             {
                 cv.string: {
                     vol.Required(CONF_NAME): cv.string,
-                    vol.Required(CONF_OPEN_SWITCH_ENTITY_ID): cv.string,
-                    vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.string,
+                    vol.Required(CONF_OPEN_SWITCH_ENTITY_ID): cv.entity_id,
+                    vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.entity_id,
+                    vol.Optional(CONF_STOP_SWITCH_ENTITY_ID): cv.entity_id,
                     vol.Optional(
                         CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
                     ): cv.positive_int,
@@ -106,6 +109,7 @@ def devices_from_config(domain_config):
         tilt_time_up = config.pop(CONF_TILTING_TIME_UP)
         open_switch_entity_id = config.pop(CONF_OPEN_SWITCH_ENTITY_ID)
         close_switch_entity_id = config.pop(CONF_CLOSE_SWITCH_ENTITY_ID)
+        stop_switch_entity_id = config.pop(CONF_STOP_SWITCH_ENTITY_ID)
         device = CoverTimeBased(
             device_id,
             name,
@@ -115,6 +119,7 @@ def devices_from_config(domain_config):
             tilt_time_up,
             open_switch_entity_id,
             close_switch_entity_id,
+            stop_switch_entity_id,
         )
         devices.append(device)
     return devices
@@ -135,6 +140,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
 
 class CoverTimeBased(CoverEntity, RestoreEntity):
+
     def __init__(
         self,
         device_id,
@@ -145,6 +151,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         tilt_time_up,
         open_switch_entity_id,
         close_switch_entity_id,
+        stop_switch_entity_id,
     ):
         """Initialize the cover."""
         from xknx.devices import TravelCalculator
@@ -155,6 +162,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._tilting_time_up = tilt_time_up
         self._open_switch_entity_id = open_switch_entity_id
         self._close_switch_entity_id = close_switch_entity_id
+        self._stop_switch_entity_id = stop_switch_entity_id
         self._unique_id = device_id
 
         if name:
@@ -483,6 +491,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 {"entity_id": self._close_switch_entity_id},
                 False,
             )
+            if self._stop_switch_entity_id is not None:
+                await self.hass.services.async_call(
+                    "homeassistant",
+                    "turn_off",
+                    {"entity_id": self._stop_switch_entity_id},
+                    False,
+                )
 
         elif command == SERVICE_OPEN_COVER:
             cmd = "UP"
@@ -499,6 +514,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 {"entity_id": self._open_switch_entity_id},
                 False,
             )
+            if self._stop_switch_entity_id is not None:
+                await self.hass.services.async_call(
+                    "homeassistant",
+                    "turn_off",
+                    {"entity_id": self._stop_switch_entity_id},
+                    False,
+                )
 
         elif command == SERVICE_STOP_COVER:
             cmd = "STOP"
@@ -515,6 +537,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 {"entity_id": self._open_switch_entity_id},
                 False,
             )
+            if self._stop_switch_entity_id is not None:
+                await self.hass.services.async_call(
+                    "homeassistant",
+                    "turn_on",
+                    {"entity_id": self._stop_switch_entity_id},
+                    False,
+                )
 
         _LOGGER.debug("_async_handle_command :: %s", cmd)
 

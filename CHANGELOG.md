@@ -1,3 +1,10 @@
+## 2.1.0 (2024-03-14)
+
+### Features
+
+- Add optional `stop_switch_entity_id` for stopping the cover
+
+
 ## 2.0.1 (2024-01-05)
 
 ### Bug Fixes

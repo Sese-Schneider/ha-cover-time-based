@@ -61,6 +61,7 @@ cover:
 | name                   | string       | **Required** | Name of the created entity                                  |         |
 | open_switch_entity_id  | state entity | **Required** | Entity ID of the switch for opening the cover               |         |
 | close_switch_entity_id | state entity | **Required** | Entity ID of the switch for closing the cover               |         |
+| stop_switch_entity_id  | state entity | *Optional*   | Entity ID of the switch for stopping the cover              | None    |
 | travelling_time_down   | int          | *Optional*   | Time it takes in seconds to close the cover                 | 30      |
 | travelling_time_up     | int          | *Optional*   | Time it takes in seconds to open the cover                  | 30      |
 | tilting_time_down      | float        | *Optional*   | Time it takes in seconds to tilt the cover all the way down | None    |
