@@ -1,3 +1,9 @@
+## 2.1.1 (2024-03-15)
+
+### Bug Fixes
+
+- Fix an issue where the integration would not load when the tilting entities were not present
+
 ## 2.1.0 (2024-03-14)
 
 ### Features

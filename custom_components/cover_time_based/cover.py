@@ -110,6 +110,7 @@ def devices_from_config(domain_config):
         open_switch_entity_id = config.pop(CONF_OPEN_SWITCH_ENTITY_ID)
         close_switch_entity_id = config.pop(CONF_CLOSE_SWITCH_ENTITY_ID)
         stop_switch_entity_id = config.pop(CONF_STOP_SWITCH_ENTITY_ID)
+
         device = CoverTimeBased(
             device_id,
             name,
@@ -252,7 +253,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     @property
     def current_cover_tilt_position(self) -> int | None:
         """Return the current tilt of the cover."""
-        return self.tilt_calc.current_position()
+        if self._has_tilt_support():
+            return self.tilt_calc.current_position()
+        return None
 
     @property
     def is_opening(self):
@@ -442,6 +445,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     def _has_tilt_support(self):
         """Return if cover has tilt support."""
+
         return self._tilting_time_down is not None and self._tilting_time_up is not None
 
     def _update_tilt_before_travel(self, command):
