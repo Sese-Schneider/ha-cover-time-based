@@ -1,14 +1,13 @@
-## 2.1.1 (2024-03-15)
-
-### Bug Fixes
-
-- Fix an issue where the integration would not load when the tilting entities were not present
-
-## 2.1.0 (2024-03-14)
+## 2.1.0 (2024-04-11)
 
 ### Features
 
 - Add optional `stop_switch_entity_id` for stopping the cover
+
+### Bug Fixes
+
+- Fix an issue where the integration would not load when the tilting entities were not present
+- Fix check for tilt support when stopping (#7)
 
 
 ## 2.0.1 (2024-01-05)

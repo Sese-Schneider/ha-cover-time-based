@@ -9,5 +9,5 @@
   "requirements": [
     "xknx==0.9.4"
   ],
-  "version": "2.1.1"
+  "version": "2.1.0"
 }
