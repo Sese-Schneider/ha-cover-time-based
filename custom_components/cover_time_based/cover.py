@@ -211,7 +211,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self.travel_calc.stop()
             self.stop_auto_updater()
 
-        if self.tilt_calc.is_traveling():
+        if self._has_tilt_support() and self.tilt_calc.is_traveling():
             _LOGGER.debug("_handle_stop :: button stops tilt movement")
             self.tilt_calc.stop()
             self.stop_auto_updater()
