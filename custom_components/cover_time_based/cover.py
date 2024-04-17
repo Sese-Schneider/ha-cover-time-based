@@ -61,7 +61,9 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
                     vol.Required(CONF_NAME): cv.string,
                     vol.Required(CONF_OPEN_SWITCH_ENTITY_ID): cv.entity_id,
                     vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.entity_id,
-                    vol.Optional(CONF_STOP_SWITCH_ENTITY_ID): cv.entity_id,
+                    vol.Optional(
+                        CONF_STOP_SWITCH_ENTITY_ID, default=None
+                    ): vol.Any(cv.entity_id, None),
                     vol.Optional(
                         CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
                     ): cv.positive_int,
