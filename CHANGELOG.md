@@ -1,3 +1,10 @@
+## 2.1.1 (2024-04-17)
+
+### Bug Fixes
+
+- Fix `stop_switch_entity_id` not being present causing the integration to crash
+
+
 ## 2.1.0 (2024-04-11)
 
 ### Features
