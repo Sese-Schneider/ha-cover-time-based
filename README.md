@@ -66,6 +66,7 @@ cover:
 | travelling_time_up     | int          | *Optional*   | Time it takes in seconds to open the cover                  | 30      |
 | tilting_time_down      | float        | *Optional*   | Time it takes in seconds to tilt the cover all the way down | None    |
 | tilting_time_up        | float        | *Optional*   | Time it takes in seconds to tilt the cover all the way up   | None    |
+| is_button				       | boolean      | *Optional*   | Treads the switches as buttons, only pressing them for 1s   | False   |
 
 
 [commits-shield]: https://img.shields.io/github/commit-activity/y/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
