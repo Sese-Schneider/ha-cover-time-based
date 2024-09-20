@@ -57,7 +57,7 @@ cover:
 ### Options
 
 | Name                   | Type         | Requirement  | Description                                                 | Default |
-| ---------------------- | ------------ | ------------ | ----------------------------------------------------------- | ------- |
+|------------------------| ------------ | ------------ |-------------------------------------------------------------| ------- |
 | name                   | string       | **Required** | Name of the created entity                                  |         |
 | open_switch_entity_id  | state entity | **Required** | Entity ID of the switch for opening the cover               |         |
 | close_switch_entity_id | state entity | **Required** | Entity ID of the switch for closing the cover               |         |
@@ -66,6 +66,7 @@ cover:
 | travelling_time_up     | int          | *Optional*   | Time it takes in seconds to open the cover                  | 30      |
 | tilting_time_down      | float        | *Optional*   | Time it takes in seconds to tilt the cover all the way down | None    |
 | tilting_time_up        | float        | *Optional*   | Time it takes in seconds to tilt the cover all the way up   | None    |
+| is_button              | boolean      | *Optional*   | Treats the switches as buttons, only pressing them for 1s   | False   |
 
 
 [commits-shield]: https://img.shields.io/github/commit-activity/y/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
