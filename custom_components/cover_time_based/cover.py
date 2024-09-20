@@ -7,11 +7,11 @@ from datetime import timedelta
 import voluptuous as vol
 
 from asyncio import sleep
+from xknx.devices import TravelStatus, TravelCalculator
 
 from homeassistant.core import callback
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.event import (
-    async_track_utc_time_change,
     async_track_time_interval,
 )
 from homeassistant.components.cover import (
@@ -20,15 +20,12 @@ from homeassistant.components.cover import (
     ATTR_POSITION,
     ATTR_TILT_POSITION,
     PLATFORM_SCHEMA,
-    DEVICE_CLASSES_SCHEMA,
     CoverEntity,
     CoverEntityFeature,
 )
 from homeassistant.const import (
     CONF_NAME,
-    CONF_DEVICE_CLASS,
     ATTR_ENTITY_ID,
-    ATTR_DEVICE_CLASS,
     SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
     SERVICE_STOP_COVER,
@@ -163,8 +160,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         is_button=False,
     ):
         """Initialize the cover."""
-        from xknx.devices import TravelCalculator
-
         self._travel_time_down = travel_time_down
         self._travel_time_up = travel_time_up
         self._tilting_time_down = tilt_time_down
@@ -268,8 +263,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     @property
     def is_opening(self):
-        from xknx.devices import TravelStatus
-
         """Return if the cover is opening or not."""
         return (
             self.travel_calc.is_traveling()
@@ -283,8 +276,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     @property
     def is_closing(self):
         """Return if the cover is closing or not."""
-        from xknx.devices import TravelStatus
-
         return (
             self.travel_calc.is_traveling()
             and self.travel_calc.travel_direction == TravelStatus.DIRECTION_DOWN
