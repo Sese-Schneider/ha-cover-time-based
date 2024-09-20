@@ -6,7 +6,7 @@ from datetime import timedelta
 
 import voluptuous as vol
 
-from xknx.devices import TravelStatus
+from asyncio import sleep
 
 from homeassistant.core import callback
 from homeassistant.helpers import entity_platform
@@ -49,6 +49,7 @@ DEFAULT_TRAVEL_TIME = 30
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
 CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
 CONF_STOP_SWITCH_ENTITY_ID = "stop_switch_entity_id"
+CONF_IS_BUTTON = "is_button"
 
 SERVICE_SET_KNOWN_POSITION = "set_known_position"
 SERVICE_SET_KNOWN_TILT_POSITION = "set_known_tilt_position"
@@ -61,9 +62,10 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
                     vol.Required(CONF_NAME): cv.string,
                     vol.Required(CONF_OPEN_SWITCH_ENTITY_ID): cv.entity_id,
                     vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.entity_id,
-                    vol.Optional(
-                        CONF_STOP_SWITCH_ENTITY_ID, default=None
-                    ): vol.Any(cv.entity_id, None),
+                    vol.Optional(CONF_STOP_SWITCH_ENTITY_ID, default=None): vol.Any(
+                        cv.entity_id, None
+                    ),
+                    vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
                     vol.Optional(
                         CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
                     ): cv.positive_int,
@@ -113,6 +115,8 @@ def devices_from_config(domain_config):
         close_switch_entity_id = config.pop(CONF_CLOSE_SWITCH_ENTITY_ID)
         stop_switch_entity_id = config.pop(CONF_STOP_SWITCH_ENTITY_ID)
 
+        is_button = config.pop(CONF_IS_BUTTON)
+
         device = CoverTimeBased(
             device_id,
             name,
@@ -123,6 +127,7 @@ def devices_from_config(domain_config):
             open_switch_entity_id,
             close_switch_entity_id,
             stop_switch_entity_id,
+            is_button,
         )
         devices.append(device)
     return devices
@@ -155,6 +160,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         open_switch_entity_id,
         close_switch_entity_id,
         stop_switch_entity_id,
+        is_button=False,
     ):
         """Initialize the cover."""
         from xknx.devices import TravelCalculator
@@ -167,6 +173,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._close_switch_entity_id = close_switch_entity_id
         self._stop_switch_entity_id = stop_switch_entity_id
         self._unique_id = device_id
+        self._is_button = is_button
 
         if name:
             self._name = name
@@ -261,6 +268,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     @property
     def is_opening(self):
+        from xknx.devices import TravelStatus
+
         """Return if the cover is opening or not."""
         return (
             self.travel_calc.is_traveling()
@@ -505,6 +514,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     False,
                 )
 
+            if self._is_button:
+                # The close_switch_entity_id should be turned off one second after being turned on
+                await sleep(1)
+
+                await self.hass.services.async_call(
+                    "homeassistant",
+                    "turn_off",
+                    {"entity_id": self._close_switch_entity_id},
+                    False,
+                )
+
         elif command == SERVICE_OPEN_COVER:
             cmd = "UP"
             self._state = True
@@ -525,6 +545,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     "homeassistant",
                     "turn_off",
                     {"entity_id": self._stop_switch_entity_id},
+                    False,
+                )
+            if self._is_button:
+                # The open_switch_entity_id should be turned off one second after being turned on
+                await sleep(1)
+
+                await self.hass.services.async_call(
+                    "homeassistant",
+                    "turn_off",
+                    {"entity_id": self._open_switch_entity_id},
                     False,
                 )
 
@@ -550,6 +580,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     {"entity_id": self._stop_switch_entity_id},
                     False,
                 )
+
+                if self._is_button:
+                    # The stop_switch_entity_id should be turned off one second after being turned on
+                    await sleep(1)
+
+                    await self.hass.services.async_call(
+                        "homeassistant",
+                        "turn_off",
+                        {"entity_id": self._stop_switch_entity_id},
+                        False,
+                    )
 
         _LOGGER.debug("_async_handle_command :: %s", cmd)
 
