@@ -332,7 +332,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_close_cover(self, **kwargs):
         """Turn the device close."""
         _LOGGER.debug("async_close_cover")
-        if self.travel_calc.current_position() > 0:
+        if self.travel_calc.current_position() is None or self.travel_calc.current_position() > 0:
             self.travel_calc.start_travel_down()
             self.start_auto_updater()
             self._update_tilt_before_travel(SERVICE_CLOSE_COVER)
@@ -341,7 +341,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_open_cover(self, **kwargs):
         """Turn the device open."""
         _LOGGER.debug("async_open_cover")
-        if self.travel_calc.current_position() < 100:
+        if self.travel_calc.current_position() is None or self.travel_calc.current_position() < 100:
             self.travel_calc.start_travel_up()
             self.start_auto_updater()
             self._update_tilt_before_travel(SERVICE_OPEN_COVER)
@@ -379,9 +379,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             position,
         )
         command = None
-        if position < current_position:
+        if current_position is None or position < current_position:
             command = SERVICE_CLOSE_COVER
-        elif position > current_position:
+        elif current_position is None or position > current_position:
             command = SERVICE_OPEN_COVER
         if command is not None:
             self.start_auto_updater()
