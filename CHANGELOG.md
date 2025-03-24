@@ -1,3 +1,15 @@
+## 2.2.0 (2025-03-24)
+
+### Features
+
+- Add support for button based cover controls (#17)
+
+### Bug Fixes
+
+- current_position is None comparison exceptions (#18)
+- Update `xknx` to latest version
+- Update service schema for 2025.09
+
 ## 2.1.1 (2024-04-17)
 
 ### Bug Fixes
