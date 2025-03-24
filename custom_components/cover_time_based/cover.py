@@ -250,13 +250,15 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     @property
     def current_cover_position(self) -> int | None:
         """Return the current position of the cover."""
-        return self.travel_calc.current_position()
+        current_position = self.travel_calc.current_position()
+        return current_position if current_position is not None else 0
 
     @property
     def current_cover_tilt_position(self) -> int | None:
         """Return the current tilt of the cover."""
         if self._has_tilt_support():
-            return self.tilt_calc.current_position()
+            current_position = self.tilt_calc.current_position()
+            return current_position if current_position is not None else 0
         return None
 
     @property
@@ -332,7 +334,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_close_cover(self, **kwargs):
         """Turn the device close."""
         _LOGGER.debug("async_close_cover")
-        if self.travel_calc.current_position() > 0:
+        current_position = self.travel_calc.current_position()
+        if current_position is None or current_position > 0:
             self.travel_calc.start_travel_down()
             self.start_auto_updater()
             self._update_tilt_before_travel(SERVICE_CLOSE_COVER)
@@ -341,7 +344,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_open_cover(self, **kwargs):
         """Turn the device open."""
         _LOGGER.debug("async_open_cover")
-        if self.travel_calc.current_position() < 100:
+        current_position = self.travel_calc.current_position()
+        if current_position is None or current_position < 100:
             self.travel_calc.start_travel_up()
             self.start_auto_updater()
             self._update_tilt_before_travel(SERVICE_OPEN_COVER)
@@ -350,7 +354,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_close_cover_tilt(self, **kwargs):
         """Turn the device close."""
         _LOGGER.debug("async_close_cover_tilt")
-        if self.tilt_calc.current_position() > 0:
+        current_position = self.tilt_calc.current_position()
+        if current_position is None or current_position > 0:
             self.tilt_calc.start_travel_down()
             self.start_auto_updater()
             await self._async_handle_command(SERVICE_CLOSE_COVER)
@@ -358,7 +363,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_open_cover_tilt(self, **kwargs):
         """Turn the device open."""
         _LOGGER.debug("async_open_cover_tilt")
-        if self.tilt_calc.current_position() < 100:
+        current_position = self.tilt_calc.current_position()
+        if current_position is None or current_position < 100:
             self.tilt_calc.start_travel_up()
             self.start_auto_updater()
             await self._async_handle_command(SERVICE_OPEN_COVER)
@@ -379,7 +385,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             position,
         )
         command = None
-        if position < current_position:
+        if current_position is None or position < current_position:
             command = SERVICE_CLOSE_COVER
         elif position > current_position:
             command = SERVICE_OPEN_COVER
@@ -401,7 +407,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             position,
         )
         command = None
-        if position < current_position:
+        if current_position is None or position < current_position:
             command = SERVICE_CLOSE_COVER
         elif position > current_position:
             command = SERVICE_OPEN_COVER
