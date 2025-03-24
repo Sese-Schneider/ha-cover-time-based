@@ -83,13 +83,13 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     }
 )
 
-POSITION_SCHEMA = vol.Schema(
+POSITION_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
         vol.Required(ATTR_POSITION): cv.positive_int,
     }
 )
-TILT_POSITION_SCHEMA = vol.Schema(
+TILT_POSITION_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
         vol.Required(ATTR_TILT_POSITION): cv.positive_int,
