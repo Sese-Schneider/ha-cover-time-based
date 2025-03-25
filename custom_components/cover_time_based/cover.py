@@ -1,19 +1,11 @@
 """Cover time based"""
 
 import logging
-
+from asyncio import sleep
 from datetime import timedelta
 
+import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-
-from asyncio import sleep
-from xknx.devices import TravelStatus, TravelCalculator
-
-from homeassistant.core import callback
-from homeassistant.helpers import entity_platform
-from homeassistant.helpers.event import (
-    async_track_time_interval,
-)
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
     ATTR_CURRENT_TILT_POSITION,
@@ -30,9 +22,13 @@ from homeassistant.const import (
     SERVICE_OPEN_COVER,
     SERVICE_STOP_COVER,
 )
-
-import homeassistant.helpers.config_validation as cv
+from homeassistant.core import callback
+from homeassistant.helpers import entity_platform
+from homeassistant.helpers.event import (
+    async_track_time_interval,
+)
 from homeassistant.helpers.restore_state import RestoreEntity
+from xknx.devices import TravelStatus, TravelCalculator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,36 +44,47 @@ CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
 CONF_STOP_SWITCH_ENTITY_ID = "stop_switch_entity_id"
 CONF_IS_BUTTON = "is_button"
 
+CONF_COVER_ENTITY_ID = "cover_entity_id"
+
 SERVICE_SET_KNOWN_POSITION = "set_known_position"
 SERVICE_SET_KNOWN_TILT_POSITION = "set_known_tilt_position"
+
+BASE_DEVICE_SCHEMA = {
+    vol.Required(CONF_NAME): cv.string,
+}
+
+TRAVEL_TIME_SCHEMA = {
+    vol.Optional(CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME): cv.positive_int,
+    vol.Optional(CONF_TRAVELLING_TIME_UP, default=DEFAULT_TRAVEL_TIME): cv.positive_int,
+    vol.Optional(CONF_TILTING_TIME_DOWN, default=None): vol.Any(cv.positive_float, None),
+    vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(cv.positive_float, None),
+}
+
+SWITCH_COVER_SCHEMA = {
+    **BASE_DEVICE_SCHEMA,
+    vol.Required(CONF_OPEN_SWITCH_ENTITY_ID): cv.entity_id,
+    vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.entity_id,
+    vol.Optional(CONF_STOP_SWITCH_ENTITY_ID, default=None): vol.Any(cv.entity_id, None),
+    vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
+    **TRAVEL_TIME_SCHEMA,
+}
+
+ENTITY_COVER_SCHEMA = {
+    **BASE_DEVICE_SCHEMA,
+    vol.Required(CONF_COVER_ENTITY_ID): cv.entity_id,
+    **TRAVEL_TIME_SCHEMA,
+}
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_DEVICES, default={}): vol.Schema(
             {
-                cv.string: {
-                    vol.Required(CONF_NAME): cv.string,
-                    vol.Required(CONF_OPEN_SWITCH_ENTITY_ID): cv.entity_id,
-                    vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.entity_id,
-                    vol.Optional(CONF_STOP_SWITCH_ENTITY_ID, default=None): vol.Any(
-                        cv.entity_id, None
-                    ),
-                    vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
-                    vol.Optional(
-                        CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
-                    ): cv.positive_int,
-                    vol.Optional(
-                        CONF_TRAVELLING_TIME_UP, default=DEFAULT_TRAVEL_TIME
-                    ): cv.positive_int,
-                    vol.Optional(
-                        CONF_TILTING_TIME_DOWN,
-                        default=None,
-                    ): vol.Any(cv.positive_float, None),
-                    vol.Optional(
-                        CONF_TILTING_TIME_UP,
-                        default=None,
-                    ): vol.Any(cv.positive_float, None),
-                }
+                cv.string: vol.Schema(
+                    vol.Any(
+                        SWITCH_COVER_SCHEMA,
+                        ENTITY_COVER_SCHEMA
+                    )
+                )
             }
         ),
     }
@@ -104,15 +111,18 @@ def devices_from_config(domain_config):
     devices = []
     for device_id, config in domain_config[CONF_DEVICES].items():
         name = config.pop(CONF_NAME)
+
         travel_time_down = config.pop(CONF_TRAVELLING_TIME_DOWN)
         travel_time_up = config.pop(CONF_TRAVELLING_TIME_UP)
         tilt_time_down = config.pop(CONF_TILTING_TIME_DOWN)
         tilt_time_up = config.pop(CONF_TILTING_TIME_UP)
-        open_switch_entity_id = config.pop(CONF_OPEN_SWITCH_ENTITY_ID)
-        close_switch_entity_id = config.pop(CONF_CLOSE_SWITCH_ENTITY_ID)
-        stop_switch_entity_id = config.pop(CONF_STOP_SWITCH_ENTITY_ID)
 
-        is_button = config.pop(CONF_IS_BUTTON)
+        open_switch_entity_id = config.pop(CONF_OPEN_SWITCH_ENTITY_ID) if CONF_OPEN_SWITCH_ENTITY_ID in config else None
+        close_switch_entity_id = config.pop(CONF_CLOSE_SWITCH_ENTITY_ID) if CONF_CLOSE_SWITCH_ENTITY_ID in config else None
+        stop_switch_entity_id = config.pop(CONF_STOP_SWITCH_ENTITY_ID) if CONF_STOP_SWITCH_ENTITY_ID in config else None
+        is_button = config.pop(CONF_IS_BUTTON) if CONF_IS_BUTTON in config else False
+
+        cover_entity_id = config.pop(CONF_COVER_ENTITY_ID) if CONF_COVER_ENTITY_ID in config else None
 
         device = CoverTimeBased(
             device_id,
@@ -124,6 +134,7 @@ def devices_from_config(domain_config):
             open_switch_entity_id,
             close_switch_entity_id,
             stop_switch_entity_id,
+            cover_entity_id,
             is_button,
         )
         devices.append(device)
@@ -147,28 +158,33 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 class CoverTimeBased(CoverEntity, RestoreEntity):
 
     def __init__(
-        self,
-        device_id,
-        name,
-        travel_time_down,
-        travel_time_up,
-        tilt_time_down,
-        tilt_time_up,
-        open_switch_entity_id,
-        close_switch_entity_id,
-        stop_switch_entity_id,
-        is_button=False,
+            self,
+            device_id,
+            name,
+            travel_time_down,
+            travel_time_up,
+            tilt_time_down,
+            tilt_time_up,
+            open_switch_entity_id,
+            close_switch_entity_id,
+            stop_switch_entity_id,
+            is_button,
+            cover_entity_id,
     ):
         """Initialize the cover."""
+        self._unique_id = device_id
+
         self._travel_time_down = travel_time_down
         self._travel_time_up = travel_time_up
         self._tilting_time_down = tilt_time_down
         self._tilting_time_up = tilt_time_up
+
         self._open_switch_entity_id = open_switch_entity_id
         self._close_switch_entity_id = close_switch_entity_id
         self._stop_switch_entity_id = stop_switch_entity_id
-        self._unique_id = device_id
         self._is_button = is_button
+
+        self._cover_entity_id = cover_entity_id
 
         if name:
             self._name = name
@@ -192,17 +208,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         old_state = await self.async_get_last_state()
         _LOGGER.debug("async_added_to_hass :: oldState %s", old_state)
         if (
-            old_state is not None
-            and self.travel_calc is not None
-            and old_state.attributes.get(ATTR_CURRENT_POSITION) is not None
+                old_state is not None
+                and self.travel_calc is not None
+                and old_state.attributes.get(ATTR_CURRENT_POSITION) is not None
         ):
             self.travel_calc.set_position(
                 int(old_state.attributes.get(ATTR_CURRENT_POSITION))
             )
 
             if (
-                self._has_tilt_support()
-                and old_state.attributes.get(ATTR_CURRENT_TILT_POSITION) is not None
+                    self._has_tilt_support()
+                    and old_state.attributes.get(ATTR_CURRENT_TILT_POSITION) is not None
             ):
                 self.tilt_calc.set_position(
                     int(old_state.attributes.get(ATTR_CURRENT_TILT_POSITION))
@@ -267,24 +283,24 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def is_opening(self):
         """Return if the cover is opening or not."""
         return (
-            self.travel_calc.is_traveling()
-            and self.travel_calc.travel_direction == TravelStatus.DIRECTION_UP
+                self.travel_calc.is_traveling()
+                and self.travel_calc.travel_direction == TravelStatus.DIRECTION_UP
         ) or (
-            self._has_tilt_support()
-            and self.tilt_calc.is_traveling()
-            and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_UP
+                self._has_tilt_support()
+                and self.tilt_calc.is_traveling()
+                and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_UP
         )
 
     @property
     def is_closing(self):
         """Return if the cover is closing or not."""
         return (
-            self.travel_calc.is_traveling()
-            and self.travel_calc.travel_direction == TravelStatus.DIRECTION_DOWN
+                self.travel_calc.is_traveling()
+                and self.travel_calc.travel_direction == TravelStatus.DIRECTION_DOWN
         ) or (
-            self._has_tilt_support()
-            and self.tilt_calc.is_traveling()
-            and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_DOWN
+                self._has_tilt_support()
+                and self.tilt_calc.is_traveling()
+                and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_DOWN
         )
 
     @property
@@ -301,16 +317,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def supported_features(self) -> CoverEntityFeature:
         """Flag supported features."""
         supported_features = (
-            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
+                CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
         )
         if self.current_cover_position is not None:
             supported_features |= CoverEntityFeature.SET_POSITION
 
         if self._has_tilt_support():
             supported_features |= (
-                CoverEntityFeature.OPEN_TILT
-                | CoverEntityFeature.CLOSE_TILT
-                | CoverEntityFeature.STOP_TILT
+                    CoverEntityFeature.OPEN_TILT
+                    | CoverEntityFeature.CLOSE_TILT
+                    | CoverEntityFeature.STOP_TILT
             )
             if self.current_cover_tilt_position is not None:
                 supported_features |= CoverEntityFeature.SET_TILT_POSITION
@@ -448,7 +464,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def position_reached(self):
         """Return if cover has reached its final position."""
         return self.travel_calc.position_reached() and (
-            not self._has_tilt_support() or self.tilt_calc.position_reached()
+                not self._has_tilt_support() or self.tilt_calc.position_reached()
         )
 
     def _has_tilt_support(self):
@@ -491,103 +507,127 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if command == SERVICE_CLOSE_COVER:
             cmd = "DOWN"
             self._state = False
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._open_switch_entity_id},
-                False,
-            )
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_on",
-                {"entity_id": self._close_switch_entity_id},
-                False,
-            )
-            if self._stop_switch_entity_id is not None:
+            if self._cover_entity_id is not None:
                 await self.hass.services.async_call(
-                    "homeassistant",
-                    "turn_off",
-                    {"entity_id": self._stop_switch_entity_id},
+                    "cover",
+                    "close_cover",
+                    {"entity_id": self._cover_entity_id},
                     False,
                 )
-
-            if self._is_button:
-                # The close_switch_entity_id should be turned off one second after being turned on
-                await sleep(1)
-
-                await self.hass.services.async_call(
-                    "homeassistant",
-                    "turn_off",
-                    {"entity_id": self._close_switch_entity_id},
-                    False,
-                )
-
-        elif command == SERVICE_OPEN_COVER:
-            cmd = "UP"
-            self._state = True
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._close_switch_entity_id},
-                False,
-            )
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_on",
-                {"entity_id": self._open_switch_entity_id},
-                False,
-            )
-            if self._stop_switch_entity_id is not None:
-                await self.hass.services.async_call(
-                    "homeassistant",
-                    "turn_off",
-                    {"entity_id": self._stop_switch_entity_id},
-                    False,
-                )
-            if self._is_button:
-                # The open_switch_entity_id should be turned off one second after being turned on
-                await sleep(1)
-
+            else:
                 await self.hass.services.async_call(
                     "homeassistant",
                     "turn_off",
                     {"entity_id": self._open_switch_entity_id},
                     False,
                 )
-
-        elif command == SERVICE_STOP_COVER:
-            cmd = "STOP"
-            self._state = True
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._close_switch_entity_id},
-                False,
-            )
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._open_switch_entity_id},
-                False,
-            )
-            if self._stop_switch_entity_id is not None:
                 await self.hass.services.async_call(
                     "homeassistant",
                     "turn_on",
-                    {"entity_id": self._stop_switch_entity_id},
+                    {"entity_id": self._close_switch_entity_id},
                     False,
                 )
-
-                if self._is_button:
-                    # The stop_switch_entity_id should be turned off one second after being turned on
-                    await sleep(1)
-
+                if self._stop_switch_entity_id is not None:
                     await self.hass.services.async_call(
                         "homeassistant",
                         "turn_off",
                         {"entity_id": self._stop_switch_entity_id},
                         False,
                     )
+
+                if self._is_button:
+                    # The close_switch_entity_id should be turned off one second after being turned on
+                    await sleep(1)
+
+                    await self.hass.services.async_call(
+                        "homeassistant",
+                        "turn_off",
+                        {"entity_id": self._close_switch_entity_id},
+                        False,
+                    )
+
+        elif command == SERVICE_OPEN_COVER:
+            cmd = "UP"
+            self._state = True
+            if self._cover_entity_id is not None:
+                await self.hass.services.async_call(
+                    "cover",
+                    "open_cover",
+                    {"entity_id": self._cover_entity_id},
+                    False,
+                )
+            else:
+                await self.hass.services.async_call(
+                    "homeassistant",
+                    "turn_off",
+                    {"entity_id": self._close_switch_entity_id},
+                    False,
+                )
+                await self.hass.services.async_call(
+                    "homeassistant",
+                    "turn_on",
+                    {"entity_id": self._open_switch_entity_id},
+                    False,
+                )
+                if self._stop_switch_entity_id is not None:
+                    await self.hass.services.async_call(
+                        "homeassistant",
+                        "turn_off",
+                        {"entity_id": self._stop_switch_entity_id},
+                        False,
+                    )
+                if self._is_button:
+                    # The open_switch_entity_id should be turned off one second after being turned on
+                    await sleep(1)
+
+                    await self.hass.services.async_call(
+                        "homeassistant",
+                        "turn_off",
+                        {"entity_id": self._open_switch_entity_id},
+                        False,
+                    )
+
+        elif command == SERVICE_STOP_COVER:
+            cmd = "STOP"
+            self._state = True
+            if self._cover_entity_id is not None:
+                await self.hass.services.async_call(
+                    "cover",
+                    "stop_cover",
+                    {"entity_id": self._cover_entity_id},
+                    False,
+                )
+            else:
+                await self.hass.services.async_call(
+                    "homeassistant",
+                    "turn_off",
+                    {"entity_id": self._close_switch_entity_id},
+                    False,
+                )
+                await self.hass.services.async_call(
+                    "homeassistant",
+                    "turn_off",
+                    {"entity_id": self._open_switch_entity_id},
+                    False,
+                )
+                if self._stop_switch_entity_id is not None:
+                    await self.hass.services.async_call(
+                        "homeassistant",
+                        "turn_on",
+                        {"entity_id": self._stop_switch_entity_id},
+                        False,
+                    )
+
+                    if self._is_button:
+                        # The stop_switch_entity_id should be turned off one second after being turned on
+                        await sleep(1)
+
+                        await self.hass.services.async_call(
+                            "homeassistant",
+                            "turn_off",
+                            {"entity_id": self._stop_switch_entity_id},
+                            False,
+                        )
 
         _LOGGER.debug("_async_handle_command :: %s", cmd)
 
