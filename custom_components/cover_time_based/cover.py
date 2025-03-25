@@ -134,8 +134,8 @@ def devices_from_config(domain_config):
             open_switch_entity_id,
             close_switch_entity_id,
             stop_switch_entity_id,
-            cover_entity_id,
             is_button,
+            cover_entity_id,
         )
         devices.append(device)
     return devices
