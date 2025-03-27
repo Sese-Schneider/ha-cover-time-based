@@ -1,8 +1,12 @@
-## 2.3.0 (2025-03-25)
+## 2.3.0 (2025-03-27)
 
 ### Features
 
 - Add support for existing cover entities
+
+### Bug Fixes
+
+- Internal position state is flipped after `xnkx` update
 
 
 ## 2.2.0 (2025-03-24)
