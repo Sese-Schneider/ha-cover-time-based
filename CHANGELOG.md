@@ -1,3 +1,10 @@
+## 2.3.1 (2025-05-01)
+
+### Bug Fixes
+
+- Internal position flipped after restart (@gbasile)
+
+
 ## 2.3.0 (2025-03-27)
 
 ### Features

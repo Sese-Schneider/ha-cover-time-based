@@ -223,7 +223,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 and old_state.attributes.get(ATTR_CURRENT_POSITION) is not None
         ):
             self.travel_calc.set_position(
-                int(old_state.attributes.get(ATTR_CURRENT_POSITION))
+                100 - int(old_state.attributes.get(ATTR_CURRENT_POSITION))
             )
 
             if (
@@ -231,7 +231,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     and old_state.attributes.get(ATTR_CURRENT_TILT_POSITION) is not None
             ):
                 self.tilt_calc.set_position(
-                    int(old_state.attributes.get(ATTR_CURRENT_TILT_POSITION))
+                    100 - int(old_state.attributes.get(ATTR_CURRENT_TILT_POSITION))
                 )
 
     def _handle_stop(self):
