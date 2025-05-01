@@ -168,18 +168,18 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
 class CoverTimeBased(CoverEntity, RestoreEntity):
     def __init__(
-            self,
-            device_id,
-            name,
-            travel_time_down,
-            travel_time_up,
-            tilt_time_down,
-            tilt_time_up,
-            open_switch_entity_id,
-            close_switch_entity_id,
-            stop_switch_entity_id,
-            is_button,
-            cover_entity_id,
+        self,
+        device_id,
+        name,
+        travel_time_down,
+        travel_time_up,
+        tilt_time_down,
+        tilt_time_up,
+        open_switch_entity_id,
+        close_switch_entity_id,
+        stop_switch_entity_id,
+        is_button,
+        cover_entity_id,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -218,17 +218,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         old_state = await self.async_get_last_state()
         _LOGGER.debug("async_added_to_hass :: oldState %s", old_state)
         if (
-                old_state is not None
-                and self.travel_calc is not None
-                and old_state.attributes.get(ATTR_CURRENT_POSITION) is not None
+            old_state is not None
+            and self.travel_calc is not None
+            and old_state.attributes.get(ATTR_CURRENT_POSITION) is not None
         ):
             self.travel_calc.set_position(
                 100 - int(old_state.attributes.get(ATTR_CURRENT_POSITION))
             )
 
             if (
-                    self._has_tilt_support()
-                    and old_state.attributes.get(ATTR_CURRENT_TILT_POSITION) is not None
+                self._has_tilt_support()
+                and old_state.attributes.get(ATTR_CURRENT_TILT_POSITION) is not None
             ):
                 self.tilt_calc.set_position(
                     100 - int(old_state.attributes.get(ATTR_CURRENT_TILT_POSITION))
@@ -295,24 +295,24 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def is_opening(self):
         """Return if the cover is opening or not."""
         return (
-                self.travel_calc.is_traveling()
-                and self.travel_calc.travel_direction == TravelStatus.DIRECTION_UP
+            self.travel_calc.is_traveling()
+            and self.travel_calc.travel_direction == TravelStatus.DIRECTION_UP
         ) or (
-                self._has_tilt_support()
-                and self.tilt_calc.is_traveling()
-                and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_UP
+            self._has_tilt_support()
+            and self.tilt_calc.is_traveling()
+            and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_UP
         )
 
     @property
     def is_closing(self):
         """Return if the cover is closing or not."""
         return (
-                self.travel_calc.is_traveling()
-                and self.travel_calc.travel_direction == TravelStatus.DIRECTION_DOWN
+            self.travel_calc.is_traveling()
+            and self.travel_calc.travel_direction == TravelStatus.DIRECTION_DOWN
         ) or (
-                self._has_tilt_support()
-                and self.tilt_calc.is_traveling()
-                and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_DOWN
+            self._has_tilt_support()
+            and self.tilt_calc.is_traveling()
+            and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_DOWN
         )
 
     @property
@@ -329,16 +329,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def supported_features(self) -> CoverEntityFeature:
         """Flag supported features."""
         supported_features = (
-                CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
+            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
         )
         if self.current_cover_position is not None:
             supported_features |= CoverEntityFeature.SET_POSITION
 
         if self._has_tilt_support():
             supported_features |= (
-                    CoverEntityFeature.OPEN_TILT
-                    | CoverEntityFeature.CLOSE_TILT
-                    | CoverEntityFeature.STOP_TILT
+                CoverEntityFeature.OPEN_TILT
+                | CoverEntityFeature.CLOSE_TILT
+                | CoverEntityFeature.STOP_TILT
             )
             if self.current_cover_tilt_position is not None:
                 supported_features |= CoverEntityFeature.SET_TILT_POSITION
@@ -480,7 +480,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def position_reached(self):
         """Return if cover has reached its final position."""
         return self.travel_calc.position_reached() and (
-                not self._has_tilt_support() or self.tilt_calc.position_reached()
+            not self._has_tilt_support() or self.tilt_calc.position_reached()
         )
 
     def _has_tilt_support(self):
