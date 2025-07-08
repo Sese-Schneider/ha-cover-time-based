@@ -7,7 +7,7 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/Sese-Schneider/ha-cover-time-based/issues",
   "requirements": [
-    "xknx==3.6.0"
+    "xknx==3.8.0"
   ],
   "version": "2.3.1"
 }
