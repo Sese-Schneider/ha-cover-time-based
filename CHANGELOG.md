@@ -1,3 +1,10 @@
+## 2.3.2 (2025-07-09)
+
+### Bug Fixes
+
+- Bump xknx (@bernardesarthur)
+
+
 ## 2.3.1 (2025-05-01)
 
 ### Bug Fixes
