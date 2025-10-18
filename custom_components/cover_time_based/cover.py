@@ -499,11 +499,30 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def auto_stop_if_necessary(self):
         """Do auto stop if necessary."""
         if self.position_reached():
+            # Calcul de la position actuelle (inversée car Home Assistant utilise 100=open)
+            current_position = 100 - self.travel_calc.current_position()
+
+            # Si la position est à 0% ou 100%, on ne fait PAS de STOP
+            if current_position in (0, 100):
+                _LOGGER.debug(
+                    "auto_stop_if_necessary :: end reached (%d%%), skip STOP",
+                    current_position,
+                )
+                # On arrête uniquement les calculs internes
+                self.travel_calc.stop()
+                if self._has_tilt_support():
+                    self.tilt_calc.stop()
+                # On stop l’auto-updater manuellement
+                self.stop_auto_updater()
+                return
+
+            # Sinon, on effectue le stop classique
             _LOGGER.debug("auto_stop_if_necessary :: calling stop command")
             self.travel_calc.stop()
             if self._has_tilt_support():
                 self.tilt_calc.stop()
             await self._async_handle_command(SERVICE_STOP_COVER)
+
 
     async def set_known_position(self, **kwargs):
         """We want to do a few things when we get a position"""
