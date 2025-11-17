@@ -499,16 +499,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def auto_stop_if_necessary(self):
         """Do auto stop if necessary."""
         if self.position_reached():
-            # Calcul de la position actuelle (inversée car Home Assistant utilise 100=open)
+            # Calculation of the current position (reversed because Home Assistant uses 100=open)
             current_position = 100 - self.travel_calc.current_position()
 
-            # Si la position est à 0% ou 100%, on ne fait PAS de STOP
+            # If the position is at 0% or 100%, we do NOT make a STOP.
             if current_position in (0, 100):
                 _LOGGER.debug(
                     "auto_stop_if_necessary :: end reached (%d%%), skip STOP",
                     current_position,
                 )
-                # On arrête uniquement les calculs internes
+                # We only stop internal calculations.
                 self.travel_calc.stop()
                 if self._has_tilt_support():
                     self.tilt_calc.stop()
@@ -516,7 +516,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 self.stop_auto_updater()
                 return
 
-            # Sinon, on effectue le stop classique
+            # Otherwise, we perform the classic stop.
             _LOGGER.debug("auto_stop_if_necessary :: calling stop command")
             self.travel_calc.stop()
             if self._has_tilt_support():
@@ -667,3 +667,4 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         # Update state of entity
         self.async_write_ha_state()
+
