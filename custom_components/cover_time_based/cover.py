@@ -38,6 +38,7 @@ CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
 CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
+CONF_MIN_MOVEMENT_TIME = "min_movement_time"
 DEFAULT_TRAVEL_TIME = 30
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
@@ -64,6 +65,9 @@ TRAVEL_TIME_SCHEMA = {
     ),
     vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(cv.positive_float, None),
     vol.Optional(CONF_TRAVEL_DELAY_AT_END, default=None): vol.Any(
+        cv.positive_float, None
+    ),
+    vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
         cv.positive_float, None
     ),
 }
@@ -118,6 +122,7 @@ def devices_from_config(domain_config):
         tilt_time_down = config.pop(CONF_TILTING_TIME_DOWN)
         tilt_time_up = config.pop(CONF_TILTING_TIME_UP)
         travel_delay_at_end = config.pop(CONF_TRAVEL_DELAY_AT_END)
+        min_movement_time = config.pop(CONF_MIN_MOVEMENT_TIME)
 
         open_switch_entity_id = (
             config.pop(CONF_OPEN_SWITCH_ENTITY_ID)
@@ -148,6 +153,7 @@ def devices_from_config(domain_config):
             tilt_time_down,
             tilt_time_up,
             travel_delay_at_end,
+            min_movement_time,
             open_switch_entity_id,
             close_switch_entity_id,
             stop_switch_entity_id,
@@ -182,6 +188,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         tilt_time_down,
         tilt_time_up,
         travel_delay_at_end,
+        min_movement_time,
         open_switch_entity_id,
         close_switch_entity_id,
         stop_switch_entity_id,
@@ -196,6 +203,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._tilting_time_down = tilt_time_down
         self._tilting_time_up = tilt_time_up
         self._travel_delay_at_end = travel_delay_at_end
+        self._min_movement_time = min_movement_time
 
         self._open_switch_entity_id = open_switch_entity_id
         self._close_switch_entity_id = close_switch_entity_id
@@ -307,6 +315,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             attr[CONF_TILTING_TIME_UP] = self._tilting_time_up
         if self._travel_delay_at_end is not None:
             attr[CONF_TRAVEL_DELAY_AT_END] = self._travel_delay_at_end
+        if self._min_movement_time is not None:
+            attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
         return attr
 
     @property
@@ -572,13 +582,30 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             return  # No movement needed - don't cancel delay
             
         if command is not None:
-            # Cancel any active delay task (we're starting new movement)
-            self._cancel_delay_task()
-            
             # Calculate how much travel will move (in percentage)
             travel_distance = abs(new_travel_position - current_travel_position)
             # Calculate time this movement will take
             movement_time = (travel_distance / 100.0) * travel_time
+            
+            # Check minimum movement time (except for movements TO endpoints)
+            is_to_endpoint = (new_travel_position == 0 or new_travel_position == 100)
+            if (
+                self._min_movement_time 
+                and self._min_movement_time > 0 
+                and not is_to_endpoint
+                and movement_time < self._min_movement_time
+            ):
+                _LOGGER.debug(
+                    "set_position :: movement too short (%fs < %fs), ignoring and restoring position",
+                    movement_time,
+                    self._min_movement_time
+                )
+                # Refresh HA state to restore the actual position in UI
+                self.async_write_ha_state()
+                return  # Movement too short, ignore
+            
+            # Cancel any active delay task (we're starting new movement)
+            self._cancel_delay_task()
             
             self.start_auto_updater()
             self.travel_calc.start_travel(new_travel_position)
@@ -631,12 +658,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             return  # No movement needed - don't cancel delay
             
         if command is not None:
-            # Cancel any active delay task (we're starting new movement)
-            self._cancel_delay_task()
-            
-            # Stop cover travel if it's currently moving
-            self._stop_travel_if_traveling()
-            
             # Calculate how much tilt will move (in percentage)
             tilt_distance = abs(new_tilt_position - current_tilt_position)
             # Calculate time this movement will take
@@ -645,6 +666,30 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             # Calculate how much travel should move in the same time
             travel_time = self._travel_time_down if command == SERVICE_CLOSE_COVER else self._travel_time_up
             travel_distance = (movement_time / travel_time) * 100.0
+            
+            # Check minimum movement time (except for movements TO endpoints)
+            # For tilt, we check against TRAVEL time (as specified)
+            is_to_endpoint = (new_tilt_position == 0 or new_tilt_position == 100)
+            if (
+                self._min_movement_time 
+                and self._min_movement_time > 0 
+                and not is_to_endpoint
+                and movement_time < self._min_movement_time
+            ):
+                _LOGGER.debug(
+                    "set_tilt_position :: movement too short (%fs < %fs), ignoring and restoring position",
+                    movement_time,
+                    self._min_movement_time
+                )
+                # Refresh HA state to restore the actual position in UI
+                self.async_write_ha_state()
+                return  # Movement too short, ignore
+            
+            # Cancel any active delay task (we're starting new movement)
+            self._cancel_delay_task()
+            
+            # Stop cover travel if it's currently moving
+            self._stop_travel_if_traveling()
             
             # Get current travel position and calculate new position
             current_travel_position = self.travel_calc.current_position()
