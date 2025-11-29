@@ -37,6 +37,8 @@ CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
+CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
+CONF_MIN_MOVEMENT_TIME = "min_movement_time"
 DEFAULT_TRAVEL_TIME = 30
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
@@ -62,6 +64,12 @@ TRAVEL_TIME_SCHEMA = {
         cv.positive_float, None
     ),
     vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(cv.positive_float, None),
+    vol.Optional(CONF_TRAVEL_DELAY_AT_END, default=None): vol.Any(
+        cv.positive_float, None
+    ),
+    vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
+        cv.positive_float, None
+    ),
 }
 
 SWITCH_COVER_SCHEMA = {
@@ -113,6 +121,8 @@ def devices_from_config(domain_config):
         travel_time_up = config.pop(CONF_TRAVELLING_TIME_UP)
         tilt_time_down = config.pop(CONF_TILTING_TIME_DOWN)
         tilt_time_up = config.pop(CONF_TILTING_TIME_UP)
+        travel_delay_at_end = config.pop(CONF_TRAVEL_DELAY_AT_END)
+        min_movement_time = config.pop(CONF_MIN_MOVEMENT_TIME)
 
         open_switch_entity_id = (
             config.pop(CONF_OPEN_SWITCH_ENTITY_ID)
@@ -142,6 +152,8 @@ def devices_from_config(domain_config):
             travel_time_up,
             tilt_time_down,
             tilt_time_up,
+            travel_delay_at_end,
+            min_movement_time,
             open_switch_entity_id,
             close_switch_entity_id,
             stop_switch_entity_id,
@@ -175,6 +187,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         travel_time_up,
         tilt_time_down,
         tilt_time_up,
+        travel_delay_at_end,
+        min_movement_time,
         open_switch_entity_id,
         close_switch_entity_id,
         stop_switch_entity_id,
@@ -188,6 +202,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._travel_time_up = travel_time_up
         self._tilting_time_down = tilt_time_down
         self._tilting_time_up = tilt_time_up
+        self._travel_delay_at_end = travel_delay_at_end
+        self._min_movement_time = min_movement_time
 
         self._open_switch_entity_id = open_switch_entity_id
         self._close_switch_entity_id = close_switch_entity_id
@@ -202,6 +218,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._name = device_id
 
         self._unsubscribe_auto_updater = None
+        self._delay_task = None  # Track the delay task for cancellation
 
         self.travel_calc = TravelCalculator(
             self._travel_time_down,
@@ -246,6 +263,29 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self.tilt_calc.stop()
             self.stop_auto_updater()
 
+    def _stop_tilt_if_traveling(self):
+        """Stop tilt movement if it's currently traveling WITHOUT travel."""
+        if self._has_tilt_support() and self.tilt_calc.is_traveling() and not self.travel_calc.is_traveling():
+            _LOGGER.debug("_stop_tilt_if_traveling :: stopping standalone tilt movement")
+            self.tilt_calc.stop()
+
+    def _stop_travel_if_traveling(self):
+        """Stop cover movement if it's currently traveling."""
+        if self.travel_calc.is_traveling():
+            _LOGGER.debug("_stop_travel_if_traveling :: stopping cover movement")
+            self.travel_calc.stop()
+            # When stopping travel, also stop tilt since they're on the same motor
+            if self._has_tilt_support() and self.tilt_calc.is_traveling():
+                _LOGGER.debug("_stop_travel_if_traveling :: also stopping tilt")
+                self.tilt_calc.stop()
+    
+    def _cancel_delay_task(self):
+        """Cancel any active delay task."""
+        if self._delay_task is not None and not self._delay_task.done():
+            _LOGGER.debug("_cancel_delay_task :: cancelling active delay task")
+            self._delay_task.cancel()
+            self._delay_task = None
+
     @property
     def name(self):
         """Return the name of the cover."""
@@ -273,6 +313,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             attr[CONF_TILTING_TIME_DOWN] = self._tilting_time_down
         if self._tilting_time_up is not None:
             attr[CONF_TILTING_TIME_UP] = self._tilting_time_up
+        if self._travel_delay_at_end is not None:
+            attr[CONF_TRAVEL_DELAY_AT_END] = self._travel_delay_at_end
+        if self._min_movement_time is not None:
+            attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
         return attr
 
     @property
@@ -362,90 +406,307 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_close_cover(self, **kwargs):
         """Turn the device close."""
         _LOGGER.debug("async_close_cover")
-        current_position = self.travel_calc.current_position()
-        if current_position is None or current_position < 100:
+        
+        current_travel_position = self.travel_calc.current_position()
+        if current_travel_position is None or current_travel_position < 100:
+            # Cancel any active delay task (we're starting new movement)
+            self._cancel_delay_task()
+            
+            # Calculate how much travel will move (to fully closed = 100)
+            travel_distance = 100 - (current_travel_position if current_travel_position is not None else 0)
+            # Calculate time this movement will take
+            movement_time = (travel_distance / 100.0) * self._travel_time_down
+            
             self.travel_calc.start_travel_down()
             self.start_auto_updater()
-            self._update_tilt_before_travel(SERVICE_CLOSE_COVER)
+            
+            # Tilt will change during travel - calculate proportional movement
+            if self._has_tilt_support():
+                # Calculate how much tilt should move in the same time
+                tilt_distance = (movement_time / self._tilting_time_down) * 100.0
+                
+                # Get current tilt position and calculate new position (moving to vertical = 100)
+                current_tilt_position = self.tilt_calc.current_position()
+                new_tilt_position = min(100, current_tilt_position + tilt_distance)
+                
+                _LOGGER.debug(
+                    "async_close_cover :: travel_distance=%f%%, movement_time=%fs, tilt_distance=%f%%, new_tilt_pos=%f",
+                    travel_distance, movement_time, tilt_distance, new_tilt_position
+                )
+                
+                self.tilt_calc.start_travel(int(new_tilt_position))
+            
             await self._async_handle_command(SERVICE_CLOSE_COVER)
 
     async def async_open_cover(self, **kwargs):
         """Turn the device open."""
         _LOGGER.debug("async_open_cover")
-        current_position = self.travel_calc.current_position()
-        if current_position is None or current_position > 0:
+        
+        current_travel_position = self.travel_calc.current_position()
+        if current_travel_position is None or current_travel_position > 0:
+            # Cancel any active delay task (we're starting new movement)
+            self._cancel_delay_task()
+            
+            # Calculate how much travel will move (to fully open = 0)
+            travel_distance = (current_travel_position if current_travel_position is not None else 100)
+            # Calculate time this movement will take
+            movement_time = (travel_distance / 100.0) * self._travel_time_up
+            
             self.travel_calc.start_travel_up()
             self.start_auto_updater()
-            self._update_tilt_before_travel(SERVICE_OPEN_COVER)
+            
+            # Tilt will change during travel - calculate proportional movement
+            if self._has_tilt_support():
+                # Calculate how much tilt should move in the same time
+                tilt_distance = (movement_time / self._tilting_time_up) * 100.0
+                
+                # Get current tilt position and calculate new position (moving to horizontal = 0)
+                current_tilt_position = self.tilt_calc.current_position()
+                new_tilt_position = max(0, current_tilt_position - tilt_distance)
+                
+                _LOGGER.debug(
+                    "async_open_cover :: travel_distance=%f%%, movement_time=%fs, tilt_distance=%f%%, new_tilt_pos=%f",
+                    travel_distance, movement_time, tilt_distance, new_tilt_position
+                )
+                
+                self.tilt_calc.start_travel(int(new_tilt_position))
+            
             await self._async_handle_command(SERVICE_OPEN_COVER)
 
     async def async_close_cover_tilt(self, **kwargs):
         """Turn the device close."""
         _LOGGER.debug("async_close_cover_tilt")
-        current_position = self.tilt_calc.current_position()
-        if current_position is None or current_position < 100:
+        
+        # Cancel any active delay task
+        self._cancel_delay_task()
+        
+        # Stop cover travel if it's currently moving
+        self._stop_travel_if_traveling()
+        
+        current_tilt_position = self.tilt_calc.current_position()
+        if current_tilt_position is None or current_tilt_position < 100:
+            # Calculate how much tilt will move (to fully closed = 100)
+            tilt_distance = 100 - (current_tilt_position if current_tilt_position is not None else 0)
+            # Calculate time this movement will take
+            movement_time = (tilt_distance / 100.0) * self._tilting_time_down
+            
+            # Calculate how much travel should move in the same time
+            travel_distance = (movement_time / self._travel_time_down) * 100.0
+            
+            # Get current travel position and calculate new position
+            current_travel_position = self.travel_calc.current_position()
+            new_travel_position = min(100, current_travel_position + travel_distance)
+            
+            _LOGGER.debug(
+                "async_close_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
+                tilt_distance, movement_time, travel_distance, new_travel_position
+            )
+            
             self.tilt_calc.start_travel_down()
+            # Travel also moves when tilting (same motor)
+            self.travel_calc.start_travel(int(new_travel_position))
             self.start_auto_updater()
             await self._async_handle_command(SERVICE_CLOSE_COVER)
 
     async def async_open_cover_tilt(self, **kwargs):
         """Turn the device open."""
         _LOGGER.debug("async_open_cover_tilt")
-        current_position = self.tilt_calc.current_position()
-        if current_position is None or current_position > 0:
+        
+        # Cancel any active delay task
+        self._cancel_delay_task()
+        
+        # Stop cover travel if it's currently moving
+        self._stop_travel_if_traveling()
+        
+        current_tilt_position = self.tilt_calc.current_position()
+        if current_tilt_position is None or current_tilt_position > 0:
+            # Calculate how much tilt will move (to fully open = 0)
+            tilt_distance = (current_tilt_position if current_tilt_position is not None else 100)
+            # Calculate time this movement will take
+            movement_time = (tilt_distance / 100.0) * self._tilting_time_up
+            
+            # Calculate how much travel should move in the same time
+            travel_distance = (movement_time / self._travel_time_up) * 100.0
+            
+            # Get current travel position and calculate new position
+            current_travel_position = self.travel_calc.current_position()
+            new_travel_position = max(0, current_travel_position - travel_distance)
+            
+            _LOGGER.debug(
+                "async_open_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
+                tilt_distance, movement_time, travel_distance, new_travel_position
+            )
+            
             self.tilt_calc.start_travel_up()
+            # Travel also moves when tilting (same motor)
+            self.travel_calc.start_travel(int(new_travel_position))
             self.start_auto_updater()
             await self._async_handle_command(SERVICE_OPEN_COVER)
 
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
         _LOGGER.debug("async_stop_cover")
+        
+        # Cancel any active delay task
+        self._cancel_delay_task()
+        
         self._handle_stop()
+        
+        # Enforce tilt constraints at travel boundaries
+        self._enforce_tilt_constraints()
+        
         await self._async_handle_command(SERVICE_STOP_COVER)
 
     async def set_position(self, position):
         """Move cover to a designated position."""
         _LOGGER.debug("set_position")
-        current_position = self.travel_calc.current_position()
+        
+        current_travel_position = self.travel_calc.current_position()
         # HA has an inverted position logic compared to XKNX
-        new_position = 100 - position
+        new_travel_position = 100 - position
         _LOGGER.debug(
             "set_position :: current_position: %d, new_position: %d",
-            current_position,
+            current_travel_position,
             position,
         )
         command = None
-        if current_position is None or new_position > current_position:
+        if current_travel_position is None or new_travel_position > current_travel_position:
             command = SERVICE_CLOSE_COVER
-        elif new_position < current_position:
+            travel_time = self._travel_time_down
+            tilt_time = self._tilting_time_down if self._has_tilt_support() else None
+        elif new_travel_position < current_travel_position:
             command = SERVICE_OPEN_COVER
+            travel_time = self._travel_time_up
+            tilt_time = self._tilting_time_up if self._has_tilt_support() else None
+        else:
+            return  # No movement needed - don't cancel delay
+            
         if command is not None:
+            # Calculate how much travel will move (in percentage)
+            travel_distance = abs(new_travel_position - current_travel_position)
+            # Calculate time this movement will take
+            movement_time = (travel_distance / 100.0) * travel_time
+            
+            # Check minimum movement time (except for movements TO endpoints)
+            is_to_endpoint = (new_travel_position == 0 or new_travel_position == 100)
+            if (
+                self._min_movement_time 
+                and self._min_movement_time > 0 
+                and not is_to_endpoint
+                and movement_time < self._min_movement_time
+            ):
+                _LOGGER.debug(
+                    "set_position :: movement too short (%fs < %fs), ignoring and restoring position",
+                    movement_time,
+                    self._min_movement_time
+                )
+                # Refresh HA state to restore the actual position in UI
+                self.async_write_ha_state()
+                return  # Movement too short, ignore
+            
+            # Cancel any active delay task (we're starting new movement)
+            self._cancel_delay_task()
+            
             self.start_auto_updater()
-            self.travel_calc.start_travel(new_position)
+            self.travel_calc.start_travel(new_travel_position)
+            
+            # Tilt changes during travel - calculate proportional movement
+            if self._has_tilt_support():
+                # Calculate how much tilt should move in the same time
+                tilt_distance = (movement_time / tilt_time) * 100.0
+                
+                # Get current tilt position and calculate new position
+                current_tilt_position = self.tilt_calc.current_position()
+                if command == SERVICE_CLOSE_COVER:
+                    # Moving down - tilt goes to vertical (100)
+                    new_tilt_position = min(100, current_tilt_position + tilt_distance)
+                else:  # SERVICE_OPEN_COVER
+                    # Moving up - tilt goes to horizontal (0)
+                    new_tilt_position = max(0, current_tilt_position - tilt_distance)
+                
+                _LOGGER.debug(
+                    "set_position :: travel_distance=%f%%, movement_time=%fs, tilt_distance=%f%%, new_tilt_pos=%f",
+                    travel_distance, movement_time, tilt_distance, new_tilt_position
+                )
+                
+                self.tilt_calc.start_travel(int(new_tilt_position))
+            
             _LOGGER.debug("set_position :: command %s", command)
-            self._update_tilt_before_travel(command)
             await self._async_handle_command(command)
         return
 
     async def set_tilt_position(self, position):
         """Move cover tilt to a designated position."""
         _LOGGER.debug("set_tilt_position")
-        current_position = self.tilt_calc.current_position()
+        
+        current_tilt_position = self.tilt_calc.current_position()
         # HA has an inverted position logic compared to XKNX
-        new_position = 100 - position
+        new_tilt_position = 100 - position
         _LOGGER.debug(
             "set_tilt_position :: current_position: %d, new_position: %d",
-            current_position,
-            new_position,
+            current_tilt_position,
+            new_tilt_position,
         )
         command = None
-        if current_position is None or new_position > current_position:
+        if current_tilt_position is None or new_tilt_position > current_tilt_position:
             command = SERVICE_CLOSE_COVER
-        elif new_position < current_position:
+            tilt_time = self._tilting_time_down
+        elif new_tilt_position < current_tilt_position:
             command = SERVICE_OPEN_COVER
+            tilt_time = self._tilting_time_up
+        else:
+            return  # No movement needed - don't cancel delay
+            
         if command is not None:
+            # Calculate how much tilt will move (in percentage)
+            tilt_distance = abs(new_tilt_position - current_tilt_position)
+            # Calculate time this movement will take
+            movement_time = (tilt_distance / 100.0) * tilt_time
+            
+            # Calculate how much travel should move in the same time
+            travel_time = self._travel_time_down if command == SERVICE_CLOSE_COVER else self._travel_time_up
+            travel_distance = (movement_time / travel_time) * 100.0
+            
+            # Check minimum movement time (except for movements TO endpoints)
+            # For tilt, we check against TRAVEL time (as specified)
+            is_to_endpoint = (new_tilt_position == 0 or new_tilt_position == 100)
+            if (
+                self._min_movement_time 
+                and self._min_movement_time > 0 
+                and not is_to_endpoint
+                and movement_time < self._min_movement_time
+            ):
+                _LOGGER.debug(
+                    "set_tilt_position :: movement too short (%fs < %fs), ignoring and restoring position",
+                    movement_time,
+                    self._min_movement_time
+                )
+                # Refresh HA state to restore the actual position in UI
+                self.async_write_ha_state()
+                return  # Movement too short, ignore
+            
+            # Cancel any active delay task (we're starting new movement)
+            self._cancel_delay_task()
+            
+            # Stop cover travel if it's currently moving
+            self._stop_travel_if_traveling()
+            
+            # Get current travel position and calculate new position
+            current_travel_position = self.travel_calc.current_position()
+            if command == SERVICE_CLOSE_COVER:
+                new_travel_position = min(100, current_travel_position + travel_distance)
+            else:  # SERVICE_OPEN_COVER
+                new_travel_position = max(0, current_travel_position - travel_distance)
+            
+            _LOGGER.debug(
+                "set_tilt_position :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
+                tilt_distance, movement_time, travel_distance, new_travel_position
+            )
+            
             self.start_auto_updater()
-            self.tilt_calc.start_travel(new_position)
+            self.tilt_calc.start_travel(new_tilt_position)
+            # Travel moves proportionally to the tilt movement time
+            self.travel_calc.start_travel(int(new_travel_position))
             _LOGGER.debug("set_tilt_position :: command %s", command)
             await self._async_handle_command(command)
         return
@@ -487,14 +748,29 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Return if cover has tilt support."""
         return self._tilting_time_down is not None and self._tilting_time_up is not None
 
-    def _update_tilt_before_travel(self, command):
-        """Updating tilt before travel."""
-        if self._has_tilt_support():
-            _LOGGER.debug("_update_tilt_before_travel :: command %s", command)
-            if command == SERVICE_OPEN_COVER:
-                self.tilt_calc.set_position(0)
-            elif command == SERVICE_CLOSE_COVER:
-                self.tilt_calc.set_position(100)
+    def _enforce_tilt_constraints(self):
+        """Enforce tilt position constraints at travel boundaries."""
+        if not self._has_tilt_support():
+            return
+        
+        current_travel = self.travel_calc.current_position()
+        current_tilt = self.tilt_calc.current_position()
+        
+        # At fully open position (0), tilt must be horizontal (0)
+        if current_travel == 0 and current_tilt != 0:
+            _LOGGER.debug(
+                "_enforce_tilt_constraints :: Travel at 0%%, forcing tilt to 0%% (was %d%%)",
+                current_tilt
+            )
+            self.tilt_calc.set_position(0)
+        
+        # At fully closed position (100), tilt must be vertical (100)
+        elif current_travel == 100 and current_tilt != 100:
+            _LOGGER.debug(
+                "_enforce_tilt_constraints :: Travel at 100%%, forcing tilt to 100%% (was %d%%)",
+                current_tilt
+            )
+            self.tilt_calc.set_position(100)
 
     async def auto_stop_if_necessary(self):
         """Do auto stop if necessary."""
@@ -503,7 +779,40 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self.travel_calc.stop()
             if self._has_tilt_support():
                 self.tilt_calc.stop()
+            
+            # Enforce tilt constraints at travel boundaries
+            self._enforce_tilt_constraints()
+            
+            # Check if we need to add delay at endpoint
+            current_travel = self.travel_calc.current_position()
+            if self._travel_delay_at_end and self._travel_delay_at_end > 0 and (current_travel == 0 or current_travel == 100):
+                _LOGGER.debug(
+                    "auto_stop_if_necessary :: at endpoint (position=%d), delaying relay stop by %fs",
+                    current_travel,
+                    self._travel_delay_at_end
+                )
+                # Keep relay active for the delay period
+                try:
+                    self._delay_task = self.hass.async_create_task(
+                        self._delayed_stop(self._travel_delay_at_end)
+                    )
+                except Exception as e:
+                    _LOGGER.error("auto_stop_if_necessary :: error creating delay task: %s", e)
+                    await self._async_handle_command(SERVICE_STOP_COVER)
+            else:
+                # No delay needed, stop immediately
+                await self._async_handle_command(SERVICE_STOP_COVER)
+    
+    async def _delayed_stop(self, delay):
+        """Stop the relay after a delay."""
+        _LOGGER.debug("_delayed_stop :: waiting %fs before stopping relay", delay)
+        try:
+            await sleep(delay)
+            _LOGGER.debug("_delayed_stop :: delay complete, stopping relay")
             await self._async_handle_command(SERVICE_STOP_COVER)
+            self._delay_task = None
+        except Exception as e:
+            _LOGGER.debug("_delayed_stop :: delay cancelled or error: %s", e)
 
     async def set_known_position(self, **kwargs):
         """We want to do a few things when we get a position"""
@@ -511,6 +820,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._handle_stop()
         await self._async_handle_command(SERVICE_STOP_COVER)
         self.travel_calc.set_position(position)
+        
+        # Enforce tilt constraints at travel boundaries
+        self._enforce_tilt_constraints()
 
     async def set_known_tilt_position(self, **kwargs):
         """We want to do a few things when we get a position"""

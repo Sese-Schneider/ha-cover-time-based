@@ -1,3 +1,26 @@
+## X.X.X (TBD)
+
+### Features
+
+- **Synchronized travel and tilt movements**: Travel and tilt now move proportionally on the same motor, accurately simulating real blind mechanism behavior
+- **Automatic position constraints**: Tilt automatically resets to correct position at travel endpoints (0% horizontal at fully open, 100% vertical at fully closed)
+- **Optional endpoint delay (`travel_delay_at_end`)**: Configurable relay delay at endpoint positions for covers with mechanical endstops, allowing position reset through endstop contact
+- **Minimum movement time (`min_movement_time`)**: Optional parameter to prevent position drift by blocking relay activations too brief to physically move the cover
+- **Polish translation**: Added Polish language support
+
+### Improvements
+
+- Travel and tilt movements are now time-synchronized and stop simultaneously
+- Movements to endpoint positions (0% or 100%) always allowed regardless of minimum movement time constraint
+- Delay task properly cancelled when new movements initiated
+- Enhanced position accuracy through mechanical constraint enforcement
+
+### Bug Fixes
+
+- Fixed simultaneous travel and tilt operations not properly stopping each other when needed
+- Improved mutual exclusion between travel and tilt movements
+
+
 ## 2.3.2 (2025-07-09)
 
 ### Bug Fixes
