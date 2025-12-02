@@ -1,5 +1,6 @@
 """Cover time based"""
 
+import asyncio
 import logging
 from asyncio import sleep
 from datetime import timedelta
@@ -262,12 +263,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             _LOGGER.debug("_handle_stop :: button stops tilt movement")
             self.tilt_calc.stop()
             self.stop_auto_updater()
-
-    def _stop_tilt_if_traveling(self):
-        """Stop tilt movement if it's currently traveling WITHOUT travel."""
-        if self._has_tilt_support() and self.tilt_calc.is_traveling() and not self.travel_calc.is_traveling():
-            _LOGGER.debug("_stop_tilt_if_traveling :: stopping standalone tilt movement")
-            self.tilt_calc.stop()
 
     def _stop_travel_if_traveling(self):
         """Stop cover movement if it's currently traveling."""
@@ -590,15 +585,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             # Check minimum movement time (except for movements TO endpoints)
             is_to_endpoint = (new_travel_position == 0 or new_travel_position == 100)
             if (
-                self._min_movement_time 
-                and self._min_movement_time > 0 
+                self._min_movement_time is not None
+                and self._min_movement_time > 0
                 and not is_to_endpoint
                 and movement_time < self._min_movement_time
             ):
-                _LOGGER.debug(
-                    "set_position :: movement too short (%fs < %fs), ignoring and restoring position",
+                _LOGGER.info(
+                    "set_position :: movement too short (%fs < %fs), ignoring - from %d%% to %d%%",
                     movement_time,
-                    self._min_movement_time
+                    self._min_movement_time,
+                    100 - current_travel_position,
+                    position,
                 )
                 # Refresh HA state to restore the actual position in UI
                 self.async_write_ha_state()
@@ -671,15 +668,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             # For tilt, we check against TRAVEL time (as specified)
             is_to_endpoint = (new_tilt_position == 0 or new_tilt_position == 100)
             if (
-                self._min_movement_time 
-                and self._min_movement_time > 0 
+                self._min_movement_time is not None
+                and self._min_movement_time > 0
                 and not is_to_endpoint
                 and movement_time < self._min_movement_time
             ):
-                _LOGGER.debug(
-                    "set_tilt_position :: movement too short (%fs < %fs), ignoring and restoring position",
+                _LOGGER.info(
+                    "set_tilt_position :: movement too short (%fs < %fs), ignoring - from %d%% to %d%%",
                     movement_time,
-                    self._min_movement_time
+                    self._min_movement_time,
+                    100 - current_tilt_position,
+                    position,
                 )
                 # Refresh HA state to restore the actual position in UI
                 self.async_write_ha_state()
@@ -785,20 +784,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             
             # Check if we need to add delay at endpoint
             current_travel = self.travel_calc.current_position()
-            if self._travel_delay_at_end and self._travel_delay_at_end > 0 and (current_travel == 0 or current_travel == 100):
+            if self._travel_delay_at_end is not None and self._travel_delay_at_end > 0 and (current_travel == 0 or current_travel == 100):
                 _LOGGER.debug(
                     "auto_stop_if_necessary :: at endpoint (position=%d), delaying relay stop by %fs",
                     current_travel,
                     self._travel_delay_at_end
                 )
                 # Keep relay active for the delay period
-                try:
-                    self._delay_task = self.hass.async_create_task(
-                        self._delayed_stop(self._travel_delay_at_end)
-                    )
-                except Exception as e:
-                    _LOGGER.error("auto_stop_if_necessary :: error creating delay task: %s", e)
-                    await self._async_handle_command(SERVICE_STOP_COVER)
+                self._delay_task = self.hass.async_create_task(
+                    self._delayed_stop(self._travel_delay_at_end)
+                )
             else:
                 # No delay needed, stop immediately
                 await self._async_handle_command(SERVICE_STOP_COVER)
@@ -811,8 +806,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             _LOGGER.debug("_delayed_stop :: delay complete, stopping relay")
             await self._async_handle_command(SERVICE_STOP_COVER)
             self._delay_task = None
-        except Exception as e:
-            _LOGGER.debug("_delayed_stop :: delay cancelled or error: %s", e)
+        except asyncio.CancelledError:
+            _LOGGER.debug("_delayed_stop :: delay cancelled")
+            self._delay_task = None
+            raise
 
     async def set_known_position(self, **kwargs):
         """We want to do a few things when we get a position"""
