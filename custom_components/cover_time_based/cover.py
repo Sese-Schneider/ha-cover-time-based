@@ -1,5 +1,6 @@
 """Cover time based"""
 
+import asyncio
 import logging
 from asyncio import sleep
 from datetime import timedelta
@@ -33,12 +34,15 @@ from xknx.devices import TravelStatus, TravelCalculator
 _LOGGER = logging.getLogger(__name__)
 
 CONF_DEVICES = "devices"
+CONF_DEFAULTS = "defaults"
 CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
 CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
+CONF_TRAVEL_STARTUP_DELAY = "travel_startup_delay"
+CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
 DEFAULT_TRAVEL_TIME = 30
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
@@ -70,6 +74,12 @@ TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
         cv.positive_float, None
     ),
+    vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
+        cv.positive_float, None
+    ),
+    vol.Optional(CONF_TILT_STARTUP_DELAY, default=None): vol.Any(
+        cv.positive_float, None
+    ),
 }
 
 SWITCH_COVER_SCHEMA = {
@@ -87,8 +97,20 @@ ENTITY_COVER_SCHEMA = {
     **TRAVEL_TIME_SCHEMA,
 }
 
+DEFAULTS_SCHEMA = vol.Schema({
+    vol.Optional(CONF_TRAVELLING_TIME_DOWN): cv.positive_int,
+    vol.Optional(CONF_TRAVELLING_TIME_UP): cv.positive_int,
+    vol.Optional(CONF_TILTING_TIME_DOWN): cv.positive_float,
+    vol.Optional(CONF_TILTING_TIME_UP): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
+    vol.Optional(CONF_MIN_MOVEMENT_TIME): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_STARTUP_DELAY): cv.positive_float,
+    vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
+})
+
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
+        vol.Optional(CONF_DEFAULTS, default={}): DEFAULTS_SCHEMA,
         vol.Optional(CONF_DEVICES, default={}): vol.Schema(
             {cv.string: vol.Schema(vol.Any(SWITCH_COVER_SCHEMA, ENTITY_COVER_SCHEMA))}
         ),
@@ -114,15 +136,45 @@ DOMAIN = "cover_time_based"
 def devices_from_config(domain_config):
     """Parse configuration and add cover devices."""
     devices = []
+    
+    # Get defaults (optional)
+    defaults = domain_config.get(CONF_DEFAULTS, {})
+    
+    def get_value(key, device_config, defaults_config, schema_default=None):
+        """
+        Get value with priority: device config > defaults > schema default.
+        
+        If key EXISTS in device config (even if None/null), use that value.
+        Otherwise, try defaults, then schema default.
+        """
+        if key in device_config:
+            return device_config[key]
+        if key in defaults_config:
+            return defaults_config[key]
+        return schema_default
+    
     for device_id, config in domain_config[CONF_DEVICES].items():
         name = config.pop(CONF_NAME)
-
-        travel_time_down = config.pop(CONF_TRAVELLING_TIME_DOWN)
-        travel_time_up = config.pop(CONF_TRAVELLING_TIME_UP)
-        tilt_time_down = config.pop(CONF_TILTING_TIME_DOWN)
-        tilt_time_up = config.pop(CONF_TILTING_TIME_UP)
-        travel_delay_at_end = config.pop(CONF_TRAVEL_DELAY_AT_END)
-        min_movement_time = config.pop(CONF_MIN_MOVEMENT_TIME)
+        
+        # Get values with defaults fallback
+        travel_time_down = get_value(CONF_TRAVELLING_TIME_DOWN, config, defaults, DEFAULT_TRAVEL_TIME)
+        travel_time_up = get_value(CONF_TRAVELLING_TIME_UP, config, defaults, DEFAULT_TRAVEL_TIME)
+        tilt_time_down = get_value(CONF_TILTING_TIME_DOWN, config, defaults, None)
+        tilt_time_up = get_value(CONF_TILTING_TIME_UP, config, defaults, None)
+        travel_delay_at_end = get_value(CONF_TRAVEL_DELAY_AT_END, config, defaults, None)
+        min_movement_time = get_value(CONF_MIN_MOVEMENT_TIME, config, defaults, None)
+        travel_startup_delay = get_value(CONF_TRAVEL_STARTUP_DELAY, config, defaults, None)
+        tilt_startup_delay = get_value(CONF_TILT_STARTUP_DELAY, config, defaults, None)
+        
+        # Pop the values that were in config (to avoid duplicates)
+        config.pop(CONF_TRAVELLING_TIME_DOWN, None)
+        config.pop(CONF_TRAVELLING_TIME_UP, None)
+        config.pop(CONF_TILTING_TIME_DOWN, None)
+        config.pop(CONF_TILTING_TIME_UP, None)
+        config.pop(CONF_TRAVEL_DELAY_AT_END, None)
+        config.pop(CONF_MIN_MOVEMENT_TIME, None)
+        config.pop(CONF_TRAVEL_STARTUP_DELAY, None)
+        config.pop(CONF_TILT_STARTUP_DELAY, None)
 
         open_switch_entity_id = (
             config.pop(CONF_OPEN_SWITCH_ENTITY_ID)
@@ -154,6 +206,8 @@ def devices_from_config(domain_config):
             tilt_time_up,
             travel_delay_at_end,
             min_movement_time,
+            travel_startup_delay,
+            tilt_startup_delay,
             open_switch_entity_id,
             close_switch_entity_id,
             stop_switch_entity_id,
@@ -189,6 +243,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         tilt_time_up,
         travel_delay_at_end,
         min_movement_time,
+        travel_startup_delay,
+        tilt_startup_delay,
         open_switch_entity_id,
         close_switch_entity_id,
         stop_switch_entity_id,
@@ -204,6 +260,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._tilting_time_up = tilt_time_up
         self._travel_delay_at_end = travel_delay_at_end
         self._min_movement_time = min_movement_time
+        self._travel_startup_delay = travel_startup_delay
+        self._tilt_startup_delay = tilt_startup_delay
 
         self._open_switch_entity_id = open_switch_entity_id
         self._close_switch_entity_id = close_switch_entity_id
@@ -218,7 +276,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._name = device_id
 
         self._unsubscribe_auto_updater = None
-        self._delay_task = None  # Track the delay task for cancellation
+        self._delay_task = None  # Track the delay task for cancellation (endpoint delay)
+        self._startup_delay_task = None  # Track the startup delay task
+        self._last_command = None  # Track last movement command for direction change detection
 
         self.travel_calc = TravelCalculator(
             self._travel_time_down,
@@ -263,12 +323,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self.tilt_calc.stop()
             self.stop_auto_updater()
 
-    def _stop_tilt_if_traveling(self):
-        """Stop tilt movement if it's currently traveling WITHOUT travel."""
-        if self._has_tilt_support() and self.tilt_calc.is_traveling() and not self.travel_calc.is_traveling():
-            _LOGGER.debug("_stop_tilt_if_traveling :: stopping standalone tilt movement")
-            self.tilt_calc.stop()
-
     def _stop_travel_if_traveling(self):
         """Stop cover movement if it's currently traveling."""
         if self.travel_calc.is_traveling():
@@ -285,6 +339,40 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             _LOGGER.debug("_cancel_delay_task :: cancelling active delay task")
             self._delay_task.cancel()
             self._delay_task = None
+            # IMPORTANT: Return True to indicate relay needs to be stopped
+            return True
+        return False
+    
+    def _cancel_startup_delay_task(self):
+        """Cancel any active startup delay task."""
+        if self._startup_delay_task is not None and not self._startup_delay_task.done():
+            _LOGGER.debug("_cancel_startup_delay_task :: cancelling active startup delay task")
+            self._startup_delay_task.cancel()
+            self._startup_delay_task = None
+    
+    async def _execute_with_startup_delay(self, startup_delay, start_callback):
+        """
+        Execute movement with startup delay.
+        
+        This method handles the motor inertia by:
+        1. Turning relay ON immediately
+        2. Waiting for startup_delay (motor "wakes up")
+        3. Starting TravelCalculator (position starts changing in HA)
+        
+        Args:
+            startup_delay: Time in seconds to wait before starting position tracking
+            start_callback: Callback to execute after delay (starts TravelCalculator)
+        """
+        _LOGGER.debug("_execute_with_startup_delay :: waiting %fs before starting position tracking", startup_delay)
+        try:
+            await sleep(startup_delay)
+            _LOGGER.debug("_execute_with_startup_delay :: startup delay complete, starting position tracking")
+            start_callback()
+            self._startup_delay_task = None
+        except asyncio.CancelledError:
+            _LOGGER.debug("_execute_with_startup_delay :: startup delay cancelled")
+            self._startup_delay_task = None
+            raise
 
     @property
     def name(self):
@@ -317,6 +405,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             attr[CONF_TRAVEL_DELAY_AT_END] = self._travel_delay_at_end
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
+        if self._travel_startup_delay is not None:
+            attr[CONF_TRAVEL_STARTUP_DELAY] = self._travel_startup_delay
+        if self._tilt_startup_delay is not None:
+            attr[CONF_TILT_STARTUP_DELAY] = self._tilt_startup_delay
         return attr
 
     @property
@@ -409,34 +501,74 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         
         current_travel_position = self.travel_calc.current_position()
         if current_travel_position is None or current_travel_position < 100:
-            # Cancel any active delay task (we're starting new movement)
-            self._cancel_delay_task()
+            # Check if startup delay is already active
+            if self._startup_delay_task and not self._startup_delay_task.done():
+                # Check if this is a direction change
+                if self._last_command == SERVICE_OPEN_COVER:
+                    # Direction changed - cancel old delay and stop relay
+                    _LOGGER.debug("async_close_cover :: direction change, cancelling startup delay")
+                    self._cancel_startup_delay_task()
+                    await self._async_handle_command(SERVICE_STOP_COVER)
+                else:
+                    # Same direction (or first call) - ignore
+                    # EDGE CASE: If user changes from tilt to travel (same direction/relay) during startup delay,
+                    # we ignore the difference in startup_delay values for simplicity. The motor is already
+                    # starting up, so the difference (typically 0.01-0.05s) is negligible.
+                    _LOGGER.debug("async_close_cover :: startup delay already active, not restarting")
+                    return
+            
+            # Cancel any endpoint delay task (we're starting new movement)
+            relay_was_on = self._cancel_delay_task()
+            if relay_was_on:
+                # Endpoint delay was active, relay is still ON - turn it OFF first
+                await self._async_handle_command(SERVICE_STOP_COVER)
             
             # Calculate how much travel will move (to fully closed = 100)
             travel_distance = 100 - (current_travel_position if current_travel_position is not None else 0)
-            # Calculate time this movement will take
+            # Calculate time this movement will take (WITHOUT startup delay - that's separate)
             movement_time = (travel_distance / 100.0) * self._travel_time_down
             
-            self.travel_calc.start_travel_down()
-            self.start_auto_updater()
+            _LOGGER.debug(
+                "async_close_cover :: travel_distance=%f%%, movement_time=%fs",
+                travel_distance, movement_time
+            )
             
-            # Tilt will change during travel - calculate proportional movement
+            # Store command for direction change detection
+            self._last_command = SERVICE_CLOSE_COVER
+            
+            # Calculate proportional tilt movement
+            tilt_target = None
             if self._has_tilt_support():
                 # Calculate how much tilt should move in the same time
                 tilt_distance = (movement_time / self._tilting_time_down) * 100.0
-                
-                # Get current tilt position and calculate new position (moving to vertical = 100)
                 current_tilt_position = self.tilt_calc.current_position()
-                new_tilt_position = min(100, current_tilt_position + tilt_distance)
-                
+                tilt_target = min(100, current_tilt_position + tilt_distance)
                 _LOGGER.debug(
-                    "async_close_cover :: travel_distance=%f%%, movement_time=%fs, tilt_distance=%f%%, new_tilt_pos=%f",
-                    travel_distance, movement_time, tilt_distance, new_tilt_position
+                    "async_close_cover :: tilt_distance=%f%%, new_tilt_pos=%f",
+                    tilt_distance, tilt_target
                 )
-                
-                self.tilt_calc.start_travel(int(new_tilt_position))
             
+            # Turn ON relay first
             await self._async_handle_command(SERVICE_CLOSE_COVER)
+            
+            # If we have startup delay, wait before starting position tracking
+            if self._travel_startup_delay and self._travel_startup_delay > 0:
+                def start_movement():
+                    """Callback to start movement after startup delay."""
+                    self.travel_calc.start_travel_down()
+                    if tilt_target is not None:
+                        self.tilt_calc.start_travel(int(tilt_target))
+                    self.start_auto_updater()
+                
+                self._startup_delay_task = self.hass.async_create_task(
+                    self._execute_with_startup_delay(self._travel_startup_delay, start_movement)
+                )
+            else:
+                # No startup delay - start immediately
+                self.travel_calc.start_travel_down()
+                if tilt_target is not None:
+                    self.tilt_calc.start_travel(int(tilt_target))
+                self.start_auto_updater()
 
     async def async_open_cover(self, **kwargs):
         """Turn the device open."""
@@ -444,41 +576,100 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         
         current_travel_position = self.travel_calc.current_position()
         if current_travel_position is None or current_travel_position > 0:
-            # Cancel any active delay task (we're starting new movement)
-            self._cancel_delay_task()
+            # Check if startup delay is already active
+            if self._startup_delay_task and not self._startup_delay_task.done():
+                # Check if this is a direction change
+                if self._last_command == SERVICE_CLOSE_COVER:
+                    # Direction changed - cancel old delay and stop relay
+                    _LOGGER.debug("async_open_cover :: direction change, cancelling startup delay")
+                    self._cancel_startup_delay_task()
+                    await self._async_handle_command(SERVICE_STOP_COVER)
+                else:
+                    # Same direction (or first call) - ignore
+                    # EDGE CASE: If user changes from tilt to travel (same direction/relay) during startup delay,
+                    # we ignore the difference in startup_delay values for simplicity. The motor is already
+                    # starting up, so the difference (typically 0.01-0.05s) is negligible.
+                    _LOGGER.debug("async_open_cover :: startup delay already active, not restarting")
+                    return
+            
+            # Cancel any endpoint delay task (we're starting new movement)
+            relay_was_on = self._cancel_delay_task()
+            if relay_was_on:
+                # Endpoint delay was active, relay is still ON - turn it OFF first
+                await self._async_handle_command(SERVICE_STOP_COVER)
             
             # Calculate how much travel will move (to fully open = 0)
             travel_distance = (current_travel_position if current_travel_position is not None else 100)
-            # Calculate time this movement will take
+            # Calculate time this movement will take (WITHOUT startup delay - that's separate)
             movement_time = (travel_distance / 100.0) * self._travel_time_up
             
-            self.travel_calc.start_travel_up()
-            self.start_auto_updater()
+            _LOGGER.debug(
+                "async_open_cover :: travel_distance=%f%%, movement_time=%fs",
+                travel_distance, movement_time
+            )
             
-            # Tilt will change during travel - calculate proportional movement
+            # Store command for direction change detection
+            self._last_command = SERVICE_OPEN_COVER
+            
+            # Calculate proportional tilt movement
+            tilt_target = None
             if self._has_tilt_support():
                 # Calculate how much tilt should move in the same time
                 tilt_distance = (movement_time / self._tilting_time_up) * 100.0
-                
-                # Get current tilt position and calculate new position (moving to horizontal = 0)
                 current_tilt_position = self.tilt_calc.current_position()
-                new_tilt_position = max(0, current_tilt_position - tilt_distance)
-                
+                tilt_target = max(0, current_tilt_position - tilt_distance)
                 _LOGGER.debug(
-                    "async_open_cover :: travel_distance=%f%%, movement_time=%fs, tilt_distance=%f%%, new_tilt_pos=%f",
-                    travel_distance, movement_time, tilt_distance, new_tilt_position
+                    "async_open_cover :: tilt_distance=%f%%, new_tilt_pos=%f",
+                    tilt_distance, tilt_target
                 )
-                
-                self.tilt_calc.start_travel(int(new_tilt_position))
             
+            # Turn ON relay first
             await self._async_handle_command(SERVICE_OPEN_COVER)
+            
+            # If we have startup delay, wait before starting position tracking
+            if self._travel_startup_delay and self._travel_startup_delay > 0:
+                def start_movement():
+                    """Callback to start movement after startup delay."""
+                    self.travel_calc.start_travel_up()
+                    if tilt_target is not None:
+                        self.tilt_calc.start_travel(int(tilt_target))
+                    self.start_auto_updater()
+                
+                self._startup_delay_task = self.hass.async_create_task(
+                    self._execute_with_startup_delay(self._travel_startup_delay, start_movement)
+                )
+            else:
+                # No startup delay - start immediately
+                self.travel_calc.start_travel_up()
+                if tilt_target is not None:
+                    self.tilt_calc.start_travel(int(tilt_target))
+                self.start_auto_updater()
 
     async def async_close_cover_tilt(self, **kwargs):
         """Turn the device close."""
         _LOGGER.debug("async_close_cover_tilt")
         
-        # Cancel any active delay task
-        self._cancel_delay_task()
+        # Check if startup delay is already active
+        if self._startup_delay_task and not self._startup_delay_task.done():
+            # Check if this is a direction change
+            if self._last_command == SERVICE_OPEN_COVER:
+                # Direction changed - cancel old delay and stop relay
+                _LOGGER.debug("async_close_cover_tilt :: direction change, cancelling startup delay")
+                self._cancel_startup_delay_task()
+                await self._async_handle_command(SERVICE_STOP_COVER)
+            else:
+                # Same direction (or first call) - ignore
+                # EDGE CASE: If user changes from travel to tilt (same direction/relay) during startup delay,
+                # we ignore the difference in startup_delay values for simplicity. The motor is already
+                # starting up, so the difference (typically 0.01-0.05s) is negligible.
+                _LOGGER.debug("async_close_cover_tilt :: startup delay already active, not restarting")
+                return
+        
+        # Cancel any endpoint delay task
+        relay_was_on = self._cancel_delay_task()
+        if relay_was_on:
+            # Endpoint delay was active, relay is still ON - turn it OFF first
+            await self._async_handle_command(SERVICE_STOP_COVER)
         
         # Stop cover travel if it's currently moving
         self._stop_travel_if_traveling()
@@ -487,33 +678,67 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if current_tilt_position is None or current_tilt_position < 100:
             # Calculate how much tilt will move (to fully closed = 100)
             tilt_distance = 100 - (current_tilt_position if current_tilt_position is not None else 0)
-            # Calculate time this movement will take
+            # Calculate time this movement will take (WITHOUT startup delay - that's separate)
             movement_time = (tilt_distance / 100.0) * self._tilting_time_down
             
             # Calculate how much travel should move in the same time
             travel_distance = (movement_time / self._travel_time_down) * 100.0
-            
-            # Get current travel position and calculate new position
             current_travel_position = self.travel_calc.current_position()
-            new_travel_position = min(100, current_travel_position + travel_distance)
+            travel_target = min(100, current_travel_position + travel_distance)
             
             _LOGGER.debug(
                 "async_close_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
-                tilt_distance, movement_time, travel_distance, new_travel_position
+                tilt_distance, movement_time, travel_distance, travel_target
             )
             
-            self.tilt_calc.start_travel_down()
-            # Travel also moves when tilting (same motor)
-            self.travel_calc.start_travel(int(new_travel_position))
-            self.start_auto_updater()
+            # Store command for direction change detection
+            self._last_command = SERVICE_CLOSE_COVER
+            
+            # Turn ON relay first
             await self._async_handle_command(SERVICE_CLOSE_COVER)
+            
+            # If we have startup delay, wait before starting position tracking
+            if self._tilt_startup_delay and self._tilt_startup_delay > 0:
+                def start_movement():
+                    """Callback to start movement after startup delay."""
+                    self.tilt_calc.start_travel_down()
+                    self.travel_calc.start_travel(int(travel_target))
+                    self.start_auto_updater()
+                
+                self._startup_delay_task = self.hass.async_create_task(
+                    self._execute_with_startup_delay(self._tilt_startup_delay, start_movement)
+                )
+            else:
+                # No startup delay - start immediately
+                self.tilt_calc.start_travel_down()
+                self.travel_calc.start_travel(int(travel_target))
+                self.start_auto_updater()
 
     async def async_open_cover_tilt(self, **kwargs):
         """Turn the device open."""
         _LOGGER.debug("async_open_cover_tilt")
         
-        # Cancel any active delay task
-        self._cancel_delay_task()
+        # Check if startup delay is already active
+        if self._startup_delay_task and not self._startup_delay_task.done():
+            # Check if this is a direction change
+            if self._last_command == SERVICE_CLOSE_COVER:
+                # Direction changed - cancel old delay and stop relay
+                _LOGGER.debug("async_open_cover_tilt :: direction change, cancelling startup delay")
+                self._cancel_startup_delay_task()
+                await self._async_handle_command(SERVICE_STOP_COVER)
+            else:
+                # Same direction (or first call) - ignore
+                # EDGE CASE: If user changes from travel to tilt (same direction/relay) during startup delay,
+                # we ignore the difference in startup_delay values for simplicity. The motor is already
+                # starting up, so the difference (typically 0.01-0.05s) is negligible.
+                _LOGGER.debug("async_open_cover_tilt :: startup delay already active, not restarting")
+                return
+        
+        # Cancel any endpoint delay task
+        relay_was_on = self._cancel_delay_task()
+        if relay_was_on:
+            # Endpoint delay was active, relay is still ON - turn it OFF first
+            await self._async_handle_command(SERVICE_STOP_COVER)
         
         # Stop cover travel if it's currently moving
         self._stop_travel_if_traveling()
@@ -522,30 +747,48 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if current_tilt_position is None or current_tilt_position > 0:
             # Calculate how much tilt will move (to fully open = 0)
             tilt_distance = (current_tilt_position if current_tilt_position is not None else 100)
-            # Calculate time this movement will take
+            # Calculate time this movement will take (WITHOUT startup delay - that's separate)
             movement_time = (tilt_distance / 100.0) * self._tilting_time_up
             
             # Calculate how much travel should move in the same time
             travel_distance = (movement_time / self._travel_time_up) * 100.0
-            
-            # Get current travel position and calculate new position
             current_travel_position = self.travel_calc.current_position()
-            new_travel_position = max(0, current_travel_position - travel_distance)
+            travel_target = max(0, current_travel_position - travel_distance)
             
             _LOGGER.debug(
                 "async_open_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
-                tilt_distance, movement_time, travel_distance, new_travel_position
+                tilt_distance, movement_time, travel_distance, travel_target
             )
             
-            self.tilt_calc.start_travel_up()
-            # Travel also moves when tilting (same motor)
-            self.travel_calc.start_travel(int(new_travel_position))
-            self.start_auto_updater()
+            # Store command for direction change detection
+            self._last_command = SERVICE_OPEN_COVER
+            
+            # Turn ON relay first
             await self._async_handle_command(SERVICE_OPEN_COVER)
+            
+            # If we have startup delay, wait before starting position tracking
+            if self._tilt_startup_delay and self._tilt_startup_delay > 0:
+                def start_movement():
+                    """Callback to start movement after startup delay."""
+                    self.tilt_calc.start_travel_up()
+                    self.travel_calc.start_travel(int(travel_target))
+                    self.start_auto_updater()
+                
+                self._startup_delay_task = self.hass.async_create_task(
+                    self._execute_with_startup_delay(self._tilt_startup_delay, start_movement)
+                )
+            else:
+                # No startup delay - start immediately
+                self.tilt_calc.start_travel_up()
+                self.travel_calc.start_travel(int(travel_target))
+                self.start_auto_updater()
 
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
         _LOGGER.debug("async_stop_cover")
+        
+        # Cancel any active startup delay task
+        self._cancel_startup_delay_task()
         
         # Cancel any active delay task
         self._cancel_delay_task()
@@ -554,6 +797,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         
         # Enforce tilt constraints at travel boundaries
         self._enforce_tilt_constraints()
+        
+        # Reset last command since we stopped
+        self._last_command = None
         
         await self._async_handle_command(SERVICE_STOP_COVER)
 
@@ -574,65 +820,136 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             command = SERVICE_CLOSE_COVER
             travel_time = self._travel_time_down
             tilt_time = self._tilting_time_down if self._has_tilt_support() else None
+            startup_delay = self._travel_startup_delay
         elif new_travel_position < current_travel_position:
             command = SERVICE_OPEN_COVER
             travel_time = self._travel_time_up
             tilt_time = self._tilting_time_up if self._has_tilt_support() else None
+            startup_delay = self._travel_startup_delay
         else:
             return  # No movement needed - don't cancel delay
             
         if command is not None:
+            # Detect if this is a direction change
+            # Compare with last command to see if direction actually changed
+            is_direction_change = False
+            
+            # Check direction change (always, not just during startup delay)
+            if self._last_command is not None and self._last_command != command:
+                is_direction_change = True
+                _LOGGER.debug("set_position :: direction change detected (%s → %s)", self._last_command, command)
+            
+            # If startup delay is active for SAME direction, ignore adjustment
+            # EDGE CASE: User adjusts target position during startup (e.g., 50%→60% while starting)
+            # We don't restart the delay since motor is already starting up
+            if (self._startup_delay_task and not self._startup_delay_task.done() 
+                and not is_direction_change):
+                _LOGGER.debug("set_position :: startup delay already active for same direction, not restarting")
+                # The relay is already ON and startup is in progress
+                # Just ignore this adjustment - the motor will reach the previous target
+                # User can adjust again after movement starts
+                return
+            
+            # If direction changed during startup delay, cancel it
+            if is_direction_change and self._startup_delay_task and not self._startup_delay_task.done():
+                self._cancel_startup_delay_task()
+                # IMPORTANT: If we cancelled startup delay, we must stop the relay
+                # Otherwise relay stays ON while position doesn't change!
+                await self._async_handle_command(SERVICE_STOP_COVER)
+            
+            # If direction changed during active movement (not startup), stop it
+            if is_direction_change and self.travel_calc.is_traveling():
+                _LOGGER.debug("set_position :: stopping active travel movement")
+                self.travel_calc.stop()
+                self.stop_auto_updater()
+                if self._has_tilt_support() and self.tilt_calc.is_traveling():
+                    self.tilt_calc.stop()
+                await self._async_handle_command(SERVICE_STOP_COVER)
+                
+                # IMPORTANT: Re-read current position after stopping
+                # Position may have changed during travel
+                current_travel_position = self.travel_calc.current_position()
+                _LOGGER.debug("set_position :: position after stop: %d", 100 - current_travel_position)
+                
+                # Re-check if we still need to move
+                if new_travel_position == current_travel_position:
+                    _LOGGER.debug("set_position :: already at target after stop, no movement needed")
+                    return
+            
+            # Cancel endpoint delay
+            relay_was_on = self._cancel_delay_task()
+            if relay_was_on:
+                # Endpoint delay was active, relay is still ON - turn it OFF first
+                await self._async_handle_command(SERVICE_STOP_COVER)
+            
             # Calculate how much travel will move (in percentage)
             travel_distance = abs(new_travel_position - current_travel_position)
-            # Calculate time this movement will take
+            # Calculate time this movement will take (WITHOUT startup delay)
             movement_time = (travel_distance / 100.0) * travel_time
             
             # Check minimum movement time (except for movements TO endpoints)
             is_to_endpoint = (new_travel_position == 0 or new_travel_position == 100)
             if (
-                self._min_movement_time 
-                and self._min_movement_time > 0 
+                self._min_movement_time is not None
+                and self._min_movement_time > 0
                 and not is_to_endpoint
                 and movement_time < self._min_movement_time
             ):
-                _LOGGER.debug(
-                    "set_position :: movement too short (%fs < %fs), ignoring and restoring position",
+                _LOGGER.info(
+                    "set_position :: movement too short (%fs < %fs), ignoring - from %d%% to %d%%",
                     movement_time,
-                    self._min_movement_time
+                    self._min_movement_time,
+                    100 - current_travel_position,
+                    position,
                 )
                 # Refresh HA state to restore the actual position in UI
                 self.async_write_ha_state()
                 return  # Movement too short, ignore
             
-            # Cancel any active delay task (we're starting new movement)
-            self._cancel_delay_task()
+            _LOGGER.debug(
+                "set_position :: travel_distance=%f%%, movement_time=%fs",
+                travel_distance, movement_time
+            )
             
-            self.start_auto_updater()
-            self.travel_calc.start_travel(new_travel_position)
+            # Store command for direction change detection
+            self._last_command = command
             
-            # Tilt changes during travel - calculate proportional movement
+            # Calculate proportional tilt movement
+            tilt_target = None
             if self._has_tilt_support():
-                # Calculate how much tilt should move in the same time
                 tilt_distance = (movement_time / tilt_time) * 100.0
-                
-                # Get current tilt position and calculate new position
                 current_tilt_position = self.tilt_calc.current_position()
                 if command == SERVICE_CLOSE_COVER:
-                    # Moving down - tilt goes to vertical (100)
-                    new_tilt_position = min(100, current_tilt_position + tilt_distance)
+                    tilt_target = min(100, current_tilt_position + tilt_distance)
                 else:  # SERVICE_OPEN_COVER
-                    # Moving up - tilt goes to horizontal (0)
-                    new_tilt_position = max(0, current_tilt_position - tilt_distance)
+                    tilt_target = max(0, current_tilt_position - tilt_distance)
                 
                 _LOGGER.debug(
-                    "set_position :: travel_distance=%f%%, movement_time=%fs, tilt_distance=%f%%, new_tilt_pos=%f",
-                    travel_distance, movement_time, tilt_distance, new_tilt_position
+                    "set_position :: tilt_distance=%f%%, new_tilt_pos=%f",
+                    tilt_distance, tilt_target
                 )
-                
-                self.tilt_calc.start_travel(int(new_tilt_position))
             
-            _LOGGER.debug("set_position :: command %s", command)
+            # Turn ON relay first
             await self._async_handle_command(command)
+            
+            # If we have startup delay, wait before starting position tracking
+            if startup_delay and startup_delay > 0:
+                def start_movement():
+                    """Callback to start movement after startup delay."""
+                    self.travel_calc.start_travel(new_travel_position)
+                    if tilt_target is not None:
+                        self.tilt_calc.start_travel(int(tilt_target))
+                    self.start_auto_updater()
+                
+                self._startup_delay_task = self.hass.async_create_task(
+                    self._execute_with_startup_delay(startup_delay, start_movement)
+                )
+            else:
+                # No startup delay - start immediately
+                self.travel_calc.start_travel(new_travel_position)
+                if tilt_target is not None:
+                    self.tilt_calc.start_travel(int(tilt_target))
+                self.start_auto_updater()
         return
 
     async def set_tilt_position(self, position):
@@ -651,64 +968,135 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if current_tilt_position is None or new_tilt_position > current_tilt_position:
             command = SERVICE_CLOSE_COVER
             tilt_time = self._tilting_time_down
+            travel_time = self._travel_time_down
+            startup_delay = self._tilt_startup_delay
         elif new_tilt_position < current_tilt_position:
             command = SERVICE_OPEN_COVER
             tilt_time = self._tilting_time_up
+            travel_time = self._travel_time_up
+            startup_delay = self._tilt_startup_delay
         else:
             return  # No movement needed - don't cancel delay
             
         if command is not None:
+            # Detect if this is a direction change
+            # Compare with last command to see if direction actually changed
+            is_direction_change = False
+            
+            # Check direction change (always, not just during startup delay)
+            if self._last_command is not None and self._last_command != command:
+                is_direction_change = True
+                _LOGGER.debug("set_tilt_position :: direction change detected (%s → %s)", self._last_command, command)
+            
+            # If startup delay is active for SAME direction, ignore adjustment
+            # EDGE CASE: User adjusts tilt target during startup (e.g., 50%→60% tilt while starting)
+            # We don't restart the delay since motor is already starting up
+            if (self._startup_delay_task and not self._startup_delay_task.done() 
+                and not is_direction_change):
+                _LOGGER.debug("set_tilt_position :: startup delay already active for same direction, not restarting")
+                # The relay is already ON and startup is in progress
+                # Just ignore this adjustment - the motor will reach the previous target
+                # User can adjust again after movement starts
+                return
+            
+            # If direction changed during startup delay, cancel it
+            if is_direction_change and self._startup_delay_task and not self._startup_delay_task.done():
+                self._cancel_startup_delay_task()
+                # IMPORTANT: If we cancelled startup delay, we must stop the relay
+                # Otherwise relay stays ON while position doesn't change!
+                await self._async_handle_command(SERVICE_STOP_COVER)
+            
+            # If direction changed during active movement (not startup), stop it
+            if is_direction_change:
+                if self.tilt_calc.is_traveling():
+                    _LOGGER.debug("set_tilt_position :: stopping active tilt movement")
+                    self.tilt_calc.stop()
+                if self.travel_calc.is_traveling():
+                    self.travel_calc.stop()
+                self.stop_auto_updater()
+                await self._async_handle_command(SERVICE_STOP_COVER)
+                
+                # IMPORTANT: Re-read current position after stopping
+                # Position may have changed during travel
+                current_tilt_position = self.tilt_calc.current_position()
+                _LOGGER.debug("set_tilt_position :: tilt position after stop: %d", 100 - current_tilt_position)
+                
+                # Re-check if we still need to move
+                if new_tilt_position == current_tilt_position:
+                    _LOGGER.debug("set_tilt_position :: already at target after stop, no movement needed")
+                    return
+            
+            # Cancel endpoint delay
+            relay_was_on = self._cancel_delay_task()
+            if relay_was_on:
+                # Endpoint delay was active, relay is still ON - turn it OFF first
+                await self._async_handle_command(SERVICE_STOP_COVER)
+            
+            # Stop cover travel if it's currently moving (for same direction tilt movements)
+            if not is_direction_change:
+                self._stop_travel_if_traveling()
+            
             # Calculate how much tilt will move (in percentage)
             tilt_distance = abs(new_tilt_position - current_tilt_position)
-            # Calculate time this movement will take
+            # Calculate time this movement will take (WITHOUT startup delay)
             movement_time = (tilt_distance / 100.0) * tilt_time
             
             # Calculate how much travel should move in the same time
-            travel_time = self._travel_time_down if command == SERVICE_CLOSE_COVER else self._travel_time_up
             travel_distance = (movement_time / travel_time) * 100.0
             
             # Check minimum movement time (except for movements TO endpoints)
-            # For tilt, we check against TRAVEL time (as specified)
             is_to_endpoint = (new_tilt_position == 0 or new_tilt_position == 100)
             if (
-                self._min_movement_time 
-                and self._min_movement_time > 0 
+                self._min_movement_time is not None
+                and self._min_movement_time > 0
                 and not is_to_endpoint
                 and movement_time < self._min_movement_time
             ):
-                _LOGGER.debug(
-                    "set_tilt_position :: movement too short (%fs < %fs), ignoring and restoring position",
+                _LOGGER.info(
+                    "set_tilt_position :: movement too short (%fs < %fs), ignoring - from %d%% to %d%%",
                     movement_time,
-                    self._min_movement_time
+                    self._min_movement_time,
+                    100 - current_tilt_position,
+                    position,
                 )
                 # Refresh HA state to restore the actual position in UI
                 self.async_write_ha_state()
                 return  # Movement too short, ignore
             
-            # Cancel any active delay task (we're starting new movement)
-            self._cancel_delay_task()
-            
-            # Stop cover travel if it's currently moving
-            self._stop_travel_if_traveling()
-            
             # Get current travel position and calculate new position
             current_travel_position = self.travel_calc.current_position()
             if command == SERVICE_CLOSE_COVER:
-                new_travel_position = min(100, current_travel_position + travel_distance)
+                travel_target = min(100, current_travel_position + travel_distance)
             else:  # SERVICE_OPEN_COVER
-                new_travel_position = max(0, current_travel_position - travel_distance)
+                travel_target = max(0, current_travel_position - travel_distance)
+            
+            # Store command for direction change detection
+            self._last_command = command
             
             _LOGGER.debug(
                 "set_tilt_position :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
-                tilt_distance, movement_time, travel_distance, new_travel_position
+                tilt_distance, movement_time, travel_distance, travel_target
             )
             
-            self.start_auto_updater()
-            self.tilt_calc.start_travel(new_tilt_position)
-            # Travel moves proportionally to the tilt movement time
-            self.travel_calc.start_travel(int(new_travel_position))
-            _LOGGER.debug("set_tilt_position :: command %s", command)
+            # Turn ON relay first
             await self._async_handle_command(command)
+            
+            # If we have startup delay, wait before starting position tracking
+            if startup_delay and startup_delay > 0:
+                def start_movement():
+                    """Callback to start movement after startup delay."""
+                    self.tilt_calc.start_travel(new_tilt_position)
+                    self.travel_calc.start_travel(int(travel_target))
+                    self.start_auto_updater()
+                
+                self._startup_delay_task = self.hass.async_create_task(
+                    self._execute_with_startup_delay(startup_delay, start_movement)
+                )
+            else:
+                # No startup delay - start immediately
+                self.tilt_calc.start_travel(new_tilt_position)
+                self.travel_calc.start_travel(int(travel_target))
+                self.start_auto_updater()
         return
 
     def start_auto_updater(self):
@@ -785,20 +1173,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             
             # Check if we need to add delay at endpoint
             current_travel = self.travel_calc.current_position()
-            if self._travel_delay_at_end and self._travel_delay_at_end > 0 and (current_travel == 0 or current_travel == 100):
+            if self._travel_delay_at_end is not None and self._travel_delay_at_end > 0 and (current_travel == 0 or current_travel == 100):
                 _LOGGER.debug(
                     "auto_stop_if_necessary :: at endpoint (position=%d), delaying relay stop by %fs",
                     current_travel,
                     self._travel_delay_at_end
                 )
                 # Keep relay active for the delay period
-                try:
-                    self._delay_task = self.hass.async_create_task(
-                        self._delayed_stop(self._travel_delay_at_end)
-                    )
-                except Exception as e:
-                    _LOGGER.error("auto_stop_if_necessary :: error creating delay task: %s", e)
-                    await self._async_handle_command(SERVICE_STOP_COVER)
+                self._delay_task = self.hass.async_create_task(
+                    self._delayed_stop(self._travel_delay_at_end)
+                )
             else:
                 # No delay needed, stop immediately
                 await self._async_handle_command(SERVICE_STOP_COVER)
@@ -811,8 +1195,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             _LOGGER.debug("_delayed_stop :: delay complete, stopping relay")
             await self._async_handle_command(SERVICE_STOP_COVER)
             self._delay_task = None
-        except Exception as e:
-            _LOGGER.debug("_delayed_stop :: delay cancelled or error: %s", e)
+        except asyncio.CancelledError:
+            _LOGGER.debug("_delayed_stop :: delay cancelled")
+            self._delay_task = None
+            raise
 
     async def set_known_position(self, **kwargs):
         """We want to do a few things when we get a position"""
