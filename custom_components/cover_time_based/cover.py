@@ -34,6 +34,7 @@ from xknx.devices import TravelStatus, TravelCalculator
 _LOGGER = logging.getLogger(__name__)
 
 CONF_DEVICES = "devices"
+CONF_DEFAULTS = "defaults"
 CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
@@ -96,8 +97,20 @@ ENTITY_COVER_SCHEMA = {
     **TRAVEL_TIME_SCHEMA,
 }
 
+DEFAULTS_SCHEMA = vol.Schema({
+    vol.Optional(CONF_TRAVELLING_TIME_DOWN): cv.positive_int,
+    vol.Optional(CONF_TRAVELLING_TIME_UP): cv.positive_int,
+    vol.Optional(CONF_TILTING_TIME_DOWN): cv.positive_float,
+    vol.Optional(CONF_TILTING_TIME_UP): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
+    vol.Optional(CONF_MIN_MOVEMENT_TIME): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_STARTUP_DELAY): cv.positive_float,
+    vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
+})
+
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
+        vol.Optional(CONF_DEFAULTS, default={}): DEFAULTS_SCHEMA,
         vol.Optional(CONF_DEVICES, default={}): vol.Schema(
             {cv.string: vol.Schema(vol.Any(SWITCH_COVER_SCHEMA, ENTITY_COVER_SCHEMA))}
         ),
@@ -123,17 +136,45 @@ DOMAIN = "cover_time_based"
 def devices_from_config(domain_config):
     """Parse configuration and add cover devices."""
     devices = []
+    
+    # Get defaults (optional)
+    defaults = domain_config.get(CONF_DEFAULTS, {})
+    
+    def get_value(key, device_config, defaults_config, schema_default=None):
+        """
+        Get value with priority: device config > defaults > schema default.
+        
+        If key EXISTS in device config (even if None/null), use that value.
+        Otherwise, try defaults, then schema default.
+        """
+        if key in device_config:
+            return device_config[key]
+        if key in defaults_config:
+            return defaults_config[key]
+        return schema_default
+    
     for device_id, config in domain_config[CONF_DEVICES].items():
         name = config.pop(CONF_NAME)
-
-        travel_time_down = config.pop(CONF_TRAVELLING_TIME_DOWN)
-        travel_time_up = config.pop(CONF_TRAVELLING_TIME_UP)
-        tilt_time_down = config.pop(CONF_TILTING_TIME_DOWN)
-        tilt_time_up = config.pop(CONF_TILTING_TIME_UP)
-        travel_delay_at_end = config.pop(CONF_TRAVEL_DELAY_AT_END)
-        min_movement_time = config.pop(CONF_MIN_MOVEMENT_TIME)
-        travel_startup_delay = config.pop(CONF_TRAVEL_STARTUP_DELAY)
-        tilt_startup_delay = config.pop(CONF_TILT_STARTUP_DELAY)
+        
+        # Get values with defaults fallback
+        travel_time_down = get_value(CONF_TRAVELLING_TIME_DOWN, config, defaults, DEFAULT_TRAVEL_TIME)
+        travel_time_up = get_value(CONF_TRAVELLING_TIME_UP, config, defaults, DEFAULT_TRAVEL_TIME)
+        tilt_time_down = get_value(CONF_TILTING_TIME_DOWN, config, defaults, None)
+        tilt_time_up = get_value(CONF_TILTING_TIME_UP, config, defaults, None)
+        travel_delay_at_end = get_value(CONF_TRAVEL_DELAY_AT_END, config, defaults, None)
+        min_movement_time = get_value(CONF_MIN_MOVEMENT_TIME, config, defaults, None)
+        travel_startup_delay = get_value(CONF_TRAVEL_STARTUP_DELAY, config, defaults, None)
+        tilt_startup_delay = get_value(CONF_TILT_STARTUP_DELAY, config, defaults, None)
+        
+        # Pop the values that were in config (to avoid duplicates)
+        config.pop(CONF_TRAVELLING_TIME_DOWN, None)
+        config.pop(CONF_TRAVELLING_TIME_UP, None)
+        config.pop(CONF_TILTING_TIME_DOWN, None)
+        config.pop(CONF_TILTING_TIME_UP, None)
+        config.pop(CONF_TRAVEL_DELAY_AT_END, None)
+        config.pop(CONF_MIN_MOVEMENT_TIME, None)
+        config.pop(CONF_TRAVEL_STARTUP_DELAY, None)
+        config.pop(CONF_TILT_STARTUP_DELAY, None)
 
         open_switch_entity_id = (
             config.pop(CONF_OPEN_SWITCH_ENTITY_ID)

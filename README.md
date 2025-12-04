@@ -44,6 +44,8 @@ Click here:
 
 ### Example configuration.yaml entry
 
+#### Basic configuration with individual device settings:
+
 ```yaml
 cover:
   - platform: cover_time_based
@@ -60,6 +62,44 @@ cover:
         min_movement_time: 0.5         # Optional: Minimum 0.5s movement duration
         travel_startup_delay: 0.1      # Optional: 100ms motor startup compensation
         tilt_startup_delay: 0.08       # Optional: 80ms motor startup compensation
+```
+
+#### Configuration with shared defaults:
+
+```yaml
+cover:
+  - platform: cover_time_based
+    # Optional: Default values for all devices
+    defaults:
+      travelling_time_down: 49.2
+      travelling_time_up: 50.7
+      tilting_time_down: 1.5
+      tilting_time_up: 1.5
+      travel_delay_at_end: 1.5
+      min_movement_time: 0.5
+      travel_startup_delay: 0.1
+      tilt_startup_delay: 0.08
+    
+    devices:
+      # This device uses all defaults
+      bedroom_left:
+        name: Bedroom Left
+        open_switch_entity_id: switch.bedroom_left_open
+        close_switch_entity_id: switch.bedroom_left_close
+      
+      # This device overrides some defaults
+      bedroom_right:
+        name: Bedroom Right
+        travelling_time_down: 52.0    # Override default
+        open_switch_entity_id: switch.bedroom_right_open
+        close_switch_entity_id: switch.bedroom_right_close
+      
+      # This device explicitly disables startup delay
+      kitchen:
+        name: Kitchen
+        travel_startup_delay: null     # Override to disable
+        open_switch_entity_id: switch.kitchen_open
+        close_switch_entity_id: switch.kitchen_close
 ```
 
 ### Options
@@ -82,6 +122,21 @@ cover:
 | is_button              | boolean      | *Optional* (`cover_entity_id` not supported)    | Treats the switches as buttons, only pressing them for 1s                       | False   |
 
 ## Advanced Features
+
+### Default Values (defaults)
+
+You can define default values for timing parameters that will be used by all devices unless explicitly overridden. This reduces configuration duplication when you have multiple covers with similar characteristics.
+
+**How it works:**
+- Values in `defaults` section apply to all devices
+- Device-specific values override defaults
+- Explicit `null` in device config overrides defaults (disables feature)
+- If neither defaults nor device config specify a value, schema defaults are used
+
+**Priority order:**
+1. Device-specific value (highest priority)
+2. Defaults value
+3. Schema default (lowest priority)
 
 ### Synchronized Travel and Tilt
 

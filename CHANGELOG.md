@@ -3,6 +3,7 @@
 ### Features
 
 - **Motor startup delay compensation (`travel_startup_delay`, `tilt_startup_delay`)**: Optional parameters to compensate for motor inertia by delaying position tracking after relay activation, improving position accuracy for short movements
+- **Default values (`defaults`)**: Optional section to define default timing parameters for all devices, reducing configuration duplication
 
 ### Bug Fixes
 
