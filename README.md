@@ -58,10 +58,10 @@ cover:
         travelling_time_up: 25
         tilting_time_down: 2.3
         tilting_time_up: 2.7
-        travel_delay_at_end: 2.0      # Optional: 2 seconds additional relay time at endpoints
-        min_movement_time: 0.5         # Optional: Minimum 0.5s movement duration
-        travel_startup_delay: 0.1      # Optional: 100ms motor startup compensation
-        tilt_startup_delay: 0.08       # Optional: 80ms motor startup compensation
+        travel_delay_at_end: 2.0
+        min_movement_time: 0.5
+        travel_startup_delay: 0.1
+        tilt_startup_delay: 0.08
 ```
 
 #### Configuration with shared defaults:
@@ -232,11 +232,6 @@ Optional feature to compensate for **motor inertia** by delaying position tracki
 - For short movements (e.g., 0.5s), this is significant (20-30% error)
 - Multiple short movements accumulate drift
 
-**Use cases:**
-- Covers where small tilt adjustments accumulate position drift
-- Motors with noticeable startup delay/inertia
-- Systems requiring high position accuracy for short movements
-
 **How it works:**
 1. Relay turns ON immediately
 2. Waits for `startup_delay` (motor is starting up)
@@ -253,25 +248,6 @@ tilt_startup_delay: 0.08    # 80ms startup delay for tilt
 # Result: Cover actually moves 1%
 ```
 
-**Calibration methods:**
-
-1. **Empirical testing:**
-   - Start with a high value (e.g., 0.2s)
-   - Test multiple small movements (e.g., 10× 5% tilt)
-   - If cover overshoots → decrease value
-   - If cover undershoots → increase value
-
-2. **Direct measurement:**
-   - Measure time from relay ON to cover starting to move
-   - Use this as initial value
-   - Fine-tune based on accuracy
-
-3. **Typical values:**
-   - Small/light covers: 0.05-0.08s
-   - Medium covers: 0.08-0.12s
-   - Large/heavy covers: 0.10-0.15s
-   - Old motors: 0.15-0.25s
-
 **Recommended values:** 0.05 - 0.15 seconds
 
 **Important notes:**
@@ -280,11 +256,6 @@ tilt_startup_delay: 0.08    # 80ms startup delay for tilt
 - Can be different for travel and tilt if needed
 - Compatible with `min_movement_time` and `travel_delay_at_end`
 
-**Not needed for:**
-- Covers with position encoders
-- Motors with negligible startup delay
-- Systems where position accuracy for short movements is not critical
-
 
 [commits-shield]: https://img.shields.io/github/commit-activity/y/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
 [commits]: https://github.com/Sese-Schneider/ha-cover-time-based/commits/main
@@ -292,4 +263,5 @@ tilt_startup_delay: 0.08    # 80ms startup delay for tilt
 [license-shield]: https://img.shields.io/github/license/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg?style=for-the-badge
 [releases-shield]: https://img.shields.io/github/release/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
+
 [releases]: https://github.com/Sese-Schneider/ha-cover-time-based/releases
