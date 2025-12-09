@@ -40,6 +40,7 @@ CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
 CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
+CONF_TRAVEL_MOVES_WITH_TILT = "travel_moves_with_tilt"
 DEFAULT_TRAVEL_TIME = 30
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
@@ -71,6 +72,7 @@ TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
         cv.positive_float, None
     ),
+    vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
 }
 
 SWITCH_COVER_SCHEMA = {
@@ -124,6 +126,7 @@ def devices_from_config(domain_config):
         tilt_time_up = config.pop(CONF_TILTING_TIME_UP)
         travel_delay_at_end = config.pop(CONF_TRAVEL_DELAY_AT_END)
         min_movement_time = config.pop(CONF_MIN_MOVEMENT_TIME)
+        travel_moves_with_tilt = config.pop(CONF_TRAVEL_MOVES_WITH_TILT)
 
         open_switch_entity_id = (
             config.pop(CONF_OPEN_SWITCH_ENTITY_ID)
@@ -155,6 +158,7 @@ def devices_from_config(domain_config):
             tilt_time_up,
             travel_delay_at_end,
             min_movement_time,
+            travel_moves_with_tilt,
             open_switch_entity_id,
             close_switch_entity_id,
             stop_switch_entity_id,
@@ -190,6 +194,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         tilt_time_up,
         travel_delay_at_end,
         min_movement_time,
+        travel_moves_with_tilt,
         open_switch_entity_id,
         close_switch_entity_id,
         stop_switch_entity_id,
@@ -205,6 +210,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._tilting_time_up = tilt_time_up
         self._travel_delay_at_end = travel_delay_at_end
         self._min_movement_time = min_movement_time
+        self._travel_moves_with_tilt = travel_moves_with_tilt
 
         self._open_switch_entity_id = open_switch_entity_id
         self._close_switch_entity_id = close_switch_entity_id
@@ -311,6 +317,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             attr[CONF_TRAVEL_DELAY_AT_END] = self._travel_delay_at_end
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
+        if self._travel_moves_with_tilt is not None:
+            attr[CONF_TRAVEL_MOVES_WITH_TILT] = self._travel_moves_with_tilt
         return attr
 
     @property
@@ -353,9 +361,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     @property
     def is_closed(self):
+        """Return if the cover is closed."""
         if not self._has_tilt_support():
             return self.travel_calc.is_closed()
-    
+        
         return self.travel_calc.is_closed() and self.tilt_calc.is_closed()
 
     @property
@@ -468,18 +477,21 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             tilt_distance = 100 - (current_tilt_position if current_tilt_position is not None else 0)
             movement_time = (tilt_distance / 100.0) * self._tilting_time_down
             
-            travel_distance = (movement_time / self._travel_time_down) * 100.0
-            
-            current_travel_position = self.travel_calc.current_position()
-            new_travel_position = min(100, current_travel_position + travel_distance)
-            
-            _LOGGER.debug(
-                "async_close_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
-                tilt_distance, movement_time, travel_distance, new_travel_position
-            )
-            
             self.tilt_calc.start_travel_down()
-            self.travel_calc.start_travel(int(new_travel_position))
+            
+            if self._travel_moves_with_tilt:
+                travel_distance = (movement_time / self._travel_time_down) * 100.0
+                
+                current_travel_position = self.travel_calc.current_position()
+                new_travel_position = min(100, current_travel_position + travel_distance)
+                
+                _LOGGER.debug(
+                    "async_close_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
+                    tilt_distance, movement_time, travel_distance, new_travel_position
+                )
+                
+                self.travel_calc.start_travel(int(new_travel_position))
+            
             self.start_auto_updater()
             await self._async_handle_command(SERVICE_CLOSE_COVER)
 
@@ -496,18 +508,21 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             tilt_distance = (current_tilt_position if current_tilt_position is not None else 100)
             movement_time = (tilt_distance / 100.0) * self._tilting_time_up
             
-            travel_distance = (movement_time / self._travel_time_up) * 100.0
-            
-            current_travel_position = self.travel_calc.current_position()
-            new_travel_position = max(0, current_travel_position - travel_distance)
-            
-            _LOGGER.debug(
-                "async_open_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
-                tilt_distance, movement_time, travel_distance, new_travel_position
-            )
-            
             self.tilt_calc.start_travel_up()
-            self.travel_calc.start_travel(int(new_travel_position))
+            
+            if self._travel_moves_with_tilt:
+                travel_distance = (movement_time / self._travel_time_up) * 100.0
+                
+                current_travel_position = self.travel_calc.current_position()
+                new_travel_position = max(0, current_travel_position - travel_distance)
+                
+                _LOGGER.debug(
+                    "async_open_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
+                    tilt_distance, movement_time, travel_distance, new_travel_position
+                )
+                
+                self.travel_calc.start_travel(int(new_travel_position))
+            
             self.start_auto_updater()
             await self._async_handle_command(SERVICE_OPEN_COVER)
 
@@ -643,22 +658,25 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             
             self._stop_travel_if_traveling()
             
-            current_travel_position = self.travel_calc.current_position()
-            if command == SERVICE_CLOSE_COVER:
-                new_travel_position = min(100, current_travel_position + travel_distance)
-            elif command == SERVICE_OPEN_COVER:
-                new_travel_position = max(0, current_travel_position - travel_distance)
-            else:
-                raise ValueError(f"Unexpected command value: {command}")
-            
-            _LOGGER.debug(
-                "set_tilt_position :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
-                tilt_distance, movement_time, travel_distance, new_travel_position
-            )
-            
             self.start_auto_updater()
             self.tilt_calc.start_travel(new_tilt_position)
-            self.travel_calc.start_travel(int(new_travel_position))
+            
+            if self._travel_moves_with_tilt:
+                current_travel_position = self.travel_calc.current_position()
+                if command == SERVICE_CLOSE_COVER:
+                    new_travel_position = min(100, current_travel_position + travel_distance)
+                elif command == SERVICE_OPEN_COVER:
+                    new_travel_position = max(0, current_travel_position - travel_distance)
+                else:
+                    raise ValueError(f"Unexpected command value: {command}")
+                
+                _LOGGER.debug(
+                    "set_tilt_position :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
+                    tilt_distance, movement_time, travel_distance, new_travel_position
+                )
+                
+                self.travel_calc.start_travel(int(new_travel_position))
+            
             _LOGGER.debug("set_tilt_position :: command %s", command)
             await self._async_handle_command(command)
         return
@@ -806,7 +824,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     )
 
                 if self._is_button:
-                    # The close_switch_entity_id should be turned off one second after being turned on
                     await sleep(1)
 
                     await self.hass.services.async_call(
@@ -847,7 +864,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                         False,
                     )
                 if self._is_button:
-                    # The open_switch_entity_id should be turned off one second after being turned on
                     await sleep(1)
 
                     await self.hass.services.async_call(
@@ -889,7 +905,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     )
 
                     if self._is_button:
-                        # The stop_switch_entity_id should be turned off one second after being turned on
                         await sleep(1)
 
                         await self.hass.services.async_call(
@@ -902,4 +917,3 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         _LOGGER.debug("_async_handle_command :: %s", cmd)
 
         self.async_write_ha_state()
-
