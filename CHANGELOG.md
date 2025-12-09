@@ -1,4 +1,4 @@
-## X.X.X (TBD)
+## 3.0.0
 
 ### Features
 

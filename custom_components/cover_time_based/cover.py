@@ -35,6 +35,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONF_DEVICES = "devices"
 CONF_DEFAULTS = "defaults"
+CONF_TRAVEL_MOVES_WITH_TILT = "travel_moves_with_tilt"
 CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
@@ -60,6 +61,7 @@ BASE_DEVICE_SCHEMA = {
 }
 
 TRAVEL_TIME_SCHEMA = {
+    vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
     vol.Optional(
         CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
     ): cv.positive_int,
@@ -98,6 +100,7 @@ ENTITY_COVER_SCHEMA = {
 }
 
 DEFAULTS_SCHEMA = vol.Schema({
+    vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT): cv.boolean,
     vol.Optional(CONF_TRAVELLING_TIME_DOWN): cv.positive_int,
     vol.Optional(CONF_TRAVELLING_TIME_UP): cv.positive_int,
     vol.Optional(CONF_TILTING_TIME_DOWN): cv.positive_float,
@@ -155,6 +158,7 @@ def devices_from_config(domain_config):
     for device_id, config in domain_config[CONF_DEVICES].items():
         name = config.pop(CONF_NAME)
         
+        travel_moves_with_tilt = get_value(CONF_TRAVEL_MOVES_WITH_TILT, config, defaults, False)
         travel_time_down = get_value(CONF_TRAVELLING_TIME_DOWN, config, defaults, DEFAULT_TRAVEL_TIME)
         travel_time_up = get_value(CONF_TRAVELLING_TIME_UP, config, defaults, DEFAULT_TRAVEL_TIME)
         tilt_time_down = get_value(CONF_TILTING_TIME_DOWN, config, defaults, None)
@@ -164,6 +168,7 @@ def devices_from_config(domain_config):
         travel_startup_delay = get_value(CONF_TRAVEL_STARTUP_DELAY, config, defaults, None)
         tilt_startup_delay = get_value(CONF_TILT_STARTUP_DELAY, config, defaults, None)
         
+        config.pop(CONF_TRAVEL_MOVES_WITH_TILT, None)
         config.pop(CONF_TRAVELLING_TIME_DOWN, None)
         config.pop(CONF_TRAVELLING_TIME_UP, None)
         config.pop(CONF_TILTING_TIME_DOWN, None)
@@ -197,6 +202,7 @@ def devices_from_config(domain_config):
         device = CoverTimeBased(
             device_id,
             name,
+            travel_moves_with_tilt,
             travel_time_down,
             travel_time_up,
             tilt_time_down,
@@ -234,6 +240,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self,
         device_id,
         name,
+        travel_moves_with_tilt,
         travel_time_down,
         travel_time_up,
         tilt_time_down,
@@ -251,6 +258,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Initialize the cover."""
         self._unique_id = device_id
 
+        self._travel_moves_with_tilt = travel_moves_with_tilt
         self._travel_time_down = travel_time_down
         self._travel_time_up = travel_time_up
         self._tilting_time_down = tilt_time_down
@@ -389,6 +397,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def extra_state_attributes(self):
         """Return the device state attributes."""
         attr = {}
+        if self._travel_moves_with_tilt is not None:
+            attr[CONF_TRAVEL_MOVES_WITH_TILT] = self._travel_moves_with_tilt
         if self._travel_time_down is not None:
             attr[CONF_TRAVELLING_TIME_DOWN] = self._travel_time_down
         if self._travel_time_up is not None:
@@ -448,7 +458,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     @property
     def is_closed(self):
         """Return if the cover is closed."""
-        return self.travel_calc.is_closed()
+        if not self._has_tilt_support():
+            return self.travel_calc.is_closed()
+        
+        return self.travel_calc.is_closed() and self.tilt_calc.is_closed()
 
     @property
     def assumed_state(self):
@@ -520,7 +533,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._last_command = SERVICE_CLOSE_COVER
             
             tilt_target = None
-            if self._has_tilt_support():
+            if self._has_tilt_support() and self._travel_moves_with_tilt:
                 tilt_distance = (movement_time / self._tilting_time_down) * 100.0
                 current_tilt_position = self.tilt_calc.current_position()
                 tilt_target = min(100, current_tilt_position + tilt_distance)
@@ -578,7 +591,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._last_command = SERVICE_OPEN_COVER
             
             tilt_target = None
-            if self._has_tilt_support():
+            if self._has_tilt_support() and self._travel_moves_with_tilt:
                 tilt_distance = (movement_time / self._tilting_time_up) * 100.0
                 current_tilt_position = self.tilt_calc.current_position()
                 tilt_target = max(0, current_tilt_position - tilt_distance)
@@ -630,13 +643,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             tilt_distance = 100 - (current_tilt_position if current_tilt_position is not None else 0)
             movement_time = (tilt_distance / 100.0) * self._tilting_time_down
             
-            travel_distance = (movement_time / self._travel_time_down) * 100.0
-            current_travel_position = self.travel_calc.current_position()
-            travel_target = min(100, current_travel_position + travel_distance)
+            travel_target = None
+            if self._travel_moves_with_tilt:
+                travel_distance = (movement_time / self._travel_time_down) * 100.0
+                current_travel_position = self.travel_calc.current_position()
+                travel_target = min(100, current_travel_position + travel_distance)
             
             _LOGGER.debug(
-                "async_close_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
-                tilt_distance, movement_time, travel_distance, travel_target
+                "async_close_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%s",
+                tilt_distance, movement_time, 
+                (movement_time / self._travel_time_down) * 100.0 if self._travel_moves_with_tilt else 0,
+                travel_target if travel_target is not None else "N/A"
             )
             
             self._last_command = SERVICE_CLOSE_COVER
@@ -646,7 +663,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             if self._tilt_startup_delay and self._tilt_startup_delay > 0:
                 def start_movement():
                     self.tilt_calc.start_travel_down()
-                    self.travel_calc.start_travel(int(travel_target))
+                    if travel_target is not None:
+                        self.travel_calc.start_travel(int(travel_target))
                     self.start_auto_updater()
                 
                 self._startup_delay_task = self.hass.async_create_task(
@@ -654,7 +672,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 )
             else:
                 self.tilt_calc.start_travel_down()
-                self.travel_calc.start_travel(int(travel_target))
+                if travel_target is not None:
+                    self.travel_calc.start_travel(int(travel_target))
                 self.start_auto_updater()
 
     async def async_open_cover_tilt(self, **kwargs):
@@ -682,13 +701,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             tilt_distance = (current_tilt_position if current_tilt_position is not None else 100)
             movement_time = (tilt_distance / 100.0) * self._tilting_time_up
             
-            travel_distance = (movement_time / self._travel_time_up) * 100.0
-            current_travel_position = self.travel_calc.current_position()
-            travel_target = max(0, current_travel_position - travel_distance)
+            travel_target = None
+            if self._travel_moves_with_tilt:
+                travel_distance = (movement_time / self._travel_time_up) * 100.0
+                current_travel_position = self.travel_calc.current_position()
+                travel_target = max(0, current_travel_position - travel_distance)
             
             _LOGGER.debug(
-                "async_open_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
-                tilt_distance, movement_time, travel_distance, travel_target
+                "async_open_cover_tilt :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%s",
+                tilt_distance, movement_time,
+                (movement_time / self._travel_time_up) * 100.0 if self._travel_moves_with_tilt else 0,
+                travel_target if travel_target is not None else "N/A"
             )
             
             self._last_command = SERVICE_OPEN_COVER
@@ -698,7 +721,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             if self._tilt_startup_delay and self._tilt_startup_delay > 0:
                 def start_movement():
                     self.tilt_calc.start_travel_up()
-                    self.travel_calc.start_travel(int(travel_target))
+                    if travel_target is not None:
+                        self.travel_calc.start_travel(int(travel_target))
                     self.start_auto_updater()
                 
                 self._startup_delay_task = self.hass.async_create_task(
@@ -706,7 +730,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 )
             else:
                 self.tilt_calc.start_travel_up()
-                self.travel_calc.start_travel(int(travel_target))
+                if travel_target is not None:
+                    self.travel_calc.start_travel(int(travel_target))
                 self.start_auto_updater()
 
     async def async_stop_cover(self, **kwargs):
@@ -811,7 +836,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._last_command = command
             
             tilt_target = None
-            if self._has_tilt_support():
+            if self._has_tilt_support() and self._travel_moves_with_tilt:
                 tilt_distance = (movement_time / tilt_time) * 100.0
                 current_tilt_position = self.tilt_calc.current_position()
                 if command == SERVICE_CLOSE_COVER:
@@ -912,7 +937,14 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             tilt_distance = abs(new_tilt_position - current_tilt_position)
             movement_time = (tilt_distance / 100.0) * tilt_time
             
-            travel_distance = (movement_time / travel_time) * 100.0
+            travel_target = None
+            if self._travel_moves_with_tilt:
+                travel_distance = (movement_time / travel_time) * 100.0
+                current_travel_position = self.travel_calc.current_position()
+                if command == SERVICE_CLOSE_COVER:
+                    travel_target = min(100, current_travel_position + travel_distance)
+                else:
+                    travel_target = max(0, current_travel_position - travel_distance)
             
             is_to_endpoint = (new_tilt_position == 0 or new_tilt_position == 100)
             if (
@@ -931,17 +963,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 self.async_write_ha_state()
                 return
             
-            current_travel_position = self.travel_calc.current_position()
-            if command == SERVICE_CLOSE_COVER:
-                travel_target = min(100, current_travel_position + travel_distance)
-            else:
-                travel_target = max(0, current_travel_position - travel_distance)
-            
             self._last_command = command
             
             _LOGGER.debug(
-                "set_tilt_position :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%f",
-                tilt_distance, movement_time, travel_distance, travel_target
+                "set_tilt_position :: tilt_distance=%f%%, movement_time=%fs, travel_distance=%f%%, new_travel_pos=%s",
+                tilt_distance, movement_time,
+                (movement_time / travel_time) * 100.0 if self._travel_moves_with_tilt else 0,
+                travel_target if travel_target is not None else "N/A"
             )
             
             await self._async_handle_command(command)
@@ -949,7 +977,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             if startup_delay and startup_delay > 0:
                 def start_movement():
                     self.tilt_calc.start_travel(new_tilt_position)
-                    self.travel_calc.start_travel(int(travel_target))
+                    if travel_target is not None:
+                        self.travel_calc.start_travel(int(travel_target))
                     self.start_auto_updater()
                 
                 self._startup_delay_task = self.hass.async_create_task(
@@ -957,7 +986,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 )
             else:
                 self.tilt_calc.start_travel(new_tilt_position)
-                self.travel_calc.start_travel(int(travel_target))
+                if travel_target is not None:
+                    self.travel_calc.start_travel(int(travel_target))
                 self.start_auto_updater()
         return
 
