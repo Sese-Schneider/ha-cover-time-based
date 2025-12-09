@@ -34,13 +34,13 @@ from xknx.devices import TravelStatus, TravelCalculator
 _LOGGER = logging.getLogger(__name__)
 
 CONF_DEVICES = "devices"
+CONF_TRAVEL_MOVES_WITH_TILT = "travel_moves_with_tilt"
 CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
 CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
-CONF_TRAVEL_MOVES_WITH_TILT = "travel_moves_with_tilt"
 DEFAULT_TRAVEL_TIME = 30
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
@@ -58,6 +58,7 @@ BASE_DEVICE_SCHEMA = {
 }
 
 TRAVEL_TIME_SCHEMA = {
+    vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
     vol.Optional(
         CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
     ): cv.positive_int,
@@ -72,7 +73,6 @@ TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
         cv.positive_float, None
     ),
-    vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
 }
 
 SWITCH_COVER_SCHEMA = {
@@ -120,13 +120,13 @@ def devices_from_config(domain_config):
     for device_id, config in domain_config[CONF_DEVICES].items():
         name = config.pop(CONF_NAME)
 
+        travel_moves_with_tilt = config.pop(CONF_TRAVEL_MOVES_WITH_TILT)
         travel_time_down = config.pop(CONF_TRAVELLING_TIME_DOWN)
         travel_time_up = config.pop(CONF_TRAVELLING_TIME_UP)
         tilt_time_down = config.pop(CONF_TILTING_TIME_DOWN)
         tilt_time_up = config.pop(CONF_TILTING_TIME_UP)
         travel_delay_at_end = config.pop(CONF_TRAVEL_DELAY_AT_END)
         min_movement_time = config.pop(CONF_MIN_MOVEMENT_TIME)
-        travel_moves_with_tilt = config.pop(CONF_TRAVEL_MOVES_WITH_TILT)
 
         open_switch_entity_id = (
             config.pop(CONF_OPEN_SWITCH_ENTITY_ID)
@@ -152,13 +152,13 @@ def devices_from_config(domain_config):
         device = CoverTimeBased(
             device_id,
             name,
+            travel_moves_with_tilt,
             travel_time_down,
             travel_time_up,
             tilt_time_down,
             tilt_time_up,
             travel_delay_at_end,
             min_movement_time,
-            travel_moves_with_tilt,
             open_switch_entity_id,
             close_switch_entity_id,
             stop_switch_entity_id,
@@ -188,13 +188,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self,
         device_id,
         name,
+        travel_moves_with_tilt,
         travel_time_down,
         travel_time_up,
         tilt_time_down,
         tilt_time_up,
         travel_delay_at_end,
         min_movement_time,
-        travel_moves_with_tilt,
         open_switch_entity_id,
         close_switch_entity_id,
         stop_switch_entity_id,
@@ -204,13 +204,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Initialize the cover."""
         self._unique_id = device_id
 
+        self._travel_moves_with_tilt = travel_moves_with_tilt
         self._travel_time_down = travel_time_down
         self._travel_time_up = travel_time_up
         self._tilting_time_down = tilt_time_down
         self._tilting_time_up = tilt_time_up
         self._travel_delay_at_end = travel_delay_at_end
         self._min_movement_time = min_movement_time
-        self._travel_moves_with_tilt = travel_moves_with_tilt
 
         self._open_switch_entity_id = open_switch_entity_id
         self._close_switch_entity_id = close_switch_entity_id
@@ -305,6 +305,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def extra_state_attributes(self):
         """Return the device state attributes."""
         attr = {}
+        if self._travel_moves_with_tilt is not None:
+            attr[CONF_TRAVEL_MOVES_WITH_TILT] = self._travel_moves_with_tilt
         if self._travel_time_down is not None:
             attr[CONF_TRAVELLING_TIME_DOWN] = self._travel_time_down
         if self._travel_time_up is not None:
@@ -317,8 +319,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             attr[CONF_TRAVEL_DELAY_AT_END] = self._travel_delay_at_end
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
-        if self._travel_moves_with_tilt is not None:
-            attr[CONF_TRAVEL_MOVES_WITH_TILT] = self._travel_moves_with_tilt
         return attr
 
     @property
@@ -917,3 +917,4 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         _LOGGER.debug("_async_handle_command :: %s", cmd)
 
         self.async_write_ha_state()
+
