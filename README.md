@@ -57,36 +57,49 @@ cover:
         tilting_time_up: 2.7
         travel_delay_at_end: 2.0
         min_movement_time: 0.5
+        travel_moves_with_tilt: false
 ```
 
 ### Options
 
-| Name                   | Type         | Requirement                                     | Description                                                                     | Default |
-|------------------------|--------------|-------------------------------------------------|---------------------------------------------------------------------------------|---------|
-| name                   | string       | **Required**                                    | Name of the created entity                                                      |         |
-| open_switch_entity_id  | state entity | **Required** or `cover_entity_id`               | Entity ID of the switch for opening the cover                                   |         |
-| close_switch_entity_id | state entity | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover                                   |         |
-| stop_switch_entity_id  | state entity | *Optional* or `cover_entity_id`                 | Entity ID of the switch for stopping the cover                                  | None    |
-| cover_entity_id        | state entity | **Required** or `open_\|close_switch_entity_id` | Entity ID of a existing cover entity                                            |         |
-| travelling_time_down   | int          | *Optional*                                      | Time it takes in seconds to close the cover                                     | 30      |
-| travelling_time_up     | int          | *Optional*                                      | Time it takes in seconds to open the cover                                      | 30      |
-| tilting_time_down      | float        | *Optional*                                      | Time it takes in seconds to tilt the cover all the way down                     | None    |
-| tilting_time_up        | float        | *Optional*                                      | Time it takes in seconds to tilt the cover all the way up                       | None    |
-| travel_delay_at_end    | float        | *Optional*                                      | Additional relay time (seconds) at endpoints (0%/100%) for position reset       | None    |
-| min_movement_time      | float        | *Optional*                                      | Minimum movement duration (seconds) - blocks shorter movements                  | None    |
-| is_button              | boolean      | *Optional* (`cover_entity_id` not supported)    | Treats the switches as buttons, only pressing them for 1s                       | False   |
+| Name                     | Type         | Requirement                                     | Description                                                                     | Default |
+|--------------------------|--------------|-------------------------------------------------|---------------------------------------------------------------------------------|---------|
+| name                     | string       | **Required**                                    | Name of the created entity                                                      |         |
+| open_switch_entity_id    | state entity | **Required** or `cover_entity_id`               | Entity ID of the switch for opening the cover                                   |         |
+| close_switch_entity_id   | state entity | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover                                   |         |
+| stop_switch_entity_id    | state entity | *Optional* or `cover_entity_id`                 | Entity ID of the switch for stopping the cover                                  | None    |
+| cover_entity_id          | state entity | **Required** or `open_\|close_switch_entity_id` | Entity ID of a existing cover entity                                            |         |
+| travelling_time_down     | int          | *Optional*                                      | Time it takes in seconds to close the cover                                     | 30      |
+| travelling_time_up       | int          | *Optional*                                      | Time it takes in seconds to open the cover                                      | 30      |
+| tilting_time_down        | float        | *Optional*                                      | Time it takes in seconds to tilt the cover all the way down                     | None    |
+| tilting_time_up          | float        | *Optional*                                      | Time it takes in seconds to tilt the cover all the way up                       | None    |
+| travel_delay_at_end      | float        | *Optional*                                      | Additional relay time (seconds) at endpoints (0%/100%) for position reset       | None    |
+| min_movement_time        | float        | *Optional*                                      | Minimum movement duration (seconds) - blocks shorter movements                  | None    |
+| travel_moves_with_tilt   | boolean      | *Optional*                                      | Whether tilt movements also cause proportional travel changes                   | False   |
+| is_button                | boolean      | *Optional* (`cover_entity_id` not supported)    | Treats the switches as buttons, only pressing them for 1s                       | False   |
 
 ## Advanced Features
 
 ### Synchronized Travel and Tilt
 
-When both `tilting_time_down/up` are configured, the integration simulates realistic blind behavior where travel and tilt occur on the same motor:
+When both `tilting_time_down/up` are configured, the integration simulates realistic blind behavior:
 
-- Moving the cover automatically adjusts tilt proportionally
-- Adjusting tilt causes proportional travel movement
+- **Travel movements** always adjust tilt proportionally
+- **Tilt movements** affect travel only when `travel_moves_with_tilt: true`
 - Movements are time-synchronized and stop simultaneously
 
 **Example:** With `travelling_time=10s` and `tilting_time=5s`, moving travel 50% changes tilt 100%.
+
+### Travel Moves With Tilt (travel_moves_with_tilt)
+
+Controls whether tilt adjustments cause proportional travel movement.
+
+- **`false` (default):** Only travel movements affect tilt. Tilt can be adjusted independently.
+- **`true`:** Both travel and tilt movements are synchronized on the same motor.
+
+```yaml
+travel_moves_with_tilt: true
+```
 
 ### Automatic Position Constraints
 
