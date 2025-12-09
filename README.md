@@ -17,9 +17,9 @@ It improves the original integration by adding tilt control and synchronized tra
 
 - Control the height of your cover based on time.
 - Control the tilt of your cover based on time.
-- **Synchronized movement:** Travel and tilt move proportionally on the same motor (realistic blind mechanism simulation).
-- **Automatic position constraints:** Tilt automatically resets to correct position at travel endpoints (0% and 100%).
+- **Synchronized movement:** Travel and tilt move proportionally on the same motor.
 - **Optional endpoint delay:** Configurable relay delay at endpoints for covers with mechanical endstops.
+- **Minimum movement time:** Prevents position drift from very short relay activations.
 
 *To enable tilt control you need to add the `tilting_time_down` and `tilting_time_up` options to your configuration.yaml.*
 
@@ -55,8 +55,8 @@ cover:
         travelling_time_up: 25
         tilting_time_down: 2.3
         tilting_time_up: 2.7
-        travel_delay_at_end: 2.0      # Optional: 2 seconds additional relay time at endpoints
-        min_movement_time: 0.5         # Optional: Minimum 0.5s movement duration
+        travel_delay_at_end: 2.0
+        min_movement_time: 0.5
 ```
 
 ### Options
@@ -82,84 +82,37 @@ cover:
 
 When both `tilting_time_down/up` are configured, the integration simulates realistic blind behavior where travel and tilt occur on the same motor:
 
-- **Moving the cover** automatically adjusts tilt proportionally based on movement duration
-- **Adjusting tilt** causes proportional travel movement (as would happen with a real motor)
+- Moving the cover automatically adjusts tilt proportionally
+- Adjusting tilt causes proportional travel movement
 - Movements are time-synchronized and stop simultaneously
 
-**Example:** With `travelling_time=10s` and `tilting_time=5s`:
-- Moving travel 50% → tilt changes 100% (twice as fast)
-- Moving tilt 50% → travel changes 25% (half as fast)
+**Example:** With `travelling_time=10s` and `tilting_time=5s`, moving travel 50% changes tilt 100%.
 
 ### Automatic Position Constraints
 
-The integration enforces mechanical constraints at endpoint positions:
-
-- **At 0% (fully open):** Tilt is automatically set to 0% (horizontal)
-- **At 100% (fully closed):** Tilt is automatically set to 100% (vertical)
-
-This prevents position drift and ensures consistency after full open/close operations.
+At endpoint positions, tilt is automatically constrained to prevent drift:
+- **At 0% (fully open):** Tilt is set to 0% (horizontal)
+- **At 100% (fully closed):** Tilt is set to 100% (vertical)
 
 ### Endpoint Delay (travel_delay_at_end)
 
-Optional feature for covers with **mechanical endstops**. Keeps the relay active for additional time after reaching 0% or 100% position.
+For covers with mechanical endstops, keeps the relay active for additional time after reaching endpoints to reset position.
 
-**Use cases:**
-- Covers with mechanical endstops that need position reset
-- Compensating for accumulated timing errors
-- Systems where relay delays cause position drift
-
-**How it works:**
-- Position in HA updates immediately (no UI delay)
-- Relay continues running for configured time
-- Motor presses against endstop, resetting position
-- Any new movement cancels the delay immediately
-
-**Example:**
 ```yaml
-travel_delay_at_end: 2.0  # 2 seconds additional press at endpoints
+travel_delay_at_end: 2.0
 ```
 
-**Recommended values:** 1.0 - 3.0 seconds
-
-**Not recommended for:**
-- Covers without mechanical endstops
-- Covers with position encoders
-- Systems with perfect time-based positioning
+Recommended values: 1.0 - 3.0 seconds
 
 ### Minimum Movement Time (min_movement_time)
 
-Optional feature to prevent **position drift from very short movements**. Blocks relay activations that are too brief to physically move the cover.
+Prevents position drift by blocking relay activations too brief to physically move the cover. Movements to 0% or 100% are always allowed.
 
-**The problem:**
-- Small position changes (e.g., 1% tilt) result in very short relay activation times (e.g., 0.03s)
-- These activations are too brief to overcome motor inertia - cover doesn't actually move
-- But the timing system counts them as movements
-- After many such "micro movements," position drift accumulates
-
-**Use cases:**
-- Preventing drift from repeated small tilt adjustments
-- Covers where motor inertia prevents very short movements
-- Systems with relay delays that make brief activations ineffective
-
-**How it works:**
-- Calculates movement duration before execution
-- Blocks movements shorter than configured minimum
-- Exception: Movements TO 0% or 100% always allowed (ensures you can fully open/close)
-
-**Example:**
 ```yaml
-min_movement_time: 0.5  # Block movements shorter than 0.5 seconds
-
-# User tries: Tilt 50% → 51%
-# Calculated time: 0.03s (from tilting_time_down: 3s)
-# Result: 0.03s < 0.5s → Movement blocked, no relay activation
+min_movement_time: 0.5
 ```
 
-**Recommended values:** 0.5 - 1.5 seconds
-
-**Not needed for:**
-- Covers with position encoders
-- All movements work reliably regardless of duration
+Recommended values: 0.5 - 1.5 seconds
 
 
 [commits-shield]: https://img.shields.io/github/commit-activity/y/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
