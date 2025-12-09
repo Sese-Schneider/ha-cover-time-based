@@ -533,7 +533,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._last_command = SERVICE_CLOSE_COVER
             
             tilt_target = None
-            if self._has_tilt_support() and self._travel_moves_with_tilt:
+            if self._has_tilt_support():
                 tilt_distance = (movement_time / self._tilting_time_down) * 100.0
                 current_tilt_position = self.tilt_calc.current_position()
                 tilt_target = min(100, current_tilt_position + tilt_distance)
@@ -591,7 +591,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._last_command = SERVICE_OPEN_COVER
             
             tilt_target = None
-            if self._has_tilt_support() and self._travel_moves_with_tilt:
+            if self._has_tilt_support():
                 tilt_distance = (movement_time / self._tilting_time_up) * 100.0
                 current_tilt_position = self.tilt_calc.current_position()
                 tilt_target = max(0, current_tilt_position - tilt_distance)
@@ -836,7 +836,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._last_command = command
             
             tilt_target = None
-            if self._has_tilt_support() and self._travel_moves_with_tilt:
+            if self._has_tilt_support():
                 tilt_distance = (movement_time / tilt_time) * 100.0
                 current_tilt_position = self.tilt_calc.current_position()
                 if command == SERVICE_CLOSE_COVER:
@@ -1031,6 +1031,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def _enforce_tilt_constraints(self):
         """Enforce tilt position constraints at travel boundaries."""
         if not self._has_tilt_support():
+            return
+
+        if not self._travel_moves_with_tilt:
             return
         
         current_travel = self.travel_calc.current_position()
