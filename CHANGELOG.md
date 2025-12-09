@@ -2,6 +2,19 @@
 
 ### Features
 
+- **Motor startup delay compensation (`travel_startup_delay`, `tilt_startup_delay`)**: Optional parameters to compensate for motor inertia by delaying position tracking after relay activation, improving position accuracy for short movements
+- **Default values (`defaults`)**: Optional section to define default timing parameters for all devices, reducing configuration duplication
+
+### Bug Fixes
+
+- Fixed endpoint delay not properly stopping relay when starting new movement in opposite direction
+- Fixed position calculation using stale data after stopping movement during direction change
+
+
+## X.X.X (TBD)
+
+### Features
+
 - **Synchronized travel and tilt movements**: Travel and tilt now move proportionally on the same motor, accurately simulating real blind mechanism behavior
 - **Automatic position constraints**: Tilt automatically resets to correct position at travel endpoints (0% horizontal at fully open, 100% vertical at fully closed)
 - **Optional endpoint delay (`travel_delay_at_end`)**: Configurable relay delay at endpoint positions for covers with mechanical endstops, allowing position reset through endstop contact
