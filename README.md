@@ -51,13 +51,13 @@ cover:
         name: Room Rolling Shutter
         open_switch_entity_id: switch.wall_switch_right
         close_switch_entity_id: switch.wall_switch_left
+        travel_moves_with_tilt: false
         travelling_time_down: 23
         travelling_time_up: 25
         tilting_time_down: 2.3
         tilting_time_up: 2.7
         travel_delay_at_end: 2.0
         min_movement_time: 0.5
-        travel_moves_with_tilt: false
 ```
 
 ### Options
@@ -69,13 +69,13 @@ cover:
 | close_switch_entity_id   | state entity | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover                                   |         |
 | stop_switch_entity_id    | state entity | *Optional* or `cover_entity_id`                 | Entity ID of the switch for stopping the cover                                  | None    |
 | cover_entity_id          | state entity | **Required** or `open_\|close_switch_entity_id` | Entity ID of a existing cover entity                                            |         |
+| travel_moves_with_tilt   | boolean      | *Optional*                                      | Whether tilt movements also cause proportional travel changes                   | False   |
 | travelling_time_down     | int          | *Optional*                                      | Time it takes in seconds to close the cover                                     | 30      |
 | travelling_time_up       | int          | *Optional*                                      | Time it takes in seconds to open the cover                                      | 30      |
 | tilting_time_down        | float        | *Optional*                                      | Time it takes in seconds to tilt the cover all the way down                     | None    |
 | tilting_time_up          | float        | *Optional*                                      | Time it takes in seconds to tilt the cover all the way up                       | None    |
 | travel_delay_at_end      | float        | *Optional*                                      | Additional relay time (seconds) at endpoints (0%/100%) for position reset       | None    |
 | min_movement_time        | float        | *Optional*                                      | Minimum movement duration (seconds) - blocks shorter movements                  | None    |
-| travel_moves_with_tilt   | boolean      | *Optional*                                      | Whether tilt movements also cause proportional travel changes                   | False   |
 | is_button                | boolean      | *Optional* (`cover_entity_id` not supported)    | Treats the switches as buttons, only pressing them for 1s                       | False   |
 
 ## Advanced Features
@@ -135,3 +135,4 @@ Recommended values: 0.5 - 1.5 seconds
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg?style=for-the-badge
 [releases-shield]: https://img.shields.io/github/release/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
 [releases]: https://github.com/Sese-Schneider/ha-cover-time-based/releases
+
