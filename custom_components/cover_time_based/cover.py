@@ -353,8 +353,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     @property
     def is_closed(self):
-        """Return if the cover is closed."""
-        return self.travel_calc.is_closed()
+        if not self._has_tilt_support():
+            return self.travel_calc.is_closed()
+    
+        return self.travel_calc.is_closed() and self.tilt_calc.is_closed()
 
     @property
     def assumed_state(self):
@@ -900,3 +902,4 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         _LOGGER.debug("_async_handle_command :: %s", cmd)
 
         self.async_write_ha_state()
+
