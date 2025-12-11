@@ -61,27 +61,15 @@ BASE_DEVICE_SCHEMA = {
 }
 
 TRAVEL_TIME_SCHEMA = {
-    vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
-    vol.Optional(
-        CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
-    ): cv.positive_int,
-    vol.Optional(CONF_TRAVELLING_TIME_UP, default=DEFAULT_TRAVEL_TIME): cv.positive_int,
-    vol.Optional(CONF_TILTING_TIME_DOWN, default=None): vol.Any(
-        cv.positive_float, None
-    ),
-    vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(cv.positive_float, None),
-    vol.Optional(CONF_TRAVEL_DELAY_AT_END, default=None): vol.Any(
-        cv.positive_float, None
-    ),
-    vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
-        cv.positive_float, None
-    ),
-    vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
-        cv.positive_float, None
-    ),
-    vol.Optional(CONF_TILT_STARTUP_DELAY, default=None): vol.Any(
-        cv.positive_float, None
-    ),
+    vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT): cv.boolean,
+    vol.Optional(CONF_TRAVELLING_TIME_DOWN): cv.positive_float,
+    vol.Optional(CONF_TRAVELLING_TIME_UP): cv.positive_float,
+    vol.Optional(CONF_TILTING_TIME_DOWN): cv.positive_float,
+    vol.Optional(CONF_TILTING_TIME_UP): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
+    vol.Optional(CONF_MIN_MOVEMENT_TIME): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_STARTUP_DELAY): cv.positive_float,
+    vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
 }
 
 SWITCH_COVER_SCHEMA = {
@@ -100,15 +88,27 @@ ENTITY_COVER_SCHEMA = {
 }
 
 DEFAULTS_SCHEMA = vol.Schema({
-    vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT): cv.boolean,
-    vol.Optional(CONF_TRAVELLING_TIME_DOWN): cv.positive_int,
-    vol.Optional(CONF_TRAVELLING_TIME_UP): cv.positive_int,
-    vol.Optional(CONF_TILTING_TIME_DOWN): cv.positive_float,
-    vol.Optional(CONF_TILTING_TIME_UP): cv.positive_float,
-    vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
-    vol.Optional(CONF_MIN_MOVEMENT_TIME): cv.positive_float,
-    vol.Optional(CONF_TRAVEL_STARTUP_DELAY): cv.positive_float,
-    vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
+    vol.Optional(
+        CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
+    ): cv.positive_float,
+    vol.Optional(CONF_TRAVELLING_TIME_UP, default=DEFAULT_TRAVEL_TIME): cv.positive_float,
+    vol.Optional(CONF_TILTING_TIME_DOWN, default=None): vol.Any(
+        cv.positive_float, None
+    ),
+    vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(cv.positive_float, None),
+    vol.Optional(CONF_TRAVEL_DELAY_AT_END, default=None): vol.Any(
+        cv.positive_float, None
+    ),
+    vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
+        cv.positive_float, None
+    ),
+    vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
+        cv.positive_float, None
+    ),
+    vol.Optional(CONF_TILT_STARTUP_DELAY, default=None): vol.Any(
+        cv.positive_float, None
+    ),
 })
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
