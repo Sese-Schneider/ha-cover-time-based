@@ -872,12 +872,20 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Turn the device stop."""
         _LOGGER.debug("async_stop_cover")
 
+        was_active = (
+            self.is_opening
+            or self.is_closing
+            or (self._startup_delay_task and not self._startup_delay_task.done())
+            or (self._delay_task and not self._delay_task.done())
+        )
+
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
         self._handle_stop()
         self._enforce_tilt_constraints()
 
-        await self._async_handle_command(SERVICE_STOP_COVER)
+        if was_active or self._input_mode != INPUT_MODE_TOGGLE:
+            await self._async_handle_command(SERVICE_STOP_COVER)
         self._last_command = None
 
     async def set_position(self, position):
@@ -1259,6 +1267,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 )
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
+            self._last_command = None
 
     async def _delayed_stop(self, delay):
         """Stop the relay after a delay."""
@@ -1267,6 +1276,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             await sleep(delay)
             _LOGGER.debug("_delayed_stop :: delay complete, stopping relay")
             await self._async_handle_command(SERVICE_STOP_COVER)
+            self._last_command = None
             self._delay_task = None
         except asyncio.CancelledError:
             _LOGGER.debug("_delayed_stop :: delay cancelled")
@@ -1276,16 +1286,22 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def set_known_position(self, **kwargs):
         """We want to do a few things when we get a position"""
         position = kwargs[ATTR_POSITION]
+        was_active = self.is_opening or self.is_closing
         self._handle_stop()
-        await self._async_handle_command(SERVICE_STOP_COVER)
+        if was_active or self._input_mode != INPUT_MODE_TOGGLE:
+            await self._async_handle_command(SERVICE_STOP_COVER)
         self.travel_calc.set_position(position)
         self._enforce_tilt_constraints()
+        self._last_command = None
 
     async def set_known_tilt_position(self, **kwargs):
         """We want to do a few things when we get a position"""
         position = kwargs[ATTR_TILT_POSITION]
-        await self._async_handle_command(SERVICE_STOP_COVER)
+        was_active = self.is_opening or self.is_closing
+        if was_active or self._input_mode != INPUT_MODE_TOGGLE:
+            await self._async_handle_command(SERVICE_STOP_COVER)
         self.tilt_calc.set_position(position)
+        self._last_command = None
 
     async def _async_handle_command(self, command, *args):
         if command == SERVICE_CLOSE_COVER:
