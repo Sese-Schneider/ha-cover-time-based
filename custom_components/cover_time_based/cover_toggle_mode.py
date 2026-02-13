@@ -26,6 +26,10 @@ class ToggleModeCover(SwitchCoverTimeBased):
         self._pulse_time = pulse_time
 
     async def _send_open(self) -> None:
+        self._mark_switch_pending(self._close_switch_entity_id, 1)
+        self._mark_switch_pending(self._open_switch_entity_id, 2)
+        if self._stop_switch_entity_id is not None:
+            self._mark_switch_pending(self._stop_switch_entity_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -54,6 +58,10 @@ class ToggleModeCover(SwitchCoverTimeBased):
         )
 
     async def _send_close(self) -> None:
+        self._mark_switch_pending(self._open_switch_entity_id, 1)
+        self._mark_switch_pending(self._close_switch_entity_id, 2)
+        if self._stop_switch_entity_id is not None:
+            self._mark_switch_pending(self._stop_switch_entity_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -83,6 +91,7 @@ class ToggleModeCover(SwitchCoverTimeBased):
 
     async def _send_stop(self) -> None:
         if self._last_command == SERVICE_CLOSE_COVER:
+            self._mark_switch_pending(self._close_switch_entity_id, 2)
             await self.hass.services.async_call(
                 "homeassistant",
                 "turn_on",
@@ -97,6 +106,7 @@ class ToggleModeCover(SwitchCoverTimeBased):
                 False,
             )
         elif self._last_command == SERVICE_OPEN_COVER:
+            self._mark_switch_pending(self._open_switch_entity_id, 2)
             await self.hass.services.async_call(
                 "homeassistant",
                 "turn_on",
@@ -142,7 +152,7 @@ class ToggleModeCover(SwitchCoverTimeBased):
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
-        if was_active:
+        if not self._triggered_externally and was_active:
             await self._send_stop()
         self.async_write_ha_state()
         self._last_command = None

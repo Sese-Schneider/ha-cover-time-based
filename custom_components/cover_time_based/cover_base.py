@@ -692,11 +692,12 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
-        await self._send_stop()
-        if (
-            tilt_restore_was_active or tilt_pre_step_was_active
-        ) and self._has_tilt_motor():
-            await self._send_tilt_stop()
+        if not self._triggered_externally:
+            await self._send_stop()
+            if (
+                tilt_restore_was_active or tilt_pre_step_was_active
+            ) and self._has_tilt_motor():
+                await self._send_tilt_stop()
         self.async_write_ha_state()
         self._last_command = None
 
@@ -1593,19 +1594,86 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         return 0.0
 
+    def _mark_switch_pending(self, entity_id, expected_transitions):
+        """Mark a switch as having pending echo transitions to ignore."""
+        self._pending_switch[entity_id] = self._pending_switch.get(entity_id, 0) + expected_transitions
+        _LOGGER.debug("_mark_switch_pending :: %s pending=%d", entity_id, self._pending_switch[entity_id])
+
+        # Cancel any existing timeout for this switch
+        if entity_id in self._pending_switch_timers:
+            self._pending_switch_timers[entity_id]()
+
+        # Safety timeout: clear pending after 5 seconds
+        @callback
+        def _clear_pending(_now):
+            if entity_id in self._pending_switch:
+                _LOGGER.debug("_mark_switch_pending :: timeout clearing %s", entity_id)
+                del self._pending_switch[entity_id]
+            self._pending_switch_timers.pop(entity_id, None)
+
+        self._pending_switch_timers[entity_id] = async_call_later(
+            self.hass, 5, _clear_pending
+        )
+
+    async def _async_switch_state_changed(self, event):
+        """Handle state changes on monitored switch entities."""
+        entity_id = event.data.get("entity_id")
+        new_state = event.data.get("new_state")
+        old_state = event.data.get("old_state")
+
+        if new_state is None or old_state is None:
+            return
+
+        new_val = new_state.state
+        old_val = old_state.state
+
+        _LOGGER.debug(
+            "_async_switch_state_changed :: %s: %s -> %s (pending=%s)",
+            entity_id, old_val, new_val,
+            self._pending_switch.get(entity_id, 0),
+        )
+
+        # Echo filtering: if this switch has pending echoes, decrement and skip
+        if self._pending_switch.get(entity_id, 0) > 0:
+            self._pending_switch[entity_id] -= 1
+            if self._pending_switch[entity_id] <= 0:
+                del self._pending_switch[entity_id]
+                # Cancel the safety timeout
+                timer = self._pending_switch_timers.pop(entity_id, None)
+                if timer:
+                    timer()
+            _LOGGER.debug(
+                "_async_switch_state_changed :: echo filtered, remaining=%s",
+                self._pending_switch.get(entity_id, 0),
+            )
+            return
+
+        # External state change detected — handle per mode
+        self._triggered_externally = True
+        try:
+            await self._handle_external_state_change(entity_id, old_val, new_val)
+        finally:
+            self._triggered_externally = False
+
+    async def _handle_external_state_change(self, entity_id, old_val, new_val):
+        """Handle external state change. Override in subclasses for mode-specific behavior."""
+
     async def _async_handle_command(self, command, *args):
         if command == SERVICE_CLOSE_COVER:
             cmd = "DOWN"
             self._state = False
-            await self._send_close()
+            if not self._triggered_externally:
+                await self._send_close()
         elif command == SERVICE_OPEN_COVER:
             cmd = "UP"
             self._state = True
-            await self._send_open()
+            if not self._triggered_externally:
+                await self._send_open()
         elif command == SERVICE_STOP_COVER:
             cmd = "STOP"
             self._state = True
-            await self._send_stop()
+            if not self._triggered_externally:
+                await self._send_stop()
 
         _LOGGER.debug("_async_handle_command :: %s", cmd)
         self.async_write_ha_state()
