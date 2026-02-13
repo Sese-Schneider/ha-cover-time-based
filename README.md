@@ -120,7 +120,8 @@ cover:
 | min_movement_time      | float        | _Optional_                                      | Minimum movement duration (seconds) - blocks shorter movements            | None    |
 | travel_startup_delay   | float        | _Optional_                                      | Motor startup time compensation (seconds) for travel movements            | None    |
 | tilt_startup_delay     | float        | _Optional_                                      | Motor startup time compensation (seconds) for tilt movements              | None    |
-| is_button              | boolean      | _Optional_ (`cover_entity_id` not supported)    | Treats the switches as buttons, only pressing them for 1s                 | False   |
+| input_mode             | string       | _Optional_ (`cover_entity_id` not supported)    | `switch` (latching), `pulse` (momentary+stop), `toggle` (same btn stops)  | switch  |
+| is_button              | boolean      | _Deprecated_                                    | Use `input_mode: pulse` instead                                           | False   |
 
 ## Advanced Features
 
