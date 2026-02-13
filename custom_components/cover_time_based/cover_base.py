@@ -23,6 +23,8 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
     async_track_time_interval,
 )
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -95,6 +97,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._tilt_restore_active: bool = False
         self._pending_travel_target: int | None = None
         self._pending_travel_command: str | None = None
+        self._triggered_externally = False
+        self._pending_switch = {}
+        self._pending_switch_timers = {}
+        self._state_listener_unsubs = []
 
         self.travel_calc = TravelCalculator(
             self._travel_time_close,
@@ -127,8 +133,26 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     int(old_state.attributes.get(ATTR_CURRENT_TILT_POSITION))
                 )
 
+        # Register state change listeners for switch entities
+        for attr in ('_open_switch_entity_id', '_close_switch_entity_id', '_stop_switch_entity_id'):
+            entity_id = getattr(self, attr, None)
+            if entity_id:
+                self._state_listener_unsubs.append(
+                    async_track_state_change_event(
+                        self.hass,
+                        [entity_id],
+                        self._async_switch_state_changed,
+                    )
+                )
+
     async def async_will_remove_from_hass(self):
         """Clean up when entity is removed."""
+        for unsub in self._state_listener_unsubs:
+            unsub()
+        self._state_listener_unsubs.clear()
+        for timer in self._pending_switch_timers.values():
+            timer()
+        self._pending_switch_timers.clear()
         if self._calibration is not None:
             if (
                 self._calibration.timeout_task
