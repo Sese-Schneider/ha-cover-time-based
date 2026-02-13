@@ -51,6 +51,8 @@ CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
 CONF_STOP_SWITCH_ENTITY_ID = "stop_switch_entity_id"
 CONF_IS_BUTTON = "is_button"
 CONF_INPUT_MODE = "input_mode"
+CONF_PULSE_TIME = "pulse_time"
+DEFAULT_PULSE_TIME = 1.0
 INPUT_MODE_SWITCH = "switch"
 INPUT_MODE_PULSE = "pulse"
 INPUT_MODE_TOGGLE = "toggle"
@@ -85,6 +87,7 @@ SWITCH_COVER_SCHEMA = {
     vol.Optional(CONF_INPUT_MODE, default=None): vol.Any(
         vol.In([INPUT_MODE_SWITCH, INPUT_MODE_PULSE, INPUT_MODE_TOGGLE]), None
     ),
+    vol.Optional(CONF_PULSE_TIME): cv.positive_float,
     **TRAVEL_TIME_SCHEMA,
 }
 
@@ -202,6 +205,8 @@ def devices_from_config(domain_config):
         )
         is_button = config.pop(CONF_IS_BUTTON) if CONF_IS_BUTTON in config else False
         input_mode = config.pop(CONF_INPUT_MODE, None) if CONF_INPUT_MODE in config else None
+        pulse_time = get_value(CONF_PULSE_TIME, config, defaults, DEFAULT_PULSE_TIME)
+        config.pop(CONF_PULSE_TIME, None)
 
         if input_mode is not None and is_button:
             _LOGGER.warning(
@@ -239,6 +244,7 @@ def devices_from_config(domain_config):
             close_switch_entity_id,
             stop_switch_entity_id,
             input_mode,
+            pulse_time,
             cover_entity_id,
         )
         devices.append(device)
@@ -277,6 +283,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         close_switch_entity_id,
         stop_switch_entity_id,
         input_mode,
+        pulse_time,
         cover_entity_id,
     ):
         """Initialize the cover."""
@@ -296,6 +303,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._close_switch_entity_id = close_switch_entity_id
         self._stop_switch_entity_id = stop_switch_entity_id
         self._input_mode = input_mode
+        self._pulse_time = pulse_time
 
         self._cover_entity_id = cover_entity_id
 
@@ -1178,7 +1186,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     )
 
                 if self._input_mode in (INPUT_MODE_PULSE, INPUT_MODE_TOGGLE):
-                    await sleep(1)
+                    await sleep(self._pulse_time)
 
                     await self.hass.services.async_call(
                         "homeassistant",
@@ -1218,7 +1226,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                         False,
                     )
                 if self._input_mode in (INPUT_MODE_PULSE, INPUT_MODE_TOGGLE):
-                    await sleep(1)
+                    await sleep(self._pulse_time)
 
                     await self.hass.services.async_call(
                         "homeassistant",
@@ -1246,7 +1254,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                         {"entity_id": self._close_switch_entity_id},
                         False,
                     )
-                    await sleep(1)
+                    await sleep(self._pulse_time)
                     await self.hass.services.async_call(
                         "homeassistant",
                         "turn_off",
@@ -1260,7 +1268,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                         {"entity_id": self._open_switch_entity_id},
                         False,
                     )
-                    await sleep(1)
+                    await sleep(self._pulse_time)
                     await self.hass.services.async_call(
                         "homeassistant",
                         "turn_off",
@@ -1293,7 +1301,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     )
 
                     if self._input_mode == INPUT_MODE_PULSE:
-                        await sleep(1)
+                        await sleep(self._pulse_time)
 
                         await self.hass.services.async_call(
                             "homeassistant",
