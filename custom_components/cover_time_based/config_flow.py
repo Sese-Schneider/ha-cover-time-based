@@ -23,7 +23,6 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
-    TextSelector,
 )
 
 from .cover import (
@@ -66,67 +65,50 @@ COVER_ENTITY_SELECTOR = EntitySelector(
     EntitySelectorConfig(domain="cover")
 )
 
+PULSE_TIME_SELECTOR = NumberSelector(
+    NumberSelectorConfig(min=0.1, max=10, step=0.1, mode=NumberSelectorMode.BOX)
+)
 
-def _build_schema(
+
+def _build_details_schema(
+    device_type: str,
+    input_mode: str,
     defaults: dict[str, Any] | None = None,
 ) -> vol.Schema:
-    """Build the cover configuration schema."""
+    """Build the details schema based on device type and input mode."""
     d = defaults or {}
-
     fields: dict[vol.Marker, Any] = {}
 
-    # Main fields
-    fields[vol.Required("name", default=d.get("name", ""))] = TextSelector()
-    fields[
-        vol.Required(CONF_DEVICE_TYPE, default=d.get(CONF_DEVICE_TYPE, DEVICE_TYPE_SWITCH))
-    ] = SelectSelector(
-        SelectSelectorConfig(
-            options=[DEVICE_TYPE_SWITCH, DEVICE_TYPE_COVER],
-            translation_key="device_type",
-            mode=SelectSelectorMode.DROPDOWN,
-        )
-    )
+    # Entity fields based on device type
+    if device_type == DEVICE_TYPE_SWITCH:
+        fields[vol.Required(
+            CONF_OPEN_SWITCH_ENTITY_ID,
+            default=d.get(CONF_OPEN_SWITCH_ENTITY_ID, vol.UNDEFINED),
+        )] = SWITCH_ENTITY_SELECTOR
+        fields[vol.Required(
+            CONF_CLOSE_SWITCH_ENTITY_ID,
+            default=d.get(CONF_CLOSE_SWITCH_ENTITY_ID, vol.UNDEFINED),
+        )] = SWITCH_ENTITY_SELECTOR
+        fields[vol.Optional(
+            CONF_STOP_SWITCH_ENTITY_ID,
+            description={
+                "suggested_value": d.get(CONF_STOP_SWITCH_ENTITY_ID)
+            },
+        )] = SWITCH_ENTITY_SELECTOR
+    else:
+        fields[vol.Required(
+            CONF_COVER_ENTITY_ID,
+            default=d.get(CONF_COVER_ENTITY_ID, vol.UNDEFINED),
+        )] = COVER_ENTITY_SELECTOR
 
-    # Switch entities
-    fields[vol.Optional(
-        CONF_OPEN_SWITCH_ENTITY_ID,
-        description={"suggested_value": d.get(CONF_OPEN_SWITCH_ENTITY_ID)},
-    )] = SWITCH_ENTITY_SELECTOR
-    fields[vol.Optional(
-        CONF_CLOSE_SWITCH_ENTITY_ID,
-        description={"suggested_value": d.get(CONF_CLOSE_SWITCH_ENTITY_ID)},
-    )] = SWITCH_ENTITY_SELECTOR
-    fields[vol.Optional(
-        CONF_STOP_SWITCH_ENTITY_ID,
-        description={"suggested_value": d.get(CONF_STOP_SWITCH_ENTITY_ID)},
-    )] = SWITCH_ENTITY_SELECTOR
+    # Pulse time (only for pulse/toggle)
+    if input_mode in (INPUT_MODE_PULSE, INPUT_MODE_TOGGLE):
+        fields[vol.Optional(
+            CONF_PULSE_TIME,
+            description={"suggested_value": d.get(CONF_PULSE_TIME)},
+        )] = PULSE_TIME_SELECTOR
 
-    # Cover entity
-    fields[vol.Optional(
-        CONF_COVER_ENTITY_ID,
-        description={"suggested_value": d.get(CONF_COVER_ENTITY_ID)},
-    )] = COVER_ENTITY_SELECTOR
-
-    # Input mode
-    fields[
-        vol.Optional(CONF_INPUT_MODE, default=d.get(CONF_INPUT_MODE, INPUT_MODE_SWITCH))
-    ] = SelectSelector(
-        SelectSelectorConfig(
-            options=[INPUT_MODE_SWITCH, INPUT_MODE_PULSE, INPUT_MODE_TOGGLE],
-            translation_key="input_mode",
-            mode=SelectSelectorMode.DROPDOWN,
-        )
-    )
-
-    # Pulse time
-    fields[vol.Optional(
-        CONF_PULSE_TIME,
-        description={"suggested_value": d.get(CONF_PULSE_TIME)},
-    )] = NumberSelector(
-        NumberSelectorConfig(min=0.1, max=10, step=0.1, mode=NumberSelectorMode.BOX)
-    )
-
-    # Travel timing fields
+    # Travel timing
     fields[vol.Optional(
         CONF_TRAVELLING_TIME_DOWN,
         description={"suggested_value": d.get(CONF_TRAVELLING_TIME_DOWN)},
@@ -149,39 +131,32 @@ def _build_schema(
     )] = BooleanSelector()
 
     # Advanced section (collapsed)
-    advanced_defaults = {
-        k: d[k] for k in (
-            CONF_TRAVEL_STARTUP_DELAY,
-            CONF_TILT_STARTUP_DELAY,
-            CONF_MIN_MOVEMENT_TIME,
-            CONF_TRAVEL_DELAY_AT_END,
-        ) if k in d
-    }
+    adv = d
     fields[vol.Optional(SECTION_ADVANCED)] = section(
         vol.Schema(
             {
                 vol.Optional(
                     CONF_TRAVEL_STARTUP_DELAY,
                     description={
-                        "suggested_value": advanced_defaults.get(CONF_TRAVEL_STARTUP_DELAY)
+                        "suggested_value": adv.get(CONF_TRAVEL_STARTUP_DELAY)
                     },
                 ): TIMING_SELECTOR,
                 vol.Optional(
                     CONF_TILT_STARTUP_DELAY,
                     description={
-                        "suggested_value": advanced_defaults.get(CONF_TILT_STARTUP_DELAY)
+                        "suggested_value": adv.get(CONF_TILT_STARTUP_DELAY)
                     },
                 ): TIMING_SELECTOR,
                 vol.Optional(
                     CONF_MIN_MOVEMENT_TIME,
                     description={
-                        "suggested_value": advanced_defaults.get(CONF_MIN_MOVEMENT_TIME)
+                        "suggested_value": adv.get(CONF_MIN_MOVEMENT_TIME)
                     },
                 ): TIMING_SELECTOR,
                 vol.Optional(
                     CONF_TRAVEL_DELAY_AT_END,
                     description={
-                        "suggested_value": advanced_defaults.get(CONF_TRAVEL_DELAY_AT_END)
+                        "suggested_value": adv.get(CONF_TRAVEL_DELAY_AT_END)
                     },
                 ): TIMING_SELECTOR,
             }
@@ -208,22 +183,73 @@ class CoverTimeBasedConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        self._device_type: str = DEVICE_TYPE_SWITCH
+        self._input_mode: str = INPUT_MODE_SWITCH
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the initial step."""
+        """Step 1: Choose device type and input mode."""
+        if user_input is not None:
+            self._device_type = user_input[CONF_DEVICE_TYPE]
+            self._input_mode = user_input.get(
+                CONF_INPUT_MODE, INPUT_MODE_SWITCH
+            )
+            return await self.async_step_details()
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_DEVICE_TYPE, default=DEVICE_TYPE_SWITCH
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            DEVICE_TYPE_SWITCH,
+                            DEVICE_TYPE_COVER,
+                        ],
+                        translation_key="device_type",
+                        mode=SelectSelectorMode.LIST,
+                    )
+                ),
+                vol.Optional(
+                    CONF_INPUT_MODE, default=INPUT_MODE_SWITCH
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            INPUT_MODE_SWITCH,
+                            INPUT_MODE_PULSE,
+                            INPUT_MODE_TOGGLE,
+                        ],
+                        translation_key="input_mode",
+                        mode=SelectSelectorMode.LIST,
+                    )
+                ),
+            }
+        )
+
+        return self.async_show_form(step_id="user", data_schema=schema)
+
+    async def async_step_details(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Step 2: Configure entities and timing."""
         if user_input is not None:
             data = _flatten_input(user_input)
-            name = data.pop("name")
+            data[CONF_DEVICE_TYPE] = self._device_type
+            data[CONF_INPUT_MODE] = self._input_mode
             return self.async_create_entry(
-                title=name,
+                title="",
                 data={},
                 options=data,
             )
 
+        schema = _build_details_schema(
+            self._device_type, self._input_mode
+        )
         return self.async_show_form(
-            step_id="user",
-            data_schema=_build_schema(),
+            step_id="details", data_schema=schema
         )
 
     @staticmethod
@@ -238,23 +264,76 @@ class CoverTimeBasedConfigFlow(ConfigFlow, domain=DOMAIN):
 class CoverTimeBasedOptionsFlow(OptionsFlow):
     """Handle options flow for reconfiguring a cover."""
 
+    def __init__(self) -> None:
+        """Initialize the options flow."""
+        self._device_type: str = DEVICE_TYPE_SWITCH
+        self._input_mode: str = INPUT_MODE_SWITCH
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the options step."""
+        """Step 1: Choose device type and input mode."""
+        current = dict(self.config_entry.options)
+
+        if user_input is not None:
+            self._device_type = user_input[CONF_DEVICE_TYPE]
+            self._input_mode = user_input.get(
+                CONF_INPUT_MODE, INPUT_MODE_SWITCH
+            )
+            return await self.async_step_details()
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_DEVICE_TYPE,
+                    default=current.get(
+                        CONF_DEVICE_TYPE, DEVICE_TYPE_SWITCH
+                    ),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            DEVICE_TYPE_SWITCH,
+                            DEVICE_TYPE_COVER,
+                        ],
+                        translation_key="device_type",
+                        mode=SelectSelectorMode.LIST,
+                    )
+                ),
+                vol.Optional(
+                    CONF_INPUT_MODE,
+                    default=current.get(
+                        CONF_INPUT_MODE, INPUT_MODE_SWITCH
+                    ),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            INPUT_MODE_SWITCH,
+                            INPUT_MODE_PULSE,
+                            INPUT_MODE_TOGGLE,
+                        ],
+                        translation_key="input_mode",
+                        mode=SelectSelectorMode.LIST,
+                    )
+                ),
+            }
+        )
+
+        return self.async_show_form(step_id="init", data_schema=schema)
+
+    async def async_step_details(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Step 2: Configure entities and timing."""
         if user_input is not None:
             data = _flatten_input(user_input)
-            name = data.pop("name")
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, title=name
-            )
+            data[CONF_DEVICE_TYPE] = self._device_type
+            data[CONF_INPUT_MODE] = self._input_mode
             return self.async_create_entry(title="", data=data)
 
-        # Pre-populate with current values
         current = dict(self.config_entry.options)
-        current["name"] = self.config_entry.title
-
+        schema = _build_details_schema(
+            self._device_type, self._input_mode, defaults=current
+        )
         return self.async_show_form(
-            step_id="init",
-            data_schema=_build_schema(defaults=current),
+            step_id="details", data_schema=schema
         )

@@ -3,14 +3,23 @@
     "step": {
       "user": {
         "title": "Add a time-based cover",
+        "description": "Choose how this cover is controlled.",
         "data": {
-          "name": "Name",
           "device_type": "Device type",
+          "input_mode": "Input mode"
+        },
+        "data_description": {
+          "device_type": "Control via switch entities, or wrap an existing cover entity with time-based positioning.",
+          "input_mode": "Switch: latching relays stay on/off. Pulse: momentary press with separate stop. Toggle: same button starts and stops."
+        }
+      },
+      "details": {
+        "title": "Configure cover",
+        "data": {
           "open_switch_entity_id": "Open switch",
           "close_switch_entity_id": "Close switch",
           "stop_switch_entity_id": "Stop switch (optional)",
           "cover_entity_id": "Cover entity",
-          "input_mode": "Input mode",
           "pulse_time": "Pulse time (seconds)",
           "travelling_time_down": "Close travel time (seconds)",
           "travelling_time_up": "Open travel time (seconds)",
@@ -19,8 +28,6 @@
           "travel_moves_with_tilt": "Tilt movements also affect travel position"
         },
         "data_description": {
-          "device_type": "Control via switch entities, or wrap an existing cover entity with time-based positioning.",
-          "input_mode": "Switch: latching relays stay on/off. Pulse: momentary press with separate stop. Toggle: same button starts and stops.",
           "pulse_time": "How long to press the button in pulse or toggle mode.",
           "travelling_time_down": "Time in seconds for the cover to fully close.",
           "travelling_time_up": "Time in seconds for the cover to fully open.",
@@ -52,14 +59,23 @@
     "step": {
       "init": {
         "title": "Reconfigure cover",
+        "description": "Choose how this cover is controlled.",
         "data": {
-          "name": "Name",
           "device_type": "Device type",
+          "input_mode": "Input mode"
+        },
+        "data_description": {
+          "device_type": "Control via switch entities, or wrap an existing cover entity with time-based positioning.",
+          "input_mode": "Switch: latching relays stay on/off. Pulse: momentary press with separate stop. Toggle: same button starts and stops."
+        }
+      },
+      "details": {
+        "title": "Configure cover",
+        "data": {
           "open_switch_entity_id": "Open switch",
           "close_switch_entity_id": "Close switch",
           "stop_switch_entity_id": "Stop switch (optional)",
           "cover_entity_id": "Cover entity",
-          "input_mode": "Input mode",
           "pulse_time": "Pulse time (seconds)",
           "travelling_time_down": "Close travel time (seconds)",
           "travelling_time_up": "Open travel time (seconds)",
@@ -68,8 +84,6 @@
           "travel_moves_with_tilt": "Tilt movements also affect travel position"
         },
         "data_description": {
-          "device_type": "Control via switch entities, or wrap an existing cover entity with time-based positioning.",
-          "input_mode": "Switch: latching relays stay on/off. Pulse: momentary press with separate stop. Toggle: same button starts and stops.",
           "pulse_time": "How long to press the button in pulse or toggle mode.",
           "travelling_time_down": "Time in seconds for the cover to fully close.",
           "travelling_time_up": "Time in seconds for the cover to fully open.",
