@@ -268,6 +268,81 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     )
 
 
+async def async_setup_entry(hass, config_entry, async_add_entities):
+    """Set up cover entities from a config entry's subentries."""
+    entities = []
+    for subentry in config_entry.subentries.values():
+        if subentry.subentry_type != "cover":
+            continue
+        entity = _entity_from_subentry(config_entry, subentry)
+        entities.append(entity)
+    if entities:
+        async_add_entities(entities)
+
+    platform = entity_platform.current_platform.get()
+    platform.async_register_entity_service(
+        SERVICE_SET_KNOWN_POSITION, POSITION_SCHEMA, "set_known_position"
+    )
+    platform.async_register_entity_service(
+        SERVICE_SET_KNOWN_TILT_POSITION,
+        TILT_POSITION_SCHEMA,
+        "set_known_tilt_position",
+    )
+
+
+def _get_subentry_value(key, subentry_data, entry_options, schema_default=None):
+    """Get value with priority: subentry data > entry options > schema default."""
+    if key in subentry_data:
+        return subentry_data[key]
+    if key in entry_options:
+        return entry_options[key]
+    return schema_default
+
+
+def _entity_from_subentry(config_entry, subentry):
+    """Create a CoverTimeBased entity from a config subentry."""
+    data = dict(subentry.data)
+    defaults = dict(config_entry.options)
+
+    def get(key, default=None):
+        return _get_subentry_value(key, data, defaults, default)
+
+    device_type = data.get("device_type", "switch")
+
+    if device_type == "switch":
+        open_switch = data.get(CONF_OPEN_SWITCH_ENTITY_ID)
+        close_switch = data.get(CONF_CLOSE_SWITCH_ENTITY_ID)
+        stop_switch = data.get(CONF_STOP_SWITCH_ENTITY_ID)
+        cover_entity_id = None
+        input_mode = data.get(CONF_INPUT_MODE, INPUT_MODE_SWITCH)
+    else:
+        open_switch = None
+        close_switch = None
+        stop_switch = None
+        cover_entity_id = data.get(CONF_COVER_ENTITY_ID)
+        input_mode = INPUT_MODE_SWITCH
+
+    return CoverTimeBased(
+        subentry.subentry_id,
+        subentry.title,
+        get(CONF_TRAVEL_MOVES_WITH_TILT, False),
+        get(CONF_TRAVELLING_TIME_DOWN, DEFAULT_TRAVEL_TIME),
+        get(CONF_TRAVELLING_TIME_UP, DEFAULT_TRAVEL_TIME),
+        get(CONF_TILTING_TIME_DOWN, None),
+        get(CONF_TILTING_TIME_UP, None),
+        get(CONF_TRAVEL_DELAY_AT_END, None),
+        get(CONF_MIN_MOVEMENT_TIME, None),
+        get(CONF_TRAVEL_STARTUP_DELAY, None),
+        get(CONF_TILT_STARTUP_DELAY, None),
+        open_switch,
+        close_switch,
+        stop_switch,
+        input_mode,
+        get(CONF_PULSE_TIME, DEFAULT_PULSE_TIME),
+        cover_entity_id,
+    )
+
+
 class CoverTimeBased(CoverEntity, RestoreEntity):
     def __init__(
         self,
