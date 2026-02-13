@@ -19,5 +19,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update — reload the entry."""
+    """Handle options update - reload the entry."""
     await hass.config_entries.async_reload(entry.entry_id)
