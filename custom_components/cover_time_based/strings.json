@@ -1,4 +1,148 @@
 {
+  "config": {
+    "step": {
+      "user": {
+        "title": "Cover Time Based",
+        "description": "Set up the Cover Time Based integration. You can configure default timing values and then add individual covers."
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Default timing settings",
+        "description": "These defaults apply to all covers unless overridden in individual cover settings.",
+        "sections": {
+          "travel_timing": {
+            "name": "Travel timing",
+            "data": {
+              "travelling_time_down": "Travel time down (seconds)",
+              "travelling_time_up": "Travel time up (seconds)",
+              "tilting_time_down": "Tilt time down (seconds)",
+              "tilting_time_up": "Tilt time up (seconds)",
+              "travel_moves_with_tilt": "Travel moves with tilt"
+            }
+          },
+          "advanced": {
+            "name": "Advanced settings",
+            "data": {
+              "travel_startup_delay": "Travel startup delay (seconds)",
+              "tilt_startup_delay": "Tilt startup delay (seconds)",
+              "min_movement_time": "Minimum movement time (seconds)",
+              "travel_delay_at_end": "Travel delay at end (seconds)"
+            }
+          }
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "cover": {
+      "entry_type": "Cover",
+      "initiate_flow": {
+        "user": "Add cover",
+        "reconfigure": "Reconfigure cover"
+      },
+      "abort": {
+        "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
+      },
+      "step": {
+        "user": {
+          "title": "Add a time-based cover",
+          "data": {
+            "name": "Name",
+            "device_type": "Device type",
+            "open_switch_entity_id": "Open switch",
+            "close_switch_entity_id": "Close switch",
+            "stop_switch_entity_id": "Stop switch",
+            "cover_entity_id": "Cover entity",
+            "input_mode": "Input mode",
+            "pulse_time": "Pulse time (seconds)"
+          },
+          "data_description": {
+            "device_type": "Choose 'switch' to control via switch entities, or 'cover' to wrap an existing cover entity.",
+            "input_mode": "Switch: latching relays. Pulse: momentary with separate stop. Toggle: same button starts and stops.",
+            "pulse_time": "Duration of button press for pulse/toggle modes."
+          },
+          "sections": {
+            "travel_timing": {
+              "name": "Travel timing",
+              "data": {
+                "travelling_time_down": "Travel time down (seconds)",
+                "travelling_time_up": "Travel time up (seconds)",
+                "tilting_time_down": "Tilt time down (seconds)",
+                "tilting_time_up": "Tilt time up (seconds)",
+                "travel_moves_with_tilt": "Travel moves with tilt"
+              }
+            },
+            "advanced": {
+              "name": "Advanced settings",
+              "data": {
+                "travel_startup_delay": "Travel startup delay (seconds)",
+                "tilt_startup_delay": "Tilt startup delay (seconds)",
+                "min_movement_time": "Minimum movement time (seconds)",
+                "travel_delay_at_end": "Travel delay at end (seconds)"
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Reconfigure cover",
+          "data": {
+            "name": "Name",
+            "device_type": "Device type",
+            "open_switch_entity_id": "Open switch",
+            "close_switch_entity_id": "Close switch",
+            "stop_switch_entity_id": "Stop switch",
+            "cover_entity_id": "Cover entity",
+            "input_mode": "Input mode",
+            "pulse_time": "Pulse time (seconds)"
+          },
+          "data_description": {
+            "device_type": "Choose 'switch' to control via switch entities, or 'cover' to wrap an existing cover entity.",
+            "input_mode": "Switch: latching relays. Pulse: momentary with separate stop. Toggle: same button starts and stops.",
+            "pulse_time": "Duration of button press for pulse/toggle modes."
+          },
+          "sections": {
+            "travel_timing": {
+              "name": "Travel timing",
+              "data": {
+                "travelling_time_down": "Travel time down (seconds)",
+                "travelling_time_up": "Travel time up (seconds)",
+                "tilting_time_down": "Tilt time down (seconds)",
+                "tilting_time_up": "Tilt time up (seconds)",
+                "travel_moves_with_tilt": "Travel moves with tilt"
+              }
+            },
+            "advanced": {
+              "name": "Advanced settings",
+              "data": {
+                "travel_startup_delay": "Travel startup delay (seconds)",
+                "tilt_startup_delay": "Tilt startup delay (seconds)",
+                "min_movement_time": "Minimum movement time (seconds)",
+                "travel_delay_at_end": "Travel delay at end (seconds)"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "selector": {
+    "device_type": {
+      "options": {
+        "switch": "Control via switches",
+        "cover": "Wrap existing cover"
+      }
+    },
+    "input_mode": {
+      "options": {
+        "switch": "Switch (latching)",
+        "pulse": "Pulse (momentary)",
+        "toggle": "Toggle (same button stops)"
+      }
+    }
+  },
   "services": {
     "set_known_position": {
       "name": "Set cover position",
@@ -9,8 +153,8 @@
           "description": "The entity ID of the cover to set the position for."
         },
         "position": {
-            "name": "Position",
-            "description": "The position of the cover, between 0 and 100."
+          "name": "Position",
+          "description": "The position of the cover, between 0 and 100."
         }
       }
     },
@@ -23,8 +167,8 @@
           "description": "The entity ID of the cover to set the tilt position for."
         },
         "position": {
-            "name": "Position",
-            "description": "The tilt position of the cover, between 0 and 100."
+          "name": "Position",
+          "description": "The tilt position of the cover, between 0 and 100."
         }
       }
     }
