@@ -28,6 +28,7 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers.event import (
     async_track_time_interval,
 )
+from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
 from homeassistant.helpers.restore_state import RestoreEntity
 from xknx.devices import TravelStatus, TravelCalculator
 
@@ -256,6 +257,19 @@ def devices_from_config(domain_config):
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the cover platform."""
+    _LOGGER.warning(
+        "Configuration of Cover Time Based via YAML is deprecated and "
+        "will be removed in a future version. Please use the UI to "
+        "configure your covers (Settings > Devices & Services > Helpers)"
+    )
+    async_create_issue(
+        hass,
+        DOMAIN,
+        "deprecated_yaml",
+        is_fixable=False,
+        severity=IssueSeverity.WARNING,
+        translation_key="deprecated_yaml",
+    )
     async_add_entities(devices_from_config(config))
 
     platform = entity_platform.current_platform.get()
