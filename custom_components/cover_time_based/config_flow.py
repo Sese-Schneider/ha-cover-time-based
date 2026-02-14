@@ -11,6 +11,7 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
+from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers.selector import (
@@ -23,6 +24,7 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    TextSelector,
 )
 
 from .cover import (
@@ -51,6 +53,7 @@ CONF_DEVICE_TYPE = "device_type"
 DEVICE_TYPE_SWITCH = "switch"
 DEVICE_TYPE_COVER = "cover"
 
+SECTION_TILT = "tilt"
 SECTION_ADVANCED = "advanced"
 
 TIMING_SELECTOR = NumberSelector(
@@ -101,13 +104,6 @@ def _build_details_schema(
             default=d.get(CONF_COVER_ENTITY_ID, vol.UNDEFINED),
         )] = COVER_ENTITY_SELECTOR
 
-    # Pulse time (only for pulse/toggle)
-    if input_mode in (INPUT_MODE_PULSE, INPUT_MODE_TOGGLE):
-        fields[vol.Optional(
-            CONF_PULSE_TIME,
-            description={"suggested_value": d.get(CONF_PULSE_TIME)},
-        )] = PULSE_TIME_SELECTOR
-
     # Travel timing
     fields[vol.Optional(
         CONF_TRAVELLING_TIME_DOWN,
@@ -117,50 +113,66 @@ def _build_details_schema(
         CONF_TRAVELLING_TIME_UP,
         description={"suggested_value": d.get(CONF_TRAVELLING_TIME_UP)},
     )] = TIMING_SELECTOR
-    fields[vol.Optional(
-        CONF_TILTING_TIME_DOWN,
-        description={"suggested_value": d.get(CONF_TILTING_TIME_DOWN)},
-    )] = TIMING_SELECTOR
-    fields[vol.Optional(
-        CONF_TILTING_TIME_UP,
-        description={"suggested_value": d.get(CONF_TILTING_TIME_UP)},
-    )] = TIMING_SELECTOR
-    fields[vol.Optional(
-        CONF_TRAVEL_MOVES_WITH_TILT,
-        default=d.get(CONF_TRAVEL_MOVES_WITH_TILT, False),
-    )] = BooleanSelector()
 
-    # Advanced section (collapsed)
-    adv = d
-    fields[vol.Optional(SECTION_ADVANCED)] = section(
+    # Tilt section (collapsed)
+    fields[vol.Optional(SECTION_TILT)] = section(
         vol.Schema(
             {
                 vol.Optional(
-                    CONF_TRAVEL_STARTUP_DELAY,
+                    CONF_TILTING_TIME_DOWN,
                     description={
-                        "suggested_value": adv.get(CONF_TRAVEL_STARTUP_DELAY)
+                        "suggested_value": d.get(CONF_TILTING_TIME_DOWN)
                     },
                 ): TIMING_SELECTOR,
                 vol.Optional(
-                    CONF_TILT_STARTUP_DELAY,
+                    CONF_TILTING_TIME_UP,
                     description={
-                        "suggested_value": adv.get(CONF_TILT_STARTUP_DELAY)
+                        "suggested_value": d.get(CONF_TILTING_TIME_UP)
                     },
                 ): TIMING_SELECTOR,
                 vol.Optional(
-                    CONF_MIN_MOVEMENT_TIME,
-                    description={
-                        "suggested_value": adv.get(CONF_MIN_MOVEMENT_TIME)
-                    },
-                ): TIMING_SELECTOR,
-                vol.Optional(
-                    CONF_TRAVEL_DELAY_AT_END,
-                    description={
-                        "suggested_value": adv.get(CONF_TRAVEL_DELAY_AT_END)
-                    },
-                ): TIMING_SELECTOR,
+                    CONF_TRAVEL_MOVES_WITH_TILT,
+                    default=d.get(CONF_TRAVEL_MOVES_WITH_TILT, False),
+                ): BooleanSelector(),
             }
         ),
+        {"collapsed": True},
+    )
+
+    # Advanced section (collapsed)
+    adv = d
+    adv_fields: dict[vol.Marker, Any] = {}
+    if input_mode in (INPUT_MODE_PULSE, INPUT_MODE_TOGGLE):
+        adv_fields[vol.Optional(
+            CONF_PULSE_TIME,
+            description={"suggested_value": adv.get(CONF_PULSE_TIME)},
+        )] = PULSE_TIME_SELECTOR
+    adv_fields[vol.Optional(
+        CONF_TRAVEL_STARTUP_DELAY,
+        description={
+            "suggested_value": adv.get(CONF_TRAVEL_STARTUP_DELAY)
+        },
+    )] = TIMING_SELECTOR
+    adv_fields[vol.Optional(
+        CONF_TILT_STARTUP_DELAY,
+        description={
+            "suggested_value": adv.get(CONF_TILT_STARTUP_DELAY)
+        },
+    )] = TIMING_SELECTOR
+    adv_fields[vol.Optional(
+        CONF_MIN_MOVEMENT_TIME,
+        description={
+            "suggested_value": adv.get(CONF_MIN_MOVEMENT_TIME)
+        },
+    )] = TIMING_SELECTOR
+    adv_fields[vol.Optional(
+        CONF_TRAVEL_DELAY_AT_END,
+        description={
+            "suggested_value": adv.get(CONF_TRAVEL_DELAY_AT_END)
+        },
+    )] = TIMING_SELECTOR
+    fields[vol.Optional(SECTION_ADVANCED)] = section(
+        vol.Schema(adv_fields),
         {"collapsed": True},
     )
 
@@ -171,7 +183,7 @@ def _flatten_input(user_input: dict[str, Any]) -> dict[str, Any]:
     """Flatten section data into a single dict."""
     data: dict[str, Any] = {}
     for key, value in user_input.items():
-        if key == SECTION_ADVANCED and isinstance(value, dict):
+        if key in (SECTION_TILT, SECTION_ADVANCED) and isinstance(value, dict):
             data.update(value)
         else:
             data[key] = value
@@ -185,14 +197,16 @@ class CoverTimeBasedConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         """Initialize the config flow."""
+        self._name: str = ""
         self._device_type: str = DEVICE_TYPE_SWITCH
         self._input_mode: str = INPUT_MODE_SWITCH
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Step 1: Choose device type and input mode."""
+        """Step 1: Choose name, device type and input mode."""
         if user_input is not None:
+            self._name = user_input[CONF_NAME]
             self._device_type = user_input[CONF_DEVICE_TYPE]
             self._input_mode = user_input.get(
                 CONF_INPUT_MODE, INPUT_MODE_SWITCH
@@ -201,6 +215,7 @@ class CoverTimeBasedConfigFlow(ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
+                vol.Required(CONF_NAME): TextSelector(),
                 vol.Required(
                     CONF_DEVICE_TYPE, default=DEVICE_TYPE_SWITCH
                 ): SelectSelector(
@@ -240,7 +255,7 @@ class CoverTimeBasedConfigFlow(ConfigFlow, domain=DOMAIN):
             data[CONF_DEVICE_TYPE] = self._device_type
             data[CONF_INPUT_MODE] = self._input_mode
             return self.async_create_entry(
-                title="",
+                title=self._name,
                 data={},
                 options=data,
             )

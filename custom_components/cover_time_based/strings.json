@@ -3,8 +3,8 @@
     "step": {
       "user": {
         "title": "Add a time-based cover",
-        "description": "Choose how this cover is controlled.",
         "data": {
+          "name": "Name",
           "device_type": "Device type",
           "input_mode": "Input mode"
         },
@@ -15,36 +15,44 @@
       },
       "details": {
         "title": "Configure cover",
+        "description": "Choose how this cover is controlled.",
         "data": {
           "open_switch_entity_id": "Open switch",
           "close_switch_entity_id": "Close switch",
           "stop_switch_entity_id": "Stop switch (optional)",
           "cover_entity_id": "Cover entity",
-          "pulse_time": "Pulse time (seconds)",
           "travelling_time_down": "Close travel time (seconds)",
-          "travelling_time_up": "Open travel time (seconds)",
-          "tilting_time_down": "Tilt close time (seconds)",
-          "tilting_time_up": "Tilt open time (seconds)",
-          "travel_moves_with_tilt": "Tilt movements also affect travel position"
+          "travelling_time_up": "Open travel time (seconds)"
         },
         "data_description": {
-          "pulse_time": "How long to press the button in pulse or toggle mode.",
           "travelling_time_down": "Time in seconds for the cover to fully close.",
-          "travelling_time_up": "Time in seconds for the cover to fully open.",
-          "tilting_time_down": "Time in seconds for tilt to go from fully open to fully closed.",
-          "tilting_time_up": "Time in seconds for tilt to go from fully closed to fully open.",
-          "travel_moves_with_tilt": "When enabled, tilt movements also change the travel position proportionally."
+          "travelling_time_up": "Time in seconds for the cover to fully open."
         },
         "sections": {
+          "tilt": {
+            "name": "Tilt settings",
+            "data": {
+              "tilting_time_down": "Tilt close time (seconds)",
+              "tilting_time_up": "Tilt open time (seconds)",
+              "travel_moves_with_tilt": "Tilt movements also affect travel position"
+            },
+            "data_description": {
+              "tilting_time_down": "Time in seconds for tilt to go from fully open to fully closed.",
+              "tilting_time_up": "Time in seconds for tilt to go from fully closed to fully open.",
+              "travel_moves_with_tilt": "When enabled, tilt movements also change the travel position proportionally."
+            }
+          },
           "advanced": {
             "name": "Advanced settings",
             "data": {
+              "pulse_time": "Pulse time (seconds)",
               "travel_startup_delay": "Travel motor startup delay (seconds)",
               "tilt_startup_delay": "Tilt motor startup delay (seconds)",
               "min_movement_time": "Minimum movement time (seconds)",
               "travel_delay_at_end": "Extra relay time at endpoints (seconds)"
             },
             "data_description": {
+              "pulse_time": "How long to press the button in pulse or toggle mode.",
               "travel_startup_delay": "Time the motor takes to start moving. Position tracking starts after this delay.",
               "tilt_startup_delay": "Time the motor takes to start tilting. Position tracking starts after this delay.",
               "min_movement_time": "Movements shorter than this are ignored.",
@@ -71,36 +79,44 @@
       },
       "details": {
         "title": "Configure cover",
+        "description": "Choose how this cover is controlled.",
         "data": {
           "open_switch_entity_id": "Open switch",
           "close_switch_entity_id": "Close switch",
           "stop_switch_entity_id": "Stop switch (optional)",
           "cover_entity_id": "Cover entity",
-          "pulse_time": "Pulse time (seconds)",
           "travelling_time_down": "Close travel time (seconds)",
-          "travelling_time_up": "Open travel time (seconds)",
-          "tilting_time_down": "Tilt close time (seconds)",
-          "tilting_time_up": "Tilt open time (seconds)",
-          "travel_moves_with_tilt": "Tilt movements also affect travel position"
+          "travelling_time_up": "Open travel time (seconds)"
         },
         "data_description": {
-          "pulse_time": "How long to press the button in pulse or toggle mode.",
           "travelling_time_down": "Time in seconds for the cover to fully close.",
-          "travelling_time_up": "Time in seconds for the cover to fully open.",
-          "tilting_time_down": "Time in seconds for tilt to go from fully open to fully closed.",
-          "tilting_time_up": "Time in seconds for tilt to go from fully closed to fully open.",
-          "travel_moves_with_tilt": "When enabled, tilt movements also change the travel position proportionally."
+          "travelling_time_up": "Time in seconds for the cover to fully open."
         },
         "sections": {
+          "tilt": {
+            "name": "Tilt settings",
+            "data": {
+              "tilting_time_down": "Tilt close time (seconds)",
+              "tilting_time_up": "Tilt open time (seconds)",
+              "travel_moves_with_tilt": "Tilt movements also affect travel position"
+            },
+            "data_description": {
+              "tilting_time_down": "Time in seconds for tilt to go from fully open to fully closed.",
+              "tilting_time_up": "Time in seconds for tilt to go from fully closed to fully open.",
+              "travel_moves_with_tilt": "When enabled, tilt movements also change the travel position proportionally."
+            }
+          },
           "advanced": {
             "name": "Advanced settings",
             "data": {
+              "pulse_time": "Pulse time (seconds)",
               "travel_startup_delay": "Travel motor startup delay (seconds)",
               "tilt_startup_delay": "Tilt motor startup delay (seconds)",
               "min_movement_time": "Minimum movement time (seconds)",
               "travel_delay_at_end": "Extra relay time at endpoints (seconds)"
             },
             "data_description": {
+              "pulse_time": "How long to press the button in pulse or toggle mode.",
               "travel_startup_delay": "Time the motor takes to start moving. Position tracking starts after this delay.",
               "tilt_startup_delay": "Time the motor takes to start tilting. Position tracking starts after this delay.",
               "min_movement_time": "Movements shorter than this are ignored.",
@@ -124,6 +140,12 @@
         "pulse": "Pulse (momentary)",
         "toggle": "Toggle (same button stops)"
       }
+    }
+  },
+  "issues": {
+    "deprecated_yaml": {
+      "title": "YAML configuration is deprecated",
+      "description": "Configuring Cover Time Based using YAML is deprecated and will be removed in a future version.\n\nPlease remove the YAML configuration and recreate your covers using the UI: **Settings > Devices & Services > Helpers > Create Helper > Cover Time Based**."
     }
   },
   "services": {
