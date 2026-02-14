@@ -30,6 +30,7 @@ from homeassistant.helpers.selector import (
 from .cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_COVER_ENTITY_ID,
+    CONF_DEVICE_TYPE,
     CONF_INPUT_MODE,
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
@@ -43,15 +44,13 @@ from .cover import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
+    DEVICE_TYPE_COVER,
+    DEVICE_TYPE_SWITCH,
     DOMAIN,
     INPUT_MODE_PULSE,
     INPUT_MODE_SWITCH,
     INPUT_MODE_TOGGLE,
 )
-
-CONF_DEVICE_TYPE = "device_type"
-DEVICE_TYPE_SWITCH = "switch"
-DEVICE_TYPE_COVER = "cover"
 
 SECTION_TILT = "tilt"
 SECTION_ADVANCED = "advanced"
@@ -140,35 +139,34 @@ def _build_details_schema(
     )
 
     # Advanced section (collapsed)
-    adv = d
     adv_fields: dict[vol.Marker, Any] = {}
     if input_mode in (INPUT_MODE_PULSE, INPUT_MODE_TOGGLE):
         adv_fields[vol.Optional(
             CONF_PULSE_TIME,
-            description={"suggested_value": adv.get(CONF_PULSE_TIME)},
+            description={"suggested_value": d.get(CONF_PULSE_TIME)},
         )] = PULSE_TIME_SELECTOR
     adv_fields[vol.Optional(
         CONF_TRAVEL_STARTUP_DELAY,
         description={
-            "suggested_value": adv.get(CONF_TRAVEL_STARTUP_DELAY)
+            "suggested_value": d.get(CONF_TRAVEL_STARTUP_DELAY)
         },
     )] = TIMING_SELECTOR
     adv_fields[vol.Optional(
         CONF_TILT_STARTUP_DELAY,
         description={
-            "suggested_value": adv.get(CONF_TILT_STARTUP_DELAY)
+            "suggested_value": d.get(CONF_TILT_STARTUP_DELAY)
         },
     )] = TIMING_SELECTOR
     adv_fields[vol.Optional(
         CONF_MIN_MOVEMENT_TIME,
         description={
-            "suggested_value": adv.get(CONF_MIN_MOVEMENT_TIME)
+            "suggested_value": d.get(CONF_MIN_MOVEMENT_TIME)
         },
     )] = TIMING_SELECTOR
     adv_fields[vol.Optional(
         CONF_TRAVEL_DELAY_AT_END,
         description={
-            "suggested_value": adv.get(CONF_TRAVEL_DELAY_AT_END)
+            "suggested_value": d.get(CONF_TRAVEL_DELAY_AT_END)
         },
     )] = TIMING_SELECTOR
     fields[vol.Optional(SECTION_ADVANCED)] = section(
@@ -188,6 +186,16 @@ def _flatten_input(user_input: dict[str, Any]) -> dict[str, Any]:
         else:
             data[key] = value
     return data
+
+
+def _validate_tilt_pair(data: dict[str, Any]) -> dict[str, str]:
+    """Validate that tilt times are provided as a pair."""
+    has_down = data.get(CONF_TILTING_TIME_DOWN) is not None
+    has_up = data.get(CONF_TILTING_TIME_UP) is not None
+    if has_down != has_up:
+        missing = CONF_TILTING_TIME_UP if has_down else CONF_TILTING_TIME_DOWN
+        return {missing: "tilt_time_pair_required"}
+    return {}
 
 
 class CoverTimeBasedConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -250,21 +258,25 @@ class CoverTimeBasedConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Step 2: Configure entities and timing."""
+        errors: dict[str, str] = {}
         if user_input is not None:
             data = _flatten_input(user_input)
-            data[CONF_DEVICE_TYPE] = self._device_type
-            data[CONF_INPUT_MODE] = self._input_mode
-            return self.async_create_entry(
-                title=self._name,
-                data={},
-                options=data,
-            )
+            errors = _validate_tilt_pair(data)
+            if not errors:
+                data[CONF_DEVICE_TYPE] = self._device_type
+                data[CONF_INPUT_MODE] = self._input_mode
+                return self.async_create_entry(
+                    title=self._name,
+                    data={},
+                    options=data,
+                )
 
         schema = _build_details_schema(
-            self._device_type, self._input_mode
+            self._device_type, self._input_mode,
+            defaults=_flatten_input(user_input) if user_input else None,
         )
         return self.async_show_form(
-            step_id="details", data_schema=schema
+            step_id="details", data_schema=schema, errors=errors
         )
 
     @staticmethod
@@ -339,16 +351,21 @@ class CoverTimeBasedOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Step 2: Configure entities and timing."""
+        errors: dict[str, str] = {}
         if user_input is not None:
             data = _flatten_input(user_input)
-            data[CONF_DEVICE_TYPE] = self._device_type
-            data[CONF_INPUT_MODE] = self._input_mode
-            return self.async_create_entry(title="", data=data)
+            errors = _validate_tilt_pair(data)
+            if not errors:
+                data[CONF_DEVICE_TYPE] = self._device_type
+                data[CONF_INPUT_MODE] = self._input_mode
+                return self.async_create_entry(title="", data=data)
 
         current = dict(self.config_entry.options)
+        if user_input is not None:
+            current.update(_flatten_input(user_input))
         schema = _build_details_schema(
             self._device_type, self._input_mode, defaults=current
         )
         return self.async_show_form(
-            step_id="details", data_schema=schema
+            step_id="details", data_schema=schema, errors=errors
         )

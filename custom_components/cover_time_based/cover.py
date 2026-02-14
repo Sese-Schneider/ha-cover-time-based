@@ -23,8 +23,10 @@ from homeassistant.const import (
     SERVICE_OPEN_COVER,
     SERVICE_STOP_COVER,
 )
-from homeassistant.core import callback
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_platform
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import (
     async_track_time_interval,
 )
@@ -59,6 +61,9 @@ INPUT_MODE_PULSE = "pulse"
 INPUT_MODE_TOGGLE = "toggle"
 
 CONF_COVER_ENTITY_ID = "cover_entity_id"
+CONF_DEVICE_TYPE = "device_type"
+DEVICE_TYPE_SWITCH = "switch"
+DEVICE_TYPE_COVER = "cover"
 
 SERVICE_SET_KNOWN_POSITION = "set_known_position"
 SERVICE_SET_KNOWN_TILT_POSITION = "set_known_tilt_position"
@@ -282,12 +287,16 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     )
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up a single cover entity from a config entry."""
     data = dict(config_entry.options)
-    device_type = data.get("device_type", "switch")
+    device_type = data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_SWITCH)
 
-    if device_type == "switch":
+    if device_type == DEVICE_TYPE_SWITCH:
         open_switch = data.get(CONF_OPEN_SWITCH_ENTITY_ID)
         close_switch = data.get(CONF_CLOSE_SWITCH_ENTITY_ID)
         stop_switch = data.get(CONF_STOP_SWITCH_ENTITY_ID)
