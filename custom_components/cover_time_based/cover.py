@@ -50,6 +50,12 @@ CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
 CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
 CONF_STOP_SWITCH_ENTITY_ID = "stop_switch_entity_id"
 CONF_IS_BUTTON = "is_button"
+CONF_INPUT_MODE = "input_mode"
+CONF_PULSE_TIME = "pulse_time"
+DEFAULT_PULSE_TIME = 1.0
+INPUT_MODE_SWITCH = "switch"
+INPUT_MODE_PULSE = "pulse"
+INPUT_MODE_TOGGLE = "toggle"
 
 CONF_COVER_ENTITY_ID = "cover_entity_id"
 
@@ -78,6 +84,10 @@ SWITCH_COVER_SCHEMA = {
     vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.entity_id,
     vol.Optional(CONF_STOP_SWITCH_ENTITY_ID, default=None): vol.Any(cv.entity_id, None),
     vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
+    vol.Optional(CONF_INPUT_MODE, default=None): vol.Any(
+        vol.In([INPUT_MODE_SWITCH, INPUT_MODE_PULSE, INPUT_MODE_TOGGLE]), None
+    ),
+    vol.Optional(CONF_PULSE_TIME): cv.positive_float,
     **TRAVEL_TIME_SCHEMA,
 }
 
@@ -194,6 +204,28 @@ def devices_from_config(domain_config):
             else None
         )
         is_button = config.pop(CONF_IS_BUTTON) if CONF_IS_BUTTON in config else False
+        input_mode = (
+            config.pop(CONF_INPUT_MODE, None) if CONF_INPUT_MODE in config else None
+        )
+        pulse_time = get_value(CONF_PULSE_TIME, config, defaults, DEFAULT_PULSE_TIME)
+        config.pop(CONF_PULSE_TIME, None)
+
+        if input_mode is not None and is_button:
+            _LOGGER.warning(
+                "Device '%s': both 'is_button' and 'input_mode' are set. "
+                "'input_mode: %s' takes precedence. Please remove 'is_button'.",
+                device_id,
+                input_mode,
+            )
+        elif is_button:
+            input_mode = INPUT_MODE_PULSE
+            _LOGGER.warning(
+                "Device '%s': 'is_button' is deprecated. "
+                "Use 'input_mode: pulse' instead.",
+                device_id,
+            )
+        elif input_mode is None:
+            input_mode = INPUT_MODE_SWITCH
 
         cover_entity_id = (
             config.pop(CONF_COVER_ENTITY_ID) if CONF_COVER_ENTITY_ID in config else None
@@ -214,7 +246,8 @@ def devices_from_config(domain_config):
             open_switch_entity_id,
             close_switch_entity_id,
             stop_switch_entity_id,
-            is_button,
+            input_mode,
+            pulse_time,
             cover_entity_id,
         )
         devices.append(device)
@@ -252,7 +285,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         open_switch_entity_id,
         close_switch_entity_id,
         stop_switch_entity_id,
-        is_button,
+        input_mode,
+        pulse_time,
         cover_entity_id,
     ):
         """Initialize the cover."""
@@ -271,7 +305,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._open_switch_entity_id = open_switch_entity_id
         self._close_switch_entity_id = close_switch_entity_id
         self._stop_switch_entity_id = stop_switch_entity_id
-        self._is_button = is_button
+        self._input_mode = input_mode
+        self._pulse_time = pulse_time
 
         self._cover_entity_id = cover_entity_id
 
@@ -505,7 +540,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_close_cover(self, **kwargs):
         """Turn the device close."""
         _LOGGER.debug("async_close_cover")
-        
+
+        if self._input_mode == INPUT_MODE_TOGGLE and (self.is_closing or self.is_opening):
+            if self.is_closing:
+                _LOGGER.debug("async_close_cover :: toggle mode, already closing, treating as stop")
+                await self.async_stop_cover()
+                return
+            else:
+                _LOGGER.debug("async_close_cover :: toggle mode, currently opening, stopping first")
+                await self.async_stop_cover()
+
         current_travel_position = self.travel_calc.current_position()
         if current_travel_position is None or current_travel_position < 100:
             if self._startup_delay_task and not self._startup_delay_task.done():
@@ -563,7 +607,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_open_cover(self, **kwargs):
         """Turn the device open."""
         _LOGGER.debug("async_open_cover")
-        
+
+        if self._input_mode == INPUT_MODE_TOGGLE and (self.is_opening or self.is_closing):
+            if self.is_opening:
+                _LOGGER.debug("async_open_cover :: toggle mode, already opening, treating as stop")
+                await self.async_stop_cover()
+                return
+            else:
+                _LOGGER.debug("async_open_cover :: toggle mode, currently closing, stopping first")
+                await self.async_stop_cover()
+
         current_travel_position = self.travel_calc.current_position()
         if current_travel_position is None or current_travel_position > 0:
             if self._startup_delay_task and not self._startup_delay_task.done():
@@ -737,14 +790,21 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
         _LOGGER.debug("async_stop_cover")
-        
+
+        was_active = (
+            self.is_opening or self.is_closing
+            or (self._startup_delay_task and not self._startup_delay_task.done())
+            or (self._delay_task and not self._delay_task.done())
+        )
+
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
         self._handle_stop()
         self._enforce_tilt_constraints()
+
+        if was_active or self._input_mode != INPUT_MODE_TOGGLE:
+            await self._async_handle_command(SERVICE_STOP_COVER)
         self._last_command = None
-        
-        await self._async_handle_command(SERVICE_STOP_COVER)
 
     async def set_position(self, position):
         """Move cover to a designated position."""
@@ -1075,7 +1135,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 )
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
-    
+            self._last_command = None
+
     async def _delayed_stop(self, delay):
         """Stop the relay after a delay."""
         _LOGGER.debug("_delayed_stop :: waiting %fs before stopping relay", delay)
@@ -1083,6 +1144,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             await sleep(delay)
             _LOGGER.debug("_delayed_stop :: delay complete, stopping relay")
             await self._async_handle_command(SERVICE_STOP_COVER)
+            self._last_command = None
             self._delay_task = None
         except asyncio.CancelledError:
             _LOGGER.debug("_delayed_stop :: delay cancelled")
@@ -1092,16 +1154,22 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def set_known_position(self, **kwargs):
         """We want to do a few things when we get a position"""
         position = kwargs[ATTR_POSITION]
+        was_active = self.is_opening or self.is_closing
         self._handle_stop()
-        await self._async_handle_command(SERVICE_STOP_COVER)
+        if was_active or self._input_mode != INPUT_MODE_TOGGLE:
+            await self._async_handle_command(SERVICE_STOP_COVER)
         self.travel_calc.set_position(position)
         self._enforce_tilt_constraints()
+        self._last_command = None
 
     async def set_known_tilt_position(self, **kwargs):
         """We want to do a few things when we get a position"""
         position = kwargs[ATTR_TILT_POSITION]
-        await self._async_handle_command(SERVICE_STOP_COVER)
+        was_active = self.is_opening or self.is_closing
+        if was_active or self._input_mode != INPUT_MODE_TOGGLE:
+            await self._async_handle_command(SERVICE_STOP_COVER)
         self.tilt_calc.set_position(position)
+        self._last_command = None
 
     async def _async_handle_command(self, command, *args):
         if command == SERVICE_CLOSE_COVER:
@@ -1135,8 +1203,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                         False,
                     )
 
-                if self._is_button:
-                    await sleep(1)
+                if self._input_mode in (INPUT_MODE_PULSE, INPUT_MODE_TOGGLE):
+                    await sleep(self._pulse_time)
 
                     await self.hass.services.async_call(
                         "homeassistant",
@@ -1175,8 +1243,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                         {"entity_id": self._stop_switch_entity_id},
                         False,
                     )
-                if self._is_button:
-                    await sleep(1)
+                if self._input_mode in (INPUT_MODE_PULSE, INPUT_MODE_TOGGLE):
+                    await sleep(self._pulse_time)
 
                     await self.hass.services.async_call(
                         "homeassistant",
@@ -1195,6 +1263,40 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     {"entity_id": self._cover_entity_id},
                     False,
                 )
+            elif self._input_mode == INPUT_MODE_TOGGLE:
+                # Toggle mode: pulse the last-used direction button to stop
+                if self._last_command == SERVICE_CLOSE_COVER:
+                    await self.hass.services.async_call(
+                        "homeassistant",
+                        "turn_on",
+                        {"entity_id": self._close_switch_entity_id},
+                        False,
+                    )
+                    await sleep(self._pulse_time)
+                    await self.hass.services.async_call(
+                        "homeassistant",
+                        "turn_off",
+                        {"entity_id": self._close_switch_entity_id},
+                        False,
+                    )
+                elif self._last_command == SERVICE_OPEN_COVER:
+                    await self.hass.services.async_call(
+                        "homeassistant",
+                        "turn_on",
+                        {"entity_id": self._open_switch_entity_id},
+                        False,
+                    )
+                    await sleep(self._pulse_time)
+                    await self.hass.services.async_call(
+                        "homeassistant",
+                        "turn_off",
+                        {"entity_id": self._open_switch_entity_id},
+                        False,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "_async_handle_command :: STOP in toggle mode with no last command, skipping"
+                    )
             else:
                 await self.hass.services.async_call(
                     "homeassistant",
@@ -1216,8 +1318,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                         False,
                     )
 
-                    if self._is_button:
-                        await sleep(1)
+                    if self._input_mode == INPUT_MODE_PULSE:
+                        await sleep(self._pulse_time)
 
                         await self.hass.services.async_call(
                             "homeassistant",
