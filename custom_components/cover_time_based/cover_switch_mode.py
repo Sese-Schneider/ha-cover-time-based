@@ -10,47 +10,7 @@ class SwitchModeCover(SwitchCoverTimeBased):
     of the movement. _send_stop turns both direction switches OFF.
     """
 
-    def __init__(
-        self,
-        device_id,
-        name,
-        travel_moves_with_tilt,
-        travel_time_down,
-        travel_time_up,
-        tilt_time_down,
-        tilt_time_up,
-        travel_delay_at_end,
-        min_movement_time,
-        travel_startup_delay,
-        tilt_startup_delay,
-        open_switch_entity_id,
-        close_switch_entity_id,
-        stop_switch_entity_id,
-        input_mode,
-        pulse_time,
-        cover_entity_id,
-    ):
-        super().__init__(
-            device_id,
-            name,
-            travel_moves_with_tilt,
-            travel_time_down,
-            travel_time_up,
-            tilt_time_down,
-            tilt_time_up,
-            travel_delay_at_end,
-            min_movement_time,
-            travel_startup_delay,
-            tilt_startup_delay,
-            open_switch_entity_id,
-            close_switch_entity_id,
-            stop_switch_entity_id,
-            input_mode,
-            pulse_time,
-            cover_entity_id,
-        )
-
-    async def _send_open(self):
+    async def _send_open(self) -> None:
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -71,7 +31,7 @@ class SwitchModeCover(SwitchCoverTimeBased):
                 False,
             )
 
-    async def _send_close(self):
+    async def _send_close(self) -> None:
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -92,7 +52,7 @@ class SwitchModeCover(SwitchCoverTimeBased):
                 False,
             )
 
-    async def _send_stop(self):
+    async def _send_stop(self) -> None:
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",

@@ -139,6 +139,54 @@ TILT_POSITION_SCHEMA = cv.make_entity_service_schema(
 DOMAIN = "cover_time_based"
 
 
+def _create_cover_from_options(options, device_id="", name=""):
+    """Create the appropriate cover subclass based on options."""
+    from .cover_wrapped import WrappedCoverTimeBased
+    from .cover_switch_mode import SwitchModeCover
+    from .cover_pulse_mode import PulseModeCover
+    from .cover_toggle_mode import ToggleModeCover
+
+    device_type = options.get(CONF_DEVICE_TYPE, DEVICE_TYPE_SWITCH)
+
+    # Common params for all subclasses
+    common = dict(
+        device_id=device_id,
+        name=name,
+        travel_moves_with_tilt=options.get(CONF_TRAVEL_MOVES_WITH_TILT, False),
+        travel_time_down=options.get(CONF_TRAVELLING_TIME_DOWN, DEFAULT_TRAVEL_TIME),
+        travel_time_up=options.get(CONF_TRAVELLING_TIME_UP, DEFAULT_TRAVEL_TIME),
+        tilt_time_down=options.get(CONF_TILTING_TIME_DOWN),
+        tilt_time_up=options.get(CONF_TILTING_TIME_UP),
+        travel_delay_at_end=options.get(CONF_TRAVEL_DELAY_AT_END),
+        min_movement_time=options.get(CONF_MIN_MOVEMENT_TIME),
+        travel_startup_delay=options.get(CONF_TRAVEL_STARTUP_DELAY),
+        tilt_startup_delay=options.get(CONF_TILT_STARTUP_DELAY),
+    )
+
+    if device_type == DEVICE_TYPE_COVER:
+        return WrappedCoverTimeBased(
+            cover_entity_id=options[CONF_COVER_ENTITY_ID],
+            **common,
+        )
+
+    switch_args = dict(
+        open_switch_entity_id=options[CONF_OPEN_SWITCH_ENTITY_ID],
+        close_switch_entity_id=options[CONF_CLOSE_SWITCH_ENTITY_ID],
+        stop_switch_entity_id=options.get(CONF_STOP_SWITCH_ENTITY_ID),
+        **common,
+    )
+
+    input_mode = options.get(CONF_INPUT_MODE, INPUT_MODE_SWITCH)
+    pulse_time = options.get(CONF_PULSE_TIME, DEFAULT_PULSE_TIME)
+
+    if input_mode == INPUT_MODE_PULSE:
+        return PulseModeCover(pulse_time=pulse_time, **switch_args)
+    elif input_mode == INPUT_MODE_TOGGLE:
+        return ToggleModeCover(pulse_time=pulse_time, **switch_args)
+    else:
+        return SwitchModeCover(**switch_args)
+
+
 def devices_from_config(domain_config):
     """Parse configuration and add cover devices."""
     devices = []
@@ -224,25 +272,28 @@ def devices_from_config(domain_config):
             config.pop(CONF_COVER_ENTITY_ID) if CONF_COVER_ENTITY_ID in config else None
         )
 
-        device = CoverTimeBased(
-            device_id,
-            name,
-            travel_moves_with_tilt,
-            travel_time_down,
-            travel_time_up,
-            tilt_time_down,
-            tilt_time_up,
-            travel_delay_at_end,
-            min_movement_time,
-            travel_startup_delay,
-            tilt_startup_delay,
-            open_switch_entity_id,
-            close_switch_entity_id,
-            stop_switch_entity_id,
-            input_mode,
-            pulse_time,
-            cover_entity_id,
-        )
+        options = {
+            CONF_DEVICE_TYPE: DEVICE_TYPE_COVER if cover_entity_id else DEVICE_TYPE_SWITCH,
+            CONF_TRAVEL_MOVES_WITH_TILT: travel_moves_with_tilt,
+            CONF_TRAVELLING_TIME_DOWN: travel_time_down,
+            CONF_TRAVELLING_TIME_UP: travel_time_up,
+            CONF_TILTING_TIME_DOWN: tilt_time_down,
+            CONF_TILTING_TIME_UP: tilt_time_up,
+            CONF_TRAVEL_DELAY_AT_END: travel_delay_at_end,
+            CONF_MIN_MOVEMENT_TIME: min_movement_time,
+            CONF_TRAVEL_STARTUP_DELAY: travel_startup_delay,
+            CONF_TILT_STARTUP_DELAY: tilt_startup_delay,
+            CONF_INPUT_MODE: input_mode,
+            CONF_PULSE_TIME: pulse_time,
+        }
+        if open_switch_entity_id:
+            options[CONF_OPEN_SWITCH_ENTITY_ID] = open_switch_entity_id
+            options[CONF_CLOSE_SWITCH_ENTITY_ID] = close_switch_entity_id
+            options[CONF_STOP_SWITCH_ENTITY_ID] = stop_switch_entity_id
+        if cover_entity_id:
+            options[CONF_COVER_ENTITY_ID] = cover_entity_id
+
+        device = _create_cover_from_options(options, device_id=device_id, name=name)
         devices.append(device)
     return devices
 
@@ -280,40 +331,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up a single cover entity from a config entry."""
-    data = dict(config_entry.options)
-    device_type = data.get(CONF_DEVICE_TYPE, DEVICE_TYPE_SWITCH)
-
-    if device_type == DEVICE_TYPE_SWITCH:
-        open_switch = data.get(CONF_OPEN_SWITCH_ENTITY_ID)
-        close_switch = data.get(CONF_CLOSE_SWITCH_ENTITY_ID)
-        stop_switch = data.get(CONF_STOP_SWITCH_ENTITY_ID)
-        cover_entity_id = None
-        input_mode = data.get(CONF_INPUT_MODE, INPUT_MODE_SWITCH)
-    else:
-        open_switch = None
-        close_switch = None
-        stop_switch = None
-        cover_entity_id = data.get(CONF_COVER_ENTITY_ID)
-        input_mode = INPUT_MODE_SWITCH
-
-    entity = CoverTimeBased(
-        config_entry.entry_id,
-        config_entry.title,
-        data.get(CONF_TRAVEL_MOVES_WITH_TILT, False),
-        data.get(CONF_TRAVELLING_TIME_DOWN, DEFAULT_TRAVEL_TIME),
-        data.get(CONF_TRAVELLING_TIME_UP, DEFAULT_TRAVEL_TIME),
-        data.get(CONF_TILTING_TIME_DOWN),
-        data.get(CONF_TILTING_TIME_UP),
-        data.get(CONF_TRAVEL_DELAY_AT_END),
-        data.get(CONF_MIN_MOVEMENT_TIME),
-        data.get(CONF_TRAVEL_STARTUP_DELAY),
-        data.get(CONF_TILT_STARTUP_DELAY),
-        open_switch,
-        close_switch,
-        stop_switch,
-        input_mode,
-        data.get(CONF_PULSE_TIME, DEFAULT_PULSE_TIME),
-        cover_entity_id,
+    entity = _create_cover_from_options(
+        config_entry.options,
+        device_id=config_entry.entry_id,
+        name=config_entry.title,
     )
     async_add_entities([entity])
 

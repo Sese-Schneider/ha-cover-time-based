@@ -38,9 +38,6 @@ def _make_switch_cover(
         open_switch_entity_id=open_switch,
         close_switch_entity_id=close_switch,
         stop_switch_entity_id=stop_switch,
-        input_mode="switch",
-        pulse_time=1.0,
-        cover_entity_id=None,
     )
     hass = MagicMock()
     hass.services.async_call = AsyncMock()

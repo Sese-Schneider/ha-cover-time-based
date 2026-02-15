@@ -30,11 +30,6 @@ def _make_wrapped_cover(cover_entity_id="cover.inner"):
         min_movement_time=None,
         travel_startup_delay=None,
         tilt_startup_delay=None,
-        open_switch_entity_id=None,
-        close_switch_entity_id=None,
-        stop_switch_entity_id=None,
-        input_mode="switch",
-        pulse_time=1.0,
         cover_entity_id=cover_entity_id,
     )
     hass = MagicMock()

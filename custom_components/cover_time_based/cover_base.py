@@ -28,9 +28,18 @@ from xknx.devices import TravelCalculator, TravelStatus
 
 _LOGGER = logging.getLogger(__name__)
 
-# These constants are imported from cover.py where they are defined,
-# but we need them here for the base class logic.
-INPUT_MODE_TOGGLE = "toggle"
+# Configuration constants used by extra_state_attributes.
+# These are also defined in cover.py for YAML/UI config schemas,
+# but we define them here to avoid circular imports.
+CONF_TRAVEL_MOVES_WITH_TILT = "travel_moves_with_tilt"
+CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
+CONF_TRAVELLING_TIME_UP = "travelling_time_up"
+CONF_TILTING_TIME_DOWN = "tilting_time_down"
+CONF_TILTING_TIME_UP = "tilting_time_up"
+CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
+CONF_MIN_MOVEMENT_TIME = "min_movement_time"
+CONF_TRAVEL_STARTUP_DELAY = "travel_startup_delay"
+CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
 
 
 class CoverTimeBased(CoverEntity, RestoreEntity):
@@ -47,12 +56,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         min_movement_time,
         travel_startup_delay,
         tilt_startup_delay,
-        open_switch_entity_id,
-        close_switch_entity_id,
-        stop_switch_entity_id,
-        input_mode,
-        pulse_time,
-        cover_entity_id,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -66,14 +69,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._min_movement_time = min_movement_time
         self._travel_startup_delay = travel_startup_delay
         self._tilt_startup_delay = tilt_startup_delay
-
-        self._open_switch_entity_id = open_switch_entity_id
-        self._close_switch_entity_id = close_switch_entity_id
-        self._stop_switch_entity_id = stop_switch_entity_id
-        self._input_mode = input_mode
-        self._pulse_time = pulse_time
-
-        self._cover_entity_id = cover_entity_id
 
         if name:
             self._name = name
@@ -203,18 +198,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     @property
     def extra_state_attributes(self):
         """Return the device state attributes."""
-        from .cover import (
-            CONF_MIN_MOVEMENT_TIME,
-            CONF_TILTING_TIME_DOWN,
-            CONF_TILTING_TIME_UP,
-            CONF_TILT_STARTUP_DELAY,
-            CONF_TRAVEL_DELAY_AT_END,
-            CONF_TRAVEL_MOVES_WITH_TILT,
-            CONF_TRAVEL_STARTUP_DELAY,
-            CONF_TRAVELLING_TIME_DOWN,
-            CONF_TRAVELLING_TIME_UP,
-        )
-
         attr = {}
         if self._travel_moves_with_tilt is not None:
             attr[CONF_TRAVEL_MOVES_WITH_TILT] = self._travel_moves_with_tilt
@@ -327,20 +310,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Turn the device close."""
         _LOGGER.debug("async_close_cover")
 
-        if self._input_mode == INPUT_MODE_TOGGLE and (
-            self.is_closing or self.is_opening
-        ):
-            if self.is_closing:
-                _LOGGER.debug(
-                    "async_close_cover :: toggle mode, already closing, treating as stop"
-                )
-                await self.async_stop_cover()
-                return
-            else:
-                _LOGGER.debug(
-                    "async_close_cover :: toggle mode, currently opening, stopping first"
-                )
-                await self.async_stop_cover()
+        if self.is_opening:
+            _LOGGER.debug("async_close_cover :: currently opening, stopping first")
+            await self.async_stop_cover()
 
         current_travel_position = self.travel_calc.current_position()
         if current_travel_position is None or current_travel_position < 100:
@@ -411,20 +383,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Turn the device open."""
         _LOGGER.debug("async_open_cover")
 
-        if self._input_mode == INPUT_MODE_TOGGLE and (
-            self.is_opening or self.is_closing
-        ):
-            if self.is_opening:
-                _LOGGER.debug(
-                    "async_open_cover :: toggle mode, already opening, treating as stop"
-                )
-                await self.async_stop_cover()
-                return
-            else:
-                _LOGGER.debug(
-                    "async_open_cover :: toggle mode, currently closing, stopping first"
-                )
-                await self.async_stop_cover()
+        if self.is_closing:
+            _LOGGER.debug("async_open_cover :: currently closing, stopping first")
+            await self.async_stop_cover()
 
         current_travel_position = self.travel_calc.current_position()
         if current_travel_position is None or current_travel_position > 0:
@@ -636,21 +597,12 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
         _LOGGER.debug("async_stop_cover")
-
-        was_active = (
-            self.is_opening
-            or self.is_closing
-            or (self._startup_delay_task and not self._startup_delay_task.done())
-            or (self._delay_task and not self._delay_task.done())
-        )
-
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
         self._handle_stop()
         self._enforce_tilt_constraints()
-
-        if was_active or self._input_mode != INPUT_MODE_TOGGLE:
-            await self._async_handle_command(SERVICE_STOP_COVER)
+        await self._send_stop()
+        self.async_write_ha_state()
         self._last_command = None
 
     async def set_position(self, position):
@@ -1062,10 +1014,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def set_known_position(self, **kwargs):
         """We want to do a few things when we get a position"""
         position = kwargs[ATTR_POSITION]
-        was_active = self.is_opening or self.is_closing
         self._handle_stop()
-        if was_active or self._input_mode != INPUT_MODE_TOGGLE:
-            await self._async_handle_command(SERVICE_STOP_COVER)
+        await self._send_stop()
         self.travel_calc.set_position(position)
         self._enforce_tilt_constraints()
         self._last_command = None
@@ -1073,9 +1023,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def set_known_tilt_position(self, **kwargs):
         """We want to do a few things when we get a position"""
         position = kwargs[ATTR_TILT_POSITION]
-        was_active = self.is_opening or self.is_closing
-        if was_active or self._input_mode != INPUT_MODE_TOGGLE:
-            await self._async_handle_command(SERVICE_STOP_COVER)
+        await self._send_stop()
         self.tilt_calc.set_position(position)
         self._last_command = None
 

@@ -110,8 +110,7 @@ class TestStopBeforeDirectionChange:
         with patch.object(cover, "async_write_ha_state"), \
              patch.object(
                  cover, "async_stop_cover", new_callable=AsyncMock
-             ) as mock_stop, \
-             patch("tests.conftest.sleep", new_callable=AsyncMock):
+             ) as mock_stop:
             await cover.async_close_cover()
 
         # async_stop_cover should have been called to stop the opening movement
@@ -129,8 +128,7 @@ class TestStopBeforeDirectionChange:
         with patch.object(cover, "async_write_ha_state"), \
              patch.object(
                  cover, "async_stop_cover", new_callable=AsyncMock
-             ) as mock_stop, \
-             patch("tests.conftest.sleep", new_callable=AsyncMock):
+             ) as mock_stop:
             await cover.async_open_cover()
 
         # async_stop_cover should have been called to stop the closing movement

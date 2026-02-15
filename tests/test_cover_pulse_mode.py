@@ -39,9 +39,7 @@ def _make_pulse_cover(
         open_switch_entity_id=open_switch,
         close_switch_entity_id=close_switch,
         stop_switch_entity_id=stop_switch,
-        input_mode="pulse",
         pulse_time=pulse_time,
-        cover_entity_id=None,
     )
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
