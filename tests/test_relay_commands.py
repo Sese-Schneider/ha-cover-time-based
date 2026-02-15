@@ -135,7 +135,7 @@ class TestPulseModeClose:
     async def test_close_pulses_close_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_PULSE)
         with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover.sleep", new_callable=AsyncMock):
+             patch("tests.conftest.sleep", new_callable=AsyncMock):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -149,7 +149,7 @@ class TestPulseModeClose:
     async def test_close_with_stop_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_PULSE, stop_switch="switch.stop")
         with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover.sleep", new_callable=AsyncMock):
+             patch("tests.conftest.sleep", new_callable=AsyncMock):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -168,7 +168,7 @@ class TestPulseModeOpen:
     async def test_open_pulses_open_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_PULSE)
         with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover.sleep", new_callable=AsyncMock):
+             patch("tests.conftest.sleep", new_callable=AsyncMock):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -197,7 +197,7 @@ class TestPulseModeStop:
     async def test_stop_with_stop_switch_pulses_it(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_PULSE, stop_switch="switch.stop")
         with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover.sleep", new_callable=AsyncMock):
+             patch("tests.conftest.sleep", new_callable=AsyncMock):
             await cover._async_handle_command(SERVICE_STOP_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -220,7 +220,7 @@ class TestToggleModeClose:
     async def test_close_pulses_close_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
         with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover.sleep", new_callable=AsyncMock):
+             patch("tests.conftest.sleep", new_callable=AsyncMock):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -238,7 +238,7 @@ class TestToggleModeOpen:
     async def test_open_pulses_open_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
         with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover.sleep", new_callable=AsyncMock):
+             patch("tests.conftest.sleep", new_callable=AsyncMock):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -257,7 +257,7 @@ class TestToggleModeStop:
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
         cover._last_command = SERVICE_CLOSE_COVER
         with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover.sleep", new_callable=AsyncMock):
+             patch("tests.conftest.sleep", new_callable=AsyncMock):
             await cover._async_handle_command(SERVICE_STOP_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -271,7 +271,7 @@ class TestToggleModeStop:
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
         cover._last_command = SERVICE_OPEN_COVER
         with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover.sleep", new_callable=AsyncMock):
+             patch("tests.conftest.sleep", new_callable=AsyncMock):
             await cover._async_handle_command(SERVICE_STOP_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
