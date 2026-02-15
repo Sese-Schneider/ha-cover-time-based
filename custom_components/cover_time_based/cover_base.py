@@ -1015,7 +1015,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """We want to do a few things when we get a position"""
         position = kwargs[ATTR_POSITION]
         self._handle_stop()
-        await self._send_stop()
+        await self._async_handle_command(SERVICE_STOP_COVER)
         self.travel_calc.set_position(position)
         self._enforce_tilt_constraints()
         self._last_command = None
@@ -1023,7 +1023,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def set_known_tilt_position(self, **kwargs):
         """We want to do a few things when we get a position"""
         position = kwargs[ATTR_TILT_POSITION]
-        await self._send_stop()
+        await self._async_handle_command(SERVICE_STOP_COVER)
         self.tilt_calc.set_position(position)
         self._last_command = None
 
