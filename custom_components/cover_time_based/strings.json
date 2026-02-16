@@ -3,6 +3,7 @@
     "step": {
       "user": {
         "title": "Add a time-based cover",
+        "description": "Set up a cover that tracks position based on movement time.",
         "data": {
           "name": "Name",
           "device_type": "Device type",
