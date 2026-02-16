@@ -6,21 +6,28 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.cover_time_based.cover import (
-    DEFAULT_PULSE_TIME,
-    DEFAULT_TRAVEL_TIME,
-    INPUT_MODE_SWITCH,
-    _create_cover_from_options,
-    CONF_COVER_ENTITY_ID,
     CONF_CLOSE_SWITCH_ENTITY_ID,
+    CONF_COVER_ENTITY_ID,
     CONF_DEVICE_TYPE,
     CONF_INPUT_MODE,
+    CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_STOP_SWITCH_ENTITY_ID,
+    CONF_TILTING_TIME_DOWN,
+    CONF_TILTING_TIME_UP,
+    CONF_TRAVEL_DELAY_AT_END,
+    CONF_TRAVEL_MOVES_WITH_TILT,
+    CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
+    CONF_TILT_STARTUP_DELAY,
+    DEFAULT_PULSE_TIME,
+    DEFAULT_TRAVEL_TIME,
     DEVICE_TYPE_COVER,
     DEVICE_TYPE_SWITCH,
+    INPUT_MODE_SWITCH,
+    _create_cover_from_options,
 )
 
 
@@ -50,6 +57,13 @@ def make_cover(make_hass):
         pulse_time=DEFAULT_PULSE_TIME,
         travel_time_down=DEFAULT_TRAVEL_TIME,
         travel_time_up=DEFAULT_TRAVEL_TIME,
+        tilt_time_down=None,
+        tilt_time_up=None,
+        travel_moves_with_tilt=False,
+        travel_startup_delay=None,
+        tilt_startup_delay=None,
+        min_movement_time=None,
+        travel_delay_at_end=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -69,6 +83,21 @@ def make_cover(make_hass):
                 CONF_TRAVELLING_TIME_DOWN: travel_time_down,
                 CONF_TRAVELLING_TIME_UP: travel_time_up,
             }
+
+        if tilt_time_down is not None:
+            options[CONF_TILTING_TIME_DOWN] = tilt_time_down
+        if tilt_time_up is not None:
+            options[CONF_TILTING_TIME_UP] = tilt_time_up
+        if travel_moves_with_tilt:
+            options[CONF_TRAVEL_MOVES_WITH_TILT] = travel_moves_with_tilt
+        if travel_startup_delay is not None:
+            options[CONF_TRAVEL_STARTUP_DELAY] = travel_startup_delay
+        if tilt_startup_delay is not None:
+            options[CONF_TILT_STARTUP_DELAY] = tilt_startup_delay
+        if min_movement_time is not None:
+            options[CONF_MIN_MOVEMENT_TIME] = min_movement_time
+        if travel_delay_at_end is not None:
+            options[CONF_TRAVEL_DELAY_AT_END] = travel_delay_at_end
 
         cover = _create_cover_from_options(
             options,
