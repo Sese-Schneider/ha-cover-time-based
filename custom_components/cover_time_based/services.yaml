@@ -1,26 +1,69 @@
 set_known_position:
+  target:
+    entity:
+      domain: cover
   fields:
-    entity_id:
-      example: cover.blinds
     position:
+      required: true
       example: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+
 set_known_tilt_position:
+  target:
+    entity:
+      domain: cover
   fields:
-    entity_id:
-      example: cover.blinds
-    position:
+    tilt_position:
+      required: true
       example: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+
 start_calibration:
+  target:
+    entity:
+      domain: cover
   fields:
-    entity_id:
-      example: cover.blinds
     attribute:
+      required: true
       example: travel_time_down
+      selector:
+        select:
+          options:
+            - travel_time_down
+            - travel_time_up
+            - tilt_time_down
+            - tilt_time_up
+            - travel_motor_overhead
+            - tilt_motor_overhead
+            - min_movement_time
     timeout:
+      required: true
       example: 120
+      default: 120
+      selector:
+        number:
+          min: 1
+          max: 600
+          step: 1
+          unit_of_measurement: "s"
+
 stop_calibration:
+  target:
+    entity:
+      domain: cover
   fields:
-    entity_id:
-      example: cover.blinds
     cancel:
-      example: false
+      required: false
+      default: false
+      selector:
+        boolean:
