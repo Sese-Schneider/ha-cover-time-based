@@ -2,6 +2,7 @@ set_known_position:
   target:
     entity:
       domain: cover
+      integration: cover_time_based
   fields:
     position:
       required: true
@@ -17,6 +18,7 @@ set_known_tilt_position:
   target:
     entity:
       domain: cover
+      integration: cover_time_based
   fields:
     tilt_position:
       required: true
@@ -32,6 +34,7 @@ start_calibration:
   target:
     entity:
       domain: cover
+      integration: cover_time_based
   fields:
     attribute:
       required: true
@@ -61,6 +64,7 @@ stop_calibration:
   target:
     entity:
       domain: cover
+      integration: cover_time_based
   fields:
     cancel:
       required: false
