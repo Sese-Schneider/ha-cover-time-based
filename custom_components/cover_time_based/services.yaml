@@ -40,17 +40,24 @@ start_calibration:
           integration: cover_time_based
     attribute:
       required: true
-      example: travel_time_down
+      example: travel_time_close
       selector:
         select:
           options:
-            - travel_time_down
-            - travel_time_up
-            - tilt_time_down
-            - tilt_time_up
-            - travel_motor_overhead
-            - tilt_motor_overhead
-            - min_movement_time
+            - label: "Travel time (close)"
+              value: travel_time_close
+            - label: "Travel time (open)"
+              value: travel_time_open
+            - label: "Travel motor overhead"
+              value: travel_motor_overhead
+            - label: "Tilt time (close)"
+              value: tilt_time_close
+            - label: "Tilt time (open)"
+              value: tilt_time_open
+            - label: "Tilt motor overhead"
+              value: tilt_motor_overhead
+            - label: "Minimum movement time"
+              value: min_movement_time
     timeout:
       required: true
       example: 120
@@ -66,8 +73,10 @@ start_calibration:
       selector:
         select:
           options:
-            - open
-            - close
+            - label: "Open"
+              value: open
+            - label: "Close"
+              value: close
 
 stop_calibration:
   fields:

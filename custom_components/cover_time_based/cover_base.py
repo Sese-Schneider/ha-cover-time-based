@@ -848,7 +848,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             raise HomeAssistantError("Calibration already in progress")
 
         # Validate BEFORE creating state
-        if attribute in ("tilt_time_down", "tilt_time_up"):
+        if attribute in ("tilt_time_close", "tilt_time_open"):
             if self._travel_moves_with_tilt:
                 raise HomeAssistantError(
                     "Tilt time calibration not available when travel_moves_with_tilt is enabled"
@@ -874,10 +874,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         # Dispatch to appropriate test type
         if attribute in (
-            "travel_time_down",
-            "travel_time_up",
-            "tilt_time_down",
-            "tilt_time_up",
+            "travel_time_close",
+            "travel_time_open",
+            "tilt_time_close",
+            "tilt_time_open",
         ):
             await self._start_simple_time_test(attribute, direction)
         elif attribute in ("travel_motor_overhead", "tilt_motor_overhead"):
@@ -910,7 +910,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._calibration.move_command = self._resolve_direction(
                 direction, None
             )
-        elif "down" in attribute:
+        elif "close" in attribute:
             self._calibration.move_command = SERVICE_CLOSE_COVER
         else:
             self._calibration.move_command = SERVICE_OPEN_COVER
@@ -1120,10 +1120,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def _save_calibration_result(self, attribute, value):
         """Save the calibration result to the config entry options."""
         attribute_to_conf = {
-            "travel_time_down": CONF_TRAVELLING_TIME_DOWN,
-            "travel_time_up": CONF_TRAVELLING_TIME_UP,
-            "tilt_time_down": CONF_TILTING_TIME_DOWN,
-            "tilt_time_up": CONF_TILTING_TIME_UP,
+            "travel_time_close": CONF_TRAVELLING_TIME_DOWN,
+            "travel_time_open": CONF_TRAVELLING_TIME_UP,
+            "tilt_time_close": CONF_TILTING_TIME_DOWN,
+            "tilt_time_open": CONF_TILTING_TIME_UP,
             "travel_motor_overhead": CONF_TRAVEL_MOTOR_OVERHEAD,
             "tilt_motor_overhead": CONF_TILT_MOTOR_OVERHEAD,
             "min_movement_time": CONF_MIN_MOVEMENT_TIME,

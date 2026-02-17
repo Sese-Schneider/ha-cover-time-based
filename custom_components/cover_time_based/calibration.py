@@ -12,11 +12,11 @@ CALIBRATION_MIN_MOVEMENT_START = 0.1
 CALIBRATION_MIN_MOVEMENT_INCREMENT = 0.1
 
 CALIBRATABLE_ATTRIBUTES = [
-    "travel_time_down",
-    "travel_time_up",
-    "tilt_time_down",
-    "tilt_time_up",
+    "travel_time_close",
+    "travel_time_open",
     "travel_motor_overhead",
+    "tilt_time_close",
+    "tilt_time_open",
     "tilt_motor_overhead",
     "min_movement_time",
 ]
