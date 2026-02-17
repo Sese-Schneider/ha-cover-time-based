@@ -1,5 +1,10 @@
 """Tests for calibration services."""
 
+import asyncio
+
+import pytest
+from unittest.mock import patch, MagicMock
+
 
 class TestConfigEntryAccess:
     """Test that config entry ID is available on the entity."""
@@ -49,3 +54,99 @@ class TestCalibrationState:
         assert len(CALIBRATABLE_ATTRIBUTES) == 7
         assert SERVICE_START_CALIBRATION == "start_calibration"
         assert SERVICE_STOP_CALIBRATION == "stop_calibration"
+
+
+class TestStartCalibrationTravelTime:
+    @pytest.mark.asyncio
+    async def test_start_travel_time_down_moves_cover(self, make_cover):
+        cover = make_cover()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_down", timeout=120.0)
+        assert cover._calibration is not None
+        assert cover._calibration.attribute == "travel_time_down"
+        cover.hass.services.async_call.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_start_travel_time_up_moves_cover(self, make_cover):
+        cover = make_cover()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_up", timeout=120.0)
+        assert cover._calibration is not None
+        assert cover._calibration.attribute == "travel_time_up"
+
+    @pytest.mark.asyncio
+    async def test_cannot_start_while_calibrating(self, make_cover):
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = make_cover()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_down", timeout=120.0)
+            with pytest.raises(HomeAssistantError, match="already"):
+                await cover.start_calibration(attribute="travel_time_up", timeout=120.0)
+
+    @pytest.mark.asyncio
+    async def test_calibration_exposes_state_attributes(self, make_cover):
+        cover = make_cover()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_down", timeout=120.0)
+        attrs = cover.extra_state_attributes
+        assert attrs["calibration_active"] is True
+        assert attrs["calibration_attribute"] == "travel_time_down"
+
+    @pytest.mark.asyncio
+    async def test_no_calibration_attributes_when_inactive(self, make_cover):
+        cover = make_cover()
+        attrs = cover.extra_state_attributes
+        assert "calibration_active" not in attrs
+
+
+class TestStopCalibrationTravelTime:
+    @pytest.mark.asyncio
+    async def test_stop_calculates_elapsed_time(self, make_cover):
+        cover = make_cover()
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_down", timeout=120.0)
+            cover._calibration.started_at -= 45.0
+            result = await cover.stop_calibration()
+
+        assert result["value"] == pytest.approx(45.0, abs=0.5)
+        assert cover._calibration is None
+        cover.hass.config_entries.async_update_entry.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stop_with_cancel_discards(self, make_cover):
+        cover = make_cover()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_down", timeout=120.0)
+            result = await cover.stop_calibration(cancel=True)
+        assert cover._calibration is None
+        assert "value" not in result
+
+    @pytest.mark.asyncio
+    async def test_stop_without_active_calibration_raises(self, make_cover):
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = make_cover()
+        with pytest.raises(HomeAssistantError, match="[Nn]o calibration"):
+            await cover.stop_calibration()
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_timeout_task(self, make_cover):
+        cover = make_cover()
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_down", timeout=120.0)
+            timeout_task = cover._calibration.timeout_task
+            await cover.stop_calibration()
+
+        await asyncio.sleep(0)  # Let event loop process cancellation
+        assert timeout_task.cancelled()

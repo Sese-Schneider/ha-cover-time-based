@@ -19,6 +19,11 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
 
+from .calibration import (
+    CALIBRATABLE_ATTRIBUTES,
+    SERVICE_START_CALIBRATION,
+    SERVICE_STOP_CALIBRATION,
+)
 from .cover_base import CoverTimeBased  # noqa: F401
 
 _LOGGER = logging.getLogger(__name__)
@@ -299,6 +304,25 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     platform.async_register_entity_service(
         SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
     )
+    platform.async_register_entity_service(
+        SERVICE_START_CALIBRATION,
+        vol.Schema(
+            {
+                vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
+                vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1)),
+            }
+        ),
+        "start_calibration",
+    )
+    platform.async_register_entity_service(
+        SERVICE_STOP_CALIBRATION,
+        vol.Schema(
+            {
+                vol.Optional("cancel", default=False): cv.boolean,
+            }
+        ),
+        "stop_calibration",
+    )
 
 
 async def async_setup_entry(
@@ -321,4 +345,23 @@ async def async_setup_entry(
     )
     platform.async_register_entity_service(
         SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
+    )
+    platform.async_register_entity_service(
+        SERVICE_START_CALIBRATION,
+        vol.Schema(
+            {
+                vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
+                vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1)),
+            }
+        ),
+        "start_calibration",
+    )
+    platform.async_register_entity_service(
+        SERVICE_STOP_CALIBRATION,
+        vol.Schema(
+            {
+                vol.Optional("cancel", default=False): cv.boolean,
+            }
+        ),
+        "stop_calibration",
     )

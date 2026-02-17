@@ -113,3 +113,9 @@ def make_cover(make_hass):
             task = getattr(cover, attr, None)
             if task is not None and not task.done():
                 task.cancel()
+        calibration = getattr(cover, "_calibration", None)
+        if calibration is not None:
+            for cal_attr in ("timeout_task", "automation_task"):
+                task = getattr(calibration, cal_attr, None)
+                if task is not None and not task.done():
+                    task.cancel()

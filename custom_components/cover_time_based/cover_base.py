@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from abc import abstractmethod
 from asyncio import sleep
 from datetime import timedelta
@@ -20,11 +21,14 @@ from homeassistant.const import (
     SERVICE_STOP_COVER,
 )
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.helpers.restore_state import RestoreEntity
 from xknx.devices import TravelCalculator, TravelStatus
+
+from .calibration import CalibrationState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,6 +88,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._name = device_id
 
         self._config_entry_id = None
+        self._calibration = None
         self._unsubscribe_auto_updater = None
         self._delay_task = None
         self._startup_delay_task = None
@@ -260,6 +265,11 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             attr[CONF_TILT_MOTOR_OVERHEAD] = self._tilt_motor_overhead
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
+        if self._calibration is not None:
+            attr["calibration_active"] = True
+            attr["calibration_attribute"] = self._calibration.attribute
+            if self._calibration.step_duration is not None:
+                attr["calibration_step"] = self._calibration.step_count
         return attr
 
     @property
@@ -812,6 +822,118 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         await self._async_handle_command(SERVICE_STOP_COVER)
         self.tilt_calc.set_position(position)
         self._last_command = None
+
+    async def start_calibration(self, **kwargs):
+        """Start a calibration test for the given attribute."""
+        attribute = kwargs["attribute"]
+        timeout = kwargs["timeout"]
+
+        if self._calibration is not None:
+            raise HomeAssistantError("Calibration already in progress")
+
+        self._calibration = CalibrationState(attribute=attribute, timeout=timeout)
+        self._calibration.timeout_task = self.hass.async_create_task(
+            self._calibration_timeout()
+        )
+
+        if "travel_time" in attribute or "tilt_time" in attribute:
+            await self._start_simple_time_test(attribute)
+
+        self.async_write_ha_state()
+
+    async def _start_simple_time_test(self, attribute):
+        """Start a simple travel/tilt time test by moving the cover."""
+        if "down" in attribute:
+            await self._async_handle_command(SERVICE_CLOSE_COVER)
+        else:
+            await self._async_handle_command(SERVICE_OPEN_COVER)
+
+    async def _calibration_timeout(self):
+        """Handle calibration timeout."""
+        try:
+            await sleep(self._calibration.timeout)
+            _LOGGER.warning(
+                "Calibration timed out after %fs for attribute '%s'",
+                self._calibration.timeout,
+                self._calibration.attribute,
+            )
+            await self._send_stop()
+            self._calibration = None
+            self.async_write_ha_state()
+        except asyncio.CancelledError:
+            _LOGGER.debug("_calibration_timeout :: cancelled")
+
+    async def stop_calibration(self, **kwargs):
+        """Stop an in-progress calibration test."""
+        if self._calibration is None:
+            raise HomeAssistantError("No calibration in progress")
+
+        cancel = kwargs.get("cancel", False)
+
+        # Cancel timeout task
+        if (
+            self._calibration.timeout_task is not None
+            and not self._calibration.timeout_task.done()
+        ):
+            self._calibration.timeout_task.cancel()
+
+        # Cancel automation task
+        if (
+            self._calibration.automation_task is not None
+            and not self._calibration.automation_task.done()
+        ):
+            self._calibration.automation_task.cancel()
+
+        # Stop the motor
+        await self._send_stop()
+
+        result = {}
+        if not cancel:
+            value = self._calculate_calibration_result()
+            result["attribute"] = self._calibration.attribute
+            result["value"] = value
+            self._save_calibration_result(self._calibration.attribute, value)
+
+        self._calibration = None
+        self.async_write_ha_state()
+        return result
+
+    def _calculate_calibration_result(self):
+        """Calculate the calibration result from elapsed time."""
+        elapsed = time.monotonic() - self._calibration.started_at
+        if (
+            "travel_time" in self._calibration.attribute
+            or "tilt_time" in self._calibration.attribute
+        ):
+            return round(elapsed, 1)
+        return elapsed
+
+    def _save_calibration_result(self, attribute, value):
+        """Save the calibration result to the config entry options."""
+        attribute_to_conf = {
+            "travel_time_down": CONF_TRAVELLING_TIME_DOWN,
+            "travel_time_up": CONF_TRAVELLING_TIME_UP,
+            "tilt_time_down": CONF_TILTING_TIME_DOWN,
+            "tilt_time_up": CONF_TILTING_TIME_UP,
+            "travel_motor_overhead": CONF_TRAVEL_MOTOR_OVERHEAD,
+            "tilt_motor_overhead": CONF_TILT_MOTOR_OVERHEAD,
+            "min_movement_time": CONF_MIN_MOVEMENT_TIME,
+        }
+        conf_key = attribute_to_conf.get(attribute)
+        if conf_key is None:
+            _LOGGER.error("Unknown calibration attribute: %s", attribute)
+            return
+
+        entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
+        if entry is None:
+            _LOGGER.error(
+                "Config entry %s not found, cannot save calibration result",
+                self._config_entry_id,
+            )
+            return
+
+        new_options = {**entry.options, conf_key: value}
+        self.hass.config_entries.async_update_entry(entry, options=new_options)
 
     async def _async_handle_command(self, command, *args):
         if command == SERVICE_CLOSE_COVER:
