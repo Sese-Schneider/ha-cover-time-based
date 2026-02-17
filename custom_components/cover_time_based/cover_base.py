@@ -1095,6 +1095,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         For min_movement_time the cover has only nudged slightly, so we
         first return it to the starting endpoint, then reset position.
         """
+        if self._calibration is None:
+            return
         attribute = self._calibration.attribute
         move_command = self._calibration.move_command
         if not move_command:
