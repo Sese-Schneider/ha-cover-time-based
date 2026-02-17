@@ -696,6 +696,7 @@ class TestRelayDelayAtEnd:
 
         # Should have created a delay task instead of stopping immediately
         assert cover._delay_task is not None
+        cover._delay_task.cancel()
 
     @pytest.mark.asyncio
     async def test_auto_stop_at_midpoint_stops_immediately(self, make_cover):
