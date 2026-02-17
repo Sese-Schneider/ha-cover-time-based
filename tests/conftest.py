@@ -112,7 +112,6 @@ def make_cover(make_hass):
     yield _make
 
     for cover in covers:
-        for attr in ("_startup_delay_task", "_delay_task"):
-            task = getattr(cover, attr, None)
-            if task is not None and not task.done():
-                task.cancel()
+        task = getattr(cover, "_startup_delay_task", None)
+        if task is not None and not task.done():
+            task.cancel()
