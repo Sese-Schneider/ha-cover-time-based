@@ -145,6 +145,35 @@ TILT_POSITION_SCHEMA = cv.make_entity_service_schema(
 DOMAIN = "cover_time_based"
 
 
+def _register_services(platform):
+    """Register entity services on the given platform."""
+    platform.async_register_entity_service(
+        SERVICE_SET_KNOWN_POSITION, POSITION_SCHEMA, "set_known_position"
+    )
+    platform.async_register_entity_service(
+        SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
+    )
+    platform.async_register_entity_service(
+        SERVICE_START_CALIBRATION,
+        vol.Schema(
+            {
+                vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
+                vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1)),
+            }
+        ),
+        "start_calibration",
+    )
+    platform.async_register_entity_service(
+        SERVICE_STOP_CALIBRATION,
+        vol.Schema(
+            {
+                vol.Optional("cancel", default=False): cv.boolean,
+            }
+        ),
+        "stop_calibration",
+    )
+
+
 def _create_cover_from_options(options, device_id="", name=""):
     """Create the appropriate cover subclass based on options."""
     from .cover_wrapped import WrappedCoverTimeBased
@@ -297,32 +326,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     async_add_entities(devices_from_config(config))
 
     platform = entity_platform.current_platform.get()
-
-    platform.async_register_entity_service(
-        SERVICE_SET_KNOWN_POSITION, POSITION_SCHEMA, "set_known_position"
-    )
-    platform.async_register_entity_service(
-        SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
-    )
-    platform.async_register_entity_service(
-        SERVICE_START_CALIBRATION,
-        vol.Schema(
-            {
-                vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
-                vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1)),
-            }
-        ),
-        "start_calibration",
-    )
-    platform.async_register_entity_service(
-        SERVICE_STOP_CALIBRATION,
-        vol.Schema(
-            {
-                vol.Optional("cancel", default=False): cv.boolean,
-            }
-        ),
-        "stop_calibration",
-    )
+    _register_services(platform)
 
 
 async def async_setup_entry(
@@ -340,28 +344,4 @@ async def async_setup_entry(
     async_add_entities([entity])
 
     platform = entity_platform.current_platform.get()
-    platform.async_register_entity_service(
-        SERVICE_SET_KNOWN_POSITION, POSITION_SCHEMA, "set_known_position"
-    )
-    platform.async_register_entity_service(
-        SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
-    )
-    platform.async_register_entity_service(
-        SERVICE_START_CALIBRATION,
-        vol.Schema(
-            {
-                vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
-                vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1)),
-            }
-        ),
-        "start_calibration",
-    )
-    platform.async_register_entity_service(
-        SERVICE_STOP_CALIBRATION,
-        vol.Schema(
-            {
-                vol.Optional("cancel", default=False): cv.boolean,
-            }
-        ),
-        "stop_calibration",
-    )
+    _register_services(platform)

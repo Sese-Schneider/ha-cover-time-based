@@ -125,6 +125,21 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     100 - int(old_state.attributes.get(ATTR_CURRENT_TILT_POSITION))
                 )
 
+    async def async_will_remove_from_hass(self):
+        """Clean up when entity is removed."""
+        if self._calibration is not None:
+            if (
+                self._calibration.timeout_task
+                and not self._calibration.timeout_task.done()
+            ):
+                self._calibration.timeout_task.cancel()
+            if (
+                self._calibration.automation_task
+                and not self._calibration.automation_task.done()
+            ):
+                self._calibration.automation_task.cancel()
+            self._calibration = None
+
     def _handle_stop(self):
         """Handle stop"""
         if self.travel_calc.is_traveling():
@@ -268,7 +283,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if self._calibration is not None:
             attr["calibration_active"] = True
             attr["calibration_attribute"] = self._calibration.attribute
-            if self._calibration.step_duration is not None:
+            if self._calibration.step_count > 0:
                 attr["calibration_step"] = self._calibration.step_count
         return attr
 
@@ -831,20 +846,38 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if self._calibration is not None:
             raise HomeAssistantError("Calibration already in progress")
 
+        # Validate BEFORE creating state
+        if attribute in ("tilt_time_down", "tilt_time_up"):
+            if self._travel_moves_with_tilt:
+                raise HomeAssistantError(
+                    "Tilt time calibration not available when travel_moves_with_tilt is enabled"
+                )
+
+        if attribute == "travel_motor_overhead":
+            if not (self._travel_time_down or self._travel_time_up):
+                raise HomeAssistantError(
+                    "Travel time must be configured before calibrating motor overhead"
+                )
+
+        if attribute == "tilt_motor_overhead":
+            if not (self._tilting_time_down or self._tilting_time_up):
+                raise HomeAssistantError(
+                    "Tilt time must be configured before calibrating motor overhead"
+                )
+
+        # Create state only after validation passes
         self._calibration = CalibrationState(attribute=attribute, timeout=timeout)
         self._calibration.timeout_task = self.hass.async_create_task(
             self._calibration_timeout()
         )
 
-        if attribute in ("tilt_time_down", "tilt_time_up"):
-            if self._travel_moves_with_tilt:
-                self._calibration.timeout_task.cancel()
-                self._calibration = None
-                raise HomeAssistantError(
-                    "Tilt time calibration not available when travel_moves_with_tilt is enabled"
-                )
-
-        if "travel_time" in attribute or "tilt_time" in attribute:
+        # Dispatch to appropriate test type
+        if attribute in (
+            "travel_time_down",
+            "travel_time_up",
+            "tilt_time_down",
+            "tilt_time_up",
+        ):
             await self._start_simple_time_test(attribute)
         elif attribute in ("travel_motor_overhead", "tilt_motor_overhead"):
             await self._start_overhead_test(attribute)
@@ -868,20 +901,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         if attribute == "travel_motor_overhead":
             travel_time = self._travel_time_down or self._travel_time_up
-            if not travel_time:
-                self._calibration.timeout_task.cancel()
-                self._calibration = None
-                raise HomeAssistantError(
-                    "Travel time must be configured before calibrating motor overhead"
-                )
         else:
             travel_time = self._tilting_time_down or self._tilting_time_up
-            if not travel_time:
-                self._calibration.timeout_task.cancel()
-                self._calibration = None
-                raise HomeAssistantError(
-                    "Tilt time must be configured before calibrating motor overhead"
-                )
 
         step_duration = travel_time / CALIBRATION_OVERHEAD_STEPS
         self._calibration.step_duration = step_duration
@@ -939,6 +960,12 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 self._calibration.timeout,
                 self._calibration.attribute,
             )
+            # Cancel automation task if running
+            if (
+                self._calibration.automation_task is not None
+                and not self._calibration.automation_task.done()
+            ):
+                self._calibration.automation_task.cancel()
             await self._send_stop()
             self._calibration = None
             self.async_write_ha_state()
@@ -1002,8 +1029,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if attribute == "min_movement_time":
             return round(self._calibration.last_pulse_duration, 2)
 
-        elapsed = time.monotonic() - self._calibration.started_at
-        return elapsed
+        raise ValueError(f"Unexpected calibration attribute: {attribute}")
 
     def _save_calibration_result(self, attribute, value):
         """Save the calibration result to the config entry options."""

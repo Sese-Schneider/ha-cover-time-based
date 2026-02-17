@@ -266,3 +266,28 @@ class TestMinMovementTimeCalibration:
             result = await cover.stop_calibration()
 
         assert result["value"] == pytest.approx(0.5)
+
+
+class TestCalibrationTimeout:
+    @pytest.mark.asyncio
+    async def test_timeout_stops_motor_and_clears_state(self, make_cover):
+        """Timeout should stop motor, clear calibration, and not crash."""
+        cover = make_cover()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_down", timeout=0.1)
+            # Wait for timeout to fire
+            await asyncio.sleep(0.2)
+        assert cover._calibration is None
+
+    @pytest.mark.asyncio
+    async def test_timeout_cancels_automation_task(self, make_cover):
+        """Timeout during overhead test should cancel automation task."""
+        cover = make_cover(travel_time_down=60.0, travel_time_up=60.0)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_motor_overhead", timeout=0.1
+            )
+            automation_task = cover._calibration.automation_task
+            await asyncio.sleep(0.3)
+        assert cover._calibration is None
+        assert automation_task.done()  # Should be cancelled
