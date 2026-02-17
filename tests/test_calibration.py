@@ -48,7 +48,7 @@ class TestCalibrationState:
         )
 
         assert CALIBRATION_STEP_PAUSE == 2.0
-        assert CALIBRATION_OVERHEAD_STEPS == 10
+        assert CALIBRATION_OVERHEAD_STEPS == 8
         assert CALIBRATION_MIN_MOVEMENT_START == 0.1
         assert CALIBRATION_MIN_MOVEMENT_INCREMENT == 0.1
         assert len(CALIBRATABLE_ATTRIBUTES) == 7
@@ -210,15 +210,19 @@ class TestMotorOverheadCalibration:
         cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
         cover.hass.config_entries.async_update_entry = MagicMock()
 
+        import time as time_mod
+
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(
                 attribute="travel_motor_overhead", timeout=300.0
             )
-            # Simulate 15 steps completed instead of expected 10
-            cover._calibration.step_count = 15
+            # Simulate 8 stepped moves completed, then continuous phase
+            cover._calibration.step_count = 8
+            # Continuous phase started 28s ago: 12s expected (0.2*60) + 16s overhead (8*2)
+            cover._calibration.continuous_start = time_mod.monotonic() - 28.0
             result = await cover.stop_calibration()
 
-        # overhead = 6.0 - (60.0 / 15) = 6.0 - 4.0 = 2.0
+        # overhead = (28.0 - 0.2*60) / 8 = (28.0 - 12.0) / 8 = 2.0
         assert result["value"] == pytest.approx(2.0, abs=0.1)
 
     @pytest.mark.asyncio

@@ -7,7 +7,7 @@ from asyncio import Task
 from dataclasses import dataclass, field
 
 CALIBRATION_STEP_PAUSE = 2.0
-CALIBRATION_OVERHEAD_STEPS = 10
+CALIBRATION_OVERHEAD_STEPS = 8
 CALIBRATION_MIN_MOVEMENT_START = 0.1
 CALIBRATION_MIN_MOVEMENT_INCREMENT = 0.1
 
@@ -35,5 +35,6 @@ class CalibrationState:
     step_count: int = 0
     step_duration: float | None = None
     last_pulse_duration: float | None = None
+    continuous_start: float | None = None
     timeout_task: Task | None = field(default=None, repr=False)
     automation_task: Task | None = field(default=None, repr=False)

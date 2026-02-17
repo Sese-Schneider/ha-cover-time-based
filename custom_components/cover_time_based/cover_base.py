@@ -904,25 +904,54 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         else:
             travel_time = self._tilting_time_down or self._tilting_time_up
 
-        step_duration = travel_time / CALIBRATION_OVERHEAD_STEPS
+        # Each step is 1/10th of total travel time, but we only do 8 steps
+        step_duration = travel_time / 10
         self._calibration.step_duration = step_duration
 
         self._calibration.automation_task = self.hass.async_create_task(
-            self._run_overhead_steps(step_duration)
+            self._run_overhead_steps(step_duration, CALIBRATION_OVERHEAD_STEPS)
         )
 
-    async def _run_overhead_steps(self, step_duration):
-        """Execute automated step sequence for overhead test."""
+    async def _run_overhead_steps(self, step_duration, num_steps):
+        """Execute stepped moves then one continuous move for overhead test.
+
+        Phase 1: num_steps stepped moves of step_duration each (with pauses).
+        Phase 2: Continuous move for the remaining distance.
+        The user calls stop_calibration when the cover reaches the endpoint.
+        """
         from .calibration import CALIBRATION_STEP_PAUSE
+        import time as time_mod
 
         try:
-            while True:
+            # Phase 1: Stepped moves
+            for i in range(num_steps):
+                _LOGGER.debug(
+                    "overhead step %d/%d: moving for %.2fs",
+                    i + 1,
+                    num_steps,
+                    step_duration,
+                )
                 await self._async_handle_command(SERVICE_CLOSE_COVER)
                 await sleep(step_duration)
                 await self._send_stop()
                 self._calibration.step_count += 1
                 self.async_write_ha_state()
-                await sleep(CALIBRATION_STEP_PAUSE)
+                if i < num_steps - 1:
+                    await sleep(CALIBRATION_STEP_PAUSE)
+
+            # Pause before continuous phase
+            await sleep(CALIBRATION_STEP_PAUSE)
+
+            # Phase 2: Continuous move for remaining distance
+            _LOGGER.debug(
+                "overhead test: starting continuous phase for remaining distance"
+            )
+            self._calibration.continuous_start = time_mod.monotonic()
+            await self._async_handle_command(SERVICE_CLOSE_COVER)
+
+            # Wait indefinitely until user calls stop_calibration
+            while True:
+                await sleep(1.0)
         except asyncio.CancelledError:
             pass
 
@@ -1016,14 +1045,31 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             return round(elapsed, 1)
 
         if attribute in ("travel_motor_overhead", "tilt_motor_overhead"):
-            step_duration = self._calibration.step_duration
-            step_count = self._calibration.step_count
             if attribute == "travel_motor_overhead":
                 total_time = self._travel_time_down or self._travel_time_up
             else:
                 total_time = self._tilting_time_down or self._tilting_time_up
-            # overhead = step_duration - (total_time / step_count)
-            overhead = step_duration - (total_time / step_count)
+
+            step_count = self._calibration.step_count
+            continuous_start = self._calibration.continuous_start
+            if continuous_start is None:
+                _LOGGER.warning(
+                    "Overhead calibration stopped before continuous phase started"
+                )
+                return 0.0
+            continuous_time = time.monotonic() - continuous_start
+            # 8 steps cover 8/10 of travel; remaining is 2/10 = 0.2 * total_time
+            expected_remaining = 0.2 * total_time
+            overhead = (continuous_time - expected_remaining) / step_count
+            _LOGGER.debug(
+                "overhead calculation: total_time=%.2f, step_count=%d, "
+                "continuous_time=%.2f, expected_remaining=%.2f, overhead=%.4f",
+                total_time,
+                step_count,
+                continuous_time,
+                expected_remaining,
+                overhead,
+            )
             return round(max(0, overhead), 2)
 
         if attribute == "min_movement_time":
