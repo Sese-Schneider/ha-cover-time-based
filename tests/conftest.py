@@ -102,6 +102,7 @@ def make_cover(make_hass):
             name="Test Cover",
         )
         cover.hass = make_hass()
+        cover._config_entry_id = "test_cover"
         covers.append(cover)
         return cover
 

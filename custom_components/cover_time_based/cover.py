@@ -312,6 +312,7 @@ async def async_setup_entry(
         device_id=config_entry.entry_id,
         name=config_entry.title,
     )
+    entity._config_entry_id = config_entry.entry_id
     async_add_entities([entity])
 
     platform = entity_platform.current_platform.get()

@@ -83,6 +83,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         else:
             self._name = device_id
 
+        self._config_entry_id = None
         self._unsubscribe_auto_updater = None
         self._delay_task = None
         self._startup_delay_task = None
