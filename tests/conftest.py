@@ -47,6 +47,7 @@ def make_hass():
 @pytest.fixture
 def make_cover(make_hass):
     """Return a factory that creates the appropriate cover subclass wired to a mock hass."""
+    covers = []
 
     def _make(
         input_mode=INPUT_MODE_SWITCH,
@@ -105,6 +106,13 @@ def make_cover(make_hass):
             name="Test Cover",
         )
         cover.hass = make_hass()
+        covers.append(cover)
         return cover
 
-    return _make
+    yield _make
+
+    for cover in covers:
+        for attr in ("_startup_delay_task", "_delay_task"):
+            task = getattr(cover, attr, None)
+            if task is not None and not task.done():
+                task.cancel()
