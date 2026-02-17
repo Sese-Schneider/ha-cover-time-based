@@ -131,6 +131,23 @@ class TestToggleModeSendClose:
             _ha("turn_off", "switch.close"),
         ]
 
+    @pytest.mark.asyncio
+    async def test_close_with_stop_switch(self):
+        cover = _make_toggle_cover(stop_switch="switch.stop")
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_close()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_off", "switch.open"),
+            _ha("turn_on", "switch.close"),
+            _ha("turn_off", "switch.stop"),
+            # after pulse sleep
+            _ha("turn_off", "switch.close"),
+        ]
+
 
 # ===================================================================
 # _send_stop
