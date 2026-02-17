@@ -36,12 +36,11 @@ from .cover import (
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_STOP_SWITCH_ENTITY_ID,
-    CONF_TILT_STARTUP_DELAY,
+    CONF_TILT_MOTOR_OVERHEAD,
     CONF_TILTING_TIME_DOWN,
     CONF_TILTING_TIME_UP,
-    CONF_TRAVEL_DELAY_AT_END,
+    CONF_TRAVEL_MOTOR_OVERHEAD,
     CONF_TRAVEL_MOVES_WITH_TILT,
-    CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
     DEVICE_TYPE_COVER,
@@ -153,26 +152,20 @@ def _build_details_schema(
         ] = PULSE_TIME_SELECTOR
     adv_fields[
         vol.Optional(
-            CONF_TRAVEL_STARTUP_DELAY,
-            description={"suggested_value": d.get(CONF_TRAVEL_STARTUP_DELAY)},
+            CONF_TRAVEL_MOTOR_OVERHEAD,
+            description={"suggested_value": d.get(CONF_TRAVEL_MOTOR_OVERHEAD)},
         )
     ] = TIMING_SELECTOR
     adv_fields[
         vol.Optional(
-            CONF_TILT_STARTUP_DELAY,
-            description={"suggested_value": d.get(CONF_TILT_STARTUP_DELAY)},
+            CONF_TILT_MOTOR_OVERHEAD,
+            description={"suggested_value": d.get(CONF_TILT_MOTOR_OVERHEAD)},
         )
     ] = TIMING_SELECTOR
     adv_fields[
         vol.Optional(
             CONF_MIN_MOVEMENT_TIME,
             description={"suggested_value": d.get(CONF_MIN_MOVEMENT_TIME)},
-        )
-    ] = TIMING_SELECTOR
-    adv_fields[
-        vol.Optional(
-            CONF_TRAVEL_DELAY_AT_END,
-            description={"suggested_value": d.get(CONF_TRAVEL_DELAY_AT_END)},
         )
     ] = TIMING_SELECTOR
     fields[vol.Optional(SECTION_ADVANCED)] = section(

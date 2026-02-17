@@ -14,14 +14,13 @@ from custom_components.cover_time_based.cover import (
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_STOP_SWITCH_ENTITY_ID,
+    CONF_TILT_MOTOR_OVERHEAD,
     CONF_TILTING_TIME_DOWN,
     CONF_TILTING_TIME_UP,
-    CONF_TRAVEL_DELAY_AT_END,
+    CONF_TRAVEL_MOTOR_OVERHEAD,
     CONF_TRAVEL_MOVES_WITH_TILT,
-    CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
-    CONF_TILT_STARTUP_DELAY,
     DEFAULT_PULSE_TIME,
     DEFAULT_TRAVEL_TIME,
     DEVICE_TYPE_COVER,
@@ -61,10 +60,9 @@ def make_cover(make_hass):
         tilt_time_down=None,
         tilt_time_up=None,
         travel_moves_with_tilt=False,
-        travel_startup_delay=None,
-        tilt_startup_delay=None,
+        travel_motor_overhead=None,
+        tilt_motor_overhead=None,
         min_movement_time=None,
-        travel_delay_at_end=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -91,14 +89,12 @@ def make_cover(make_hass):
             options[CONF_TILTING_TIME_UP] = tilt_time_up
         if travel_moves_with_tilt:
             options[CONF_TRAVEL_MOVES_WITH_TILT] = travel_moves_with_tilt
-        if travel_startup_delay is not None:
-            options[CONF_TRAVEL_STARTUP_DELAY] = travel_startup_delay
-        if tilt_startup_delay is not None:
-            options[CONF_TILT_STARTUP_DELAY] = tilt_startup_delay
+        if travel_motor_overhead is not None:
+            options[CONF_TRAVEL_MOTOR_OVERHEAD] = travel_motor_overhead
+        if tilt_motor_overhead is not None:
+            options[CONF_TILT_MOTOR_OVERHEAD] = tilt_motor_overhead
         if min_movement_time is not None:
             options[CONF_MIN_MOVEMENT_TIME] = min_movement_time
-        if travel_delay_at_end is not None:
-            options[CONF_TRAVEL_DELAY_AT_END] = travel_delay_at_end
 
         cover = _create_cover_from_options(
             options,

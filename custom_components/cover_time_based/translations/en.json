@@ -47,17 +47,15 @@
             "name": "Advanced settings",
             "data": {
               "pulse_time": "Pulse time (seconds)",
-              "travel_startup_delay": "Travel motor startup delay (seconds)",
-              "tilt_startup_delay": "Tilt motor startup delay (seconds)",
-              "min_movement_time": "Minimum movement time (seconds)",
-              "travel_delay_at_end": "Extra relay time at endpoints (seconds)"
+              "travel_motor_overhead": "Travel motor overhead (seconds)",
+              "tilt_motor_overhead": "Tilt motor overhead (seconds)",
+              "min_movement_time": "Minimum movement time (seconds)"
             },
             "data_description": {
               "pulse_time": "How long to press the button in pulse or toggle mode.",
-              "travel_startup_delay": "Time the motor takes to start moving. Position tracking starts after this delay.",
-              "tilt_startup_delay": "Time the motor takes to start tilting. Position tracking starts after this delay.",
-              "min_movement_time": "Movements shorter than this are ignored.",
-              "travel_delay_at_end": "Extra time to keep the relay on when reaching fully open or fully closed."
+              "travel_motor_overhead": "Total non-movement time for motor startup and relay hold at endpoints. Split evenly between startup delay and end delay.",
+              "tilt_motor_overhead": "Total non-movement time for tilt motor startup. Split evenly between startup delay and end delay.",
+              "min_movement_time": "Movements shorter than this are ignored."
             }
           }
         }
@@ -114,17 +112,15 @@
             "name": "Advanced settings",
             "data": {
               "pulse_time": "Pulse time (seconds)",
-              "travel_startup_delay": "Travel motor startup delay (seconds)",
-              "tilt_startup_delay": "Tilt motor startup delay (seconds)",
-              "min_movement_time": "Minimum movement time (seconds)",
-              "travel_delay_at_end": "Extra relay time at endpoints (seconds)"
+              "travel_motor_overhead": "Travel motor overhead (seconds)",
+              "tilt_motor_overhead": "Tilt motor overhead (seconds)",
+              "min_movement_time": "Minimum movement time (seconds)"
             },
             "data_description": {
               "pulse_time": "How long to press the button in pulse or toggle mode.",
-              "travel_startup_delay": "Time the motor takes to start moving. Position tracking starts after this delay.",
-              "tilt_startup_delay": "Time the motor takes to start tilting. Position tracking starts after this delay.",
-              "min_movement_time": "Movements shorter than this are ignored.",
-              "travel_delay_at_end": "Extra time to keep the relay on when reaching fully open or fully closed."
+              "travel_motor_overhead": "Total non-movement time for motor startup and relay hold at endpoints. Split evenly between startup delay and end delay.",
+              "tilt_motor_overhead": "Total non-movement time for tilt motor startup. Split evenly between startup delay and end delay.",
+              "min_movement_time": "Movements shorter than this are ignored."
             }
           }
         }

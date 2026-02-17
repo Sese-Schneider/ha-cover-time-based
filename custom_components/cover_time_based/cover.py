@@ -30,10 +30,9 @@ CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
-CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
+CONF_TRAVEL_MOTOR_OVERHEAD = "travel_motor_overhead"
+CONF_TILT_MOTOR_OVERHEAD = "tilt_motor_overhead"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
-CONF_TRAVEL_STARTUP_DELAY = "travel_startup_delay"
-CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
 DEFAULT_TRAVEL_TIME = 30
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
@@ -65,10 +64,9 @@ TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TRAVELLING_TIME_UP): cv.positive_float,
     vol.Optional(CONF_TILTING_TIME_DOWN): cv.positive_float,
     vol.Optional(CONF_TILTING_TIME_UP): cv.positive_float,
-    vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_MOTOR_OVERHEAD): cv.positive_float,
+    vol.Optional(CONF_TILT_MOTOR_OVERHEAD): cv.positive_float,
     vol.Optional(CONF_MIN_MOVEMENT_TIME): cv.positive_float,
-    vol.Optional(CONF_TRAVEL_STARTUP_DELAY): cv.positive_float,
-    vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
 }
 
 SWITCH_COVER_SCHEMA = {
@@ -105,16 +103,13 @@ DEFAULTS_SCHEMA = vol.Schema(
         vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(
             cv.positive_float, None
         ),
-        vol.Optional(CONF_TRAVEL_DELAY_AT_END, default=None): vol.Any(
+        vol.Optional(CONF_TRAVEL_MOTOR_OVERHEAD, default=None): vol.Any(
+            cv.positive_float, None
+        ),
+        vol.Optional(CONF_TILT_MOTOR_OVERHEAD, default=None): vol.Any(
             cv.positive_float, None
         ),
         vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
-            cv.positive_float, None
-        ),
-        vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
-            cv.positive_float, None
-        ),
-        vol.Optional(CONF_TILT_STARTUP_DELAY, default=None): vol.Any(
             cv.positive_float, None
         ),
     }
@@ -163,10 +158,9 @@ def _create_cover_from_options(options, device_id="", name=""):
         travel_time_up=options.get(CONF_TRAVELLING_TIME_UP, DEFAULT_TRAVEL_TIME),
         tilt_time_down=options.get(CONF_TILTING_TIME_DOWN),
         tilt_time_up=options.get(CONF_TILTING_TIME_UP),
-        travel_delay_at_end=options.get(CONF_TRAVEL_DELAY_AT_END),
+        travel_motor_overhead=options.get(CONF_TRAVEL_MOTOR_OVERHEAD),
+        tilt_motor_overhead=options.get(CONF_TILT_MOTOR_OVERHEAD),
         min_movement_time=options.get(CONF_MIN_MOVEMENT_TIME),
-        travel_startup_delay=options.get(CONF_TRAVEL_STARTUP_DELAY),
-        tilt_startup_delay=options.get(CONF_TILT_STARTUP_DELAY),
     )
 
     if device_type == DEVICE_TYPE_COVER:
@@ -199,10 +193,9 @@ _TIMING_DEFAULTS = {
     CONF_TRAVELLING_TIME_UP: DEFAULT_TRAVEL_TIME,
     CONF_TILTING_TIME_DOWN: None,
     CONF_TILTING_TIME_UP: None,
-    CONF_TRAVEL_DELAY_AT_END: None,
+    CONF_TRAVEL_MOTOR_OVERHEAD: None,
+    CONF_TILT_MOTOR_OVERHEAD: None,
     CONF_MIN_MOVEMENT_TIME: None,
-    CONF_TRAVEL_STARTUP_DELAY: None,
-    CONF_TILT_STARTUP_DELAY: None,
 }
 
 

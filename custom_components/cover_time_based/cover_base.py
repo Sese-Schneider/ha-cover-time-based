@@ -36,10 +36,9 @@ CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
-CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
+CONF_TRAVEL_MOTOR_OVERHEAD = "travel_motor_overhead"
+CONF_TILT_MOTOR_OVERHEAD = "tilt_motor_overhead"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
-CONF_TRAVEL_STARTUP_DELAY = "travel_startup_delay"
-CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
 
 
 class CoverTimeBased(CoverEntity, RestoreEntity):
@@ -52,10 +51,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         travel_time_up,
         tilt_time_down,
         tilt_time_up,
-        travel_delay_at_end,
+        travel_motor_overhead,
+        tilt_motor_overhead,
         min_movement_time,
-        travel_startup_delay,
-        tilt_startup_delay,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -65,10 +63,20 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._travel_time_up = travel_time_up
         self._tilting_time_down = tilt_time_down
         self._tilting_time_up = tilt_time_up
-        self._travel_delay_at_end = travel_delay_at_end
+        self._travel_motor_overhead = travel_motor_overhead
+        self._tilt_motor_overhead = tilt_motor_overhead
         self._min_movement_time = min_movement_time
-        self._travel_startup_delay = travel_startup_delay
-        self._tilt_startup_delay = tilt_startup_delay
+
+        # Derive internal delay values by splitting overhead 50/50
+        self._travel_startup_delay = (
+            travel_motor_overhead / 2 if travel_motor_overhead else None
+        )
+        self._travel_delay_at_end = (
+            travel_motor_overhead / 2 if travel_motor_overhead else None
+        )
+        self._tilt_startup_delay = (
+            tilt_motor_overhead / 2 if tilt_motor_overhead else None
+        )
 
         if name:
             self._name = name
@@ -245,14 +253,12 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             attr[CONF_TILTING_TIME_DOWN] = self._tilting_time_down
         if self._tilting_time_up is not None:
             attr[CONF_TILTING_TIME_UP] = self._tilting_time_up
-        if self._travel_delay_at_end is not None:
-            attr[CONF_TRAVEL_DELAY_AT_END] = self._travel_delay_at_end
+        if self._travel_motor_overhead is not None:
+            attr[CONF_TRAVEL_MOTOR_OVERHEAD] = self._travel_motor_overhead
+        if self._tilt_motor_overhead is not None:
+            attr[CONF_TILT_MOTOR_OVERHEAD] = self._tilt_motor_overhead
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
-        if self._travel_startup_delay is not None:
-            attr[CONF_TRAVEL_STARTUP_DELAY] = self._travel_startup_delay
-        if self._tilt_startup_delay is not None:
-            attr[CONF_TILT_STARTUP_DELAY] = self._tilt_startup_delay
         return attr
 
     @property

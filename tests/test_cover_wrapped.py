@@ -26,10 +26,9 @@ def _make_wrapped_cover(cover_entity_id="cover.inner"):
         travel_time_up=30,
         tilt_time_down=None,
         tilt_time_up=None,
-        travel_delay_at_end=None,
+        travel_motor_overhead=None,
+        tilt_motor_overhead=None,
         min_movement_time=None,
-        travel_startup_delay=None,
-        tilt_startup_delay=None,
         cover_entity_id=cover_entity_id,
     )
     hass = MagicMock()
