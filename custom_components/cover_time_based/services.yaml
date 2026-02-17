@@ -61,6 +61,13 @@ start_calibration:
           max: 600
           step: 1
           unit_of_measurement: "s"
+    direction:
+      required: false
+      selector:
+        select:
+          options:
+            - open
+            - close
 
 stop_calibration:
   fields:

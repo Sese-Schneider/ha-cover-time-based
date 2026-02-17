@@ -174,6 +174,7 @@ def _register_services(platform):
                     vol.Required("timeout"): vol.All(
                         vol.Coerce(float), vol.Range(min=1)
                     ),
+                    vol.Optional("direction"): vol.In(["open", "close"]),
                 }
             ),
         )

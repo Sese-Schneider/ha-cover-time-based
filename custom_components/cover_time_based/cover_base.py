@@ -842,6 +842,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Start a calibration test for the given attribute."""
         attribute = kwargs["attribute"]
         timeout = kwargs["timeout"]
+        direction = kwargs.get("direction")  # "open", "close", or None (auto)
 
         if self._calibration is not None:
             raise HomeAssistantError("Calibration already in progress")
@@ -878,51 +879,60 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             "tilt_time_down",
             "tilt_time_up",
         ):
-            await self._start_simple_time_test(attribute)
+            await self._start_simple_time_test(attribute, direction)
         elif attribute in ("travel_motor_overhead", "tilt_motor_overhead"):
-            await self._start_overhead_test(attribute)
+            await self._start_overhead_test(attribute, direction)
         elif attribute == "min_movement_time":
-            position = self.current_cover_position
-            if position is not None and position < 50:
-                self._calibration.move_command = SERVICE_OPEN_COVER
-            else:
-                self._calibration.move_command = SERVICE_CLOSE_COVER
+            self._calibration.move_command = self._resolve_direction(
+                direction, self.current_cover_position
+            )
             self._calibration.automation_task = self.hass.async_create_task(
                 self._run_min_movement_pulses()
             )
 
         self.async_write_ha_state()
 
-    async def _start_simple_time_test(self, attribute):
+    @staticmethod
+    def _resolve_direction(direction, position):
+        """Resolve move command from explicit direction or current position."""
+        if direction == "close":
+            return SERVICE_CLOSE_COVER
+        if direction == "open":
+            return SERVICE_OPEN_COVER
+        # Auto-detect from position
+        if position is not None and position < 50:
+            return SERVICE_OPEN_COVER
+        return SERVICE_CLOSE_COVER
+
+    async def _start_simple_time_test(self, attribute, direction):
         """Start a simple travel/tilt time test by moving the cover."""
-        if "down" in attribute:
+        if direction:
+            self._calibration.move_command = self._resolve_direction(
+                direction, None
+            )
+        elif "down" in attribute:
             self._calibration.move_command = SERVICE_CLOSE_COVER
         else:
             self._calibration.move_command = SERVICE_OPEN_COVER
         await self._async_handle_command(self._calibration.move_command)
 
-    async def _start_overhead_test(self, attribute):
+    async def _start_overhead_test(self, attribute, direction):
         """Start automated step test for motor overhead."""
         from .calibration import CALIBRATION_OVERHEAD_STEPS
 
         if attribute == "travel_motor_overhead":
             position = self.current_cover_position
-            # Determine direction based on current position
-            if position is not None and position < 50:
-                # Closer to closed — move up (open)
-                move_command = SERVICE_OPEN_COVER
+            move_command = self._resolve_direction(direction, position)
+            if move_command == SERVICE_OPEN_COVER:
                 travel_time = self._travel_time_up or self._travel_time_down
             else:
-                # Closer to open (or unknown) — move down (close)
-                move_command = SERVICE_CLOSE_COVER
                 travel_time = self._travel_time_down or self._travel_time_up
         else:
             position = self.current_cover_tilt_position
-            if position is not None and position < 50:
-                move_command = SERVICE_OPEN_COVER
+            move_command = self._resolve_direction(direction, position)
+            if move_command == SERVICE_OPEN_COVER:
                 travel_time = self._tilting_time_up or self._tilting_time_down
             else:
-                move_command = SERVICE_CLOSE_COVER
                 travel_time = self._tilting_time_down or self._tilting_time_up
 
         _LOGGER.debug(
