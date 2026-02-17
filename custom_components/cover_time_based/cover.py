@@ -14,7 +14,7 @@ from homeassistant.const import (
     CONF_NAME,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
@@ -173,6 +173,7 @@ def _register_services(platform):
             }
         ),
         "stop_calibration",
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
 
