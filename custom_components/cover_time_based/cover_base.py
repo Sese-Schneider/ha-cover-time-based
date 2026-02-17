@@ -1000,12 +1000,20 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         from .calibration import (
             CALIBRATION_MIN_MOVEMENT_START,
             CALIBRATION_MIN_MOVEMENT_INCREMENT,
+            CALIBRATION_MIN_MOVEMENT_INITIAL_PAUSE,
             CALIBRATION_STEP_PAUSE,
         )
 
         pulse_duration = CALIBRATION_MIN_MOVEMENT_START
 
         try:
+            # Give user time to prepare stop_calibration call
+            _LOGGER.debug(
+                "min_movement: waiting %.0fs before first pulse",
+                CALIBRATION_MIN_MOVEMENT_INITIAL_PAUSE,
+            )
+            await sleep(CALIBRATION_MIN_MOVEMENT_INITIAL_PAUSE)
+
             while True:
                 self._calibration.last_pulse_duration = pulse_duration
                 self._calibration.step_count += 1
