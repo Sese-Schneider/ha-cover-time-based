@@ -155,17 +155,19 @@ def _register_services(platform):
     )
     platform.async_register_entity_service(
         SERVICE_START_CALIBRATION,
-        vol.Schema(
+        cv.make_entity_service_schema(
             {
                 vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
-                vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1)),
+                vol.Required("timeout"): vol.All(
+                    vol.Coerce(float), vol.Range(min=1)
+                ),
             }
         ),
         "start_calibration",
     )
     platform.async_register_entity_service(
         SERVICE_STOP_CALIBRATION,
-        vol.Schema(
+        cv.make_entity_service_schema(
             {
                 vol.Optional("cancel", default=False): cv.boolean,
             }
