@@ -846,6 +846,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         if "travel_time" in attribute or "tilt_time" in attribute:
             await self._start_simple_time_test(attribute)
+        elif attribute in ("travel_motor_overhead", "tilt_motor_overhead"):
+            await self._start_overhead_test(attribute)
 
         self.async_write_ha_state()
 
@@ -855,6 +857,49 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             await self._async_handle_command(SERVICE_CLOSE_COVER)
         else:
             await self._async_handle_command(SERVICE_OPEN_COVER)
+
+    async def _start_overhead_test(self, attribute):
+        """Start automated step test for motor overhead."""
+        from .calibration import CALIBRATION_OVERHEAD_STEPS
+
+        if attribute == "travel_motor_overhead":
+            travel_time = self._travel_time_down or self._travel_time_up
+            if not travel_time:
+                self._calibration.timeout_task.cancel()
+                self._calibration = None
+                raise HomeAssistantError(
+                    "Travel time must be configured before calibrating motor overhead"
+                )
+        else:
+            travel_time = self._tilting_time_down or self._tilting_time_up
+            if not travel_time:
+                self._calibration.timeout_task.cancel()
+                self._calibration = None
+                raise HomeAssistantError(
+                    "Tilt time must be configured before calibrating motor overhead"
+                )
+
+        step_duration = travel_time / CALIBRATION_OVERHEAD_STEPS
+        self._calibration.step_duration = step_duration
+
+        self._calibration.automation_task = self.hass.async_create_task(
+            self._run_overhead_steps(step_duration)
+        )
+
+    async def _run_overhead_steps(self, step_duration):
+        """Execute automated step sequence for overhead test."""
+        from .calibration import CALIBRATION_STEP_PAUSE
+
+        try:
+            while True:
+                await self._async_handle_command(SERVICE_CLOSE_COVER)
+                await sleep(step_duration)
+                await self._send_stop()
+                self._calibration.step_count += 1
+                self.async_write_ha_state()
+                await sleep(CALIBRATION_STEP_PAUSE)
+        except asyncio.CancelledError:
+            pass
 
     async def _calibration_timeout(self):
         """Handle calibration timeout."""
@@ -907,13 +952,25 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         return result
 
     def _calculate_calibration_result(self):
-        """Calculate the calibration result from elapsed time."""
-        elapsed = time.monotonic() - self._calibration.started_at
-        if (
-            "travel_time" in self._calibration.attribute
-            or "tilt_time" in self._calibration.attribute
-        ):
+        """Calculate the calibration result based on attribute type."""
+        attribute = self._calibration.attribute
+
+        if "travel_time" in attribute or "tilt_time" in attribute:
+            elapsed = time.monotonic() - self._calibration.started_at
             return round(elapsed, 1)
+
+        if attribute in ("travel_motor_overhead", "tilt_motor_overhead"):
+            step_duration = self._calibration.step_duration
+            step_count = self._calibration.step_count
+            if attribute == "travel_motor_overhead":
+                total_time = self._travel_time_down or self._travel_time_up
+            else:
+                total_time = self._tilting_time_down or self._tilting_time_up
+            # overhead = step_duration - (total_time / step_count)
+            overhead = step_duration - (total_time / step_count)
+            return round(max(0, overhead), 2)
+
+        elapsed = time.monotonic() - self._calibration.started_at
         return elapsed
 
     def _save_calibration_result(self, attribute, value):

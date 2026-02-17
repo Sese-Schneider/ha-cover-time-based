@@ -176,3 +176,67 @@ class TestCalibrationTiltTime:
         )
         with pytest.raises(HomeAssistantError, match="travel_moves_with_tilt"):
             await cover.start_calibration(attribute="tilt_time_down", timeout=30.0)
+
+
+class TestMotorOverheadCalibration:
+    @pytest.mark.asyncio
+    async def test_prerequisite_travel_time_required(self, make_cover):
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = make_cover()
+        # Factory defaults travel_time to 30, so manually clear it
+        cover._travel_time_down = None
+        cover._travel_time_up = None
+        with pytest.raises(HomeAssistantError, match="[Tt]ravel time"):
+            await cover.start_calibration(
+                attribute="travel_motor_overhead", timeout=300.0
+            )
+
+    @pytest.mark.asyncio
+    async def test_starts_automated_steps(self, make_cover):
+        cover = make_cover(travel_time_down=60.0, travel_time_up=60.0)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_motor_overhead", timeout=300.0
+            )
+        assert cover._calibration.automation_task is not None
+        assert cover._calibration.step_duration == 6.0
+
+    @pytest.mark.asyncio
+    async def test_overhead_calculation(self, make_cover):
+        cover = make_cover(travel_time_down=60.0, travel_time_up=60.0)
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_motor_overhead", timeout=300.0
+            )
+            # Simulate 15 steps completed instead of expected 10
+            cover._calibration.step_count = 15
+            result = await cover.stop_calibration()
+
+        # overhead = 6.0 - (60.0 / 15) = 6.0 - 4.0 = 2.0
+        assert result["value"] == pytest.approx(2.0, abs=0.1)
+
+    @pytest.mark.asyncio
+    async def test_tilt_overhead_prerequisite(self, make_cover):
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = make_cover()  # No tilt time configured
+        with pytest.raises(HomeAssistantError, match="[Tt]ilt time"):
+            await cover.start_calibration(
+                attribute="tilt_motor_overhead", timeout=300.0
+            )
+
+    @pytest.mark.asyncio
+    async def test_tilt_overhead_starts(self, make_cover):
+        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="tilt_motor_overhead", timeout=300.0
+            )
+        assert cover._calibration.automation_task is not None
+        assert cover._calibration.step_duration == 0.5
