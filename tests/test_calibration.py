@@ -150,3 +150,29 @@ class TestStopCalibrationTravelTime:
 
         await asyncio.sleep(0)  # Let event loop process cancellation
         assert timeout_task.cancelled()
+
+
+class TestCalibrationTiltTime:
+    @pytest.mark.asyncio
+    async def test_start_tilt_time_down(self, make_cover):
+        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_down", timeout=30.0)
+        assert cover._calibration.attribute == "tilt_time_down"
+
+    @pytest.mark.asyncio
+    async def test_start_tilt_time_up(self, make_cover):
+        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_up", timeout=30.0)
+        assert cover._calibration.attribute == "tilt_time_up"
+
+    @pytest.mark.asyncio
+    async def test_tilt_rejected_when_travel_moves_with_tilt(self, make_cover):
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = make_cover(
+            tilt_time_down=5.0, tilt_time_up=5.0, travel_moves_with_tilt=True
+        )
+        with pytest.raises(HomeAssistantError, match="travel_moves_with_tilt"):
+            await cover.start_calibration(attribute="tilt_time_down", timeout=30.0)

@@ -836,6 +836,14 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._calibration_timeout()
         )
 
+        if attribute in ("tilt_time_down", "tilt_time_up"):
+            if self._travel_moves_with_tilt:
+                self._calibration.timeout_task.cancel()
+                self._calibration = None
+                raise HomeAssistantError(
+                    "Tilt time calibration not available when travel_moves_with_tilt is enabled"
+                )
+
         if "travel_time" in attribute or "tilt_time" in attribute:
             await self._start_simple_time_test(attribute)
 
