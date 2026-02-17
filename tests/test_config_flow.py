@@ -1,7 +1,7 @@
 """Tests for config_flow.py."""
 
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock
 
 from custom_components.cover_time_based.config_flow import (
     CoverTimeBasedConfigFlow,
@@ -20,18 +20,14 @@ from custom_components.cover_time_based.cover import (
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
-    CONF_STOP_SWITCH_ENTITY_ID,
-    CONF_TILT_STARTUP_DELAY,
     CONF_TILTING_TIME_DOWN,
     CONF_TILTING_TIME_UP,
     CONF_TRAVEL_DELAY_AT_END,
     CONF_TRAVEL_MOVES_WITH_TILT,
-    CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
     DEVICE_TYPE_COVER,
     DEVICE_TYPE_SWITCH,
-    DOMAIN,
     INPUT_MODE_PULSE,
     INPUT_MODE_SWITCH,
     INPUT_MODE_TOGGLE,
@@ -105,10 +101,15 @@ class TestValidateTiltPair:
     """Test tilt time pair validation."""
 
     def test_both_present_is_valid(self):
-        assert _validate_tilt_pair({
-            CONF_TILTING_TIME_DOWN: 5.0,
-            CONF_TILTING_TIME_UP: 4.0,
-        }) == {}
+        assert (
+            _validate_tilt_pair(
+                {
+                    CONF_TILTING_TIME_DOWN: 5.0,
+                    CONF_TILTING_TIME_UP: 4.0,
+                }
+            )
+            == {}
+        )
 
     def test_neither_present_is_valid(self):
         assert _validate_tilt_pair({}) == {}
@@ -124,10 +125,15 @@ class TestValidateTiltPair:
         assert errors[CONF_TILTING_TIME_DOWN] == "tilt_time_pair_required"
 
     def test_both_none_is_valid(self):
-        assert _validate_tilt_pair({
-            CONF_TILTING_TIME_DOWN: None,
-            CONF_TILTING_TIME_UP: None,
-        }) == {}
+        assert (
+            _validate_tilt_pair(
+                {
+                    CONF_TILTING_TIME_DOWN: None,
+                    CONF_TILTING_TIME_UP: None,
+                }
+            )
+            == {}
+        )
 
 
 # ===================================================================

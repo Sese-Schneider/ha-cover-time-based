@@ -21,14 +21,20 @@ class SwitchModeCover(SwitchCoverTimeBased):
                 _LOGGER.debug("_handle_external_state_change :: external open detected")
                 await self.async_open_cover()
             elif new_val == "off":
-                _LOGGER.debug("_handle_external_state_change :: external open-stop detected")
+                _LOGGER.debug(
+                    "_handle_external_state_change :: external open-stop detected"
+                )
                 await self.async_stop_cover()
         elif entity_id == self._close_switch_entity_id:
             if new_val == "on":
-                _LOGGER.debug("_handle_external_state_change :: external close detected")
+                _LOGGER.debug(
+                    "_handle_external_state_change :: external close detected"
+                )
                 await self.async_close_cover()
             elif new_val == "off":
-                _LOGGER.debug("_handle_external_state_change :: external close-stop detected")
+                _LOGGER.debug(
+                    "_handle_external_state_change :: external close-stop detected"
+                )
                 await self.async_stop_cover()
         elif entity_id == self._stop_switch_entity_id:
             if new_val == "on":

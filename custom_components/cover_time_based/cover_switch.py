@@ -36,11 +36,17 @@ class SwitchCoverTimeBased(CoverTimeBased):
             return
 
         if entity_id == self._open_switch_entity_id:
-            _LOGGER.debug("_handle_external_state_change :: external open pulse detected")
+            _LOGGER.debug(
+                "_handle_external_state_change :: external open pulse detected"
+            )
             await self.async_open_cover()
         elif entity_id == self._close_switch_entity_id:
-            _LOGGER.debug("_handle_external_state_change :: external close pulse detected")
+            _LOGGER.debug(
+                "_handle_external_state_change :: external close pulse detected"
+            )
             await self.async_close_cover()
         elif entity_id == self._stop_switch_entity_id:
-            _LOGGER.debug("_handle_external_state_change :: external stop pulse detected")
+            _LOGGER.debug(
+                "_handle_external_state_change :: external stop pulse detected"
+            )
             await self.async_stop_cover()
