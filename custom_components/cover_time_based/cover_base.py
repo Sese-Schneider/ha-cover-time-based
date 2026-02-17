@@ -882,6 +882,11 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         elif attribute in ("travel_motor_overhead", "tilt_motor_overhead"):
             await self._start_overhead_test(attribute)
         elif attribute == "min_movement_time":
+            position = self.current_cover_position
+            if position is not None and position < 50:
+                self._calibration.move_command = SERVICE_OPEN_COVER
+            else:
+                self._calibration.move_command = SERVICE_CLOSE_COVER
             self._calibration.automation_task = self.hass.async_create_task(
                 self._run_min_movement_pulses()
             )
@@ -891,22 +896,46 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def _start_simple_time_test(self, attribute):
         """Start a simple travel/tilt time test by moving the cover."""
         if "down" in attribute:
-            await self._async_handle_command(SERVICE_CLOSE_COVER)
+            self._calibration.move_command = SERVICE_CLOSE_COVER
         else:
-            await self._async_handle_command(SERVICE_OPEN_COVER)
+            self._calibration.move_command = SERVICE_OPEN_COVER
+        await self._async_handle_command(self._calibration.move_command)
 
     async def _start_overhead_test(self, attribute):
         """Start automated step test for motor overhead."""
         from .calibration import CALIBRATION_OVERHEAD_STEPS
 
         if attribute == "travel_motor_overhead":
-            travel_time = self._travel_time_down or self._travel_time_up
+            position = self.current_cover_position
+            # Determine direction based on current position
+            if position is not None and position < 50:
+                # Closer to closed — move up (open)
+                move_command = SERVICE_OPEN_COVER
+                travel_time = self._travel_time_up or self._travel_time_down
+            else:
+                # Closer to open (or unknown) — move down (close)
+                move_command = SERVICE_CLOSE_COVER
+                travel_time = self._travel_time_down or self._travel_time_up
         else:
-            travel_time = self._tilting_time_down or self._tilting_time_up
+            position = self.current_cover_tilt_position
+            if position is not None and position < 50:
+                move_command = SERVICE_OPEN_COVER
+                travel_time = self._tilting_time_up or self._tilting_time_down
+            else:
+                move_command = SERVICE_CLOSE_COVER
+                travel_time = self._tilting_time_down or self._tilting_time_up
+
+        _LOGGER.debug(
+            "overhead test: position=%s, direction=%s, travel_time=%.2f",
+            position,
+            move_command,
+            travel_time,
+        )
 
         # Each step is 1/10th of total travel time, but we only do 8 steps
         step_duration = travel_time / 10
         self._calibration.step_duration = step_duration
+        self._calibration.move_command = move_command
 
         self._calibration.automation_task = self.hass.async_create_task(
             self._run_overhead_steps(step_duration, CALIBRATION_OVERHEAD_STEPS)
@@ -920,7 +949,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         The user calls stop_calibration when the cover reaches the endpoint.
         """
         from .calibration import CALIBRATION_STEP_PAUSE
-        import time as time_mod
+
+        move_command = self._calibration.move_command
 
         try:
             # Phase 1: Stepped moves
@@ -931,7 +961,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     num_steps,
                     step_duration,
                 )
-                await self._async_handle_command(SERVICE_CLOSE_COVER)
+                await self._async_handle_command(move_command)
                 await sleep(step_duration)
                 await self._send_stop()
                 self._calibration.step_count += 1
@@ -946,8 +976,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             _LOGGER.debug(
                 "overhead test: starting continuous phase for remaining distance"
             )
-            self._calibration.continuous_start = time_mod.monotonic()
-            await self._async_handle_command(SERVICE_CLOSE_COVER)
+            self._calibration.continuous_start = time.monotonic()
+            await self._async_handle_command(move_command)
 
             # Wait indefinitely until user calls stop_calibration
             while True:
@@ -970,7 +1000,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 self._calibration.last_pulse_duration = pulse_duration
                 self._calibration.step_count += 1
 
-                await self._async_handle_command(SERVICE_CLOSE_COVER)
+                await self._async_handle_command(self._calibration.move_command)
                 await sleep(pulse_duration)
                 await self._send_stop()
                 self.async_write_ha_state()
