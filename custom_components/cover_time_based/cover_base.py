@@ -1072,9 +1072,59 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             result["value"] = value
             self._save_calibration_result(self._calibration.attribute, value)
 
+        await self._reset_position_after_calibration(cancel)
+
         self._calibration = None
         self.async_write_ha_state()
         return result
+
+    async def _reset_position_after_calibration(self, cancelled):
+        """Reset tracked position after calibration to match reality.
+
+        For most tests the cover has moved to an endpoint (fully open or
+        closed), so we set the tracked position to match.
+
+        For min_movement_time the cover has only nudged slightly, so we
+        first return it to the starting endpoint, then reset position.
+        """
+        attribute = self._calibration.attribute
+        move_command = self._calibration.move_command
+        if not move_command:
+            return
+
+        is_tilt = "tilt" in attribute
+        calc = self.tilt_calc if is_tilt else self.travel_calc
+
+        if attribute == "min_movement_time":
+            # Return cover to starting position by moving in the opposite
+            # direction for long enough to reach the endpoint.
+            if move_command == SERVICE_CLOSE_COVER:
+                return_command = SERVICE_OPEN_COVER
+                travel_time = self._travel_time_up or self._travel_time_down
+            else:
+                return_command = SERVICE_CLOSE_COVER
+                travel_time = self._travel_time_down or self._travel_time_up
+            if travel_time:
+                _LOGGER.debug(
+                    "min_movement: returning to start via %s for %.1fs",
+                    return_command,
+                    travel_time,
+                )
+                await self._async_handle_command(return_command)
+                await sleep(travel_time)
+                await self._send_stop()
+            # After return, cover is at the opposite endpoint from move_command
+            endpoint = 100 if move_command == SERVICE_CLOSE_COVER else 0
+        else:
+            # Cover ended at the endpoint in the direction of travel
+            endpoint = 0 if move_command == SERVICE_CLOSE_COVER else 100
+
+        _LOGGER.debug(
+            "calibration: resetting %s position to %d",
+            "tilt" if is_tilt else "travel",
+            endpoint,
+        )
+        calc.set_position(endpoint)
 
     def _calculate_calibration_result(self):
         """Calculate the calibration result based on attribute type."""
