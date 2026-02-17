@@ -63,9 +63,7 @@ SWITCH_ENTITY_SELECTOR = EntitySelector(
     EntitySelectorConfig(domain=["switch", "input_boolean"])
 )
 
-COVER_ENTITY_SELECTOR = EntitySelector(
-    EntitySelectorConfig(domain="cover")
-)
+COVER_ENTITY_SELECTOR = EntitySelector(EntitySelectorConfig(domain="cover"))
 
 PULSE_TIME_SELECTOR = NumberSelector(
     NumberSelectorConfig(min=0.1, max=10, step=0.1, mode=NumberSelectorMode.BOX)
@@ -83,35 +81,45 @@ def _build_details_schema(
 
     # Entity fields based on device type
     if device_type == DEVICE_TYPE_SWITCH:
-        fields[vol.Required(
-            CONF_OPEN_SWITCH_ENTITY_ID,
-            default=d.get(CONF_OPEN_SWITCH_ENTITY_ID, vol.UNDEFINED),
-        )] = SWITCH_ENTITY_SELECTOR
-        fields[vol.Required(
-            CONF_CLOSE_SWITCH_ENTITY_ID,
-            default=d.get(CONF_CLOSE_SWITCH_ENTITY_ID, vol.UNDEFINED),
-        )] = SWITCH_ENTITY_SELECTOR
-        fields[vol.Optional(
-            CONF_STOP_SWITCH_ENTITY_ID,
-            description={
-                "suggested_value": d.get(CONF_STOP_SWITCH_ENTITY_ID)
-            },
-        )] = SWITCH_ENTITY_SELECTOR
+        fields[
+            vol.Required(
+                CONF_OPEN_SWITCH_ENTITY_ID,
+                default=d.get(CONF_OPEN_SWITCH_ENTITY_ID, vol.UNDEFINED),
+            )
+        ] = SWITCH_ENTITY_SELECTOR
+        fields[
+            vol.Required(
+                CONF_CLOSE_SWITCH_ENTITY_ID,
+                default=d.get(CONF_CLOSE_SWITCH_ENTITY_ID, vol.UNDEFINED),
+            )
+        ] = SWITCH_ENTITY_SELECTOR
+        fields[
+            vol.Optional(
+                CONF_STOP_SWITCH_ENTITY_ID,
+                description={"suggested_value": d.get(CONF_STOP_SWITCH_ENTITY_ID)},
+            )
+        ] = SWITCH_ENTITY_SELECTOR
     else:
-        fields[vol.Required(
-            CONF_COVER_ENTITY_ID,
-            default=d.get(CONF_COVER_ENTITY_ID, vol.UNDEFINED),
-        )] = COVER_ENTITY_SELECTOR
+        fields[
+            vol.Required(
+                CONF_COVER_ENTITY_ID,
+                default=d.get(CONF_COVER_ENTITY_ID, vol.UNDEFINED),
+            )
+        ] = COVER_ENTITY_SELECTOR
 
     # Travel timing
-    fields[vol.Optional(
-        CONF_TRAVELLING_TIME_DOWN,
-        description={"suggested_value": d.get(CONF_TRAVELLING_TIME_DOWN)},
-    )] = TIMING_SELECTOR
-    fields[vol.Optional(
-        CONF_TRAVELLING_TIME_UP,
-        description={"suggested_value": d.get(CONF_TRAVELLING_TIME_UP)},
-    )] = TIMING_SELECTOR
+    fields[
+        vol.Optional(
+            CONF_TRAVELLING_TIME_DOWN,
+            description={"suggested_value": d.get(CONF_TRAVELLING_TIME_DOWN)},
+        )
+    ] = TIMING_SELECTOR
+    fields[
+        vol.Optional(
+            CONF_TRAVELLING_TIME_UP,
+            description={"suggested_value": d.get(CONF_TRAVELLING_TIME_UP)},
+        )
+    ] = TIMING_SELECTOR
 
     # Tilt section (collapsed)
     fields[vol.Optional(SECTION_TILT)] = section(
@@ -119,15 +127,11 @@ def _build_details_schema(
             {
                 vol.Optional(
                     CONF_TILTING_TIME_DOWN,
-                    description={
-                        "suggested_value": d.get(CONF_TILTING_TIME_DOWN)
-                    },
+                    description={"suggested_value": d.get(CONF_TILTING_TIME_DOWN)},
                 ): TIMING_SELECTOR,
                 vol.Optional(
                     CONF_TILTING_TIME_UP,
-                    description={
-                        "suggested_value": d.get(CONF_TILTING_TIME_UP)
-                    },
+                    description={"suggested_value": d.get(CONF_TILTING_TIME_UP)},
                 ): TIMING_SELECTOR,
                 vol.Optional(
                     CONF_TRAVEL_MOVES_WITH_TILT,
@@ -141,34 +145,36 @@ def _build_details_schema(
     # Advanced section (collapsed)
     adv_fields: dict[vol.Marker, Any] = {}
     if input_mode in (INPUT_MODE_PULSE, INPUT_MODE_TOGGLE):
-        adv_fields[vol.Optional(
-            CONF_PULSE_TIME,
-            description={"suggested_value": d.get(CONF_PULSE_TIME)},
-        )] = PULSE_TIME_SELECTOR
-    adv_fields[vol.Optional(
-        CONF_TRAVEL_STARTUP_DELAY,
-        description={
-            "suggested_value": d.get(CONF_TRAVEL_STARTUP_DELAY)
-        },
-    )] = TIMING_SELECTOR
-    adv_fields[vol.Optional(
-        CONF_TILT_STARTUP_DELAY,
-        description={
-            "suggested_value": d.get(CONF_TILT_STARTUP_DELAY)
-        },
-    )] = TIMING_SELECTOR
-    adv_fields[vol.Optional(
-        CONF_MIN_MOVEMENT_TIME,
-        description={
-            "suggested_value": d.get(CONF_MIN_MOVEMENT_TIME)
-        },
-    )] = TIMING_SELECTOR
-    adv_fields[vol.Optional(
-        CONF_TRAVEL_DELAY_AT_END,
-        description={
-            "suggested_value": d.get(CONF_TRAVEL_DELAY_AT_END)
-        },
-    )] = TIMING_SELECTOR
+        adv_fields[
+            vol.Optional(
+                CONF_PULSE_TIME,
+                description={"suggested_value": d.get(CONF_PULSE_TIME)},
+            )
+        ] = PULSE_TIME_SELECTOR
+    adv_fields[
+        vol.Optional(
+            CONF_TRAVEL_STARTUP_DELAY,
+            description={"suggested_value": d.get(CONF_TRAVEL_STARTUP_DELAY)},
+        )
+    ] = TIMING_SELECTOR
+    adv_fields[
+        vol.Optional(
+            CONF_TILT_STARTUP_DELAY,
+            description={"suggested_value": d.get(CONF_TILT_STARTUP_DELAY)},
+        )
+    ] = TIMING_SELECTOR
+    adv_fields[
+        vol.Optional(
+            CONF_MIN_MOVEMENT_TIME,
+            description={"suggested_value": d.get(CONF_MIN_MOVEMENT_TIME)},
+        )
+    ] = TIMING_SELECTOR
+    adv_fields[
+        vol.Optional(
+            CONF_TRAVEL_DELAY_AT_END,
+            description={"suggested_value": d.get(CONF_TRAVEL_DELAY_AT_END)},
+        )
+    ] = TIMING_SELECTOR
     fields[vol.Optional(SECTION_ADVANCED)] = section(
         vol.Schema(adv_fields),
         {"collapsed": True},
@@ -216,9 +222,7 @@ class CoverTimeBasedConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._name = user_input[CONF_NAME]
             self._device_type = user_input[CONF_DEVICE_TYPE]
-            self._input_mode = user_input.get(
-                CONF_INPUT_MODE, INPUT_MODE_SWITCH
-            )
+            self._input_mode = user_input.get(CONF_INPUT_MODE, INPUT_MODE_SWITCH)
             return await self.async_step_details()
 
         schema = vol.Schema(
@@ -272,7 +276,8 @@ class CoverTimeBasedConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
 
         schema = _build_details_schema(
-            self._device_type, self._input_mode,
+            self._device_type,
+            self._input_mode,
             defaults=_flatten_input(user_input) if user_input else None,
         )
         return self.async_show_form(
@@ -304,18 +309,14 @@ class CoverTimeBasedOptionsFlow(OptionsFlow):
 
         if user_input is not None:
             self._device_type = user_input[CONF_DEVICE_TYPE]
-            self._input_mode = user_input.get(
-                CONF_INPUT_MODE, INPUT_MODE_SWITCH
-            )
+            self._input_mode = user_input.get(CONF_INPUT_MODE, INPUT_MODE_SWITCH)
             return await self.async_step_details()
 
         schema = vol.Schema(
             {
                 vol.Required(
                     CONF_DEVICE_TYPE,
-                    default=current.get(
-                        CONF_DEVICE_TYPE, DEVICE_TYPE_SWITCH
-                    ),
+                    default=current.get(CONF_DEVICE_TYPE, DEVICE_TYPE_SWITCH),
                 ): SelectSelector(
                     SelectSelectorConfig(
                         options=[
@@ -328,9 +329,7 @@ class CoverTimeBasedOptionsFlow(OptionsFlow):
                 ),
                 vol.Optional(
                     CONF_INPUT_MODE,
-                    default=current.get(
-                        CONF_INPUT_MODE, INPUT_MODE_SWITCH
-                    ),
+                    default=current.get(CONF_INPUT_MODE, INPUT_MODE_SWITCH),
                 ): SelectSelector(
                     SelectSelectorConfig(
                         options=[

@@ -36,10 +36,12 @@ class TestToggleCloseWhileMoving:
         cover.travel_calc.set_position(0)
         cover.travel_calc.start_travel_down()
 
-        with patch.object(cover, "async_write_ha_state"), \
-             patch.object(
-                 cover, "async_stop_cover", new_callable=AsyncMock
-             ) as mock_stop:
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "async_stop_cover", new_callable=AsyncMock
+            ) as mock_stop,
+        ):
             await cover.async_close_cover()
 
         mock_stop.assert_awaited_once()
@@ -52,10 +54,12 @@ class TestToggleCloseWhileMoving:
         cover.travel_calc.set_position(100)
         cover.travel_calc.start_travel_up()
 
-        with patch.object(cover, "async_write_ha_state"), \
-             patch.object(
-                 cover, "async_stop_cover", new_callable=AsyncMock
-             ) as mock_stop:
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "async_stop_cover", new_callable=AsyncMock
+            ) as mock_stop,
+        ):
             await cover.async_open_cover()
 
         mock_stop.assert_awaited_once()
@@ -107,10 +111,12 @@ class TestStopBeforeDirectionChange:
         cover.travel_calc.start_travel_up()
         cover._last_command = SERVICE_OPEN_COVER
 
-        with patch.object(cover, "async_write_ha_state"), \
-             patch.object(
-                 cover, "async_stop_cover", new_callable=AsyncMock
-             ) as mock_stop:
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "async_stop_cover", new_callable=AsyncMock
+            ) as mock_stop,
+        ):
             await cover.async_close_cover()
 
         # async_stop_cover should have been called to stop the opening movement
@@ -125,10 +131,12 @@ class TestStopBeforeDirectionChange:
         cover.travel_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER
 
-        with patch.object(cover, "async_write_ha_state"), \
-             patch.object(
-                 cover, "async_stop_cover", new_callable=AsyncMock
-             ) as mock_stop:
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "async_stop_cover", new_callable=AsyncMock
+            ) as mock_stop,
+        ):
             await cover.async_open_cover()
 
         # async_stop_cover should have been called to stop the closing movement

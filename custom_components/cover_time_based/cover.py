@@ -90,29 +90,35 @@ ENTITY_COVER_SCHEMA = {
     **TRAVEL_TIME_SCHEMA,
 }
 
-DEFAULTS_SCHEMA = vol.Schema({
-    vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
-    vol.Optional(
-        CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
-    ): cv.positive_float,
-    vol.Optional(CONF_TRAVELLING_TIME_UP, default=DEFAULT_TRAVEL_TIME): cv.positive_float,
-    vol.Optional(CONF_TILTING_TIME_DOWN, default=None): vol.Any(
-        cv.positive_float, None
-    ),
-    vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(cv.positive_float, None),
-    vol.Optional(CONF_TRAVEL_DELAY_AT_END, default=None): vol.Any(
-        cv.positive_float, None
-    ),
-    vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
-        cv.positive_float, None
-    ),
-    vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
-        cv.positive_float, None
-    ),
-    vol.Optional(CONF_TILT_STARTUP_DELAY, default=None): vol.Any(
-        cv.positive_float, None
-    ),
-})
+DEFAULTS_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
+        vol.Optional(
+            CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
+        ): cv.positive_float,
+        vol.Optional(
+            CONF_TRAVELLING_TIME_UP, default=DEFAULT_TRAVEL_TIME
+        ): cv.positive_float,
+        vol.Optional(CONF_TILTING_TIME_DOWN, default=None): vol.Any(
+            cv.positive_float, None
+        ),
+        vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(
+            cv.positive_float, None
+        ),
+        vol.Optional(CONF_TRAVEL_DELAY_AT_END, default=None): vol.Any(
+            cv.positive_float, None
+        ),
+        vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
+            cv.positive_float, None
+        ),
+        vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
+            cv.positive_float, None
+        ),
+        vol.Optional(CONF_TILT_STARTUP_DELAY, default=None): vol.Any(
+            cv.positive_float, None
+        ),
+    }
+)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
@@ -187,114 +193,91 @@ def _create_cover_from_options(options, device_id="", name=""):
         return SwitchModeCover(**switch_args)
 
 
+_TIMING_DEFAULTS = {
+    CONF_TRAVEL_MOVES_WITH_TILT: False,
+    CONF_TRAVELLING_TIME_DOWN: DEFAULT_TRAVEL_TIME,
+    CONF_TRAVELLING_TIME_UP: DEFAULT_TRAVEL_TIME,
+    CONF_TILTING_TIME_DOWN: None,
+    CONF_TILTING_TIME_UP: None,
+    CONF_TRAVEL_DELAY_AT_END: None,
+    CONF_MIN_MOVEMENT_TIME: None,
+    CONF_TRAVEL_STARTUP_DELAY: None,
+    CONF_TILT_STARTUP_DELAY: None,
+}
+
+
+def _get_value(key, device_config, defaults_config, schema_default=None):
+    """Get config value with priority: device config > defaults > schema default."""
+    if key in device_config:
+        return device_config[key]
+    if key in defaults_config:
+        return defaults_config[key]
+    return schema_default
+
+
+def _resolve_input_mode(device_id, config, defaults):
+    """Resolve input mode from config, handling is_button deprecation."""
+    is_button = config.pop(CONF_IS_BUTTON, False)
+    input_mode = config.pop(CONF_INPUT_MODE, None)
+
+    if input_mode is not None and is_button:
+        _LOGGER.warning(
+            "Device '%s': both 'is_button' and 'input_mode' are set. "
+            "'input_mode: %s' takes precedence. Please remove 'is_button'.",
+            device_id,
+            input_mode,
+        )
+    elif is_button:
+        input_mode = INPUT_MODE_PULSE
+        _LOGGER.warning(
+            "Device '%s': 'is_button' is deprecated. Use 'input_mode: pulse' instead.",
+            device_id,
+        )
+
+    return input_mode or INPUT_MODE_SWITCH
+
+
 def devices_from_config(domain_config):
     """Parse configuration and add cover devices."""
     devices = []
     defaults = domain_config.get(CONF_DEFAULTS, {})
 
-    def get_value(key, device_config, defaults_config, schema_default=None):
-        """
-        Get value with priority: device config > defaults > schema default.
-
-        If key EXISTS in device config (even if None/null), use that value.
-        Otherwise, try defaults, then schema default.
-        """
-        # Priority: device config > defaults > schema default
-        if key in device_config:
-            return device_config[key]
-        if key in defaults_config:
-            return defaults_config[key]
-        return schema_default
-
     for device_id, config in domain_config[CONF_DEVICES].items():
         name = config.pop(CONF_NAME)
 
-        travel_moves_with_tilt = get_value(CONF_TRAVEL_MOVES_WITH_TILT, config, defaults, False)
-        travel_time_down = get_value(CONF_TRAVELLING_TIME_DOWN, config, defaults, DEFAULT_TRAVEL_TIME)
-        travel_time_up = get_value(CONF_TRAVELLING_TIME_UP, config, defaults, DEFAULT_TRAVEL_TIME)
-        tilt_time_down = get_value(CONF_TILTING_TIME_DOWN, config, defaults, None)
-        tilt_time_up = get_value(CONF_TILTING_TIME_UP, config, defaults, None)
-        travel_delay_at_end = get_value(CONF_TRAVEL_DELAY_AT_END, config, defaults, None)
-        min_movement_time = get_value(CONF_MIN_MOVEMENT_TIME, config, defaults, None)
-        travel_startup_delay = get_value(CONF_TRAVEL_STARTUP_DELAY, config, defaults, None)
-        tilt_startup_delay = get_value(CONF_TILT_STARTUP_DELAY, config, defaults, None)
+        # Extract timing values with defaults, then remove from config
+        options = {}
+        for key, schema_default in _TIMING_DEFAULTS.items():
+            options[key] = _get_value(key, config, defaults, schema_default)
+            config.pop(key, None)
 
-        config.pop(CONF_TRAVEL_MOVES_WITH_TILT, None)
-        config.pop(CONF_TRAVELLING_TIME_DOWN, None)
-        config.pop(CONF_TRAVELLING_TIME_UP, None)
-        config.pop(CONF_TILTING_TIME_DOWN, None)
-        config.pop(CONF_TILTING_TIME_UP, None)
-        config.pop(CONF_TRAVEL_DELAY_AT_END, None)
-        config.pop(CONF_MIN_MOVEMENT_TIME, None)
-        config.pop(CONF_TRAVEL_STARTUP_DELAY, None)
-        config.pop(CONF_TILT_STARTUP_DELAY, None)
+        # Entity IDs
+        open_switch = config.pop(CONF_OPEN_SWITCH_ENTITY_ID, None)
+        close_switch = config.pop(CONF_CLOSE_SWITCH_ENTITY_ID, None)
+        stop_switch = config.pop(CONF_STOP_SWITCH_ENTITY_ID, None)
+        cover_entity_id = config.pop(CONF_COVER_ENTITY_ID, None)
 
-        open_switch_entity_id = (
-            config.pop(CONF_OPEN_SWITCH_ENTITY_ID)
-            if CONF_OPEN_SWITCH_ENTITY_ID in config
-            else None
-        )
-        close_switch_entity_id = (
-            config.pop(CONF_CLOSE_SWITCH_ENTITY_ID)
-            if CONF_CLOSE_SWITCH_ENTITY_ID in config
-            else None
-        )
-        stop_switch_entity_id = (
-            config.pop(CONF_STOP_SWITCH_ENTITY_ID)
-            if CONF_STOP_SWITCH_ENTITY_ID in config
-            else None
-        )
-        is_button = config.pop(CONF_IS_BUTTON) if CONF_IS_BUTTON in config else False
-        input_mode = (
-            config.pop(CONF_INPUT_MODE, None) if CONF_INPUT_MODE in config else None
-        )
-        pulse_time = get_value(CONF_PULSE_TIME, config, defaults, DEFAULT_PULSE_TIME)
+        # Input mode (handles is_button deprecation)
+        input_mode = _resolve_input_mode(device_id, config, defaults)
+        pulse_time = _get_value(CONF_PULSE_TIME, config, defaults, DEFAULT_PULSE_TIME)
         config.pop(CONF_PULSE_TIME, None)
 
-        if input_mode is not None and is_button:
-            _LOGGER.warning(
-                "Device '%s': both 'is_button' and 'input_mode' are set. "
-                "'input_mode: %s' takes precedence. Please remove 'is_button'.",
-                device_id,
-                input_mode,
-            )
-        elif is_button:
-            input_mode = INPUT_MODE_PULSE
-            _LOGGER.warning(
-                "Device '%s': 'is_button' is deprecated. "
-                "Use 'input_mode: pulse' instead.",
-                device_id,
-            )
-        elif input_mode is None:
-            input_mode = INPUT_MODE_SWITCH
-
-        cover_entity_id = (
-            config.pop(CONF_COVER_ENTITY_ID) if CONF_COVER_ENTITY_ID in config else None
+        options[CONF_DEVICE_TYPE] = (
+            DEVICE_TYPE_COVER if cover_entity_id else DEVICE_TYPE_SWITCH
         )
+        options[CONF_INPUT_MODE] = input_mode
+        options[CONF_PULSE_TIME] = pulse_time
 
-        options = {
-            CONF_DEVICE_TYPE: DEVICE_TYPE_COVER if cover_entity_id else DEVICE_TYPE_SWITCH,
-            CONF_TRAVEL_MOVES_WITH_TILT: travel_moves_with_tilt,
-            CONF_TRAVELLING_TIME_DOWN: travel_time_down,
-            CONF_TRAVELLING_TIME_UP: travel_time_up,
-            CONF_TILTING_TIME_DOWN: tilt_time_down,
-            CONF_TILTING_TIME_UP: tilt_time_up,
-            CONF_TRAVEL_DELAY_AT_END: travel_delay_at_end,
-            CONF_MIN_MOVEMENT_TIME: min_movement_time,
-            CONF_TRAVEL_STARTUP_DELAY: travel_startup_delay,
-            CONF_TILT_STARTUP_DELAY: tilt_startup_delay,
-            CONF_INPUT_MODE: input_mode,
-            CONF_PULSE_TIME: pulse_time,
-        }
-        if open_switch_entity_id:
-            options[CONF_OPEN_SWITCH_ENTITY_ID] = open_switch_entity_id
-            options[CONF_CLOSE_SWITCH_ENTITY_ID] = close_switch_entity_id
-            options[CONF_STOP_SWITCH_ENTITY_ID] = stop_switch_entity_id
+        if open_switch:
+            options[CONF_OPEN_SWITCH_ENTITY_ID] = open_switch
+            options[CONF_CLOSE_SWITCH_ENTITY_ID] = close_switch
+            options[CONF_STOP_SWITCH_ENTITY_ID] = stop_switch
         if cover_entity_id:
             options[CONF_COVER_ENTITY_ID] = cover_entity_id
 
-        device = _create_cover_from_options(options, device_id=device_id, name=name)
-        devices.append(device)
+        devices.append(
+            _create_cover_from_options(options, device_id=device_id, name=name)
+        )
     return devices
 
 

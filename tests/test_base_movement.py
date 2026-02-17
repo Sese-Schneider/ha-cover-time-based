@@ -13,7 +13,7 @@ These tests exercise the movement coordination logic in cover_base.py:
 import asyncio
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
@@ -633,7 +633,9 @@ class TestStartupDelayConflict:
         assert cover._startup_delay_task is task1
 
     @pytest.mark.asyncio
-    async def test_set_position_during_startup_delay_same_direction_skips(self, make_cover):
+    async def test_set_position_during_startup_delay_same_direction_skips(
+        self, make_cover
+    ):
         cover = make_cover(travel_startup_delay=10.0)
         cover.travel_calc.set_position(0)
 
@@ -651,7 +653,9 @@ class TestStartupDelayConflict:
         assert cover._startup_delay_task is task1
 
     @pytest.mark.asyncio
-    async def test_set_position_during_startup_delay_direction_change_cancels(self, make_cover):
+    async def test_set_position_during_startup_delay_direction_change_cancels(
+        self, make_cover
+    ):
         cover = make_cover(travel_startup_delay=10.0)
         cover.travel_calc.set_position(50)
 

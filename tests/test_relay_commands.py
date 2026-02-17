@@ -24,6 +24,7 @@ from custom_components.cover_time_based.cover import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _calls(mock: AsyncMock):
     """Return the list of calls made on hass.services.async_call."""
     return mock.call_args_list
@@ -42,6 +43,7 @@ def _cover_svc(service, entity_id):
 # ===================================================================
 # Switch mode
 # ===================================================================
+
 
 class TestSwitchModeClose:
     """CLOSE command in switch mode."""
@@ -128,14 +130,20 @@ class TestSwitchModeStop:
 # Pulse mode
 # ===================================================================
 
+
 class TestPulseModeClose:
     """CLOSE command in pulse mode."""
 
     @pytest.mark.asyncio
     async def test_close_pulses_close_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_PULSE)
-        with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover_pulse_mode.sleep", new_callable=AsyncMock):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_pulse_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -148,8 +156,13 @@ class TestPulseModeClose:
     @pytest.mark.asyncio
     async def test_close_with_stop_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_PULSE, stop_switch="switch.stop")
-        with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover_pulse_mode.sleep", new_callable=AsyncMock):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_pulse_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -167,8 +180,13 @@ class TestPulseModeOpen:
     @pytest.mark.asyncio
     async def test_open_pulses_open_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_PULSE)
-        with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover_pulse_mode.sleep", new_callable=AsyncMock):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_pulse_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -196,8 +214,13 @@ class TestPulseModeStop:
     @pytest.mark.asyncio
     async def test_stop_with_stop_switch_pulses_it(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_PULSE, stop_switch="switch.stop")
-        with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover_pulse_mode.sleep", new_callable=AsyncMock):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_pulse_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
             await cover._async_handle_command(SERVICE_STOP_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -213,14 +236,20 @@ class TestPulseModeStop:
 # Toggle mode
 # ===================================================================
 
+
 class TestToggleModeClose:
     """CLOSE command in toggle mode."""
 
     @pytest.mark.asyncio
     async def test_close_pulses_close_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
-        with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover_toggle_mode.sleep", new_callable=AsyncMock):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -237,8 +266,13 @@ class TestToggleModeOpen:
     @pytest.mark.asyncio
     async def test_open_pulses_open_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
-        with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover_toggle_mode.sleep", new_callable=AsyncMock):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -256,8 +290,13 @@ class TestToggleModeStop:
     async def test_stop_after_close_pulses_close_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
         cover._last_command = SERVICE_CLOSE_COVER
-        with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover_toggle_mode.sleep", new_callable=AsyncMock):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
             await cover._async_handle_command(SERVICE_STOP_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -270,8 +309,13 @@ class TestToggleModeStop:
     async def test_stop_after_open_pulses_open_switch(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
         cover._last_command = SERVICE_OPEN_COVER
-        with patch.object(cover, "async_write_ha_state"), \
-             patch("custom_components.cover_time_based.cover_toggle_mode.sleep", new_callable=AsyncMock):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
             await cover._async_handle_command(SERVICE_STOP_COVER)
 
         assert _calls(cover.hass.services.async_call) == [
@@ -295,6 +339,7 @@ class TestToggleModeStop:
 # ===================================================================
 # Wrapped cover entity (delegates to cover.* services)
 # ===================================================================
+
 
 class TestWrappedCoverClose:
     """CLOSE command delegated to a wrapped cover entity."""
