@@ -182,7 +182,7 @@
       "description": "Start a calibration test to measure a timing parameter. The cover will begin moving — call stop_calibration when the desired endpoint is reached.",
       "fields": {
         "entity_id": {
-          "name": "Cover",
+          "name": "Entity ID",
           "description": "The cover to calibrate"
         },
         "attribute": {
@@ -204,7 +204,7 @@
       "description": "Stop an active calibration test. Calculates the result and saves it to the configuration unless cancelled.",
       "fields": {
         "entity_id": {
-          "name": "Cover",
+          "name": "Entity ID",
           "description": "The cover being calibrated"
         },
         "cancel": {
