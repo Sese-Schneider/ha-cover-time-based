@@ -240,3 +240,29 @@ class TestMotorOverheadCalibration:
             )
         assert cover._calibration.automation_task is not None
         assert cover._calibration.step_duration == 0.5
+
+
+class TestMinMovementTimeCalibration:
+    @pytest.mark.asyncio
+    async def test_starts_incremental_pulses(self, make_cover):
+        cover = make_cover()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="min_movement_time", timeout=60.0)
+        assert cover._calibration.automation_task is not None
+
+    @pytest.mark.asyncio
+    async def test_min_movement_result_is_last_pulse(self, make_cover):
+        cover = make_cover()
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="min_movement_time", timeout=60.0)
+            # Simulate 5 pulses (0.1, 0.2, 0.3, 0.4, 0.5)
+            cover._calibration.step_count = 5
+            cover._calibration.last_pulse_duration = 0.5
+            result = await cover.stop_calibration()
+
+        assert result["value"] == pytest.approx(0.5)

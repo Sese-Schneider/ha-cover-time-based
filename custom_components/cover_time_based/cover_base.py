@@ -848,6 +848,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             await self._start_simple_time_test(attribute)
         elif attribute in ("travel_motor_overhead", "tilt_motor_overhead"):
             await self._start_overhead_test(attribute)
+        elif attribute == "min_movement_time":
+            self._calibration.automation_task = self.hass.async_create_task(
+                self._run_min_movement_pulses()
+            )
 
         self.async_write_ha_state()
 
@@ -898,6 +902,31 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 self._calibration.step_count += 1
                 self.async_write_ha_state()
                 await sleep(CALIBRATION_STEP_PAUSE)
+        except asyncio.CancelledError:
+            pass
+
+    async def _run_min_movement_pulses(self):
+        """Send increasingly longer pulses until user sees movement."""
+        from .calibration import (
+            CALIBRATION_MIN_MOVEMENT_START,
+            CALIBRATION_MIN_MOVEMENT_INCREMENT,
+            CALIBRATION_STEP_PAUSE,
+        )
+
+        pulse_duration = CALIBRATION_MIN_MOVEMENT_START
+
+        try:
+            while True:
+                self._calibration.last_pulse_duration = pulse_duration
+                self._calibration.step_count += 1
+
+                await self._async_handle_command(SERVICE_CLOSE_COVER)
+                await sleep(pulse_duration)
+                await self._send_stop()
+                self.async_write_ha_state()
+
+                await sleep(CALIBRATION_STEP_PAUSE)
+                pulse_duration += CALIBRATION_MIN_MOVEMENT_INCREMENT
         except asyncio.CancelledError:
             pass
 
@@ -969,6 +998,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             # overhead = step_duration - (total_time / step_count)
             overhead = step_duration - (total_time / step_count)
             return round(max(0, overhead), 2)
+
+        if attribute == "min_movement_time":
+            return round(self._calibration.last_pulse_duration, 2)
 
         elapsed = time.monotonic() - self._calibration.started_at
         return elapsed
