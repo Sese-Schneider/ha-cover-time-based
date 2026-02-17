@@ -31,11 +31,13 @@ set_known_tilt_position:
           unit_of_measurement: "%"
 
 start_calibration:
-  target:
-    entity:
-      domain: cover
-      integration: cover_time_based
   fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: cover
+          integration: cover_time_based
     attribute:
       required: true
       example: travel_time_down
@@ -61,11 +63,13 @@ start_calibration:
           unit_of_measurement: "s"
 
 stop_calibration:
-  target:
-    entity:
-      domain: cover
-      integration: cover_time_based
   fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: cover
+          integration: cover_time_based
     cancel:
       required: false
       default: false

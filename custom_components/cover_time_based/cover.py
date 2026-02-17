@@ -153,28 +153,65 @@ def _register_services(platform):
     platform.async_register_entity_service(
         SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
     )
-    platform.async_register_entity_service(
-        SERVICE_START_CALIBRATION,
-        cv.make_entity_service_schema(
-            {
-                vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
-                vol.Required("timeout"): vol.All(
-                    vol.Coerce(float), vol.Range(min=1)
-                ),
-            }
-        ),
-        "start_calibration",
-    )
-    platform.async_register_entity_service(
-        SERVICE_STOP_CALIBRATION,
-        cv.make_entity_service_schema(
-            {
-                vol.Optional("cancel", default=False): cv.boolean,
-            }
-        ),
-        "stop_calibration",
-        supports_response=SupportsResponse.OPTIONAL,
-    )
+
+    hass = platform.hass
+
+    if not hass.services.has_service(DOMAIN, SERVICE_START_CALIBRATION):
+        async def _handle_start_calibration(call):
+            entity_id = call.data["entity_id"]
+            entity = _resolve_entity(hass, entity_id)
+            data = {k: v for k, v in call.data.items() if k != "entity_id"}
+            await entity.start_calibration(**data)
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_START_CALIBRATION,
+            _handle_start_calibration,
+            schema=vol.Schema(
+                {
+                    vol.Required("entity_id"): cv.entity_id,
+                    vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
+                    vol.Required("timeout"): vol.All(
+                        vol.Coerce(float), vol.Range(min=1)
+                    ),
+                }
+            ),
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_STOP_CALIBRATION):
+        async def _handle_stop_calibration(call):
+            entity_id = call.data["entity_id"]
+            entity = _resolve_entity(hass, entity_id)
+            data = {k: v for k, v in call.data.items() if k != "entity_id"}
+            return await entity.stop_calibration(**data)
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_STOP_CALIBRATION,
+            _handle_stop_calibration,
+            schema=vol.Schema(
+                {
+                    vol.Required("entity_id"): cv.entity_id,
+                    vol.Optional("cancel", default=False): cv.boolean,
+                }
+            ),
+            supports_response=SupportsResponse.OPTIONAL,
+        )
+
+
+def _resolve_entity(hass, entity_id):
+    """Resolve an entity_id to a CoverTimeBased instance."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    component = hass.data.get("entity_components", {}).get("cover")
+    if component is None:
+        raise HomeAssistantError("Cover platform not loaded")
+    entity = component.get_entity(entity_id)
+    if entity is None or not isinstance(entity, CoverTimeBased):
+        raise HomeAssistantError(
+            f"{entity_id} is not a cover_time_based entity"
+        )
+    return entity
 
 
 def _create_cover_from_options(options, device_id="", name=""):
