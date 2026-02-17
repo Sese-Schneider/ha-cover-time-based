@@ -10,3 +10,17 @@ set_known_tilt_position:
       example: cover.blinds
     position:
       example: 50
+start_calibration:
+  fields:
+    entity_id:
+      example: cover.blinds
+    attribute:
+      example: travel_time_down
+    timeout:
+      example: 120
+stop_calibration:
+  fields:
+    entity_id:
+      example: cover.blinds
+    cancel:
+      example: false

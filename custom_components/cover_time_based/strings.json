@@ -176,6 +176,30 @@
           "description": "The tilt position of the cover, between 0 and 100."
         }
       }
+    },
+    "start_calibration": {
+      "name": "Start calibration",
+      "description": "Start a calibration test to measure a timing parameter. The cover will begin moving — call stop_calibration when the desired endpoint is reached.",
+      "fields": {
+        "attribute": {
+          "name": "Attribute",
+          "description": "The timing parameter to calibrate"
+        },
+        "timeout": {
+          "name": "Timeout",
+          "description": "Safety timeout in seconds — motor will auto-stop if stop_calibration is not called"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Stop calibration",
+      "description": "Stop an active calibration test. Calculates the result and saves it to the configuration unless cancelled.",
+      "fields": {
+        "cancel": {
+          "name": "Cancel",
+          "description": "If true, discard the test results without saving"
+        }
+      }
     }
   }
 }
