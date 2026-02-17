@@ -168,7 +168,9 @@ class TestAsyncSetCoverPosition:
         assert cover._last_command == SERVICE_CLOSE_COVER
 
     @pytest.mark.asyncio
-    async def test_async_set_cover_tilt_position_calls_set_tilt_position(self, make_cover):
+    async def test_async_set_cover_tilt_position_calls_set_tilt_position(
+        self, make_cover
+    ):
         cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -678,7 +680,9 @@ class TestSwitchStateChanged:
             "new_state": new,
         }
 
-        with patch.object(cover, "_handle_external_state_change", new_callable=AsyncMock) as mock_handler:
+        with patch.object(
+            cover, "_handle_external_state_change", new_callable=AsyncMock
+        ) as mock_handler:
             await cover._async_switch_state_changed(event)
 
         # Should have set _triggered_externally and called handler
@@ -699,7 +703,9 @@ class TestSwitchStateChanged:
             "new_state": new,
         }
 
-        with patch.object(cover, "_handle_external_state_change", new_callable=AsyncMock):
+        with patch.object(
+            cover, "_handle_external_state_change", new_callable=AsyncMock
+        ):
             await cover._async_switch_state_changed(event)
 
         assert cover._triggered_externally is False

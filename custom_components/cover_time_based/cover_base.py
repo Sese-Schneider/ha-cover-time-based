@@ -118,7 +118,11 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 )
 
         # Register state change listeners for switch entities
-        for attr in ('_open_switch_entity_id', '_close_switch_entity_id', '_stop_switch_entity_id'):
+        for attr in (
+            "_open_switch_entity_id",
+            "_close_switch_entity_id",
+            "_stop_switch_entity_id",
+        ):
             entity_id = getattr(self, attr, None)
             if entity_id:
                 self._state_listener_unsubs.append(
@@ -836,8 +840,14 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     def _mark_switch_pending(self, entity_id, expected_transitions):
         """Mark a switch as having pending echo transitions to ignore."""
-        self._pending_switch[entity_id] = self._pending_switch.get(entity_id, 0) + expected_transitions
-        _LOGGER.debug("_mark_switch_pending :: %s pending=%d", entity_id, self._pending_switch[entity_id])
+        self._pending_switch[entity_id] = (
+            self._pending_switch.get(entity_id, 0) + expected_transitions
+        )
+        _LOGGER.debug(
+            "_mark_switch_pending :: %s pending=%d",
+            entity_id,
+            self._pending_switch[entity_id],
+        )
 
         # Cancel any existing timeout for this switch
         if entity_id in self._pending_switch_timers:
@@ -869,7 +879,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         _LOGGER.debug(
             "_async_switch_state_changed :: %s: %s -> %s (pending=%s)",
-            entity_id, old_val, new_val,
+            entity_id,
+            old_val,
+            new_val,
             self._pending_switch.get(entity_id, 0),
         )
 

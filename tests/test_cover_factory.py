@@ -1,7 +1,7 @@
 """Tests for cover factory and YAML config parsing in cover.py."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -23,11 +23,8 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
-    DEFAULT_PULSE_TIME,
-    DEFAULT_TRAVEL_TIME,
     DEVICE_TYPE_COVER,
     DEVICE_TYPE_SWITCH,
-    DOMAIN,
     INPUT_MODE_PULSE,
     INPUT_MODE_SWITCH,
     INPUT_MODE_TOGGLE,
@@ -377,9 +374,7 @@ class TestAsyncSetupPlatform:
         }
 
         platform = MagicMock()
-        with patch(
-            "custom_components.cover_time_based.cover.async_create_issue"
-        ):
+        with patch("custom_components.cover_time_based.cover.async_create_issue"):
             with patch(
                 "custom_components.cover_time_based.cover.entity_platform.current_platform"
             ) as mock_platform:

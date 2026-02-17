@@ -1,7 +1,7 @@
 """Tests for __init__.py integration setup/teardown."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.cover_time_based import (
     async_setup_entry,
