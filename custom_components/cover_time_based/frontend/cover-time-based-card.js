@@ -570,6 +570,9 @@ class CoverTimeBasedCard extends LitElement {
     return html`
       <div class="section">
         <div class="field-label">Endpoint Run-on Time</div>
+        <div class="helper-text">
+          Additional travel time at endpoints (0%/100%) for position reset
+        </div>
         <ha-textfield
           type="number"
           min="0"
