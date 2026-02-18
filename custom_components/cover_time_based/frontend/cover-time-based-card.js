@@ -170,6 +170,23 @@ class CoverTimeBasedCard extends LitElement {
     return state?.attributes?.calibration_active === true;
   }
 
+  _getCalibrationHint() {
+    const select = this.shadowRoot?.querySelector("#cal-attribute");
+    const attr = select?.value;
+    const pos = this._knownPosition;
+    const endpoint = pos === "open" ? "closed" : "open";
+    const hints = {
+      travel_time_open: "Click Finish once the cover is fully open",
+      travel_time_close: "Click Finish once the cover is fully closed",
+      travel_startup_delay: `Click Finish once the cover is fully ${endpoint}`,
+      tilt_time_open: "Click Finish once the cover slats are fully open",
+      tilt_time_close: "Click Finish once the cover slats are fully closed",
+      tilt_startup_delay: `Click Finish once the cover slats are fully ${endpoint}`,
+      min_movement_time: "Click Finish as soon as you notice the cover moving",
+    };
+    return hints[attr] || "";
+  }
+
   _hasRequiredEntities(c) {
     if (!c) return false;
     if (c.device_type === "cover") return !!c.cover_entity_id;
@@ -629,10 +646,7 @@ class CoverTimeBasedCard extends LitElement {
       );
     }
 
-    rows.push(
-      ["Endpoint runon time", "endpoint_runon_time", c.endpoint_runon_time],
-      ["Minimum movement time", "min_movement_time", c.min_movement_time]
-    );
+    rows.push(["Minimum movement time", "min_movement_time", c.min_movement_time]);
 
     return html`
       <div class="section">
@@ -754,7 +768,9 @@ class CoverTimeBasedCard extends LitElement {
         <div class="cal-form">
           <div class="cal-field">
             <label class="sub-label" for="cal-attribute">Attribute</label>
-            <select class="ha-select" id="cal-attribute">
+            <select class="ha-select" id="cal-attribute"
+              @change=${() => this.requestUpdate()}
+            >
               ${availableAttributes.map(
                 ([key, label]) =>
                   html`<option value=${key} ?disabled=${disabledKeys.has(key)}>${label}</option>`
@@ -769,7 +785,9 @@ class CoverTimeBasedCard extends LitElement {
           ? html`<div class="helper-text" style="margin-top: 8px;">
               Set position to start calibration.
             </div>`
-          : ""}
+          : html`<div class="helper-text" style="margin-top: 8px;">
+              ${this._getCalibrationHint()}
+            </div>`}
       </div>
     `;
   }
