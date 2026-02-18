@@ -631,6 +631,17 @@ class CoverTimeBasedCard extends LitElement {
       }
     );
 
+    const disabledKeys = new Set();
+    if (this._knownPosition === "unknown") {
+      availableAttributes.forEach(([key]) => disabledKeys.add(key));
+    } else if (this._knownPosition === "open") {
+      disabledKeys.add("travel_time_open");
+      disabledKeys.add("tilt_time_open");
+    } else if (this._knownPosition === "closed") {
+      disabledKeys.add("travel_time_close");
+      disabledKeys.add("tilt_time_close");
+    }
+
     if (calibrating) {
       return html`
         <div class="section calibration-active">
@@ -667,7 +678,7 @@ class CoverTimeBasedCard extends LitElement {
             <select class="ha-select" id="cal-attribute">
               ${availableAttributes.map(
                 ([key, label]) =>
-                  html`<option value=${key}>${label}</option>`
+                  html`<option value=${key} ?disabled=${disabledKeys.has(key)}>${label}</option>`
               )}
             </select>
           </div>
@@ -683,10 +694,15 @@ class CoverTimeBasedCard extends LitElement {
               id="cal-timeout"
             ></ha-textfield>
           </div>
-          <ha-button unelevated @click=${this._onStartCalibration}
+          <ha-button unelevated ?disabled=${this._knownPosition === "unknown"} @click=${this._onStartCalibration}
             >Start</ha-button
           >
         </div>
+        ${this._knownPosition === "unknown"
+          ? html`<div class="helper-text" style="margin-top: 8px;">
+              Set position to start calibration.
+            </div>`
+          : ""}
       </div>
     `;
   }
