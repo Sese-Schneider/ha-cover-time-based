@@ -412,7 +412,7 @@ class CoverTimeBasedCard extends LitElement {
             </fieldset>
           `
         : html`
-            ${this._renderPositionReset()}
+            ${calibrating ? "" : this._renderPositionReset()}
             ${this._renderCalibration(calibrating)}
             ${this._renderTimingTable(c)}
           `}
