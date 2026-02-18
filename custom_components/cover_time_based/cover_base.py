@@ -907,9 +907,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def _start_simple_time_test(self, attribute, direction):
         """Start a simple travel/tilt time test by moving the cover."""
         if direction:
-            self._calibration.move_command = self._resolve_direction(
-                direction, None
-            )
+            self._calibration.move_command = self._resolve_direction(direction, None)
         elif "close" in attribute:
             self._calibration.move_command = SERVICE_CLOSE_COVER
         else:
@@ -1089,11 +1087,12 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def _reset_position_after_calibration(self, cancelled):
         """Reset tracked position after calibration to match reality.
 
-        For most tests the cover has moved to an endpoint (fully open or
-        closed), so we set the tracked position to match.
+        When cancelled, the cover may be at an intermediate position, so
+        we drive it to a known endpoint first.
 
-        For min_movement_time the cover has only nudged slightly, so we
-        first return it to the starting endpoint, then reset position.
+        For a successful stop the cover has reached an endpoint (fully
+        open or closed) for most tests, or only nudged slightly for
+        min_movement_time.
         """
         if self._calibration is None:
             return
@@ -1105,7 +1104,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         is_tilt = "tilt" in attribute
         calc = self.tilt_calc if is_tilt else self.travel_calc
 
-        if attribute == "min_movement_time":
+        if cancelled or attribute == "min_movement_time":
             # Return cover to starting position by moving in the opposite
             # direction for long enough to reach the endpoint.
             if move_command == SERVICE_CLOSE_COVER:
@@ -1116,7 +1115,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 travel_time = self._travel_time_down or self._travel_time_up
             if travel_time:
                 _LOGGER.debug(
-                    "min_movement: returning to start via %s for %.1fs",
+                    "calibration: returning to start via %s for %.1fs",
                     return_command,
                     travel_time,
                 )

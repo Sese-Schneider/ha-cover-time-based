@@ -82,7 +82,9 @@ class TestStartCalibrationTravelTime:
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="travel_time_close", timeout=120.0)
             with pytest.raises(HomeAssistantError, match="already"):
-                await cover.start_calibration(attribute="travel_time_open", timeout=120.0)
+                await cover.start_calibration(
+                    attribute="travel_time_open", timeout=120.0
+                )
 
     @pytest.mark.asyncio
     async def test_calibration_exposes_state_attributes(self, make_cover):
@@ -150,6 +152,90 @@ class TestStopCalibrationTravelTime:
 
         await asyncio.sleep(0)  # Let event loop process cancellation
         assert timeout_task.cancelled()
+
+
+class TestCancelReturnsToStart:
+    """When cancelled mid-travel, cover should return to its starting endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_close_returns_cover_to_open(self, make_cover):
+        """Cancelling a close-direction test drives cover back to fully open."""
+        cover = make_cover(travel_time_down=20, travel_time_up=20)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_close", timeout=120.0)
+
+            # Cover is closing; cancel mid-way
+            with patch(
+                "custom_components.cover_time_based.cover_base.sleep"
+            ) as mock_sleep:
+                result = await cover.stop_calibration(cancel=True)
+
+            # Should have slept for the return trip (travel_time_up = 20)
+            mock_sleep.assert_awaited_once_with(20)
+
+        # Position reset to fully open (100 = open, opposite of close direction)
+        assert cover.travel_calc.current_position() == 100
+        assert cover._calibration is None
+        assert "value" not in result
+
+    @pytest.mark.asyncio
+    async def test_cancel_open_returns_cover_to_closed(self, make_cover):
+        """Cancelling an open-direction test drives cover back to fully closed."""
+        cover = make_cover(travel_time_down=25, travel_time_up=25)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_open", timeout=120.0)
+
+            with patch(
+                "custom_components.cover_time_based.cover_base.sleep"
+            ) as mock_sleep:
+                await cover.stop_calibration(cancel=True)
+
+            mock_sleep.assert_awaited_once_with(25)
+
+        assert cover.travel_calc.current_position() == 0
+        assert cover._calibration is None
+
+    @pytest.mark.asyncio
+    async def test_cancel_sends_stop_after_return(self, make_cover):
+        """Cancel should send stop relay after the return movement."""
+        cover = make_cover(travel_time_down=10, travel_time_up=10)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_close", timeout=120.0)
+
+            with patch("custom_components.cover_time_based.cover_base.sleep"):
+                await cover.stop_calibration(cancel=True)
+
+        # _send_stop called twice: once on stop_calibration, once after return
+        stop_calls = [
+            c
+            for c in cover.hass.services.async_call.await_args_list
+            if c.args[1] == "turn_off"
+        ]
+        # At minimum, stop relays were sent
+        assert len(stop_calls) >= 2
+
+    @pytest.mark.asyncio
+    async def test_successful_stop_does_not_return(self, make_cover):
+        """Successful stop (not cancel) should NOT return the cover."""
+        cover = make_cover(travel_time_down=20, travel_time_up=20)
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_close", timeout=120.0)
+
+            with patch(
+                "custom_components.cover_time_based.cover_base.sleep"
+            ) as mock_sleep:
+                await cover.stop_calibration()
+
+            # No sleep for return trip — cover is assumed at endpoint
+            mock_sleep.assert_not_awaited()
+
+        # Position at the close endpoint (0)
+        assert cover.travel_calc.current_position() == 0
 
 
 class TestCalibrationTiltTime:
