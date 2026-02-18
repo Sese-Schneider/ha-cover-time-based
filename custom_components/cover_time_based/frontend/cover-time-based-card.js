@@ -34,6 +34,7 @@ class CoverTimeBasedCard extends LitElement {
       _saving: { type: Boolean },
       _dirty: { type: Boolean },
       _activeTab: { type: String },
+      _knownPosition: { type: String },
     };
   }
 
@@ -45,6 +46,7 @@ class CoverTimeBasedCard extends LitElement {
     this._saving = false;
     this._dirty = false;
     this._activeTab = "device";
+    this._knownPosition = "unknown";
     this._helpersLoaded = false;
   }
 
@@ -219,7 +221,6 @@ class CoverTimeBasedCard extends LitElement {
 
   async _onStartCalibration() {
     const attrSelect = this.shadowRoot.querySelector("#cal-attribute");
-    const dirSelect = this.shadowRoot.querySelector("#cal-direction");
     const timeoutInput = this.shadowRoot.querySelector("#cal-timeout");
 
     const data = {
@@ -227,9 +228,6 @@ class CoverTimeBasedCard extends LitElement {
       attribute: attrSelect.value,
       timeout: parseInt(timeoutInput.value) || 120,
     };
-    if (dirSelect.value) {
-      data.direction = dirSelect.value;
-    }
 
     try {
       await this.hass.callService(DOMAIN, "start_calibration", data);
@@ -304,11 +302,22 @@ class CoverTimeBasedCard extends LitElement {
           .includeDomains=${["cover"]}
           .entityFilter=${(entity) =>
             "travelling_time_down" in (entity.attributes || {})}
-          label="Entity"
+          label=""
           @value-changed=${(e) => {
-            this._selectedEntity = e.detail?.value || "";
+            const newEntity = e.detail?.value || "";
+            if (newEntity === this._selectedEntity) return;
+            if (this._dirty) {
+              if (!confirm("You have unsaved changes. Discard and continue?")) {
+                // Reset picker back to current entity
+                e.target.value = this._selectedEntity;
+                this.requestUpdate();
+                return;
+              }
+            }
+            this._selectedEntity = newEntity;
             this._config = null;
             this._dirty = false;
+            this._knownPosition = "unknown";
             if (this._selectedEntity) this._loadConfig();
           }}
         ></ha-entity-picker>
@@ -357,7 +366,7 @@ class CoverTimeBasedCard extends LitElement {
         <button
           class="tab ${this._activeTab === "timing" ? "active" : ""}"
           @click=${() => { this._activeTab = "timing"; }}
-        >Timing</button>
+        >Calibration</button>
       </div>
 
       ${this._activeTab === "device"
@@ -366,22 +375,22 @@ class CoverTimeBasedCard extends LitElement {
               ${this._renderDeviceType(c)} ${this._renderInputEntities(c)}
               ${this._renderInputMode(c)} ${this._renderTiltSupport(c)}
             </fieldset>
-
-            ${this._dirty
-              ? html`
-                  <div class="save-bar">
-                    <ha-button unelevated @click=${this._save} ?disabled=${this._saving}>
-                      ${this._saving ? "Saving..." : "Save"}
-                    </ha-button>
-                    <ha-button @click=${this._loadConfig}>Discard</ha-button>
-                  </div>
-                `
-              : ""}
           `
         : html`
-            ${this._renderTimingTable(c)}
             ${this._renderCalibration(calibrating)}
+            ${this._renderTimingTable(c)}
           `}
+
+      ${this._dirty
+        ? html`
+            <div class="save-bar">
+              <ha-button @click=${this._loadConfig}>Discard</ha-button>
+              <ha-button unelevated @click=${this._save} ?disabled=${this._saving}>
+                ${this._saving ? "Saving..." : "Save"}
+              </ha-button>
+            </div>
+          `
+        : ""}
     `;
   }
 
@@ -534,7 +543,6 @@ class CoverTimeBasedCard extends LitElement {
 
     return html`
       <div class="section">
-        <div class="field-label">Timing Configuration</div>
         <table class="timing-table">
           <thead>
             <tr>
@@ -582,20 +590,20 @@ class CoverTimeBasedCard extends LitElement {
             <ha-icon icon="mdi:tune" style="--mdc-icon-size: 20px;"></ha-icon>
             Calibration Active
           </div>
-          <div class="cal-status">
-            <strong>${ATTRIBUTE_LABELS[attrs.calibration_attribute]}</strong>
-            ${attrs.calibration_step
-              ? html`<span class="cal-step"
-                  >Step ${attrs.calibration_step}</span
-                >`
-              : ""}
-          </div>
-          <div class="button-row">
-            <ha-button unelevated @click=${() => this._onStopCalibration(false)}
-              >Stop</ha-button
-            >
+          <div class="cal-form">
+            <div class="cal-status">
+              <strong>${ATTRIBUTE_LABELS[attrs.calibration_attribute]}</strong>
+              ${attrs.calibration_step
+                ? html`<span class="cal-step"
+                    >Step ${attrs.calibration_step}</span
+                  >`
+                : ""}
+            </div>
             <ha-button @click=${() => this._onStopCalibration(true)}
               >Cancel</ha-button
+            >
+            <ha-button unelevated @click=${() => this._onStopCalibration(false)}
+              >Finish</ha-button
             >
           </div>
         </div>
@@ -604,7 +612,7 @@ class CoverTimeBasedCard extends LitElement {
 
     return html`
       <div class="section">
-        <div class="field-label">Calibration</div>
+        <div class="field-label">Timing Calibration</div>
         <div class="cal-form">
           <div class="cal-field">
             <label class="sub-label" for="cal-attribute">Attribute</label>
@@ -613,16 +621,6 @@ class CoverTimeBasedCard extends LitElement {
                 ([key, label]) =>
                   html`<option value=${key}>${label}</option>`
               )}
-            </select>
-          </div>
-          <div class="cal-field">
-            <label class="sub-label" for="cal-direction"
-              >Direction (optional)</label
-            >
-            <select class="ha-select" id="cal-direction">
-              <option value="">Auto</option>
-              <option value="open">Open</option>
-              <option value="close">Close</option>
             </select>
           </div>
           <div class="cal-field cal-field-narrow">
@@ -638,7 +636,7 @@ class CoverTimeBasedCard extends LitElement {
             ></ha-textfield>
           </div>
           <ha-button unelevated @click=${this._onStartCalibration}
-            >Go</ha-button
+            >Start</ha-button
           >
         </div>
       </div>
@@ -909,6 +907,7 @@ class CoverTimeBasedCard extends LitElement {
         display: flex;
         align-items: center;
         gap: 12px;
+        flex: 1;
         padding: 8px 0;
         font-size: var(--paper-font-body1_-_font-size, 14px);
       }
@@ -936,6 +935,7 @@ class CoverTimeBasedCard extends LitElement {
 
       .button-row {
         display: flex;
+        justify-content: flex-end;
         gap: 8px;
         margin-top: 8px;
       }
@@ -943,6 +943,7 @@ class CoverTimeBasedCard extends LitElement {
       /* Save bar */
       .save-bar {
         display: flex;
+        justify-content: flex-end;
         gap: 8px;
         padding: 12px 0;
         margin-bottom: 16px;
