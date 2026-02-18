@@ -550,7 +550,7 @@ class CoverTimeBasedCard extends LitElement {
             Tilts before/after cover movement
           </option>
           <option value="during" ?selected=${tiltMode === "during"}>
-            Tilts during cover movement
+            Tilts with cover movement
           </option>
         </select>
       </div>
