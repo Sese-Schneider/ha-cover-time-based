@@ -221,19 +221,29 @@ class CoverTimeBasedCard extends LitElement {
 
   async _onStartCalibration() {
     const attrSelect = this.shadowRoot.querySelector("#cal-attribute");
-    const timeoutInput = this.shadowRoot.querySelector("#cal-timeout");
 
     const data = {
       entity_id: this._selectedEntity,
       attribute: attrSelect.value,
-      timeout: parseInt(timeoutInput.value) || 120,
+      timeout: 300,
     };
+
+    if (this._knownPosition === "open") {
+      data.direction = "close";
+    } else if (this._knownPosition === "closed") {
+      data.direction = "open";
+    }
+
+    this._knownPosition = "unknown";
 
     try {
       await this.hass.callService(DOMAIN, "start_calibration", data);
     } catch (err) {
       console.error("Start calibration failed:", err);
     }
+
+    const posSelect = this.shadowRoot.querySelector("#position-select");
+    if (posSelect) posSelect.value = "unknown";
   }
 
   async _onStopCalibration(cancel = false) {
@@ -681,18 +691,6 @@ class CoverTimeBasedCard extends LitElement {
                   html`<option value=${key} ?disabled=${disabledKeys.has(key)}>${label}</option>`
               )}
             </select>
-          </div>
-          <div class="cal-field cal-field-narrow">
-            <ha-textfield
-              type="number"
-              min="1"
-              max="600"
-              step="1"
-              suffix="s"
-              label="Timeout"
-              value="120"
-              id="cal-timeout"
-            ></ha-textfield>
           </div>
           <ha-button unelevated ?disabled=${this._knownPosition === "unknown"} @click=${this._onStartCalibration}
             >Start</ha-button
