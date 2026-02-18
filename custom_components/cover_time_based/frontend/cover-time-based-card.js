@@ -372,9 +372,16 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   async _onCoverCommand(command) {
+    const cmdMap = {
+      open_cover: "open",
+      close_cover: "close",
+      stop_cover: "stop",
+    };
     try {
-      await this.hass.callService("cover", command, {
+      await this.hass.callWS({
+        type: `${DOMAIN}/raw_command`,
         entity_id: this._selectedEntity,
+        command: cmdMap[command],
       });
     } catch (err) {
       console.error(`Cover ${command} failed:`, err);
@@ -511,17 +518,19 @@ class CoverTimeBasedCard extends LitElement {
             </strong>
             <span class="entity-id">${this._selectedEntity}</span>
           </div>
-          <div class="cover-controls">
-            <ha-button title="Open" @click=${() => this._onCoverCommand("open_cover")}>
-              <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
-            </ha-button>
-            <ha-button title="Stop" @click=${() => this._onCoverCommand("stop_cover")}>
-              <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
-            </ha-button>
-            <ha-button title="Close" @click=${() => this._onCoverCommand("close_cover")}>
-              <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
-            </ha-button>
-          </div>
+          ${this._activeTab === "timing" ? html`
+            <div class="cover-controls">
+              <ha-button title="Open" @click=${() => this._onCoverCommand("open_cover")}>
+                <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title="Stop" @click=${() => this._onCoverCommand("stop_cover")}>
+                <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title="Close" @click=${() => this._onCoverCommand("close_cover")}>
+                <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+            </div>
+          ` : ""}
         </div>
       </div>
 
@@ -532,8 +541,9 @@ class CoverTimeBasedCard extends LitElement {
         >Device</button>
         <button
           class="tab ${this._activeTab === "timing" ? "active" : ""}"
-          ?disabled=${!this._hasRequiredEntities(c)}
+          ?disabled=${!this._hasRequiredEntities(c) || this._dirty}
           @click=${() => { this._activeTab = "timing"; }}
+          title=${this._dirty ? "Save changes before calibrating" : ""}
         >Calibration</button>
       </div>
 

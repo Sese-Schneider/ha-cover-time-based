@@ -68,6 +68,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_update_config)
     websocket_api.async_register_command(hass, ws_start_calibration)
     websocket_api.async_register_command(hass, ws_stop_calibration)
+    websocket_api.async_register_command(hass, ws_raw_command)
 
 
 def _resolve_config_entry(hass: HomeAssistant, entity_id: str):
@@ -286,3 +287,37 @@ async def ws_stop_calibration(
         return
 
     connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {
+        "type": "cover_time_based/raw_command",
+        vol.Required("entity_id"): str,
+        vol.Required("command"): vol.In(["open", "close", "stop"]),
+    }
+)
+@websocket_api.async_response
+async def ws_raw_command(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Send open/close/stop directly to the underlying device, bypassing the position tracker."""
+    entity = _resolve_entity(hass, msg["entity_id"])
+    if entity is None:
+        connection.send_error(msg["id"], "not_found", "Entity not found")
+        return
+
+    try:
+        command = msg["command"]
+        if command == "open":
+            await entity._send_open()
+        elif command == "close":
+            await entity._send_close()
+        elif command == "stop":
+            await entity._send_stop()
+    except Exception as exc:  # noqa: BLE001
+        connection.send_error(msg["id"], "failed", str(exc))
+        return
+
+    connection.send_result(msg["id"], {"success": True})

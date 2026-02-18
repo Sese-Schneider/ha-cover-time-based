@@ -30,6 +30,7 @@ from custom_components.cover_time_based.websocket_api import (
     _resolve_config_entry,
     async_register_websocket_api,
     ws_get_config,
+    ws_raw_command,
     ws_start_calibration,
     ws_stop_calibration,
     ws_update_config,
@@ -501,9 +502,10 @@ class TestRegistration:
         ) as mock_register:
             async_register_websocket_api(hass)
 
-        assert mock_register.call_count == 4
+        assert mock_register.call_count == 5
         registered_fns = {call[0][1] for call in mock_register.call_args_list}
         assert ws_get_config in registered_fns
         assert ws_update_config in registered_fns
         assert ws_start_calibration in registered_fns
         assert ws_stop_calibration in registered_fns
+        assert ws_raw_command in registered_fns

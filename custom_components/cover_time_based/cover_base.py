@@ -1131,67 +1131,30 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             result["attribute"] = self._calibration.attribute
             result["value"] = value
 
-        # Run position reset in background so callers get the result immediately
-        calibration = self._calibration
+            # For successful completion, update the tracked position to
+            # reflect where the cover ended up (at an endpoint).
+            self._set_position_after_calibration(self._calibration)
+
         self._calibration = None
         self.async_write_ha_state()
-
-        async def _background_reset():
-            try:
-                await self._reset_position_after_calibration_state(calibration, cancel)
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Position reset after calibration failed")
-
-        self.hass.async_create_task(_background_reset())
         return result
 
-    async def _reset_position_after_calibration(self, cancelled):
-        """Reset tracked position after calibration to match reality."""
-        if self._calibration is None:
-            return
-        await self._reset_position_after_calibration_state(self._calibration, cancelled)
+    def _set_position_after_calibration(self, calibration):
+        """Update tracked position after successful calibration.
 
-    async def _reset_position_after_calibration_state(self, calibration, cancelled):
-        """Reset tracked position after calibration to match reality.
-
-        When cancelled, the cover may be at an intermediate position, so
-        we drive it to a known endpoint first.
-
-        For a successful stop the cover has reached an endpoint (fully
-        open or closed) for most tests, or only nudged slightly for
-        min_movement_time.
+        For travel/tilt time and startup delay tests, the cover has
+        reached an endpoint. For min_movement_time the cover only nudged
+        slightly so we leave the tracked position unchanged.
         """
-        attribute = calibration.attribute
         move_command = calibration.move_command
-        if not move_command:
+        if not move_command or calibration.attribute == "min_movement_time":
             return
 
-        is_tilt = "tilt" in attribute
+        is_tilt = "tilt" in calibration.attribute
         calc = self.tilt_calc if is_tilt else self.travel_calc
 
-        if cancelled or attribute == "min_movement_time":
-            # Return cover to starting position by moving in the opposite
-            # direction for long enough to reach the endpoint.
-            if move_command == SERVICE_CLOSE_COVER:
-                return_command = SERVICE_OPEN_COVER
-                travel_time = self._travel_time_open or self._travel_time_close
-            else:
-                return_command = SERVICE_CLOSE_COVER
-                travel_time = self._travel_time_close or self._travel_time_open
-            if travel_time:
-                _LOGGER.debug(
-                    "calibration: returning to start via %s for %.1fs",
-                    return_command,
-                    travel_time,
-                )
-                await self._async_handle_command(return_command)
-                await sleep(travel_time)
-                await self._send_stop()
-            # After return, cover is at the opposite endpoint from move_command
-            endpoint = 100 if move_command == SERVICE_CLOSE_COVER else 0
-        else:
-            # Cover ended at the endpoint in the direction of travel
-            endpoint = 0 if move_command == SERVICE_CLOSE_COVER else 100
+        # Cover ended at the endpoint in the direction of travel
+        endpoint = 0 if move_command == SERVICE_CLOSE_COVER else 100
 
         _LOGGER.debug(
             "calibration: resetting %s position to %d",
