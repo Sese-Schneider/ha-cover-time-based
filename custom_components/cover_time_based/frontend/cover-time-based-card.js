@@ -441,6 +441,7 @@ class CoverTimeBasedCard extends LitElement {
         ? html`
             <fieldset ?disabled=${disabled}>
               ${this._renderDeviceType(c)} ${this._renderInputEntities(c)}
+              ${this._renderEndpointRunon(c)}
               ${this._renderInputMode(c)} ${this._renderTiltSupport(c)}
             </fieldset>
           `
@@ -561,21 +562,27 @@ class CoverTimeBasedCard extends LitElement {
               </div>
             `
           : ""}
-        <div class="inline-field">
-          <ha-textfield
-            type="number"
-            min="0"
-            max="10"
-            step="0.1"
-            suffix="s"
-            label="Endpoint runon time"
-            .value=${String(c.endpoint_runon_time || "")}
-            @change=${(e) => {
-              const v = e.target.value.trim();
-              this._updateLocal({ endpoint_runon_time: v === "" ? null : parseFloat(v) });
-            }}
-          ></ha-textfield>
-        </div>
+      </div>
+    `;
+  }
+
+  _renderEndpointRunon(c) {
+    return html`
+      <div class="section">
+        <div class="field-label">Endpoint Run-on Time</div>
+        <ha-textfield
+          type="number"
+          min="0"
+          max="10"
+          step="0.1"
+          suffix="s"
+          label=""
+          .value=${String(c.endpoint_runon_time || "")}
+          @change=${(e) => {
+            const v = e.target.value.trim();
+            this._updateLocal({ endpoint_runon_time: v === "" ? null : parseFloat(v) });
+          }}
+        ></ha-textfield>
       </div>
     `;
   }
