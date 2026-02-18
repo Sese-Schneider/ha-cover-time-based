@@ -279,6 +279,13 @@ class CoverTimeBasedCard extends LitElement {
         entity_id: this._selectedEntity,
         position,
       });
+      this.updateComplete.then(() => {
+        const select = this.shadowRoot.querySelector("#cal-attribute");
+        if (select) {
+          const firstEnabled = [...select.options].find((o) => !o.disabled);
+          if (firstEnabled) select.value = firstEnabled.value;
+        }
+      });
     } catch (err) {
       console.error("Reset position failed:", err);
     }
