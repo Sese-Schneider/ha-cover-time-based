@@ -247,6 +247,7 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   async _onStopCalibration(cancel = false) {
+    this._knownPosition = "unknown";
     try {
       const data = { entity_id: this._selectedEntity };
       if (cancel) data.cancel = true;
