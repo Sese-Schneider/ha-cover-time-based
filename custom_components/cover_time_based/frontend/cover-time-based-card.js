@@ -170,6 +170,12 @@ class CoverTimeBasedCard extends LitElement {
     return state?.attributes?.calibration_active === true;
   }
 
+  _hasRequiredEntities(c) {
+    if (!c) return false;
+    if (c.device_type === "cover") return !!c.cover_entity_id;
+    return !!c.open_switch_entity_id && !!c.close_switch_entity_id;
+  }
+
   // --- Event handlers ---
 
   _onEntityChange(e) {
@@ -426,6 +432,7 @@ class CoverTimeBasedCard extends LitElement {
         >Device</button>
         <button
           class="tab ${this._activeTab === "timing" ? "active" : ""}"
+          ?disabled=${!this._hasRequiredEntities(c)}
           @click=${() => { this._activeTab = "timing"; }}
         >Calibration</button>
       </div>
