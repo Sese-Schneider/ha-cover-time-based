@@ -196,25 +196,25 @@ class CoverTimeBasedCard extends LitElement {
     this._updateLocal({ cover_entity_id: value || null });
   }
 
-  _onTiltEnabledChange(e) {
-    if (e.target.checked) {
-      this._updateLocal({
-        tilting_time_down: 5.0,
-        tilting_time_up: 5.0,
-      });
-    } else {
+  _onTiltModeChange(e) {
+    const mode = e.target.value;
+    if (mode === "none") {
       this._updateLocal({
         tilting_time_down: null,
         tilting_time_up: null,
         travel_moves_with_tilt: false,
       });
+    } else {
+      const updates = { travel_moves_with_tilt: mode === "during" };
+      // Initialize tilt times if enabling for the first time
+      if (this._config.tilting_time_down == null) {
+        updates.tilting_time_down = 5.0;
+      }
+      if (this._config.tilting_time_up == null) {
+        updates.tilting_time_up = 5.0;
+      }
+      this._updateLocal(updates);
     }
-  }
-
-  _onTiltBehaviorChange(e) {
-    this._updateLocal({
-      travel_moves_with_tilt: e.target.value === "true",
-    });
   }
 
   async _onStartCalibration() {
@@ -524,42 +524,31 @@ class CoverTimeBasedCard extends LitElement {
 
   _renderTiltSupport(c) {
     const hasTilt = c.tilting_time_down != null || c.tilting_time_up != null;
+    const tiltMode = !hasTilt ? "none" : c.travel_moves_with_tilt ? "during" : "before_after";
 
     return html`
       <div class="section">
-        <label class="tilt-toggle">
-          <ha-checkbox
-            ?checked=${hasTilt}
-            @change=${this._onTiltEnabledChange}
-          ></ha-checkbox>
-          <span>Cover supports tilting</span>
-        </label>
-        ${hasTilt
-          ? html`
-              <div class="radio-group indent">
-                <label class="radio-label">
-                  <input
-                    type="radio"
-                    name="tilt_behavior"
-                    value="false"
-                    ?checked=${!c.travel_moves_with_tilt}
-                    @change=${this._onTiltBehaviorChange}
-                  />
-                  Before opening and after closing
-                </label>
-                <label class="radio-label">
-                  <input
-                    type="radio"
-                    name="tilt_behavior"
-                    value="true"
-                    ?checked=${c.travel_moves_with_tilt}
-                    @change=${this._onTiltBehaviorChange}
-                  />
-                  During opening/closing
-                </label>
-              </div>
-            `
-          : ""}
+        <div class="field-label">Tilting</div>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input type="radio" name="tilt_mode" value="none"
+              ?checked=${tiltMode === "none"}
+              @change=${this._onTiltModeChange} />
+            Not supported
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="tilt_mode" value="before_after"
+              ?checked=${tiltMode === "before_after"}
+              @change=${this._onTiltModeChange} />
+            Tilts before/after cover movement
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="tilt_mode" value="during"
+              ?checked=${tiltMode === "during"}
+              @change=${this._onTiltModeChange} />
+            Tilts during cover movement
+          </label>
+        </div>
       </div>
     `;
   }
