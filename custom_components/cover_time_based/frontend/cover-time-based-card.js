@@ -557,27 +557,23 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _renderTimingTable(c) {
-    const state = this._getEntityState();
-    if (!state) return "";
-
-    const attrs = state.attributes;
     const hasTilt = c.tilting_time_down != null || c.tilting_time_up != null;
 
     const rows = [
-      ["Travel time (close)", attrs.travelling_time_down],
-      ["Travel time (open)", attrs.travelling_time_up],
-      ["Travel motor overhead", attrs.travel_motor_overhead],
+      ["Travel time (close)", "travelling_time_down", c.travelling_time_down],
+      ["Travel time (open)", "travelling_time_up", c.travelling_time_up],
+      ["Travel motor overhead", "travel_motor_overhead", c.travel_motor_overhead],
     ];
 
     if (hasTilt) {
       rows.push(
-        ["Tilt time (close)", attrs.tilting_time_down],
-        ["Tilt time (open)", attrs.tilting_time_up],
-        ["Tilt motor overhead", attrs.tilt_motor_overhead]
+        ["Tilt time (close)", "tilting_time_down", c.tilting_time_down],
+        ["Tilt time (open)", "tilting_time_up", c.tilting_time_up],
+        ["Tilt motor overhead", "tilt_motor_overhead", c.tilt_motor_overhead]
       );
     }
 
-    rows.push(["Minimum movement time", attrs.min_movement_time]);
+    rows.push(["Minimum movement time", "min_movement_time", c.min_movement_time]);
 
     return html`
       <div class="section">
@@ -590,13 +586,23 @@ class CoverTimeBasedCard extends LitElement {
           </thead>
           <tbody>
             ${rows.map(
-              ([label, value]) => html`
+              ([label, key, value]) => html`
                 <tr>
                   <td>${label}</td>
                   <td class="value-cell">
-                    ${value != null
-                      ? html`${value}<span class="unit">s</span>`
-                      : html`<span class="not-set">Not set</span>`}
+                    <input
+                      type="number"
+                      class="timing-input"
+                      .value=${value != null ? String(value) : ""}
+                      placeholder="Not set"
+                      step="0.1"
+                      min="0"
+                      max="600"
+                      @change=${(e) => {
+                        const v = e.target.value.trim();
+                        this._updateLocal({ [key]: v === "" ? null : parseFloat(v) });
+                      }}
+                    /><span class="unit">s</span>
                   </td>
                 </tr>
               `
@@ -929,17 +935,32 @@ class CoverTimeBasedCard extends LitElement {
 
       .value-cell {
         font-family: var(--code-font-family, monospace);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .timing-input {
+        width: 80px;
+        padding: 4px 8px;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 4px;
+        font-family: var(--code-font-family, monospace);
+        font-size: inherit;
+        color: var(--primary-text-color);
+        background: var(--card-background-color, #fff);
+        text-align: right;
+      }
+
+      .timing-input::placeholder {
+        color: var(--secondary-text-color);
+        font-style: italic;
+        font-family: inherit;
       }
 
       .unit {
         color: var(--secondary-text-color);
         margin-left: 2px;
-      }
-
-      .not-set {
-        color: var(--secondary-text-color);
-        font-style: italic;
-        font-family: inherit;
       }
 
       /* Native select for calibration dropdowns */
