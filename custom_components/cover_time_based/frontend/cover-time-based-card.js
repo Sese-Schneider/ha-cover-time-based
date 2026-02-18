@@ -290,6 +290,11 @@ class CoverTimeBasedCard extends LitElement {
     this._updateLocal({ [field]: value || null });
   }
 
+  _filterNonTimeBased = (stateObj) => {
+    const entry = this.hass.entities[stateObj.entity_id];
+    return !entry || entry.platform !== DOMAIN;
+  };
+
   _onCoverEntityChange(e) {
     const value = e.detail?.value || e.target?.value || null;
     this._updateLocal({ cover_entity_id: value || null });
@@ -335,7 +340,10 @@ class CoverTimeBasedCard extends LitElement {
     this._calibratingOverride = undefined;
 
     try {
-      await this.hass.callService(DOMAIN, "start_calibration", data);
+      await this.hass.callWS({
+        type: `${DOMAIN}/start_calibration`,
+        ...data,
+      });
     } catch (err) {
       console.error("Start calibration failed:", err);
     }
@@ -580,6 +588,7 @@ class CoverTimeBasedCard extends LitElement {
             .hass=${this.hass}
             .value=${c.cover_entity_id || ""}
             .includeDomains=${["cover"]}
+            .entityFilter=${this._filterNonTimeBased}
             label="Cover Entity"
             @value-changed=${this._onCoverEntityChange}
           ></ha-entity-picker>

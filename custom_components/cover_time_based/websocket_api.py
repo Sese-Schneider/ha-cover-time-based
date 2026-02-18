@@ -10,6 +10,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
+from .calibration import CALIBRATABLE_ATTRIBUTES
 from .cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_COVER_ENTITY_ID,
@@ -65,6 +66,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register WebSocket API commands."""
     websocket_api.async_register_command(hass, ws_get_config)
     websocket_api.async_register_command(hass, ws_update_config)
+    websocket_api.async_register_command(hass, ws_start_calibration)
     websocket_api.async_register_command(hass, ws_stop_calibration)
 
 
@@ -184,6 +186,19 @@ async def ws_update_config(
         connection.send_error(msg["id"], "not_found", error)
         return
 
+    # Reject wrapping another cover_time_based entity
+    cover_entity_id = msg.get("cover_entity_id")
+    if cover_entity_id:
+        entity_reg = er.async_get(hass)
+        target = entity_reg.async_get(cover_entity_id)
+        if target and target.platform == DOMAIN:
+            connection.send_error(
+                msg["id"],
+                "invalid_entity",
+                "Cannot wrap another Cover Time Based entity",
+            )
+            return
+
     new_options = dict(config_entry.options)
 
     for ws_key, conf_key in _FIELD_MAP.items():
@@ -210,6 +225,39 @@ def _resolve_entity(hass: HomeAssistant, entity_id: str):
     if entity is None or not isinstance(entity, CoverTimeBased):
         return None
     return entity
+
+
+@websocket_api.websocket_command(
+    {
+        "type": "cover_time_based/start_calibration",
+        vol.Required("entity_id"): str,
+        vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
+        vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1)),
+        vol.Optional("direction"): vol.In(["open", "close"]),
+    }
+)
+@websocket_api.async_response
+async def ws_start_calibration(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Handle start_calibration WebSocket command."""
+    entity = _resolve_entity(hass, msg["entity_id"])
+    if entity is None:
+        connection.send_error(msg["id"], "not_found", "Entity not found")
+        return
+
+    try:
+        kwargs = {"attribute": msg["attribute"], "timeout": msg["timeout"]}
+        if "direction" in msg:
+            kwargs["direction"] = msg["direction"]
+        await entity.start_calibration(**kwargs)
+    except Exception as exc:  # noqa: BLE001
+        connection.send_error(msg["id"], "failed", str(exc))
+        return
+
+    connection.send_result(msg["id"], {"success": True})
 
 
 @websocket_api.websocket_command(
