@@ -24,6 +24,16 @@ const ATTRIBUTE_LABELS = {
   min_movement_time: "Minimum movement time",
 };
 
+const ATTRIBUTE_TO_CONFIG = {
+  travel_time_close: "travel_time_close",
+  travel_time_open: "travel_time_open",
+  tilt_time_close: "tilt_time_close",
+  tilt_time_open: "tilt_time_open",
+  travel_startup_delay: "travel_startup_delay",
+  tilt_startup_delay: "tilt_startup_delay",
+  min_movement_time: "min_movement_time",
+};
+
 class CoverTimeBasedCard extends LitElement {
   static get properties() {
     return {
@@ -35,6 +45,7 @@ class CoverTimeBasedCard extends LitElement {
       _dirty: { type: Boolean },
       _activeTab: { type: String },
       _knownPosition: { type: String },
+      _loadError: { type: String },
     };
   }
 
@@ -48,6 +59,22 @@ class CoverTimeBasedCard extends LitElement {
     this._activeTab = "device";
     this._knownPosition = "unknown";
     this._helpersLoaded = false;
+  }
+
+  _getScrollParent() {
+    let el = this;
+    while (el) {
+      el = el.parentElement || el.getRootNode()?.host;
+      if (el && el.scrollTop > 0) return el;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+
+  async performUpdate() {
+    const scroller = this._getScrollParent();
+    const scrollTop = scroller?.scrollTop ?? 0;
+    await super.performUpdate();
+    if (scroller) scroller.scrollTop = scrollTop;
   }
 
   async connectedCallback() {
@@ -94,6 +121,25 @@ class CoverTimeBasedCard extends LitElement {
 
       this.requestUpdate();
     }
+
+    // Load entity list from full registry (includes config_entry_id)
+    this._loadEntityList();
+  }
+
+  async _loadEntityList() {
+    if (!this.hass) return;
+    try {
+      const entries = await this.hass.callWS({
+        type: "config/entity_registry/list",
+      });
+      this._configEntryEntities = entries
+        .filter((e) => e.platform === "cover_time_based" && e.config_entry_id)
+        .map((e) => e.entity_id);
+      this.requestUpdate();
+    } catch (err) {
+      console.error("Failed to load entity registry:", err);
+      this._configEntryEntities = [];
+    }
   }
 
   disconnectedCallback() {
@@ -120,6 +166,7 @@ class CoverTimeBasedCard extends LitElement {
   async _loadConfig() {
     if (!this._selectedEntity || !this.hass) return;
     this._loading = true;
+    this._loadError = null;
     try {
       this._config = await this.hass.callWS({
         type: "cover_time_based/get_config",
@@ -129,6 +176,7 @@ class CoverTimeBasedCard extends LitElement {
     } catch (err) {
       console.error("Failed to load config:", err);
       this._config = null;
+      this._loadError = "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings → Devices & Services → Helpers → Create Helper → Cover Time Based.";
     }
     this._loading = false;
   }
@@ -175,13 +223,31 @@ class CoverTimeBasedCard extends LitElement {
     const attr = select?.value;
     const pos = this._knownPosition;
     const endpoint = pos === "open" ? "closed" : "open";
+    const c = this._config;
+    const tiltMode = c?.tilt_mode || "none";
     const hints = {
-      travel_time_open: "Click Finish once the cover is fully open",
-      travel_time_close: "Click Finish once the cover is fully closed",
-      travel_startup_delay: `Click Finish once the cover is fully ${endpoint}`,
-      tilt_time_open: "Click Finish once the cover slats are fully open",
-      tilt_time_close: "Click Finish once the cover slats are fully closed",
-      tilt_startup_delay: `Click Finish once the cover slats are fully ${endpoint}`,
+      travel_time_open: tiltMode === "before_after"
+        ? "Start with the slats tilted fully closed, then click Finish when the cover is fully open but before the slats start opening"
+        : "Click Finish once the cover is fully open",
+      travel_time_close: tiltMode === "before_after"
+        ? "Start with the slats tilted fully open, then click Finish when the cover is fully closed but before the slats start closing"
+        : "Click Finish once the cover is fully closed",
+      travel_startup_delay: tiltMode === "before_after"
+        ? pos === "open"
+          ? "Start with the slats tilted fully open, then click Finish when the cover is fully closed but before the slats start closing"
+          : "Start with the slats tilted fully closed, then click Finish when the cover is fully open but before the slats start opening"
+        : `Click Finish once the cover is fully ${endpoint}`,
+      tilt_time_open: tiltMode === "before_after"
+        ? "Start with the cover fully closed and the slats tilted fully closed, then click Finish when the slats are fully open"
+        : "Click Finish once the cover slats are fully open",
+      tilt_time_close: tiltMode === "before_after"
+        ? "Start with the cover fully closed and the slats tilted fully open, then click Finish when the slats are fully closed"
+        : "Click Finish once the cover slats are fully closed",
+      tilt_startup_delay: tiltMode === "before_after"
+        ? pos === "open"
+          ? "Start with the cover fully closed and the slats tilted fully open, then click Finish when the slats are fully closed"
+          : "Start with the cover fully closed and the slats tilted fully closed, then click Finish when the slats are fully open"
+        : `Click Finish once the cover slats are fully ${endpoint}`,
       min_movement_time: "Click Finish as soon as you notice the cover moving",
     };
     return hints[attr] || "";
@@ -233,18 +299,18 @@ class CoverTimeBasedCard extends LitElement {
     const mode = e.target.value;
     if (mode === "none") {
       this._updateLocal({
-        tilting_time_down: null,
-        tilting_time_up: null,
-        travel_moves_with_tilt: false,
+        tilt_time_close: null,
+        tilt_time_open: null,
+        tilt_mode: "none",
       });
     } else {
-      const updates = { travel_moves_with_tilt: mode === "during" };
+      const updates = { tilt_mode: mode };
       // Initialize tilt times if enabling for the first time
-      if (this._config.tilting_time_down == null) {
-        updates.tilting_time_down = 5.0;
+      if (this._config.tilt_time_close == null) {
+        updates.tilt_time_close = 5.0;
       }
-      if (this._config.tilting_time_up == null) {
-        updates.tilting_time_up = 5.0;
+      if (this._config.tilt_time_open == null) {
+        updates.tilt_time_open = 5.0;
       }
       this._updateLocal(updates);
     }
@@ -283,9 +349,15 @@ class CoverTimeBasedCard extends LitElement {
     this._calibratingOverride = false;
     this.requestUpdate();
     try {
-      const data = { entity_id: this._selectedEntity };
-      if (cancel) data.cancel = true;
-      await this.hass.callService(DOMAIN, "stop_calibration", data);
+      const result = await this.hass.callWS({
+        type: "cover_time_based/stop_calibration",
+        entity_id: this._selectedEntity,
+        cancel,
+      });
+      if (!cancel && result?.attribute) {
+        const configKey = ATTRIBUTE_TO_CONFIG[result.attribute];
+        if (configKey) this._updateLocal({ [configKey]: result.value });
+      }
     } catch (err) {
       console.error("Stop calibration failed:", err);
     }
@@ -310,7 +382,7 @@ class CoverTimeBasedCard extends LitElement {
         entity_id: this._selectedEntity,
         position,
       });
-      if (this._config?.tilting_time_down != null || this._config?.tilting_time_up != null) {
+      if (this._config?.tilt_mode && this._config.tilt_mode !== "none") {
         await this.hass.callService(DOMAIN, "set_known_tilt_position", {
           entity_id: this._selectedEntity,
           tilt_position: position,
@@ -356,6 +428,9 @@ class CoverTimeBasedCard extends LitElement {
           ${this._selectedEntity && this._config
             ? this._renderConfigSections()
             : ""}
+          ${this._loadError
+            ? html`<div class="yaml-warning">${this._loadError}</div>`
+            : ""}
           ${this._loading
             ? html`<div class="loading">
                 <ha-icon icon="mdi:loading" class="spin"></ha-icon> Loading...
@@ -372,9 +447,7 @@ class CoverTimeBasedCard extends LitElement {
         <ha-entity-picker
           .hass=${this.hass}
           .value=${this._selectedEntity}
-          .includeDomains=${["cover"]}
-          .entityFilter=${(entity) =>
-            "travelling_time_down" in (entity.attributes || {})}
+          .includeEntities=${this._configEntryEntities || []}
           label=""
           @value-changed=${(e) => {
             const newEntity = e.detail?.value || "";
@@ -400,6 +473,7 @@ class CoverTimeBasedCard extends LitElement {
             this._selectedEntity = newEntity;
             this._config = null;
             this._dirty = false;
+            this._loadError = null;
             this._knownPosition = "unknown";
             this._calibratingOverride = undefined;
             this._activeTab = "device";
@@ -430,14 +504,14 @@ class CoverTimeBasedCard extends LitElement {
             <span class="entity-id">${this._selectedEntity}</span>
           </div>
           <div class="cover-controls">
-            <ha-button @click=${() => this._onCoverCommand("open_cover")}>
-              <ha-icon icon="mdi:arrow-up" style="--mdc-icon-size: 18px;"></ha-icon>
+            <ha-button title="Open" @click=${() => this._onCoverCommand("open_cover")}>
+              <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
             </ha-button>
-            <ha-button @click=${() => this._onCoverCommand("stop_cover")}>
+            <ha-button title="Stop" @click=${() => this._onCoverCommand("stop_cover")}>
               <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
             </ha-button>
-            <ha-button @click=${() => this._onCoverCommand("close_cover")}>
-              <ha-icon icon="mdi:arrow-down" style="--mdc-icon-size: 18px;"></ha-icon>
+            <ha-button title="Close" @click=${() => this._onCoverCommand("close_cover")}>
+              <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
             </ha-button>
           </div>
         </div>
@@ -609,8 +683,7 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _renderTiltSupport(c) {
-    const hasTilt = c.tilting_time_down != null || c.tilting_time_up != null;
-    const tiltMode = !hasTilt ? "none" : c.travel_moves_with_tilt ? "during" : "before_after";
+    const tiltMode = c.tilt_mode || "none";
 
     return html`
       <div class="section">
@@ -631,18 +704,18 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _renderTimingTable(c) {
-    const hasTilt = c.tilting_time_down != null || c.tilting_time_up != null;
+    const hasTilt = c.tilt_mode && c.tilt_mode !== "none";
 
     const rows = [
-      ["Travel time (close)", "travelling_time_down", c.travelling_time_down],
-      ["Travel time (open)", "travelling_time_up", c.travelling_time_up],
+      ["Travel time (close)", "travel_time_close", c.travel_time_close],
+      ["Travel time (open)", "travel_time_open", c.travel_time_open],
       ["Travel startup delay", "travel_startup_delay", c.travel_startup_delay],
     ];
 
     if (hasTilt) {
       rows.push(
-        ["Tilt time (close)", "tilting_time_down", c.tilting_time_down],
-        ["Tilt time (open)", "tilting_time_up", c.tilting_time_up],
+        ["Tilt time (close)", "tilt_time_close", c.tilt_time_close],
+        ["Tilt time (open)", "tilt_time_open", c.tilt_time_open],
         ["Tilt startup delay", "tilt_startup_delay", c.tilt_startup_delay]
       );
     }
@@ -715,8 +788,7 @@ class CoverTimeBasedCard extends LitElement {
     const state = this._getEntityState();
     const attrs = state?.attributes || {};
     const hasTilt =
-      this._config?.tilting_time_down != null ||
-      this._config?.tilting_time_up != null;
+      this._config?.tilt_mode && this._config.tilt_mode !== "none";
 
     const availableAttributes = Object.entries(ATTRIBUTE_LABELS).filter(
       ([key]) => {
@@ -1133,6 +1205,16 @@ class CoverTimeBasedCard extends LitElement {
         gap: 8px;
         padding: 24px;
         color: var(--secondary-text-color);
+      }
+
+      .yaml-warning {
+        padding: 16px;
+        margin: 8px 0;
+        background: var(--warning-color, #ff9800);
+        color: var(--text-primary-color, #fff);
+        border-radius: 8px;
+        font-size: 14px;
+        line-height: 1.4;
       }
 
       @keyframes spin {

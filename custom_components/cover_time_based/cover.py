@@ -30,6 +30,13 @@ _LOGGER = logging.getLogger(__name__)
 
 CONF_DEVICES = "devices"
 CONF_DEFAULTS = "defaults"
+CONF_TILT_MODE = "tilt_mode"
+CONF_TRAVEL_TIME_CLOSE = "travel_time_close"
+CONF_TRAVEL_TIME_OPEN = "travel_time_open"
+CONF_TILT_TIME_CLOSE = "tilt_time_close"
+CONF_TILT_TIME_OPEN = "tilt_time_open"
+
+# Deprecated YAML key names (renamed)
 CONF_TRAVEL_MOVES_WITH_TILT = "travel_moves_with_tilt"
 CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
@@ -65,6 +72,10 @@ BASE_DEVICE_SCHEMA = {
     vol.Required(CONF_NAME): cv.string,
 }
 
+CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
+CONF_TRAVEL_MOTOR_OVERHEAD = "travel_motor_overhead"
+CONF_TILT_MOTOR_OVERHEAD = "tilt_motor_overhead"
+
 TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT): cv.boolean,
     vol.Optional(CONF_TRAVELLING_TIME_DOWN): cv.positive_float,
@@ -74,6 +85,9 @@ TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TRAVEL_STARTUP_DELAY): cv.positive_float,
     vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
     vol.Optional(CONF_ENDPOINT_RUNON_TIME): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_MOTOR_OVERHEAD): cv.positive_float,
+    vol.Optional(CONF_TILT_MOTOR_OVERHEAD): cv.positive_float,
     vol.Optional(CONF_MIN_MOVEMENT_TIME): cv.positive_float,
 }
 
@@ -83,9 +97,6 @@ SWITCH_COVER_SCHEMA = {
     vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.entity_id,
     vol.Optional(CONF_STOP_SWITCH_ENTITY_ID, default=None): vol.Any(cv.entity_id, None),
     vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
-    vol.Optional(CONF_INPUT_MODE, default=None): vol.Any(
-        vol.In([INPUT_MODE_SWITCH, INPUT_MODE_PULSE, INPUT_MODE_TOGGLE]), None
-    ),
     vol.Optional(CONF_PULSE_TIME): cv.positive_float,
     **TRAVEL_TIME_SCHEMA,
 }
@@ -99,12 +110,12 @@ ENTITY_COVER_SCHEMA = {
 DEFAULTS_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
-        vol.Optional(
-            CONF_TRAVELLING_TIME_DOWN, default=DEFAULT_TRAVEL_TIME
-        ): cv.positive_float,
-        vol.Optional(
-            CONF_TRAVELLING_TIME_UP, default=DEFAULT_TRAVEL_TIME
-        ): cv.positive_float,
+        vol.Optional(CONF_TRAVELLING_TIME_DOWN, default=None): vol.Any(
+            cv.positive_float, None
+        ),
+        vol.Optional(CONF_TRAVELLING_TIME_UP, default=None): vol.Any(
+            cv.positive_float, None
+        ),
         vol.Optional(CONF_TILTING_TIME_DOWN, default=None): vol.Any(
             cv.positive_float, None
         ),
@@ -120,6 +131,9 @@ DEFAULTS_SCHEMA = vol.Schema(
         vol.Optional(
             CONF_ENDPOINT_RUNON_TIME, default=DEFAULT_ENDPOINT_RUNON_TIME
         ): vol.Any(cv.positive_float, None),
+        vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
+        vol.Optional(CONF_TRAVEL_MOTOR_OVERHEAD): cv.positive_float,
+        vol.Optional(CONF_TILT_MOTOR_OVERHEAD): cv.positive_float,
         vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
             cv.positive_float, None
         ),
@@ -234,14 +248,16 @@ def _create_cover_from_options(options, device_id="", name=""):
     common = dict(
         device_id=device_id,
         name=name,
-        travel_moves_with_tilt=options.get(CONF_TRAVEL_MOVES_WITH_TILT, False),
-        travel_time_down=options.get(CONF_TRAVELLING_TIME_DOWN, DEFAULT_TRAVEL_TIME),
-        travel_time_up=options.get(CONF_TRAVELLING_TIME_UP, DEFAULT_TRAVEL_TIME),
-        tilt_time_down=options.get(CONF_TILTING_TIME_DOWN),
-        tilt_time_up=options.get(CONF_TILTING_TIME_UP),
+        tilt_mode=options.get(CONF_TILT_MODE, "none"),
+        travel_time_close=options.get(CONF_TRAVEL_TIME_CLOSE),
+        travel_time_open=options.get(CONF_TRAVEL_TIME_OPEN),
+        tilt_time_close=options.get(CONF_TILT_TIME_CLOSE),
+        tilt_time_open=options.get(CONF_TILT_TIME_OPEN),
         travel_startup_delay=options.get(CONF_TRAVEL_STARTUP_DELAY),
         tilt_startup_delay=options.get(CONF_TILT_STARTUP_DELAY),
-        endpoint_runon_time=options.get(CONF_ENDPOINT_RUNON_TIME, DEFAULT_ENDPOINT_RUNON_TIME),
+        endpoint_runon_time=options.get(
+            CONF_ENDPOINT_RUNON_TIME, DEFAULT_ENDPOINT_RUNON_TIME
+        ),
         min_movement_time=options.get(CONF_MIN_MOVEMENT_TIME),
     )
 
@@ -270,11 +286,11 @@ def _create_cover_from_options(options, device_id="", name=""):
 
 
 _TIMING_DEFAULTS = {
-    CONF_TRAVEL_MOVES_WITH_TILT: False,
-    CONF_TRAVELLING_TIME_DOWN: DEFAULT_TRAVEL_TIME,
-    CONF_TRAVELLING_TIME_UP: DEFAULT_TRAVEL_TIME,
-    CONF_TILTING_TIME_DOWN: None,
-    CONF_TILTING_TIME_UP: None,
+    CONF_TILT_MODE: "none",
+    CONF_TRAVEL_TIME_CLOSE: None,
+    CONF_TRAVEL_TIME_OPEN: None,
+    CONF_TILT_TIME_CLOSE: None,
+    CONF_TILT_TIME_OPEN: None,
     CONF_TRAVEL_STARTUP_DELAY: None,
     CONF_TILT_STARTUP_DELAY: None,
     CONF_ENDPOINT_RUNON_TIME: DEFAULT_ENDPOINT_RUNON_TIME,
@@ -292,25 +308,41 @@ def _get_value(key, device_config, defaults_config, schema_default=None):
 
 
 def _resolve_input_mode(device_id, config, defaults):
-    """Resolve input mode from config, handling is_button deprecation."""
+    """Resolve input mode from config, handling legacy is_button key."""
     is_button = config.pop(CONF_IS_BUTTON, False)
-    input_mode = config.pop(CONF_INPUT_MODE, None)
 
-    if input_mode is not None and is_button:
-        _LOGGER.warning(
-            "Device '%s': both 'is_button' and 'input_mode' are set. "
-            "'input_mode: %s' takes precedence. Please remove 'is_button'.",
-            device_id,
-            input_mode,
-        )
-    elif is_button:
-        input_mode = INPUT_MODE_PULSE
-        _LOGGER.warning(
-            "Device '%s': 'is_button' is deprecated. Use 'input_mode: pulse' instead.",
-            device_id,
-        )
+    if is_button:
+        return INPUT_MODE_PULSE
 
-    return input_mode or INPUT_MODE_SWITCH
+    return INPUT_MODE_SWITCH
+
+
+_YAML_KEY_RENAMES = {
+    CONF_TRAVEL_DELAY_AT_END: CONF_ENDPOINT_RUNON_TIME,
+    CONF_TRAVEL_MOTOR_OVERHEAD: CONF_TRAVEL_STARTUP_DELAY,
+    CONF_TILT_MOTOR_OVERHEAD: CONF_TILT_STARTUP_DELAY,
+    CONF_TRAVELLING_TIME_DOWN: CONF_TRAVEL_TIME_CLOSE,
+    CONF_TRAVELLING_TIME_UP: CONF_TRAVEL_TIME_OPEN,
+    CONF_TILTING_TIME_DOWN: CONF_TILT_TIME_CLOSE,
+    CONF_TILTING_TIME_UP: CONF_TILT_TIME_OPEN,
+}
+
+
+def _migrate_yaml_keys(config):
+    """Migrate deprecated YAML key names to current names."""
+    for old_key, new_key in _YAML_KEY_RENAMES.items():
+        if old_key in config:
+            if new_key not in config:
+                config[new_key] = config[old_key]
+            config.pop(old_key)
+
+    # Migrate travel_moves_with_tilt boolean → tilt_mode string
+    if CONF_TRAVEL_MOVES_WITH_TILT in config:
+        if CONF_TILT_MODE not in config:
+            config[CONF_TILT_MODE] = (
+                "during" if config[CONF_TRAVEL_MOVES_WITH_TILT] else "before_after"
+            )
+        config.pop(CONF_TRAVEL_MOVES_WITH_TILT)
 
 
 def devices_from_config(domain_config):
@@ -318,8 +350,12 @@ def devices_from_config(domain_config):
     devices = []
     defaults = domain_config.get(CONF_DEFAULTS, {})
 
+    _migrate_yaml_keys(defaults)
+
     for device_id, config in domain_config[CONF_DEVICES].items():
         name = config.pop(CONF_NAME)
+
+        _migrate_yaml_keys(config)
 
         # Extract timing values with defaults, then remove from config
         options = {}

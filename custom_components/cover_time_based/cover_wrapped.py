@@ -14,6 +14,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
         super().__init__(**kwargs)
         self._cover_entity_id = cover_entity_id
 
+    def _are_entities_configured(self) -> bool:
+        """Return True if the wrapped cover entity is configured."""
+        return bool(self._cover_entity_id)
+
     async def _send_open(self) -> None:
         await self.hass.services.async_call(
             "cover", "open_cover", {"entity_id": self._cover_entity_id}, False

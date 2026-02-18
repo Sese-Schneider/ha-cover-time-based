@@ -1,5 +1,6 @@
 """Cover Time Based integration."""
 
+import logging
 from pathlib import Path
 
 from homeassistant.components import frontend
@@ -9,6 +10,8 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .websocket_api import async_register_websocket_api
+
+_LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "cover_time_based"
 PLATFORMS: list[Platform] = [Platform.COVER]
@@ -54,3 +57,44 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update - reload the entry."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate config entry to current version."""
+    if entry.version == 1:
+        _LOGGER.debug("Migrating config entry %s from version 1 to 2", entry.entry_id)
+        new_options = dict(entry.options)
+
+        # Rename keys
+        _rename_key(new_options, "travelling_time_down", "travel_time_close")
+        _rename_key(new_options, "travelling_time_up", "travel_time_open")
+        _rename_key(new_options, "tilting_time_down", "tilt_time_close")
+        _rename_key(new_options, "tilting_time_up", "tilt_time_open")
+
+        # Convert travel_moves_with_tilt boolean → tilt_mode string
+        if "travel_moves_with_tilt" in new_options:
+            old_val = new_options.pop("travel_moves_with_tilt")
+            if "tilt_mode" not in new_options:
+                has_tilt = (
+                    new_options.get("tilt_time_close") is not None
+                    or new_options.get("tilt_time_open") is not None
+                )
+                if not has_tilt:
+                    new_options["tilt_mode"] = "none"
+                elif old_val:
+                    new_options["tilt_mode"] = "during"
+                else:
+                    new_options["tilt_mode"] = "before_after"
+
+        hass.config_entries.async_update_entry(entry, options=new_options, version=2)
+        _LOGGER.debug("Migration to version 2 complete for %s", entry.entry_id)
+
+    return True
+
+
+def _rename_key(d: dict, old: str, new: str) -> None:
+    """Rename a dict key if present."""
+    if old in d:
+        if new not in d:
+            d[new] = d[old]
+        del d[old]

@@ -35,11 +35,11 @@ _LOGGER = logging.getLogger(__name__)
 # Configuration constants used by extra_state_attributes.
 # These are also defined in cover.py for YAML/UI config schemas,
 # but we define them here to avoid circular imports.
-CONF_TRAVEL_MOVES_WITH_TILT = "travel_moves_with_tilt"
-CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
-CONF_TRAVELLING_TIME_UP = "travelling_time_up"
-CONF_TILTING_TIME_DOWN = "tilting_time_down"
-CONF_TILTING_TIME_UP = "tilting_time_up"
+CONF_TILT_MODE = "tilt_mode"
+CONF_TRAVEL_TIME_CLOSE = "travel_time_close"
+CONF_TRAVEL_TIME_OPEN = "travel_time_open"
+CONF_TILT_TIME_CLOSE = "tilt_time_close"
+CONF_TILT_TIME_OPEN = "tilt_time_open"
 CONF_TRAVEL_STARTUP_DELAY = "travel_startup_delay"
 CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
 CONF_ENDPOINT_RUNON_TIME = "endpoint_runon_time"
@@ -51,11 +51,11 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self,
         device_id,
         name,
-        travel_moves_with_tilt,
-        travel_time_down,
-        travel_time_up,
-        tilt_time_down,
-        tilt_time_up,
+        tilt_mode,
+        travel_time_close,
+        travel_time_open,
+        tilt_time_close,
+        tilt_time_open,
         travel_startup_delay,
         tilt_startup_delay,
         endpoint_runon_time,
@@ -64,11 +64,11 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Initialize the cover."""
         self._unique_id = device_id
 
-        self._travel_moves_with_tilt = travel_moves_with_tilt
-        self._travel_time_down = travel_time_down
-        self._travel_time_up = travel_time_up
-        self._tilting_time_down = tilt_time_down
-        self._tilting_time_up = tilt_time_up
+        self._tilt_mode_config = tilt_mode
+        self._travel_time_close = travel_time_close
+        self._travel_time_open = travel_time_open
+        self._tilting_time_close = tilt_time_close
+        self._tilting_time_open = tilt_time_open
         self._travel_startup_delay = travel_startup_delay
         self._tilt_startup_delay = tilt_startup_delay
         self._endpoint_runon_time = endpoint_runon_time
@@ -87,13 +87,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._last_command = None
 
         self.travel_calc = TravelCalculator(
-            self._travel_time_down,
-            self._travel_time_up,
+            self._travel_time_close,
+            self._travel_time_open,
         )
         if self._has_tilt_support():
             self.tilt_calc = TravelCalculator(
-                self._tilting_time_down,
-                self._tilting_time_up,
+                self._tilting_time_close,
+                self._tilting_time_open,
             )
 
     async def async_added_to_hass(self):
@@ -243,6 +243,60 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         return self._name
 
     @property
+    def _tilt_mode(self):
+        """Return tilt mode: 'none', 'during', or 'before_after'."""
+        has_tilt = (
+            self._tilting_time_close is not None or self._tilting_time_open is not None
+        )
+        if not has_tilt:
+            return "none"
+        return (
+            self._tilt_mode_config
+            if self._tilt_mode_config != "none"
+            else "before_after"
+        )
+
+    def _are_entities_configured(self) -> bool:
+        """Return True if the required input entities are configured.
+
+        Subclasses override this to check their specific entity IDs.
+        """
+        return True
+
+    def _get_missing_configuration(self) -> list[str]:
+        """Return list of missing configuration items."""
+        missing = []
+        if not self._are_entities_configured():
+            missing.append("input entities")
+        if self._travel_time_close is None and self._travel_time_open is None:
+            missing.append("travel times")
+        return missing
+
+    @property
+    def available(self) -> bool:
+        """Return True if the cover is properly configured and available."""
+        return len(self._get_missing_configuration()) == 0
+
+    def _require_configured(self) -> None:
+        """Raise if the cover is not properly configured."""
+        missing = self._get_missing_configuration()
+        if missing:
+            raise HomeAssistantError(
+                f"Cover not configured: missing {', '.join(missing)}. "
+                "Please configure using the Cover Time Based card."
+            )
+
+    def _require_travel_time(self, closing: bool) -> float:
+        """Return travel time for the given direction, or raise if not configured."""
+        travel_time = self._travel_time_close if closing else self._travel_time_open
+        if travel_time is None:
+            raise HomeAssistantError(
+                "Travel time not configured. Please configure travel times "
+                "using the Cover Time Based card."
+            )
+        return travel_time
+
+    @property
     def unique_id(self):
         """Return the unique id."""
         return "cover_timebased_uuid_" + self._unique_id
@@ -256,16 +310,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def extra_state_attributes(self):
         """Return the device state attributes."""
         attr = {}
-        if self._travel_moves_with_tilt is not None:
-            attr[CONF_TRAVEL_MOVES_WITH_TILT] = self._travel_moves_with_tilt
-        if self._travel_time_down is not None:
-            attr[CONF_TRAVELLING_TIME_DOWN] = self._travel_time_down
-        if self._travel_time_up is not None:
-            attr[CONF_TRAVELLING_TIME_UP] = self._travel_time_up
-        if self._tilting_time_down is not None:
-            attr[CONF_TILTING_TIME_DOWN] = self._tilting_time_down
-        if self._tilting_time_up is not None:
-            attr[CONF_TILTING_TIME_UP] = self._tilting_time_up
+        if self._tilt_mode_config is not None:
+            attr[CONF_TILT_MODE] = self._tilt_mode_config
+        if self._travel_time_close is not None:
+            attr[CONF_TRAVEL_TIME_CLOSE] = self._travel_time_close
+        if self._travel_time_open is not None:
+            attr[CONF_TRAVEL_TIME_OPEN] = self._travel_time_open
+        if self._tilting_time_close is not None:
+            attr[CONF_TILT_TIME_CLOSE] = self._tilting_time_close
+        if self._tilting_time_open is not None:
+            attr[CONF_TILT_TIME_OPEN] = self._tilting_time_open
         if self._travel_startup_delay is not None:
             attr[CONF_TRAVEL_STARTUP_DELAY] = self._travel_startup_delay
         if self._tilt_startup_delay is not None:
@@ -354,6 +408,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def async_set_cover_position(self, **kwargs):
         """Move the cover to a specific position."""
+        self._require_configured()
         if ATTR_POSITION in kwargs:
             position = kwargs[ATTR_POSITION]
             _LOGGER.debug("async_set_cover_position: %d", position)
@@ -368,6 +423,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def async_close_cover(self, **kwargs):
         """Close the cover fully."""
+        self._require_configured()
         _LOGGER.debug("async_close_cover")
         if self.is_opening:
             _LOGGER.debug("async_close_cover :: currently opening, stopping first")
@@ -376,6 +432,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def async_open_cover(self, **kwargs):
         """Open the cover fully."""
+        self._require_configured()
         _LOGGER.debug("async_open_cover")
         if self.is_closing:
             _LOGGER.debug("async_open_cover :: currently closing, stopping first")
@@ -418,7 +475,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         travel_distance = abs(
             target - (current if current is not None else default_pos)
         )
-        travel_time = self._travel_time_down if closing else self._travel_time_up
+        travel_time = self._require_travel_time(closing)
         movement_time = (travel_distance / 100.0) * travel_time
 
         _LOGGER.debug(
@@ -436,8 +493,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 movement_time,
                 closing,
                 self.tilt_calc,
-                self._tilting_time_down,
-                self._tilting_time_up,
+                self._tilting_time_close,
+                self._tilting_time_open,
             )
 
         await self._async_handle_command(command)
@@ -493,17 +550,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         tilt_distance = abs(
             target - (current_tilt if current_tilt is not None else default_pos)
         )
-        tilt_time = self._tilting_time_down if closing else self._tilting_time_up
+        tilt_time = self._tilting_time_close if closing else self._tilting_time_open
         movement_time = (tilt_distance / 100.0) * tilt_time
 
         travel_target = None
-        if self._travel_moves_with_tilt:
+        if self._tilt_mode == "during":
             travel_target = self._calc_coupled_target(
                 movement_time,
                 closing,
                 self.travel_calc,
-                self._travel_time_down,
-                self._travel_time_up,
+                self._travel_time_close,
+                self._travel_time_open,
             )
 
         _LOGGER.debug(
@@ -526,6 +583,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
+        self._require_configured()
         _LOGGER.debug("async_stop_cover")
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
@@ -616,7 +674,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if relay_was_on:
             await self._async_handle_command(SERVICE_STOP_COVER)
 
-        travel_time = self._travel_time_down if closing else self._travel_time_up
+        travel_time = self._require_travel_time(closing)
         movement_time = (abs(target - current) / 100.0) * travel_time
 
         if self._is_movement_too_short(movement_time, target, current, "set_position"):
@@ -630,8 +688,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 movement_time,
                 closing,
                 self.tilt_calc,
-                self._tilting_time_down,
-                self._tilting_time_up,
+                self._tilting_time_close,
+                self._tilting_time_open,
             )
 
         await self._async_handle_command(command)
@@ -683,17 +741,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if not is_direction_change:
             self._stop_travel_if_traveling()
 
-        tilt_time = self._tilting_time_down if closing else self._tilting_time_up
+        tilt_time = self._tilting_time_close if closing else self._tilting_time_open
         movement_time = (abs(target - current) / 100.0) * tilt_time
 
         travel_target = None
-        if self._travel_moves_with_tilt:
+        if self._tilt_mode == "during":
             travel_target = self._calc_coupled_target(
                 movement_time,
                 closing,
                 self.travel_calc,
-                self._travel_time_down,
-                self._travel_time_up,
+                self._travel_time_close,
+                self._travel_time_open,
             )
 
         if self._is_movement_too_short(
@@ -747,14 +805,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     def _has_tilt_support(self):
         """Return if cover has tilt support."""
-        return self._tilting_time_down is not None and self._tilting_time_up is not None
+        return (
+            self._tilting_time_close is not None and self._tilting_time_open is not None
+        )
 
     def _enforce_tilt_constraints(self):
         """Enforce tilt position constraints at travel boundaries."""
         if not self._has_tilt_support():
             return
 
-        if not self._travel_moves_with_tilt:
+        if self._tilt_mode != "during":
             return
 
         current_travel = self.travel_calc.current_position()
@@ -843,19 +903,19 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         # Validate BEFORE creating state
         if attribute in ("tilt_time_close", "tilt_time_open"):
-            if self._travel_moves_with_tilt:
+            if self._tilt_mode == "during":
                 raise HomeAssistantError(
-                    "Tilt time calibration not available when travel_moves_with_tilt is enabled"
+                    "Tilt time calibration not available when tilt mode is 'during'"
                 )
 
         if attribute == "travel_startup_delay":
-            if not (self._travel_time_down or self._travel_time_up):
+            if not (self._travel_time_close or self._travel_time_open):
                 raise HomeAssistantError(
                     "Travel time must be configured before calibrating startup delay"
                 )
 
         if attribute == "tilt_startup_delay":
-            if not (self._tilting_time_down or self._tilting_time_up):
+            if not (self._tilting_time_close or self._tilting_time_open):
                 raise HomeAssistantError(
                     "Tilt time must be configured before calibrating startup delay"
                 )
@@ -916,16 +976,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             position = self.current_cover_position
             move_command = self._resolve_direction(direction, position)
             if move_command == SERVICE_OPEN_COVER:
-                travel_time = self._travel_time_up or self._travel_time_down
+                travel_time = self._travel_time_open or self._travel_time_close
             else:
-                travel_time = self._travel_time_down or self._travel_time_up
+                travel_time = self._travel_time_close or self._travel_time_open
         else:
             position = self.current_cover_tilt_position
             move_command = self._resolve_direction(direction, position)
             if move_command == SERVICE_OPEN_COVER:
-                travel_time = self._tilting_time_up or self._tilting_time_down
+                travel_time = self._tilting_time_open or self._tilting_time_close
             else:
-                travel_time = self._tilting_time_down or self._tilting_time_up
+                travel_time = self._tilting_time_close or self._tilting_time_open
 
         _LOGGER.debug(
             "overhead test: position=%s, direction=%s, travel_time=%.2f",
@@ -1070,15 +1130,28 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             value = self._calculate_calibration_result()
             result["attribute"] = self._calibration.attribute
             result["value"] = value
-            self._save_calibration_result(self._calibration.attribute, value)
 
-        await self._reset_position_after_calibration(cancel)
-
+        # Run position reset in background so callers get the result immediately
+        calibration = self._calibration
         self._calibration = None
         self.async_write_ha_state()
+
+        async def _background_reset():
+            try:
+                await self._reset_position_after_calibration_state(calibration, cancel)
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Position reset after calibration failed")
+
+        self.hass.async_create_task(_background_reset())
         return result
 
     async def _reset_position_after_calibration(self, cancelled):
+        """Reset tracked position after calibration to match reality."""
+        if self._calibration is None:
+            return
+        await self._reset_position_after_calibration_state(self._calibration, cancelled)
+
+    async def _reset_position_after_calibration_state(self, calibration, cancelled):
         """Reset tracked position after calibration to match reality.
 
         When cancelled, the cover may be at an intermediate position, so
@@ -1088,10 +1161,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         open or closed) for most tests, or only nudged slightly for
         min_movement_time.
         """
-        if self._calibration is None:
-            return
-        attribute = self._calibration.attribute
-        move_command = self._calibration.move_command
+        attribute = calibration.attribute
+        move_command = calibration.move_command
         if not move_command:
             return
 
@@ -1103,10 +1174,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             # direction for long enough to reach the endpoint.
             if move_command == SERVICE_CLOSE_COVER:
                 return_command = SERVICE_OPEN_COVER
-                travel_time = self._travel_time_up or self._travel_time_down
+                travel_time = self._travel_time_open or self._travel_time_close
             else:
                 return_command = SERVICE_CLOSE_COVER
-                travel_time = self._travel_time_down or self._travel_time_up
+                travel_time = self._travel_time_close or self._travel_time_open
             if travel_time:
                 _LOGGER.debug(
                     "calibration: returning to start via %s for %.1fs",
@@ -1139,10 +1210,15 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         if attribute in ("travel_startup_delay", "tilt_startup_delay"):
             if attribute == "travel_startup_delay":
-                total_time = self._travel_time_down or self._travel_time_up
+                total_time = self._travel_time_close or self._travel_time_open
             else:
-                total_time = self._tilting_time_down or self._tilting_time_up
+                total_time = self._tilting_time_close or self._tilting_time_open
 
+            if not total_time:
+                _LOGGER.warning(
+                    "Startup delay calibration requires travel/tilt time to be set first"
+                )
+                return 0.0
             step_count = self._calibration.step_count
             continuous_start = self._calibration.continuous_start
             if continuous_start is None:
@@ -1166,6 +1242,11 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             return round(max(0, overhead), 2)
 
         if attribute == "min_movement_time":
+            if self._calibration.last_pulse_duration is None:
+                _LOGGER.warning(
+                    "Min movement calibration stopped before any pulses sent"
+                )
+                return 0.0
             return round(self._calibration.last_pulse_duration, 2)
 
         raise ValueError(f"Unexpected calibration attribute: {attribute}")
@@ -1173,10 +1254,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def _save_calibration_result(self, attribute, value):
         """Save the calibration result to the config entry options."""
         attribute_to_conf = {
-            "travel_time_close": CONF_TRAVELLING_TIME_DOWN,
-            "travel_time_open": CONF_TRAVELLING_TIME_UP,
-            "tilt_time_close": CONF_TILTING_TIME_DOWN,
-            "tilt_time_open": CONF_TILTING_TIME_UP,
+            "travel_time_close": CONF_TRAVEL_TIME_CLOSE,
+            "travel_time_open": CONF_TRAVEL_TIME_OPEN,
+            "tilt_time_close": CONF_TILT_TIME_CLOSE,
+            "tilt_time_open": CONF_TILT_TIME_OPEN,
             "travel_startup_delay": CONF_TRAVEL_STARTUP_DELAY,
             "tilt_startup_delay": CONF_TILT_STARTUP_DELAY,
             "min_movement_time": CONF_MIN_MOVEMENT_TIME,
