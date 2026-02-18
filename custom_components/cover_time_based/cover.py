@@ -309,8 +309,14 @@ def _get_value(key, device_config, defaults_config, schema_default=None):
 
 def _resolve_input_mode(device_id, config, defaults):
     """Resolve input mode from config, handling legacy is_button key."""
-    is_button = config.pop(CONF_IS_BUTTON, False)
+    # Explicit input_mode takes precedence
+    explicit = config.pop(CONF_INPUT_MODE, None) or defaults.get(CONF_INPUT_MODE)
+    if explicit:
+        config.pop(CONF_IS_BUTTON, None)
+        return explicit
 
+    # Legacy is_button → pulse mode
+    is_button = config.pop(CONF_IS_BUTTON, False)
     if is_button:
         return INPUT_MODE_PULSE
 
