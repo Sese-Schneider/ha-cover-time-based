@@ -389,28 +389,14 @@ class CoverTimeBasedCard extends LitElement {
     return html`
       <div class="section">
         <div class="field-label">Device Type</div>
-        <div class="radio-group">
-          <label class="radio-label">
-            <input
-              type="radio"
-              name="device_type"
-              value="switch"
-              ?checked=${c.device_type === "switch"}
-              @change=${this._onDeviceTypeChange}
-            />
+        <select class="ha-select" @change=${this._onDeviceTypeChange}>
+          <option value="switch" ?selected=${c.device_type === "switch"}>
             Control via switches
-          </label>
-          <label class="radio-label">
-            <input
-              type="radio"
-              name="device_type"
-              value="cover"
-              ?checked=${c.device_type === "cover"}
-              @change=${this._onDeviceTypeChange}
-            />
+          </option>
+          <option value="cover" ?selected=${c.device_type === "cover"}>
             Wrap an existing cover entity
-          </label>
-        </div>
+          </option>
+        </select>
       </div>
     `;
   }
@@ -470,38 +456,17 @@ class CoverTimeBasedCard extends LitElement {
     return html`
       <div class="section">
         <div class="field-label">Input Mode</div>
-        <div class="radio-group">
-          <label class="radio-label">
-            <input
-              type="radio"
-              name="input_mode"
-              value="switch"
-              ?checked=${c.input_mode === "switch"}
-              @change=${this._onInputModeChange}
-            />
+        <select class="ha-select" @change=${this._onInputModeChange}>
+          <option value="switch" ?selected=${c.input_mode === "switch"}>
             Switch (latching)
-          </label>
-          <label class="radio-label">
-            <input
-              type="radio"
-              name="input_mode"
-              value="pulse"
-              ?checked=${c.input_mode === "pulse"}
-              @change=${this._onInputModeChange}
-            />
+          </option>
+          <option value="pulse" ?selected=${c.input_mode === "pulse"}>
             Pulse (momentary)
-          </label>
-          <label class="radio-label">
-            <input
-              type="radio"
-              name="input_mode"
-              value="toggle"
-              ?checked=${c.input_mode === "toggle"}
-              @change=${this._onInputModeChange}
-            />
+          </option>
+          <option value="toggle" ?selected=${c.input_mode === "toggle"}>
             Toggle (same button)
-          </label>
-        </div>
+          </option>
+        </select>
         ${showPulseTime
           ? html`
               <div class="inline-field">
@@ -529,26 +494,17 @@ class CoverTimeBasedCard extends LitElement {
     return html`
       <div class="section">
         <div class="field-label">Tilting</div>
-        <div class="radio-group">
-          <label class="radio-label">
-            <input type="radio" name="tilt_mode" value="none"
-              ?checked=${tiltMode === "none"}
-              @change=${this._onTiltModeChange} />
+        <select class="ha-select" @change=${this._onTiltModeChange}>
+          <option value="none" ?selected=${tiltMode === "none"}>
             Not supported
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="tilt_mode" value="before_after"
-              ?checked=${tiltMode === "before_after"}
-              @change=${this._onTiltModeChange} />
+          </option>
+          <option value="before_after" ?selected=${tiltMode === "before_after"}>
             Tilts before/after cover movement
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="tilt_mode" value="during"
-              ?checked=${tiltMode === "during"}
-              @change=${this._onTiltModeChange} />
+          </option>
+          <option value="during" ?selected=${tiltMode === "during"}>
             Tilts during cover movement
-          </label>
-        </div>
+          </option>
+        </select>
       </div>
     `;
   }
