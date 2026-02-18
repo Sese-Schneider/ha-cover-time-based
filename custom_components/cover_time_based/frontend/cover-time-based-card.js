@@ -96,6 +96,13 @@ class CoverTimeBasedCard extends LitElement {
     }
   }
 
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._isCalibrating()) {
+      this._onStopCalibration(true);
+    }
+  }
+
   setConfig(_config) {
     // No user-configurable options
   }
@@ -343,12 +350,17 @@ class CoverTimeBasedCard extends LitElement {
           @value-changed=${(e) => {
             const newEntity = e.detail?.value || "";
             if (newEntity === this._selectedEntity) return;
-            if (this._dirty) {
-              if (!confirm("You have unsaved changes. Discard and continue?")) {
-                // Reset picker back to current entity
+            if (this._dirty || this._isCalibrating()) {
+              const msg = this._isCalibrating()
+                ? "A calibration is running. Cancel it and continue?"
+                : "You have unsaved changes. Discard and continue?";
+              if (!confirm(msg)) {
                 e.target.value = this._selectedEntity;
                 this.requestUpdate();
                 return;
+              }
+              if (this._isCalibrating()) {
+                this._onStopCalibration(true);
               }
             }
             this._selectedEntity = newEntity;
