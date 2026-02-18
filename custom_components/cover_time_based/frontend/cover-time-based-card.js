@@ -275,10 +275,12 @@ class CoverTimeBasedCard extends LitElement {
         entity_id: this._selectedEntity,
         position,
       });
-      await this.hass.callService(DOMAIN, "set_known_tilt_position", {
-        entity_id: this._selectedEntity,
-        tilt_position: position,
-      });
+      if (this._config?.tilting_time_down != null || this._config?.tilting_time_up != null) {
+        await this.hass.callService(DOMAIN, "set_known_tilt_position", {
+          entity_id: this._selectedEntity,
+          tilt_position: position,
+        });
+      }
       this.updateComplete.then(() => {
         const select = this.shadowRoot.querySelector("#cal-attribute");
         if (select) {
