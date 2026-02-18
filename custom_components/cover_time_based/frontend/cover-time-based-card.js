@@ -322,6 +322,7 @@ class CoverTimeBasedCard extends LitElement {
           const firstEnabled = [...select.options].find((o) => !o.disabled);
           if (firstEnabled) select.value = firstEnabled.value;
         }
+        this.requestUpdate();
       });
     } catch (err) {
       console.error("Reset position failed:", err);
