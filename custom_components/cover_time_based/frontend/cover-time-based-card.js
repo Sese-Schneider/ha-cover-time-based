@@ -858,6 +858,11 @@ class CoverTimeBasedCard extends LitElement {
         border-bottom-color: var(--primary-color);
       }
 
+      .tab:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+
       /* Radio groups */
       .radio-group {
         display: flex;
