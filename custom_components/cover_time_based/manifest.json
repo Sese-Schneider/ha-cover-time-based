@@ -3,6 +3,7 @@
   "name": "Cover Time Based",
   "codeowners": ["@Sese-Schneider"],
   "config_flow": true,
+  "dependencies": ["http"],
   "documentation": "https://github.com/Sese-Schneider/ha-cover-time-based",
   "integration_type": "helper",
   "iot_class": "calculated",
