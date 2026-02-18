@@ -277,7 +277,7 @@ class CoverTimeBasedCard extends LitElement {
       });
       await this.hass.callService(DOMAIN, "set_known_tilt_position", {
         entity_id: this._selectedEntity,
-        position,
+        tilt_position: position,
       });
       this.updateComplete.then(() => {
         const select = this.shadowRoot.querySelector("#cal-attribute");
