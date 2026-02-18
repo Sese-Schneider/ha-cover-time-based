@@ -377,6 +377,7 @@ class CoverTimeBasedCard extends LitElement {
             </fieldset>
           `
         : html`
+            ${this._renderPositionReset()}
             ${this._renderCalibration(calibrating)}
             ${this._renderTimingTable(c)}
           `}
@@ -569,6 +570,36 @@ class CoverTimeBasedCard extends LitElement {
     `;
   }
 
+  _renderPositionReset() {
+    const isUnknown = this._knownPosition === "unknown";
+    return html`
+      <div class="section">
+        <div class="field-label">Current Position</div>
+        <div class="helper-text">
+          Move cover to a known endpoint, then set position.
+        </div>
+        <div class="cal-form">
+          <div class="cal-field">
+            <select
+              class="ha-select"
+              id="position-select"
+              @change=${(e) => { this._knownPosition = e.target.value; }}
+            >
+              <option value="unknown" ?selected=${this._knownPosition === "unknown"}>Unknown</option>
+              <option value="open" ?selected=${this._knownPosition === "open"}>Fully open</option>
+              <option value="closed" ?selected=${this._knownPosition === "closed"}>Fully closed</option>
+            </select>
+          </div>
+          <ha-button
+            unelevated
+            ?disabled=${isUnknown}
+            @click=${this._onResetPosition}
+          >Reset</ha-button>
+        </div>
+      </div>
+    `;
+  }
+
   _renderCalibration(calibrating) {
     const state = this._getEntityState();
     const attrs = state?.attributes || {};
@@ -680,6 +711,12 @@ class CoverTimeBasedCard extends LitElement {
         font-size: var(--paper-font-body1_-_font-size, 14px);
         margin-bottom: 8px;
         color: var(--primary-text-color);
+      }
+
+      .helper-text {
+        font-size: 12px;
+        color: var(--secondary-text-color, #727272);
+        margin: -4px 0 8px;
       }
 
       .sub-label {
