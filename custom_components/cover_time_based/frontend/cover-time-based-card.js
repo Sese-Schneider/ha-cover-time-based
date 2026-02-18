@@ -278,9 +278,10 @@ class CoverTimeBasedCard extends LitElement {
     }
   }
 
-  async _onResetPosition() {
-    if (this._knownPosition === "unknown") return;
-    const position = this._knownPosition === "open" ? 100 : 0;
+  async _onPositionChange(value) {
+    this._knownPosition = value;
+    if (value === "unknown") return;
+    const position = value === "open" ? 100 : 0;
     try {
       await this.hass.callService(DOMAIN, "set_known_position", {
         entity_id: this._selectedEntity,
@@ -637,7 +638,6 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _renderPositionReset() {
-    const isUnknown = this._knownPosition === "unknown";
     return html`
       <div class="section">
         <div class="field-label">Current Position</div>
@@ -649,18 +649,13 @@ class CoverTimeBasedCard extends LitElement {
             <select
               class="ha-select"
               id="position-select"
-              @change=${(e) => { this._knownPosition = e.target.value; }}
+              @change=${(e) => this._onPositionChange(e.target.value)}
             >
               <option value="unknown" ?selected=${this._knownPosition === "unknown"}>Unknown</option>
               <option value="open" ?selected=${this._knownPosition === "open"}>Fully open</option>
               <option value="closed" ?selected=${this._knownPosition === "closed"}>Fully closed</option>
             </select>
           </div>
-          <ha-button
-            unelevated
-            ?disabled=${isUnknown}
-            @click=${this._onResetPosition}
-          >Reset</ha-button>
         </div>
       </div>
     `;
