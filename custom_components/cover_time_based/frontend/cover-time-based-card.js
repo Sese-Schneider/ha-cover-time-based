@@ -165,6 +165,7 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _isCalibrating() {
+    if (this._calibratingOverride === false) return false;
     const state = this._getEntityState();
     return state?.attributes?.calibration_active === true;
   }
@@ -242,6 +243,7 @@ class CoverTimeBasedCard extends LitElement {
     }
 
     this._knownPosition = "unknown";
+    this._calibratingOverride = undefined;
 
     try {
       await this.hass.callService(DOMAIN, "start_calibration", data);
@@ -255,6 +257,8 @@ class CoverTimeBasedCard extends LitElement {
 
   async _onStopCalibration(cancel = false) {
     this._knownPosition = "unknown";
+    this._calibratingOverride = false;
+    this.requestUpdate();
     try {
       const data = { entity_id: this._selectedEntity };
       if (cancel) data.cancel = true;
@@ -355,7 +359,12 @@ class CoverTimeBasedCard extends LitElement {
                 ? "A calibration is running. Cancel it and continue?"
                 : "You have unsaved changes. Discard and continue?";
               if (!confirm(msg)) {
-                e.target.value = this._selectedEntity;
+                const current = this._selectedEntity;
+                const picker = e.target;
+                picker.value = current;
+                requestAnimationFrame(() => {
+                  picker.value = current;
+                });
                 this.requestUpdate();
                 return;
               }
@@ -367,6 +376,7 @@ class CoverTimeBasedCard extends LitElement {
             this._config = null;
             this._dirty = false;
             this._knownPosition = "unknown";
+            this._calibratingOverride = undefined;
             this._activeTab = "device";
             if (this._selectedEntity) this._loadConfig();
           }}
