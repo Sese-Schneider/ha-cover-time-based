@@ -17,10 +17,10 @@ const DOMAIN = "cover_time_based";
 const ATTRIBUTE_LABELS = {
   travel_time_close: "Travel time (close)",
   travel_time_open: "Travel time (open)",
-  travel_motor_overhead: "Travel motor overhead",
+  travel_startup_delay: "Travel startup delay",
   tilt_time_close: "Tilt time (close)",
   tilt_time_open: "Tilt time (open)",
-  tilt_motor_overhead: "Tilt motor overhead",
+  tilt_startup_delay: "Tilt startup delay",
   min_movement_time: "Minimum movement time",
 };
 
@@ -593,18 +593,21 @@ class CoverTimeBasedCard extends LitElement {
     const rows = [
       ["Travel time (close)", "travelling_time_down", c.travelling_time_down],
       ["Travel time (open)", "travelling_time_up", c.travelling_time_up],
-      ["Travel motor overhead", "travel_motor_overhead", c.travel_motor_overhead],
+      ["Travel startup delay", "travel_startup_delay", c.travel_startup_delay],
     ];
 
     if (hasTilt) {
       rows.push(
         ["Tilt time (close)", "tilting_time_down", c.tilting_time_down],
         ["Tilt time (open)", "tilting_time_up", c.tilting_time_up],
-        ["Tilt motor overhead", "tilt_motor_overhead", c.tilt_motor_overhead]
+        ["Tilt startup delay", "tilt_startup_delay", c.tilt_startup_delay]
       );
     }
 
-    rows.push(["Minimum movement time", "min_movement_time", c.min_movement_time]);
+    rows.push(
+      ["Endpoint runon time", "endpoint_runon_time", c.endpoint_runon_time],
+      ["Minimum movement time", "min_movement_time", c.min_movement_time]
+    );
 
     return html`
       <div class="section">

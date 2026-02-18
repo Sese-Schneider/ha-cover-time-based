@@ -15,10 +15,10 @@ CALIBRATION_MIN_MOVEMENT_INITIAL_PAUSE = 5.0
 CALIBRATABLE_ATTRIBUTES = [
     "travel_time_close",
     "travel_time_open",
-    "travel_motor_overhead",
+    "travel_startup_delay",
     "tilt_time_close",
     "tilt_time_open",
-    "tilt_motor_overhead",
+    "tilt_startup_delay",
     "min_movement_time",
 ]
 

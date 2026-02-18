@@ -275,7 +275,7 @@ class TestMotorOverheadCalibration:
         cover._travel_time_up = None
         with pytest.raises(HomeAssistantError, match="[Tt]ravel time"):
             await cover.start_calibration(
-                attribute="travel_motor_overhead", timeout=300.0
+                attribute="travel_startup_delay", timeout=300.0
             )
 
     @pytest.mark.asyncio
@@ -283,7 +283,7 @@ class TestMotorOverheadCalibration:
         cover = make_cover(travel_time_down=60.0, travel_time_up=60.0)
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(
-                attribute="travel_motor_overhead", timeout=300.0
+                attribute="travel_startup_delay", timeout=300.0
             )
         assert cover._calibration.automation_task is not None
         assert cover._calibration.step_duration == 6.0
@@ -300,7 +300,7 @@ class TestMotorOverheadCalibration:
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(
-                attribute="travel_motor_overhead", timeout=300.0
+                attribute="travel_startup_delay", timeout=300.0
             )
             # Simulate 8 stepped moves completed, then continuous phase
             cover._calibration.step_count = 8
@@ -317,17 +317,13 @@ class TestMotorOverheadCalibration:
 
         cover = make_cover()  # No tilt time configured
         with pytest.raises(HomeAssistantError, match="[Tt]ilt time"):
-            await cover.start_calibration(
-                attribute="tilt_motor_overhead", timeout=300.0
-            )
+            await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
 
     @pytest.mark.asyncio
     async def test_tilt_overhead_starts(self, make_cover):
         cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
         with patch.object(cover, "async_write_ha_state"):
-            await cover.start_calibration(
-                attribute="tilt_motor_overhead", timeout=300.0
-            )
+            await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
         assert cover._calibration.automation_task is not None
         assert cover._calibration.step_duration == 0.5
 
@@ -374,9 +370,7 @@ class TestCalibrationTimeout:
         """Timeout during overhead test should cancel automation task."""
         cover = make_cover(travel_time_down=60.0, travel_time_up=60.0)
         with patch.object(cover, "async_write_ha_state"):
-            await cover.start_calibration(
-                attribute="travel_motor_overhead", timeout=0.1
-            )
+            await cover.start_calibration(attribute="travel_startup_delay", timeout=0.1)
             automation_task = cover._calibration.automation_task
             await asyncio.sleep(0.3)
         assert cover._calibration is None

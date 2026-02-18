@@ -12,10 +12,10 @@ from custom_components.cover_time_based.cover import (
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_STOP_SWITCH_ENTITY_ID,
-    CONF_TILT_MOTOR_OVERHEAD,
+    CONF_TILT_STARTUP_DELAY,
     CONF_TILTING_TIME_DOWN,
     CONF_TILTING_TIME_UP,
-    CONF_TRAVEL_MOTOR_OVERHEAD,
+    CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_MOVES_WITH_TILT,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
@@ -200,8 +200,8 @@ class TestWsGetConfig:
         assert result["cover_entity_id"] is None
         assert result["tilting_time_down"] is None
         assert result["tilting_time_up"] is None
-        assert result["travel_motor_overhead"] is None
-        assert result["tilt_motor_overhead"] is None
+        assert result["travel_startup_delay"] is None
+        assert result["tilt_startup_delay"] is None
         assert result["min_movement_time"] is None
 
     @pytest.mark.asyncio
@@ -216,8 +216,8 @@ class TestWsGetConfig:
             CONF_TILTING_TIME_DOWN: 3.0,
             CONF_TILTING_TIME_UP: 3.5,
             CONF_TRAVEL_MOVES_WITH_TILT: True,
-            CONF_TRAVEL_MOTOR_OVERHEAD: 1.2,
-            CONF_TILT_MOTOR_OVERHEAD: 0.8,
+            CONF_TRAVEL_STARTUP_DELAY: 1.2,
+            CONF_TILT_STARTUP_DELAY: 0.8,
             CONF_MIN_MOVEMENT_TIME: 0.5,
         }
         hass, _, entity_reg = _make_hass(options=options)
@@ -247,8 +247,8 @@ class TestWsGetConfig:
         assert result["tilting_time_down"] == 3.0
         assert result["tilting_time_up"] == 3.5
         assert result["travel_moves_with_tilt"] is True
-        assert result["travel_motor_overhead"] == 1.2
-        assert result["tilt_motor_overhead"] == 0.8
+        assert result["travel_startup_delay"] == 1.2
+        assert result["tilt_startup_delay"] == 0.8
         assert result["min_movement_time"] == 0.5
 
     @pytest.mark.asyncio

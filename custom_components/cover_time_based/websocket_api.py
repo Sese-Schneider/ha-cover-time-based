@@ -19,10 +19,11 @@ from .cover import (
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_STOP_SWITCH_ENTITY_ID,
-    CONF_TILT_MOTOR_OVERHEAD,
+    CONF_ENDPOINT_RUNON_TIME,
+    CONF_TILT_STARTUP_DELAY,
     CONF_TILTING_TIME_DOWN,
     CONF_TILTING_TIME_UP,
-    CONF_TRAVEL_MOTOR_OVERHEAD,
+    CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_MOVES_WITH_TILT,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
@@ -53,8 +54,9 @@ _FIELD_MAP = {
     "travelling_time_up": CONF_TRAVELLING_TIME_UP,
     "tilting_time_down": CONF_TILTING_TIME_DOWN,
     "tilting_time_up": CONF_TILTING_TIME_UP,
-    "travel_motor_overhead": CONF_TRAVEL_MOTOR_OVERHEAD,
-    "tilt_motor_overhead": CONF_TILT_MOTOR_OVERHEAD,
+    "travel_startup_delay": CONF_TRAVEL_STARTUP_DELAY,
+    "tilt_startup_delay": CONF_TILT_STARTUP_DELAY,
+    "endpoint_runon_time": CONF_ENDPOINT_RUNON_TIME,
     "min_movement_time": CONF_MIN_MOVEMENT_TIME,
 }
 
@@ -121,8 +123,9 @@ async def ws_get_config(
             ),
             "tilting_time_down": options.get(CONF_TILTING_TIME_DOWN),
             "tilting_time_up": options.get(CONF_TILTING_TIME_UP),
-            "travel_motor_overhead": options.get(CONF_TRAVEL_MOTOR_OVERHEAD),
-            "tilt_motor_overhead": options.get(CONF_TILT_MOTOR_OVERHEAD),
+            "travel_startup_delay": options.get(CONF_TRAVEL_STARTUP_DELAY),
+            "tilt_startup_delay": options.get(CONF_TILT_STARTUP_DELAY),
+            "endpoint_runon_time": options.get(CONF_ENDPOINT_RUNON_TIME),
             "min_movement_time": options.get(CONF_MIN_MOVEMENT_TIME),
         },
     )
@@ -156,10 +159,13 @@ async def ws_get_config(
         vol.Optional("tilting_time_up"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
-        vol.Optional("travel_motor_overhead"): vol.Any(
+        vol.Optional("travel_startup_delay"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
-        vol.Optional("tilt_motor_overhead"): vol.Any(
+        vol.Optional("tilt_startup_delay"): vol.Any(
+            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
+        ),
+        vol.Optional("endpoint_runon_time"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
         vol.Optional("min_movement_time"): vol.Any(

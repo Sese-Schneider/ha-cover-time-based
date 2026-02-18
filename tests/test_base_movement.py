@@ -555,7 +555,7 @@ class TestStartupDelay:
 
     @pytest.mark.asyncio
     async def test_close_with_startup_delay_creates_task(self, make_cover):
-        cover = make_cover(travel_motor_overhead=1.0)
+        cover = make_cover(travel_startup_delay=1.0)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -581,7 +581,7 @@ class TestStartupDelay:
         cover = make_cover(
             tilt_time_down=5.0,
             tilt_time_up=5.0,
-            tilt_motor_overhead=1.0,
+            tilt_startup_delay=1.0,
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -597,7 +597,7 @@ class TestStartupDelayConflict:
 
     @pytest.mark.asyncio
     async def test_close_during_open_startup_delay_cancels(self, make_cover):
-        cover = make_cover(travel_motor_overhead=20.0)
+        cover = make_cover(travel_startup_delay=20.0)
         cover.travel_calc.set_position(100)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -617,7 +617,7 @@ class TestStartupDelayConflict:
 
     @pytest.mark.asyncio
     async def test_same_direction_during_startup_delay_is_ignored(self, make_cover):
-        cover = make_cover(travel_motor_overhead=20.0)
+        cover = make_cover(travel_startup_delay=20.0)
         cover.travel_calc.set_position(100)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -636,7 +636,7 @@ class TestStartupDelayConflict:
     async def test_set_position_during_startup_delay_same_direction_skips(
         self, make_cover
     ):
-        cover = make_cover(travel_motor_overhead=20.0)
+        cover = make_cover(travel_startup_delay=20.0)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -656,7 +656,7 @@ class TestStartupDelayConflict:
     async def test_set_position_during_startup_delay_direction_change_cancels(
         self, make_cover
     ):
-        cover = make_cover(travel_motor_overhead=20.0)
+        cover = make_cover(travel_startup_delay=20.0)
         cover.travel_calc.set_position(50)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -677,11 +677,11 @@ class TestStartupDelayConflict:
 
 
 class TestRelayDelayAtEnd:
-    """travel_motor_overhead should cause a delay at endpoints (via derived travel_delay_at_end)."""
+    """endpoint_runon_time should cause a delay at endpoints."""
 
     @pytest.mark.asyncio
     async def test_auto_stop_at_endpoint_creates_delay_task(self, make_cover):
-        cover = make_cover(travel_motor_overhead=4.0)
+        cover = make_cover(endpoint_runon_time=4.0)
         cover.travel_calc.set_position(0)
         # Simulate the cover reaching position 100 (endpoint)
         cover.travel_calc.start_travel(100)
@@ -700,7 +700,7 @@ class TestRelayDelayAtEnd:
 
     @pytest.mark.asyncio
     async def test_auto_stop_at_midpoint_stops_immediately(self, make_cover):
-        cover = make_cover(travel_motor_overhead=4.0)
+        cover = make_cover(endpoint_runon_time=4.0)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel(50)
 
@@ -713,7 +713,7 @@ class TestRelayDelayAtEnd:
     @pytest.mark.asyncio
     async def test_close_cancels_active_relay_delay(self, make_cover):
         """Starting a new movement should cancel an active relay delay."""
-        cover = make_cover(travel_motor_overhead=4.0)
+        cover = make_cover(endpoint_runon_time=4.0)
         cover.travel_calc.set_position(0)  # at open endpoint
 
         # Simulate an active delay task
@@ -757,7 +757,7 @@ class TestStopCover:
 
     @pytest.mark.asyncio
     async def test_stop_clears_startup_delay(self, make_cover):
-        cover = make_cover(travel_motor_overhead=20.0)
+        cover = make_cover(travel_startup_delay=20.0)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):

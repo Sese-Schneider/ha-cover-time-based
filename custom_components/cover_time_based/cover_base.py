@@ -40,8 +40,9 @@ CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
-CONF_TRAVEL_MOTOR_OVERHEAD = "travel_motor_overhead"
-CONF_TILT_MOTOR_OVERHEAD = "tilt_motor_overhead"
+CONF_TRAVEL_STARTUP_DELAY = "travel_startup_delay"
+CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
+CONF_ENDPOINT_RUNON_TIME = "endpoint_runon_time"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
 
 
@@ -55,8 +56,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         travel_time_up,
         tilt_time_down,
         tilt_time_up,
-        travel_motor_overhead,
-        tilt_motor_overhead,
+        travel_startup_delay,
+        tilt_startup_delay,
+        endpoint_runon_time,
         min_movement_time,
     ):
         """Initialize the cover."""
@@ -67,20 +69,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._travel_time_up = travel_time_up
         self._tilting_time_down = tilt_time_down
         self._tilting_time_up = tilt_time_up
-        self._travel_motor_overhead = travel_motor_overhead
-        self._tilt_motor_overhead = tilt_motor_overhead
+        self._travel_startup_delay = travel_startup_delay
+        self._tilt_startup_delay = tilt_startup_delay
+        self._endpoint_runon_time = endpoint_runon_time
         self._min_movement_time = min_movement_time
-
-        # Derive internal delay values by splitting overhead 50/50
-        self._travel_startup_delay = (
-            travel_motor_overhead / 2 if travel_motor_overhead else None
-        )
-        self._travel_delay_at_end = (
-            travel_motor_overhead / 2 if travel_motor_overhead else None
-        )
-        self._tilt_startup_delay = (
-            tilt_motor_overhead / 2 if tilt_motor_overhead else None
-        )
 
         if name:
             self._name = name
@@ -274,10 +266,12 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             attr[CONF_TILTING_TIME_DOWN] = self._tilting_time_down
         if self._tilting_time_up is not None:
             attr[CONF_TILTING_TIME_UP] = self._tilting_time_up
-        if self._travel_motor_overhead is not None:
-            attr[CONF_TRAVEL_MOTOR_OVERHEAD] = self._travel_motor_overhead
-        if self._tilt_motor_overhead is not None:
-            attr[CONF_TILT_MOTOR_OVERHEAD] = self._tilt_motor_overhead
+        if self._travel_startup_delay is not None:
+            attr[CONF_TRAVEL_STARTUP_DELAY] = self._travel_startup_delay
+        if self._tilt_startup_delay is not None:
+            attr[CONF_TILT_STARTUP_DELAY] = self._tilt_startup_delay
+        if self._endpoint_runon_time is not None:
+            attr[CONF_ENDPOINT_RUNON_TIME] = self._endpoint_runon_time
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
         if self._calibration is not None:
@@ -792,17 +786,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
             current_travel = self.travel_calc.current_position()
             if (
-                self._travel_delay_at_end is not None
-                and self._travel_delay_at_end > 0
+                self._endpoint_runon_time is not None
+                and self._endpoint_runon_time > 0
                 and (current_travel == 0 or current_travel == 100)
             ):
                 _LOGGER.debug(
                     "auto_stop_if_necessary :: at endpoint (position=%d), delaying relay stop by %fs",
                     current_travel,
-                    self._travel_delay_at_end,
+                    self._endpoint_runon_time,
                 )
                 self._delay_task = self.hass.async_create_task(
-                    self._delayed_stop(self._travel_delay_at_end)
+                    self._delayed_stop(self._endpoint_runon_time)
                 )
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
@@ -854,16 +848,16 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     "Tilt time calibration not available when travel_moves_with_tilt is enabled"
                 )
 
-        if attribute == "travel_motor_overhead":
+        if attribute == "travel_startup_delay":
             if not (self._travel_time_down or self._travel_time_up):
                 raise HomeAssistantError(
-                    "Travel time must be configured before calibrating motor overhead"
+                    "Travel time must be configured before calibrating startup delay"
                 )
 
-        if attribute == "tilt_motor_overhead":
+        if attribute == "tilt_startup_delay":
             if not (self._tilting_time_down or self._tilting_time_up):
                 raise HomeAssistantError(
-                    "Tilt time must be configured before calibrating motor overhead"
+                    "Tilt time must be configured before calibrating startup delay"
                 )
 
         # Create state only after validation passes
@@ -880,7 +874,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             "tilt_time_open",
         ):
             await self._start_simple_time_test(attribute, direction)
-        elif attribute in ("travel_motor_overhead", "tilt_motor_overhead"):
+        elif attribute in ("travel_startup_delay", "tilt_startup_delay"):
             await self._start_overhead_test(attribute, direction)
         elif attribute == "min_movement_time":
             self._calibration.move_command = self._resolve_direction(
@@ -918,7 +912,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Start automated step test for motor overhead."""
         from .calibration import CALIBRATION_OVERHEAD_STEPS
 
-        if attribute == "travel_motor_overhead":
+        if attribute == "travel_startup_delay":
             position = self.current_cover_position
             move_command = self._resolve_direction(direction, position)
             if move_command == SERVICE_OPEN_COVER:
@@ -1143,8 +1137,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             elapsed = time.monotonic() - self._calibration.started_at
             return round(elapsed, 1)
 
-        if attribute in ("travel_motor_overhead", "tilt_motor_overhead"):
-            if attribute == "travel_motor_overhead":
+        if attribute in ("travel_startup_delay", "tilt_startup_delay"):
+            if attribute == "travel_startup_delay":
                 total_time = self._travel_time_down or self._travel_time_up
             else:
                 total_time = self._tilting_time_down or self._tilting_time_up
@@ -1183,8 +1177,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             "travel_time_open": CONF_TRAVELLING_TIME_UP,
             "tilt_time_close": CONF_TILTING_TIME_DOWN,
             "tilt_time_open": CONF_TILTING_TIME_UP,
-            "travel_motor_overhead": CONF_TRAVEL_MOTOR_OVERHEAD,
-            "tilt_motor_overhead": CONF_TILT_MOTOR_OVERHEAD,
+            "travel_startup_delay": CONF_TRAVEL_STARTUP_DELAY,
+            "tilt_startup_delay": CONF_TILT_STARTUP_DELAY,
             "min_movement_time": CONF_MIN_MOVEMENT_TIME,
         }
         conf_key = attribute_to_conf.get(attribute)

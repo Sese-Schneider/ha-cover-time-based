@@ -35,8 +35,9 @@ CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
-CONF_TRAVEL_MOTOR_OVERHEAD = "travel_motor_overhead"
-CONF_TILT_MOTOR_OVERHEAD = "tilt_motor_overhead"
+CONF_TRAVEL_STARTUP_DELAY = "travel_startup_delay"
+CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
+CONF_ENDPOINT_RUNON_TIME = "endpoint_runon_time"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
 DEFAULT_TRAVEL_TIME = 30
 
@@ -69,8 +70,9 @@ TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TRAVELLING_TIME_UP): cv.positive_float,
     vol.Optional(CONF_TILTING_TIME_DOWN): cv.positive_float,
     vol.Optional(CONF_TILTING_TIME_UP): cv.positive_float,
-    vol.Optional(CONF_TRAVEL_MOTOR_OVERHEAD): cv.positive_float,
-    vol.Optional(CONF_TILT_MOTOR_OVERHEAD): cv.positive_float,
+    vol.Optional(CONF_TRAVEL_STARTUP_DELAY): cv.positive_float,
+    vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
+    vol.Optional(CONF_ENDPOINT_RUNON_TIME): cv.positive_float,
     vol.Optional(CONF_MIN_MOVEMENT_TIME): cv.positive_float,
 }
 
@@ -108,10 +110,13 @@ DEFAULTS_SCHEMA = vol.Schema(
         vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(
             cv.positive_float, None
         ),
-        vol.Optional(CONF_TRAVEL_MOTOR_OVERHEAD, default=None): vol.Any(
+        vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
             cv.positive_float, None
         ),
-        vol.Optional(CONF_TILT_MOTOR_OVERHEAD, default=None): vol.Any(
+        vol.Optional(CONF_TILT_STARTUP_DELAY, default=None): vol.Any(
+            cv.positive_float, None
+        ),
+        vol.Optional(CONF_ENDPOINT_RUNON_TIME, default=None): vol.Any(
             cv.positive_float, None
         ),
         vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
@@ -233,8 +238,9 @@ def _create_cover_from_options(options, device_id="", name=""):
         travel_time_up=options.get(CONF_TRAVELLING_TIME_UP, DEFAULT_TRAVEL_TIME),
         tilt_time_down=options.get(CONF_TILTING_TIME_DOWN),
         tilt_time_up=options.get(CONF_TILTING_TIME_UP),
-        travel_motor_overhead=options.get(CONF_TRAVEL_MOTOR_OVERHEAD),
-        tilt_motor_overhead=options.get(CONF_TILT_MOTOR_OVERHEAD),
+        travel_startup_delay=options.get(CONF_TRAVEL_STARTUP_DELAY),
+        tilt_startup_delay=options.get(CONF_TILT_STARTUP_DELAY),
+        endpoint_runon_time=options.get(CONF_ENDPOINT_RUNON_TIME),
         min_movement_time=options.get(CONF_MIN_MOVEMENT_TIME),
     )
 
@@ -268,8 +274,9 @@ _TIMING_DEFAULTS = {
     CONF_TRAVELLING_TIME_UP: DEFAULT_TRAVEL_TIME,
     CONF_TILTING_TIME_DOWN: None,
     CONF_TILTING_TIME_UP: None,
-    CONF_TRAVEL_MOTOR_OVERHEAD: None,
-    CONF_TILT_MOTOR_OVERHEAD: None,
+    CONF_TRAVEL_STARTUP_DELAY: None,
+    CONF_TILT_STARTUP_DELAY: None,
+    CONF_ENDPOINT_RUNON_TIME: None,
     CONF_MIN_MOVEMENT_TIME: None,
 }
 

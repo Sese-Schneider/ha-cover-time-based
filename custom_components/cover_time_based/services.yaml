@@ -48,14 +48,14 @@ start_calibration:
               value: travel_time_close
             - label: "Travel time (open)"
               value: travel_time_open
-            - label: "Travel motor overhead"
-              value: travel_motor_overhead
+            - label: "Travel startup delay"
+              value: travel_startup_delay
             - label: "Tilt time (close)"
               value: tilt_time_close
             - label: "Tilt time (open)"
               value: tilt_time_open
-            - label: "Tilt motor overhead"
-              value: tilt_motor_overhead
+            - label: "Tilt startup delay"
+              value: tilt_startup_delay
             - label: "Minimum movement time"
               value: min_movement_time
     timeout:
