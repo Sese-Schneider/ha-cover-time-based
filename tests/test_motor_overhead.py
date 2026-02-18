@@ -24,20 +24,22 @@ class TestTravelStartupDelay:
         assert cover._endpoint_runon_time == 1.5
 
     @pytest.mark.asyncio
-    async def test_no_endpoint_runon_time_gives_none(self, make_cover):
+    async def test_no_endpoint_runon_time_gives_default(self, make_cover):
         cover = make_cover()
-        assert cover._endpoint_runon_time is None
+        assert cover._endpoint_runon_time == 2.0
 
 
 class TestTiltStartupDelay:
     @pytest.mark.asyncio
     async def test_tilt_startup_delay_stored_directly(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0, tilt_startup_delay=1.0)
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_startup_delay=1.0
+        )
         assert cover._tilt_startup_delay == 1.0
 
     @pytest.mark.asyncio
     async def test_no_tilt_startup_delay(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         assert cover._tilt_startup_delay is None
 
 
@@ -51,7 +53,9 @@ class TestDelayValuesStoredOnInstance:
 
     @pytest.mark.asyncio
     async def test_tilt_startup_delay_stored(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0, tilt_startup_delay=2.0)
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_startup_delay=2.0
+        )
         assert cover._tilt_startup_delay == 2.0
 
     @pytest.mark.asyncio
@@ -64,4 +68,4 @@ class TestDelayValuesStoredOnInstance:
         cover = make_cover()
         assert cover._travel_startup_delay is None
         assert cover._tilt_startup_delay is None
-        assert cover._endpoint_runon_time is None
+        assert cover._endpoint_runon_time == 2.0

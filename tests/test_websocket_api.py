@@ -12,15 +12,14 @@ from custom_components.cover_time_based.cover import (
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_STOP_SWITCH_ENTITY_ID,
+    CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
-    CONF_TILTING_TIME_DOWN,
-    CONF_TILTING_TIME_UP,
+    CONF_TILT_TIME_CLOSE,
+    CONF_TILT_TIME_OPEN,
     CONF_TRAVEL_STARTUP_DELAY,
-    CONF_TRAVEL_MOVES_WITH_TILT,
-    CONF_TRAVELLING_TIME_DOWN,
-    CONF_TRAVELLING_TIME_UP,
+    CONF_TRAVEL_TIME_CLOSE,
+    CONF_TRAVEL_TIME_OPEN,
     DEFAULT_PULSE_TIME,
-    DEFAULT_TRAVEL_TIME,
     DEVICE_TYPE_COVER,
     DEVICE_TYPE_SWITCH,
     INPUT_MODE_PULSE,
@@ -31,6 +30,7 @@ from custom_components.cover_time_based.websocket_api import (
     _resolve_config_entry,
     async_register_websocket_api,
     ws_get_config,
+    ws_stop_calibration,
     ws_update_config,
 )
 
@@ -190,16 +190,16 @@ class TestWsGetConfig:
         assert result["device_type"] == DEVICE_TYPE_SWITCH
         assert result["input_mode"] == INPUT_MODE_SWITCH
         assert result["pulse_time"] == DEFAULT_PULSE_TIME
-        assert result["travelling_time_down"] == DEFAULT_TRAVEL_TIME
-        assert result["travelling_time_up"] == DEFAULT_TRAVEL_TIME
-        assert result["travel_moves_with_tilt"] is False
+        assert result["travel_time_close"] is None
+        assert result["travel_time_open"] is None
+        assert result["tilt_mode"] == "none"
         # Optional fields default to None
         assert result["open_switch_entity_id"] is None
         assert result["close_switch_entity_id"] is None
         assert result["stop_switch_entity_id"] is None
         assert result["cover_entity_id"] is None
-        assert result["tilting_time_down"] is None
-        assert result["tilting_time_up"] is None
+        assert result["tilt_time_close"] is None
+        assert result["tilt_time_open"] is None
         assert result["travel_startup_delay"] is None
         assert result["tilt_startup_delay"] is None
         assert result["min_movement_time"] is None
@@ -211,11 +211,11 @@ class TestWsGetConfig:
             CONF_INPUT_MODE: INPUT_MODE_PULSE,
             CONF_PULSE_TIME: 2.5,
             CONF_COVER_ENTITY_ID: "cover.inner",
-            CONF_TRAVELLING_TIME_DOWN: 45,
-            CONF_TRAVELLING_TIME_UP: 50,
-            CONF_TILTING_TIME_DOWN: 3.0,
-            CONF_TILTING_TIME_UP: 3.5,
-            CONF_TRAVEL_MOVES_WITH_TILT: True,
+            CONF_TRAVEL_TIME_CLOSE: 45,
+            CONF_TRAVEL_TIME_OPEN: 50,
+            CONF_TILT_TIME_CLOSE: 3.0,
+            CONF_TILT_TIME_OPEN: 3.5,
+            CONF_TILT_MODE: "during",
             CONF_TRAVEL_STARTUP_DELAY: 1.2,
             CONF_TILT_STARTUP_DELAY: 0.8,
             CONF_MIN_MOVEMENT_TIME: 0.5,
@@ -242,11 +242,11 @@ class TestWsGetConfig:
         assert result["input_mode"] == INPUT_MODE_PULSE
         assert result["pulse_time"] == 2.5
         assert result["cover_entity_id"] == "cover.inner"
-        assert result["travelling_time_down"] == 45
-        assert result["travelling_time_up"] == 50
-        assert result["tilting_time_down"] == 3.0
-        assert result["tilting_time_up"] == 3.5
-        assert result["travel_moves_with_tilt"] is True
+        assert result["travel_time_close"] == 45
+        assert result["travel_time_open"] == 50
+        assert result["tilt_time_close"] == 3.0
+        assert result["tilt_time_open"] == 3.5
+        assert result["tilt_mode"] == "during"
         assert result["travel_startup_delay"] == 1.2
         assert result["tilt_startup_delay"] == 0.8
         assert result["min_movement_time"] == 0.5
@@ -440,24 +440,24 @@ class TestWsUpdateConfig:
                     "id": 1,
                     "type": "cover_time_based/update_config",
                     "entity_id": ENTITY_ID,
-                    "tilting_time_down": 5.0,
-                    "tilting_time_up": 5.5,
-                    "travel_moves_with_tilt": True,
+                    "tilt_time_close": 5.0,
+                    "tilt_time_open": 5.5,
+                    "tilt_mode": "during",
                 },
             )
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
-        assert new_options[CONF_TILTING_TIME_DOWN] == 5.0
-        assert new_options[CONF_TILTING_TIME_UP] == 5.5
-        assert new_options[CONF_TRAVEL_MOVES_WITH_TILT] is True
+        assert new_options[CONF_TILT_TIME_CLOSE] == 5.0
+        assert new_options[CONF_TILT_TIME_OPEN] == 5.5
+        assert new_options[CONF_TILT_MODE] == "during"
 
     @pytest.mark.asyncio
     async def test_clear_tilt_fields(self):
         hass, _, entity_reg = _make_hass(
             options={
-                CONF_TILTING_TIME_DOWN: 5.0,
-                CONF_TILTING_TIME_UP: 5.0,
-                CONF_TRAVEL_MOVES_WITH_TILT: True,
+                CONF_TILT_TIME_CLOSE: 5.0,
+                CONF_TILT_TIME_OPEN: 5.0,
+                CONF_TILT_MODE: "during",
             }
         )
         conn = _make_connection()
@@ -473,16 +473,16 @@ class TestWsUpdateConfig:
                     "id": 1,
                     "type": "cover_time_based/update_config",
                     "entity_id": ENTITY_ID,
-                    "tilting_time_down": None,
-                    "tilting_time_up": None,
-                    "travel_moves_with_tilt": False,
+                    "tilt_time_close": None,
+                    "tilt_time_open": None,
+                    "tilt_mode": "none",
                 },
             )
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
-        assert CONF_TILTING_TIME_DOWN not in new_options
-        assert CONF_TILTING_TIME_UP not in new_options
-        assert new_options[CONF_TRAVEL_MOVES_WITH_TILT] is False
+        assert CONF_TILT_TIME_CLOSE not in new_options
+        assert CONF_TILT_TIME_OPEN not in new_options
+        assert new_options[CONF_TILT_MODE] == "none"
 
 
 # ---------------------------------------------------------------------------
@@ -500,7 +500,8 @@ class TestRegistration:
         ) as mock_register:
             async_register_websocket_api(hass)
 
-        assert mock_register.call_count == 2
+        assert mock_register.call_count == 3
         registered_fns = {call[0][1] for call in mock_register.call_args_list}
         assert ws_get_config in registered_fns
         assert ws_update_config in registered_fns
+        assert ws_stop_calibration in registered_fns

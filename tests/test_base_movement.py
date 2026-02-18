@@ -120,7 +120,7 @@ class TestCloseWithTiltCoupling:
 
     @pytest.mark.asyncio
     async def test_close_also_starts_tilt_travel(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
 
@@ -132,7 +132,7 @@ class TestCloseWithTiltCoupling:
 
     @pytest.mark.asyncio
     async def test_open_also_starts_tilt_travel(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(100)
 
@@ -153,7 +153,7 @@ class TestCloseTilt:
 
     @pytest.mark.asyncio
     async def test_close_tilt_sends_command_and_starts_tilt(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
 
@@ -165,7 +165,7 @@ class TestCloseTilt:
 
     @pytest.mark.asyncio
     async def test_close_tilt_when_already_closed_does_nothing(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(100)
 
@@ -181,7 +181,7 @@ class TestOpenTilt:
 
     @pytest.mark.asyncio
     async def test_open_tilt_sends_command_and_starts_tilt(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(100)
 
@@ -193,7 +193,7 @@ class TestOpenTilt:
 
     @pytest.mark.asyncio
     async def test_open_tilt_when_already_open_does_nothing(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
 
@@ -209,7 +209,7 @@ class TestTiltStopsTravelFirst:
 
     @pytest.mark.asyncio
     async def test_close_tilt_stops_active_travel(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
         cover.tilt_calc.set_position(0)
@@ -224,14 +224,14 @@ class TestTiltStopsTravelFirst:
 
 
 class TestTiltWithTravelCoupling:
-    """Tilt with travel_moves_with_tilt should also move travel."""
+    """Tilt with tilt_mode="during" should also move travel."""
 
     @pytest.mark.asyncio
     async def test_close_tilt_also_moves_travel_when_coupled(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_moves_with_tilt=True,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="during",
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -245,9 +245,9 @@ class TestTiltWithTravelCoupling:
     @pytest.mark.asyncio
     async def test_open_tilt_also_moves_travel_when_coupled(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_moves_with_tilt=True,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="during",
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(100)
@@ -261,9 +261,9 @@ class TestTiltWithTravelCoupling:
     @pytest.mark.asyncio
     async def test_close_tilt_without_coupling_does_not_move_travel(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_moves_with_tilt=False,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="before_after",
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -366,7 +366,7 @@ class TestSetPositionWithTilt:
 
     @pytest.mark.asyncio
     async def test_set_position_also_moves_tilt(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
 
@@ -387,7 +387,7 @@ class TestSetTiltPosition:
 
     @pytest.mark.asyncio
     async def test_set_tilt_close_direction(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
 
@@ -399,7 +399,7 @@ class TestSetTiltPosition:
 
     @pytest.mark.asyncio
     async def test_set_tilt_open_direction(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(100)
 
@@ -411,7 +411,7 @@ class TestSetTiltPosition:
 
     @pytest.mark.asyncio
     async def test_set_tilt_already_at_target(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(50)
 
@@ -424,7 +424,7 @@ class TestSetTiltPosition:
     @pytest.mark.asyncio
     async def test_set_tilt_stops_active_travel(self, make_cover):
         """set_tilt_position should stop any active travel (not a direction change)."""
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
         cover.tilt_calc.set_position(0)
@@ -438,14 +438,14 @@ class TestSetTiltPosition:
 
 
 class TestSetTiltWithTravelCoupling:
-    """set_tilt_position with travel_moves_with_tilt should also move travel."""
+    """set_tilt_position with tilt_mode="during" should also move travel."""
 
     @pytest.mark.asyncio
     async def test_set_tilt_moves_travel_when_coupled(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_moves_with_tilt=True,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="during",
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -459,9 +459,9 @@ class TestSetTiltWithTravelCoupling:
     @pytest.mark.asyncio
     async def test_set_tilt_does_not_move_travel_when_uncoupled(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_moves_with_tilt=False,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="before_after",
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -484,8 +484,8 @@ class TestMinMovementTime:
     @pytest.mark.asyncio
     async def test_short_movement_ignored(self, make_cover):
         cover = make_cover(
-            travel_time_down=30,
-            travel_time_up=30,
+            travel_time_close=30,
+            travel_time_open=30,
             min_movement_time=2.0,
         )
         cover.travel_calc.set_position(50)
@@ -500,8 +500,8 @@ class TestMinMovementTime:
     @pytest.mark.asyncio
     async def test_long_enough_movement_proceeds(self, make_cover):
         cover = make_cover(
-            travel_time_down=30,
-            travel_time_up=30,
+            travel_time_close=30,
+            travel_time_open=30,
             min_movement_time=2.0,
         )
         cover.travel_calc.set_position(50)
@@ -516,8 +516,8 @@ class TestMinMovementTime:
     async def test_endpoint_movement_always_allowed(self, make_cover):
         """Movements to endpoints (0 or 100) bypass min_movement_time."""
         cover = make_cover(
-            travel_time_down=30,
-            travel_time_up=30,
+            travel_time_close=30,
+            travel_time_open=30,
             min_movement_time=100.0,  # very high threshold
         )
         cover.travel_calc.set_position(99)  # almost closed
@@ -530,8 +530,8 @@ class TestMinMovementTime:
     @pytest.mark.asyncio
     async def test_tilt_short_movement_ignored(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
             min_movement_time=1.0,
         )
         cover.travel_calc.set_position(50)
@@ -579,8 +579,8 @@ class TestStartupDelay:
     @pytest.mark.asyncio
     async def test_tilt_with_startup_delay_creates_task(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
             tilt_startup_delay=1.0,
         )
         cover.travel_calc.set_position(50)
@@ -773,7 +773,7 @@ class TestStopCover:
 
     @pytest.mark.asyncio
     async def test_stop_with_tilt(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
 
@@ -809,7 +809,7 @@ class TestSetKnownPosition:
 
     @pytest.mark.asyncio
     async def test_set_known_tilt_position(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
 
@@ -852,13 +852,13 @@ class TestProperties:
         assert cover.is_closed is False
 
     def test_is_closed_with_tilt(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(100)
         assert cover.is_closed is True
 
     def test_is_not_closed_when_tilt_open(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(0)
         assert cover.is_closed is False
@@ -870,7 +870,7 @@ class TestProperties:
         assert cover.current_cover_position == 70
 
     def test_current_tilt_position(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.tilt_calc.set_position(25)
         assert cover.current_cover_tilt_position == 75
 
@@ -879,7 +879,7 @@ class TestProperties:
         assert cover.current_cover_tilt_position is None
 
     def test_has_tilt_support(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         assert cover._has_tilt_support() is True
 
     def test_no_tilt_support(self, make_cover):
@@ -897,9 +897,9 @@ class TestTiltConstraints:
 
     def test_tilt_forced_open_when_travel_fully_open(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_moves_with_tilt=True,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="during",
         )
         cover.travel_calc.set_position(0)  # fully open
         cover.tilt_calc.set_position(50)
@@ -910,9 +910,9 @@ class TestTiltConstraints:
 
     def test_tilt_forced_closed_when_travel_fully_closed(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_moves_with_tilt=True,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="during",
         )
         cover.travel_calc.set_position(100)  # fully closed
         cover.tilt_calc.set_position(50)
@@ -923,9 +923,9 @@ class TestTiltConstraints:
 
     def test_no_constraint_without_coupling(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_moves_with_tilt=False,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="before_after",
         )
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(50)
@@ -936,9 +936,9 @@ class TestTiltConstraints:
 
     def test_no_constraint_at_midpoint(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_moves_with_tilt=True,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="during",
         )
         cover.travel_calc.set_position(50)  # midpoint
         cover.tilt_calc.set_position(30)

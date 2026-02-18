@@ -15,13 +15,13 @@ from custom_components.cover_time_based.cover import (
     CONF_PULSE_TIME,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_ENDPOINT_RUNON_TIME,
+    CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
-    CONF_TILTING_TIME_DOWN,
-    CONF_TILTING_TIME_UP,
+    CONF_TILT_TIME_CLOSE,
+    CONF_TILT_TIME_OPEN,
     CONF_TRAVEL_STARTUP_DELAY,
-    CONF_TRAVEL_MOVES_WITH_TILT,
-    CONF_TRAVELLING_TIME_DOWN,
-    CONF_TRAVELLING_TIME_UP,
+    CONF_TRAVEL_TIME_CLOSE,
+    CONF_TRAVEL_TIME_OPEN,
     DEFAULT_PULSE_TIME,
     DEFAULT_TRAVEL_TIME,
     DEVICE_TYPE_COVER,
@@ -56,11 +56,11 @@ def make_cover(make_hass):
         close_switch="switch.close",
         stop_switch=None,
         pulse_time=DEFAULT_PULSE_TIME,
-        travel_time_down=DEFAULT_TRAVEL_TIME,
-        travel_time_up=DEFAULT_TRAVEL_TIME,
-        tilt_time_down=None,
-        tilt_time_up=None,
-        travel_moves_with_tilt=False,
+        travel_time_close=DEFAULT_TRAVEL_TIME,
+        travel_time_open=DEFAULT_TRAVEL_TIME,
+        tilt_time_close=None,
+        tilt_time_open=None,
+        tilt_mode="none",
         travel_startup_delay=None,
         tilt_startup_delay=None,
         endpoint_runon_time=None,
@@ -70,8 +70,8 @@ def make_cover(make_hass):
             options = {
                 CONF_DEVICE_TYPE: DEVICE_TYPE_COVER,
                 CONF_COVER_ENTITY_ID: cover_entity_id,
-                CONF_TRAVELLING_TIME_DOWN: travel_time_down,
-                CONF_TRAVELLING_TIME_UP: travel_time_up,
+                CONF_TRAVEL_TIME_CLOSE: travel_time_close,
+                CONF_TRAVEL_TIME_OPEN: travel_time_open,
             }
         else:
             options = {
@@ -81,16 +81,16 @@ def make_cover(make_hass):
                 CONF_STOP_SWITCH_ENTITY_ID: stop_switch,
                 CONF_INPUT_MODE: input_mode,
                 CONF_PULSE_TIME: pulse_time,
-                CONF_TRAVELLING_TIME_DOWN: travel_time_down,
-                CONF_TRAVELLING_TIME_UP: travel_time_up,
+                CONF_TRAVEL_TIME_CLOSE: travel_time_close,
+                CONF_TRAVEL_TIME_OPEN: travel_time_open,
             }
 
-        if tilt_time_down is not None:
-            options[CONF_TILTING_TIME_DOWN] = tilt_time_down
-        if tilt_time_up is not None:
-            options[CONF_TILTING_TIME_UP] = tilt_time_up
-        if travel_moves_with_tilt:
-            options[CONF_TRAVEL_MOVES_WITH_TILT] = travel_moves_with_tilt
+        if tilt_time_close is not None:
+            options[CONF_TILT_TIME_CLOSE] = tilt_time_close
+        if tilt_time_open is not None:
+            options[CONF_TILT_TIME_OPEN] = tilt_time_open
+        if tilt_mode != "none":
+            options[CONF_TILT_MODE] = tilt_mode
         if travel_startup_delay is not None:
             options[CONF_TRAVEL_STARTUP_DELAY] = travel_startup_delay
         if tilt_startup_delay is not None:

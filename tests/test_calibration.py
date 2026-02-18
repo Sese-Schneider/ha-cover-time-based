@@ -106,19 +106,15 @@ class TestStopCalibrationTravelTime:
     @pytest.mark.asyncio
     async def test_stop_calculates_elapsed_time(self, make_cover):
         cover = make_cover()
-        mock_entry = MagicMock()
-        mock_entry.options = {}
-        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
-        cover.hass.config_entries.async_update_entry = MagicMock()
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="travel_time_close", timeout=120.0)
             cover._calibration.started_at -= 45.0
             result = await cover.stop_calibration()
 
+        assert result["attribute"] == "travel_time_close"
         assert result["value"] == pytest.approx(45.0, abs=0.5)
         assert cover._calibration is None
-        cover.hass.config_entries.async_update_entry.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_stop_with_cancel_discards(self, make_cover):
@@ -160,7 +156,7 @@ class TestCancelReturnsToStart:
     @pytest.mark.asyncio
     async def test_cancel_close_returns_cover_to_open(self, make_cover):
         """Cancelling a close-direction test drives cover back to fully open."""
-        cover = make_cover(travel_time_down=20, travel_time_up=20)
+        cover = make_cover(travel_time_close=20, travel_time_open=20)
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="travel_time_close", timeout=120.0)
 
@@ -169,8 +165,9 @@ class TestCancelReturnsToStart:
                 "custom_components.cover_time_based.cover_base.sleep"
             ) as mock_sleep:
                 result = await cover.stop_calibration(cancel=True)
+                await asyncio.sleep(0)  # let background reset task run
 
-            # Should have slept for the return trip (travel_time_up = 20)
+            # Should have slept for the return trip (travel_time_open = 20)
             mock_sleep.assert_awaited_once_with(20)
 
         # Position reset to fully open (100 = open, opposite of close direction)
@@ -181,7 +178,7 @@ class TestCancelReturnsToStart:
     @pytest.mark.asyncio
     async def test_cancel_open_returns_cover_to_closed(self, make_cover):
         """Cancelling an open-direction test drives cover back to fully closed."""
-        cover = make_cover(travel_time_down=25, travel_time_up=25)
+        cover = make_cover(travel_time_close=25, travel_time_open=25)
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="travel_time_open", timeout=120.0)
 
@@ -189,6 +186,7 @@ class TestCancelReturnsToStart:
                 "custom_components.cover_time_based.cover_base.sleep"
             ) as mock_sleep:
                 await cover.stop_calibration(cancel=True)
+                await asyncio.sleep(0)  # let background reset task run
 
             mock_sleep.assert_awaited_once_with(25)
 
@@ -198,12 +196,13 @@ class TestCancelReturnsToStart:
     @pytest.mark.asyncio
     async def test_cancel_sends_stop_after_return(self, make_cover):
         """Cancel should send stop relay after the return movement."""
-        cover = make_cover(travel_time_down=10, travel_time_up=10)
+        cover = make_cover(travel_time_close=10, travel_time_open=10)
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="travel_time_close", timeout=120.0)
 
             with patch("custom_components.cover_time_based.cover_base.sleep"):
                 await cover.stop_calibration(cancel=True)
+                await asyncio.sleep(0)  # let background reset task run
 
         # _send_stop called twice: once on stop_calibration, once after return
         stop_calls = [
@@ -217,11 +216,7 @@ class TestCancelReturnsToStart:
     @pytest.mark.asyncio
     async def test_successful_stop_does_not_return(self, make_cover):
         """Successful stop (not cancel) should NOT return the cover."""
-        cover = make_cover(travel_time_down=20, travel_time_up=20)
-        mock_entry = MagicMock()
-        mock_entry.options = {}
-        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
-        cover.hass.config_entries.async_update_entry = MagicMock()
+        cover = make_cover(travel_time_close=20, travel_time_open=20)
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="travel_time_close", timeout=120.0)
@@ -230,6 +225,7 @@ class TestCancelReturnsToStart:
                 "custom_components.cover_time_based.cover_base.sleep"
             ) as mock_sleep:
                 await cover.stop_calibration()
+                await asyncio.sleep(0)  # let background reset task run
 
             # No sleep for return trip — cover is assumed at endpoint
             mock_sleep.assert_not_awaited()
@@ -241,26 +237,24 @@ class TestCancelReturnsToStart:
 class TestCalibrationTiltTime:
     @pytest.mark.asyncio
     async def test_start_tilt_time_close(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="tilt_time_close", timeout=30.0)
         assert cover._calibration.attribute == "tilt_time_close"
 
     @pytest.mark.asyncio
     async def test_start_tilt_time_open(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="tilt_time_open", timeout=30.0)
         assert cover._calibration.attribute == "tilt_time_open"
 
     @pytest.mark.asyncio
-    async def test_tilt_rejected_when_travel_moves_with_tilt(self, make_cover):
+    async def test_tilt_rejected_when_tilt_mode_during(self, make_cover):
         from homeassistant.exceptions import HomeAssistantError
 
-        cover = make_cover(
-            tilt_time_down=5.0, tilt_time_up=5.0, travel_moves_with_tilt=True
-        )
-        with pytest.raises(HomeAssistantError, match="travel_moves_with_tilt"):
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="during")
+        with pytest.raises(HomeAssistantError, match="tilt mode is 'during'"):
             await cover.start_calibration(attribute="tilt_time_close", timeout=30.0)
 
 
@@ -271,8 +265,8 @@ class TestMotorOverheadCalibration:
 
         cover = make_cover()
         # Factory defaults travel_time to 30, so manually clear it
-        cover._travel_time_down = None
-        cover._travel_time_up = None
+        cover._travel_time_close = None
+        cover._travel_time_open = None
         with pytest.raises(HomeAssistantError, match="[Tt]ravel time"):
             await cover.start_calibration(
                 attribute="travel_startup_delay", timeout=300.0
@@ -280,7 +274,7 @@ class TestMotorOverheadCalibration:
 
     @pytest.mark.asyncio
     async def test_starts_automated_steps(self, make_cover):
-        cover = make_cover(travel_time_down=60.0, travel_time_up=60.0)
+        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(
                 attribute="travel_startup_delay", timeout=300.0
@@ -290,7 +284,7 @@ class TestMotorOverheadCalibration:
 
     @pytest.mark.asyncio
     async def test_overhead_calculation(self, make_cover):
-        cover = make_cover(travel_time_down=60.0, travel_time_up=60.0)
+        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
         mock_entry = MagicMock()
         mock_entry.options = {}
         cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
@@ -321,7 +315,7 @@ class TestMotorOverheadCalibration:
 
     @pytest.mark.asyncio
     async def test_tilt_overhead_starts(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
         assert cover._calibration.automation_task is not None
@@ -368,7 +362,7 @@ class TestCalibrationTimeout:
     @pytest.mark.asyncio
     async def test_timeout_cancels_automation_task(self, make_cover):
         """Timeout during overhead test should cancel automation task."""
-        cover = make_cover(travel_time_down=60.0, travel_time_up=60.0)
+        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="travel_startup_delay", timeout=0.1)
             automation_task = cover._calibration.automation_task
