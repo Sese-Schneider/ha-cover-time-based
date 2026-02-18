@@ -355,6 +355,7 @@ class CoverTimeBasedCard extends LitElement {
             this._config = null;
             this._dirty = false;
             this._knownPosition = "unknown";
+            this._activeTab = "device";
             if (this._selectedEntity) this._loadConfig();
           }}
         ></ha-entity-picker>
