@@ -533,63 +533,56 @@ class CoverTimeBasedCard extends LitElement {
       c.input_mode === "pulse" || c.input_mode === "toggle";
 
     return html`
-      <div class="section field-row">
-        <div class="field-row-label">Input Mode</div>
-        <div class="field-row-value">
-          <select class="ha-select" @change=${this._onInputModeChange}>
-            <option value="switch" ?selected=${c.input_mode === "switch"}>
-              Switch (latching)
-            </option>
-            <option value="pulse" ?selected=${c.input_mode === "pulse"}>
-              Pulse (momentary)
-            </option>
-            <option value="toggle" ?selected=${c.input_mode === "toggle"}>
-              Toggle (same button)
-            </option>
-          </select>
-        </div>
-      </div>
-      ${showPulseTime
-        ? html`
-            <div class="section field-row">
-              <div class="field-row-label">Pulse Time</div>
-              <div class="field-row-value">
+      <div class="section">
+        <div class="field-label">Input Mode</div>
+        <select class="ha-select" @change=${this._onInputModeChange}>
+          <option value="switch" ?selected=${c.input_mode === "switch"}>
+            Switch (latching)
+          </option>
+          <option value="pulse" ?selected=${c.input_mode === "pulse"}>
+            Pulse (momentary)
+          </option>
+          <option value="toggle" ?selected=${c.input_mode === "toggle"}>
+            Toggle (same button)
+          </option>
+        </select>
+        ${showPulseTime
+          ? html`
+              <div class="inline-field">
                 <ha-textfield
                   type="number"
                   min="0.1"
                   max="10"
                   step="0.1"
                   suffix="s"
-                  label=""
+                  label="Pulse time"
                   .value=${String(c.pulse_time || 1.0)}
                   @change=${this._onPulseTimeChange}
                 ></ha-textfield>
               </div>
-            </div>
-          `
-        : ""}
+            `
+          : ""}
+      </div>
     `;
   }
 
   _renderEndpointRunon(c) {
     return html`
-      <div class="section field-row">
-        <div class="field-row-label">Endpoint Run-on Time</div>
-        <div class="field-row-value">
-          <ha-textfield
-            type="number"
-            min="0"
-            max="10"
-            step="0.1"
-            suffix="s"
-            label=""
-            .value=${String(c.endpoint_runon_time || "")}
-            @change=${(e) => {
-              const v = e.target.value.trim();
-              this._updateLocal({ endpoint_runon_time: v === "" ? null : parseFloat(v) });
-            }}
-          ></ha-textfield>
-        </div>
+      <div class="section">
+        <div class="field-label">Endpoint Run-on Time</div>
+        <ha-textfield
+          type="number"
+          min="0"
+          max="10"
+          step="0.1"
+          suffix="s"
+          label=""
+          .value=${String(c.endpoint_runon_time || "")}
+          @change=${(e) => {
+            const v = e.target.value.trim();
+            this._updateLocal({ endpoint_runon_time: v === "" ? null : parseFloat(v) });
+          }}
+        ></ha-textfield>
       </div>
     `;
   }
@@ -599,21 +592,19 @@ class CoverTimeBasedCard extends LitElement {
     const tiltMode = !hasTilt ? "none" : c.travel_moves_with_tilt ? "during" : "before_after";
 
     return html`
-      <div class="section field-row">
-        <div class="field-row-label">Tilting</div>
-        <div class="field-row-value">
-          <select class="ha-select" @change=${this._onTiltModeChange}>
-            <option value="none" ?selected=${tiltMode === "none"}>
-              Not supported
-            </option>
-            <option value="before_after" ?selected=${tiltMode === "before_after"}>
-              Tilts before/after cover movement
-            </option>
-            <option value="during" ?selected=${tiltMode === "during"}>
-              Tilts with cover movement
-            </option>
-          </select>
-        </div>
+      <div class="section">
+        <div class="field-label">Tilting</div>
+        <select class="ha-select" @change=${this._onTiltModeChange}>
+          <option value="none" ?selected=${tiltMode === "none"}>
+            Not supported
+          </option>
+          <option value="before_after" ?selected=${tiltMode === "before_after"}>
+            Tilts before/after cover movement
+          </option>
+          <option value="during" ?selected=${tiltMode === "during"}>
+            Tilts with cover movement
+          </option>
+        </select>
       </div>
     `;
   }
@@ -817,30 +808,6 @@ class CoverTimeBasedCard extends LitElement {
         font-size: var(--paper-font-body1_-_font-size, 14px);
         margin-bottom: 8px;
         color: var(--primary-text-color);
-      }
-
-      .field-row {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-      }
-
-      .field-row-label {
-        flex: 0 0 auto;
-        font-weight: 500;
-        font-size: var(--paper-font-body1_-_font-size, 14px);
-        color: var(--primary-text-color);
-        white-space: nowrap;
-      }
-
-      .field-row-value {
-        flex: 1;
-        min-width: 0;
-      }
-
-      .field-row-value .ha-select,
-      .field-row-value ha-textfield {
-        width: 100%;
       }
 
       .helper-text {
