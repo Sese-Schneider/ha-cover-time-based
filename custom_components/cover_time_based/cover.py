@@ -157,6 +157,7 @@ def _register_services(platform):
     hass = platform.hass
 
     if not hass.services.has_service(DOMAIN, SERVICE_START_CALIBRATION):
+
         async def _handle_start_calibration(call):
             entity_id = call.data["entity_id"]
             entity = _resolve_entity(hass, entity_id)
@@ -180,6 +181,7 @@ def _register_services(platform):
         )
 
     if not hass.services.has_service(DOMAIN, SERVICE_STOP_CALIBRATION):
+
         async def _handle_stop_calibration(call):
             entity_id = call.data["entity_id"]
             entity = _resolve_entity(hass, entity_id)
@@ -209,9 +211,7 @@ def _resolve_entity(hass, entity_id):
         raise HomeAssistantError("Cover platform not loaded")
     entity = component.get_entity(entity_id)
     if entity is None or not isinstance(entity, CoverTimeBased):
-        raise HomeAssistantError(
-            f"{entity_id} is not a cover_time_based entity"
-        )
+        raise HomeAssistantError(f"{entity_id} is not a cover_time_based entity")
     return entity
 
 
@@ -240,13 +240,13 @@ def _create_cover_from_options(options, device_id="", name=""):
 
     if device_type == DEVICE_TYPE_COVER:
         return WrappedCoverTimeBased(
-            cover_entity_id=options[CONF_COVER_ENTITY_ID],
+            cover_entity_id=options.get(CONF_COVER_ENTITY_ID, ""),
             **common,
         )
 
     switch_args = dict(
-        open_switch_entity_id=options[CONF_OPEN_SWITCH_ENTITY_ID],
-        close_switch_entity_id=options[CONF_CLOSE_SWITCH_ENTITY_ID],
+        open_switch_entity_id=options.get(CONF_OPEN_SWITCH_ENTITY_ID, ""),
+        close_switch_entity_id=options.get(CONF_CLOSE_SWITCH_ENTITY_ID, ""),
         stop_switch_entity_id=options.get(CONF_STOP_SWITCH_ENTITY_ID),
         **common,
     )
