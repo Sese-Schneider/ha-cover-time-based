@@ -1,8 +1,9 @@
-"""Tests for external state change handling in switch/pulse/toggle modes.
+"""Tests for external state change handling in all cover modes.
 
 Covers the _handle_external_state_change methods in:
-- cover_switch.py (SwitchCoverTimeBased base)
-- cover_switch_mode.py (SwitchModeCover override)
+- cover_switch.py (SwitchCoverTimeBased base for pulse/toggle)
+- cover_switch_mode.py (SwitchModeCover override for latching)
+- cover_wrapped.py (WrappedCoverTimeBased for wrapped cover entities)
 """
 
 import pytest
@@ -204,3 +205,94 @@ class TestToggleModeExternalStateChange:
             await cover._handle_external_state_change("switch.open", "on", "off")
 
         assert cover._last_command is None
+
+    @pytest.mark.asyncio
+    async def test_close_while_closing_stops(self, make_cover):
+        """In toggle mode, close while already closing should stop."""
+        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("switch.close", "on", "off")
+
+        assert cover._last_command is None
+
+
+# ===================================================================
+# WrappedCoverTimeBased._handle_external_state_change
+# ===================================================================
+
+
+class TestWrappedCoverExternalStateChange:
+    """Test external state changes for wrapped cover entities."""
+
+    @pytest.mark.asyncio
+    async def test_opening_triggers_open(self, make_cover):
+        """Wrapped cover transitioning to 'opening' triggers position tracking."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "opening"
+            )
+
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_closing_triggers_close(self, make_cover):
+        """Wrapped cover transitioning to 'closing' triggers position tracking."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change(
+                "cover.inner", "open", "closing"
+            )
+
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_stop_from_opening(self, make_cover):
+        """Wrapped cover stopping after opening triggers stop."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change(
+                "cover.inner", "opening", "open"
+            )
+
+        assert cover._last_command is None
+
+    @pytest.mark.asyncio
+    async def test_stop_from_closing(self, make_cover):
+        """Wrapped cover stopping after closing triggers stop."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change(
+                "cover.inner", "closing", "closed"
+            )
+
+        assert cover._last_command is None
+
+    @pytest.mark.asyncio
+    async def test_non_moving_transition_ignored(self, make_cover):
+        """Transitions between non-moving states should be ignored."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change(
+                "cover.inner", "open", "closed"
+            )
+
+        assert not cover.travel_calc.is_traveling()
