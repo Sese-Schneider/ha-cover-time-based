@@ -256,6 +256,23 @@ class CoverTimeBasedCard extends LitElement {
     }
   }
 
+  async _onResetPosition() {
+    if (this._knownPosition === "unknown") return;
+    const position = this._knownPosition === "open" ? 100 : 0;
+    try {
+      await this.hass.callService(DOMAIN, "set_known_position", {
+        entity_id: this._selectedEntity,
+        position,
+      });
+      await this.hass.callService(DOMAIN, "set_known_tilt_position", {
+        entity_id: this._selectedEntity,
+        position,
+      });
+    } catch (err) {
+      console.error("Reset position failed:", err);
+    }
+  }
+
   _onCreateNew() {
     if (this._dirty) {
       if (!confirm("You have unsaved changes. Discard and continue?")) {
