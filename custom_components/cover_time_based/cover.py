@@ -40,6 +40,7 @@ CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
 CONF_ENDPOINT_RUNON_TIME = "endpoint_runon_time"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
 DEFAULT_TRAVEL_TIME = 30
+DEFAULT_ENDPOINT_RUNON_TIME = 2.0
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
 CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
@@ -116,9 +117,9 @@ DEFAULTS_SCHEMA = vol.Schema(
         vol.Optional(CONF_TILT_STARTUP_DELAY, default=None): vol.Any(
             cv.positive_float, None
         ),
-        vol.Optional(CONF_ENDPOINT_RUNON_TIME, default=None): vol.Any(
-            cv.positive_float, None
-        ),
+        vol.Optional(
+            CONF_ENDPOINT_RUNON_TIME, default=DEFAULT_ENDPOINT_RUNON_TIME
+        ): vol.Any(cv.positive_float, None),
         vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
             cv.positive_float, None
         ),
@@ -240,7 +241,7 @@ def _create_cover_from_options(options, device_id="", name=""):
         tilt_time_up=options.get(CONF_TILTING_TIME_UP),
         travel_startup_delay=options.get(CONF_TRAVEL_STARTUP_DELAY),
         tilt_startup_delay=options.get(CONF_TILT_STARTUP_DELAY),
-        endpoint_runon_time=options.get(CONF_ENDPOINT_RUNON_TIME),
+        endpoint_runon_time=options.get(CONF_ENDPOINT_RUNON_TIME, DEFAULT_ENDPOINT_RUNON_TIME),
         min_movement_time=options.get(CONF_MIN_MOVEMENT_TIME),
     )
 
@@ -276,7 +277,7 @@ _TIMING_DEFAULTS = {
     CONF_TILTING_TIME_UP: None,
     CONF_TRAVEL_STARTUP_DELAY: None,
     CONF_TILT_STARTUP_DELAY: None,
-    CONF_ENDPOINT_RUNON_TIME: None,
+    CONF_ENDPOINT_RUNON_TIME: DEFAULT_ENDPOINT_RUNON_TIME,
     CONF_MIN_MOVEMENT_TIME: None,
 }
 
