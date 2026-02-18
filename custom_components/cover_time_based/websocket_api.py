@@ -27,6 +27,7 @@ from .cover import (
     CONF_TRAVEL_MOVES_WITH_TILT,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
+    DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_PULSE_TIME,
     DEFAULT_TRAVEL_TIME,
     DEVICE_TYPE_COVER,
@@ -125,7 +126,9 @@ async def ws_get_config(
             "tilting_time_up": options.get(CONF_TILTING_TIME_UP),
             "travel_startup_delay": options.get(CONF_TRAVEL_STARTUP_DELAY),
             "tilt_startup_delay": options.get(CONF_TILT_STARTUP_DELAY),
-            "endpoint_runon_time": options.get(CONF_ENDPOINT_RUNON_TIME),
+            "endpoint_runon_time": options.get(
+                CONF_ENDPOINT_RUNON_TIME, DEFAULT_ENDPOINT_RUNON_TIME
+            ),
             "min_movement_time": options.get(CONF_MIN_MOVEMENT_TIME),
         },
     )
