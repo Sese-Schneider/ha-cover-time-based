@@ -469,3 +469,101 @@ class TestProportionalSnapTrackers:
         tilt.set_position(30)
         strategy.snap_trackers_to_physical(travel, tilt)
         assert tilt.current_position() == 30
+
+
+# --- Sequential new interface tests ---
+
+
+class TestSequentialTiltProperties:
+    def test_name(self):
+        assert SequentialTilt().name == "sequential"
+
+    def test_uses_tilt_motor(self):
+        assert SequentialTilt().uses_tilt_motor is False
+
+
+class TestSequentialPlanMovePosition:
+    def test_flattens_tilt_before_travel(self):
+        strategy = SequentialTilt()
+        steps = strategy.plan_move_position(target_pos=30, current_pos=100, current_tilt=80)
+        assert steps == [TiltTo(0), TravelTo(30)]
+
+    def test_skips_tilt_when_already_flat(self):
+        strategy = SequentialTilt()
+        steps = strategy.plan_move_position(target_pos=30, current_pos=100, current_tilt=0)
+        assert steps == [TravelTo(30)]
+
+    def test_opening_fully(self):
+        strategy = SequentialTilt()
+        steps = strategy.plan_move_position(target_pos=0, current_pos=100, current_tilt=100)
+        assert steps == [TiltTo(0), TravelTo(0)]
+
+    def test_closing_fully_from_open(self):
+        strategy = SequentialTilt()
+        steps = strategy.plan_move_position(target_pos=100, current_pos=0, current_tilt=0)
+        assert steps == [TravelTo(100)]
+
+    def test_partial_move_with_flat_tilt(self):
+        strategy = SequentialTilt()
+        steps = strategy.plan_move_position(target_pos=50, current_pos=80, current_tilt=0)
+        assert steps == [TravelTo(50)]
+
+
+class TestSequentialPlanMoveTilt:
+    def test_travels_to_closed_before_tilting(self):
+        strategy = SequentialTilt()
+        steps = strategy.plan_move_tilt(target_tilt=50, current_pos=30, current_tilt=0)
+        assert steps == [TravelTo(100), TiltTo(50)]
+
+    def test_tilts_directly_when_at_closed(self):
+        strategy = SequentialTilt()
+        steps = strategy.plan_move_tilt(target_tilt=50, current_pos=100, current_tilt=0)
+        assert steps == [TiltTo(50)]
+
+    def test_tilt_fully_closed(self):
+        strategy = SequentialTilt()
+        steps = strategy.plan_move_tilt(target_tilt=100, current_pos=100, current_tilt=0)
+        assert steps == [TiltTo(100)]
+
+    def test_tilt_open_from_partially_tilted(self):
+        strategy = SequentialTilt()
+        steps = strategy.plan_move_tilt(target_tilt=0, current_pos=100, current_tilt=50)
+        assert steps == [TiltTo(0)]
+
+
+class TestSequentialSnapTrackers:
+    def test_forces_tilt_to_zero_when_not_at_closed(self):
+        strategy = SequentialTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(50)
+        tilt.set_position(30)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 0
+
+    def test_no_op_when_at_closed(self):
+        strategy = SequentialTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(100)
+        tilt.set_position(50)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 50
+
+    def test_no_op_when_already_flat(self):
+        strategy = SequentialTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(30)
+        tilt.set_position(0)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 0
+
+    def test_forces_at_fully_open(self):
+        strategy = SequentialTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(0)
+        tilt.set_position(10)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 0
