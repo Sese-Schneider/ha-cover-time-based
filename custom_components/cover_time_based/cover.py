@@ -235,9 +235,12 @@ def _resolve_entity(hass, entity_id):
     return entity
 
 
-def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open):
+def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwargs):
     """Map tilt_mode config string to a TiltStrategy instance (or None)."""
-    from .tilt_strategies import ProportionalTilt, SequentialTilt
+    from .tilt_strategies import DualMotorTilt, ProportionalTilt, SequentialTilt
+
+    if tilt_mode_str == "none":
+        return None
 
     has_tilt_times = tilt_time_close is not None and tilt_time_open is not None
     if not has_tilt_times:
@@ -245,6 +248,11 @@ def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open):
 
     if tilt_mode_str == "proportional":
         return ProportionalTilt()
+    if tilt_mode_str == "dual_motor":
+        return DualMotorTilt(
+            safe_tilt_position=kwargs.get("safe_tilt_position", 0),
+            min_tilt_allowed_position=kwargs.get("min_tilt_allowed_position"),
+        )
     # "sequential" or any other value with tilt times → sequential
     return SequentialTilt()
 
@@ -263,6 +271,8 @@ def _create_cover_from_options(options, device_id="", name=""):
         tilt_mode_str,
         options.get(CONF_TILT_TIME_CLOSE),
         options.get(CONF_TILT_TIME_OPEN),
+        safe_tilt_position=options.get("safe_tilt_position", 0),
+        min_tilt_allowed_position=options.get("min_tilt_allowed_position"),
     )
 
     # Common params for all subclasses

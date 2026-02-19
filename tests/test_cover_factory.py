@@ -32,12 +32,18 @@ from custom_components.cover_time_based.cover import (
     INPUT_MODE_SWITCH,
     INPUT_MODE_TOGGLE,
     _create_cover_from_options,
+    _resolve_tilt_strategy,
     devices_from_config,
 )
 from custom_components.cover_time_based.cover_switch_mode import SwitchModeCover
 from custom_components.cover_time_based.cover_pulse_mode import PulseModeCover
 from custom_components.cover_time_based.cover_toggle_mode import ToggleModeCover
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
+from custom_components.cover_time_based.tilt_strategies import (
+    DualMotorTilt,
+    ProportionalTilt,
+    SequentialTilt,
+)
 
 
 # ===================================================================
@@ -428,3 +434,49 @@ class TestAsyncSetupEntry:
         assert len(added_entities) == 1
         assert added_entities[0].name == "My Cover"
         assert platform.async_register_entity_service.call_count == 2
+
+
+# ===================================================================
+# _resolve_tilt_strategy
+# ===================================================================
+
+
+class TestResolveTiltStrategy:
+    def test_none_when_tilt_mode_none(self):
+        assert _resolve_tilt_strategy("none", 2.0, 2.0) is None
+
+    def test_none_when_no_tilt_times(self):
+        assert _resolve_tilt_strategy("sequential", None, None) is None
+
+    def test_none_when_partial_tilt_times(self):
+        assert _resolve_tilt_strategy("sequential", 2.0, None) is None
+
+    def test_sequential(self):
+        result = _resolve_tilt_strategy("sequential", 2.0, 2.0)
+        assert isinstance(result, SequentialTilt)
+
+    def test_proportional(self):
+        result = _resolve_tilt_strategy("proportional", 2.0, 2.0)
+        assert isinstance(result, ProportionalTilt)
+
+    def test_dual_motor_defaults(self):
+        result = _resolve_tilt_strategy("dual_motor", 2.0, 2.0)
+        assert isinstance(result, DualMotorTilt)
+        assert result._safe_tilt_position == 0
+        assert result._min_tilt_allowed_position is None
+
+    def test_dual_motor_with_options(self):
+        result = _resolve_tilt_strategy(
+            "dual_motor",
+            2.0,
+            2.0,
+            safe_tilt_position=10,
+            min_tilt_allowed_position=80,
+        )
+        assert isinstance(result, DualMotorTilt)
+        assert result._safe_tilt_position == 10
+        assert result._min_tilt_allowed_position == 80
+
+    def test_unknown_mode_defaults_to_sequential(self):
+        result = _resolve_tilt_strategy("unknown_value", 2.0, 2.0)
+        assert isinstance(result, SequentialTilt)

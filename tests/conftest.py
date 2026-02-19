@@ -89,8 +89,16 @@ def make_cover(make_hass):
             options[CONF_TILT_TIME_CLOSE] = tilt_time_close
         if tilt_time_open is not None:
             options[CONF_TILT_TIME_OPEN] = tilt_time_open
-        if tilt_mode != "none":
-            options[CONF_TILT_MODE] = tilt_mode
+        # Default to sequential when tilt times are provided but no explicit mode
+        effective_tilt_mode = tilt_mode
+        if (
+            effective_tilt_mode == "none"
+            and tilt_time_close is not None
+            and tilt_time_open is not None
+        ):
+            effective_tilt_mode = "sequential"
+        if effective_tilt_mode != "none":
+            options[CONF_TILT_MODE] = effective_tilt_mode
         if travel_startup_delay is not None:
             options[CONF_TRAVEL_STARTUP_DELAY] = travel_startup_delay
         if tilt_startup_delay is not None:
