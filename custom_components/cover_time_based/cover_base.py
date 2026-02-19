@@ -281,12 +281,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Return the device state attributes."""
         attr = {}
         if self._tilt_strategy is not None:
-            from .tilt_strategies import ProportionalTilt, SequentialTilt
-
-            if isinstance(self._tilt_strategy, ProportionalTilt):
-                attr[CONF_TILT_MODE] = "proportional"
-            elif isinstance(self._tilt_strategy, SequentialTilt):
-                attr[CONF_TILT_MODE] = "sequential"
+            attr[CONF_TILT_MODE] = self._tilt_strategy.name
         if self._travel_time_close is not None:
             attr[CONF_TRAVEL_TIME_CLOSE] = self._travel_time_close
         if self._travel_time_open is not None:
