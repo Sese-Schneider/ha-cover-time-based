@@ -60,36 +60,6 @@ class TiltStrategy(ABC):
     """Base class for tilt mode strategies."""
 
     @abstractmethod
-    def calc_tilt_for_travel(
-        self,
-        movement_time: float,
-        closing: bool,
-        tilt_calc: TravelCalculator,
-        tilt_time_close: float,
-        tilt_time_open: float,
-    ) -> int | None:
-        """When travel moves, what tilt target? None = no coupling."""
-
-    @abstractmethod
-    def calc_travel_for_tilt(
-        self,
-        movement_time: float,
-        closing: bool,
-        travel_calc: TravelCalculator,
-        travel_time_close: float,
-        travel_time_open: float,
-    ) -> int | None:
-        """When tilt moves, what travel target? None = no coupling."""
-
-    @abstractmethod
-    def enforce_constraints(
-        self,
-        travel_calc: TravelCalculator,
-        tilt_calc: TravelCalculator,
-    ) -> None:
-        """Enforce constraints after stop."""
-
-    @abstractmethod
     def can_calibrate_tilt(self) -> bool:
         """Whether tilt calibration is allowed."""
 
