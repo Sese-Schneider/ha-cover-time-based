@@ -217,8 +217,10 @@ class TestCalibrationTiltTime:
     async def test_tilt_rejected_when_tilt_mode_during(self, make_cover):
         from homeassistant.exceptions import HomeAssistantError
 
-        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="during")
-        with pytest.raises(HomeAssistantError, match="tilt mode is 'during'"):
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="proportional"
+        )
+        with pytest.raises(HomeAssistantError, match="proportional tilt mode"):
             await cover.start_calibration(attribute="tilt_time_close", timeout=30.0)
 
 

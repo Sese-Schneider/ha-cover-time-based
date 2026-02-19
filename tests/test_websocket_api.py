@@ -217,7 +217,7 @@ class TestWsGetConfig:
             CONF_TRAVEL_TIME_OPEN: 50,
             CONF_TILT_TIME_CLOSE: 3.0,
             CONF_TILT_TIME_OPEN: 3.5,
-            CONF_TILT_MODE: "during",
+            CONF_TILT_MODE: "proportional",
             CONF_TRAVEL_STARTUP_DELAY: 1.2,
             CONF_TILT_STARTUP_DELAY: 0.8,
             CONF_MIN_MOVEMENT_TIME: 0.5,
@@ -248,7 +248,7 @@ class TestWsGetConfig:
         assert result["travel_time_open"] == 50
         assert result["tilt_time_close"] == 3.0
         assert result["tilt_time_open"] == 3.5
-        assert result["tilt_mode"] == "during"
+        assert result["tilt_mode"] == "proportional"
         assert result["travel_startup_delay"] == 1.2
         assert result["tilt_startup_delay"] == 0.8
         assert result["min_movement_time"] == 0.5
@@ -444,14 +444,14 @@ class TestWsUpdateConfig:
                     "entity_id": ENTITY_ID,
                     "tilt_time_close": 5.0,
                     "tilt_time_open": 5.5,
-                    "tilt_mode": "during",
+                    "tilt_mode": "proportional",
                 },
             )
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_options[CONF_TILT_TIME_CLOSE] == 5.0
         assert new_options[CONF_TILT_TIME_OPEN] == 5.5
-        assert new_options[CONF_TILT_MODE] == "during"
+        assert new_options[CONF_TILT_MODE] == "proportional"
 
     @pytest.mark.asyncio
     async def test_clear_tilt_fields(self):
@@ -459,7 +459,7 @@ class TestWsUpdateConfig:
             options={
                 CONF_TILT_TIME_CLOSE: 5.0,
                 CONF_TILT_TIME_OPEN: 5.0,
-                CONF_TILT_MODE: "during",
+                CONF_TILT_MODE: "proportional",
             }
         )
         conn = _make_connection()

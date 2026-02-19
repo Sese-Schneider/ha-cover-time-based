@@ -224,14 +224,14 @@ class TestTiltStopsTravelFirst:
 
 
 class TestTiltWithTravelCoupling:
-    """Tilt with tilt_mode="during" should also move travel."""
+    """Tilt with tilt_mode="proportional" should also move travel."""
 
     @pytest.mark.asyncio
     async def test_close_tilt_also_moves_travel_when_coupled(self, make_cover):
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
-            tilt_mode="during",
+            tilt_mode="proportional",
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -247,7 +247,7 @@ class TestTiltWithTravelCoupling:
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
-            tilt_mode="during",
+            tilt_mode="proportional",
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(100)
@@ -263,7 +263,7 @@ class TestTiltWithTravelCoupling:
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
-            tilt_mode="before_after",
+            tilt_mode="sequential",
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -438,14 +438,14 @@ class TestSetTiltPosition:
 
 
 class TestSetTiltWithTravelCoupling:
-    """set_tilt_position with tilt_mode="during" should also move travel."""
+    """set_tilt_position with tilt_mode="proportional" should also move travel."""
 
     @pytest.mark.asyncio
     async def test_set_tilt_moves_travel_when_coupled(self, make_cover):
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
-            tilt_mode="during",
+            tilt_mode="proportional",
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -461,7 +461,7 @@ class TestSetTiltWithTravelCoupling:
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
-            tilt_mode="before_after",
+            tilt_mode="sequential",
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -899,12 +899,12 @@ class TestTiltConstraints:
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
-            tilt_mode="during",
+            tilt_mode="proportional",
         )
         cover.travel_calc.set_position(0)  # fully open
         cover.tilt_calc.set_position(50)
 
-        cover._enforce_tilt_constraints()
+        cover._tilt_strategy.enforce_constraints(cover.travel_calc, cover.tilt_calc)
 
         assert cover.tilt_calc.current_position() == 0
 
@@ -912,12 +912,12 @@ class TestTiltConstraints:
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
-            tilt_mode="during",
+            tilt_mode="proportional",
         )
         cover.travel_calc.set_position(100)  # fully closed
         cover.tilt_calc.set_position(50)
 
-        cover._enforce_tilt_constraints()
+        cover._tilt_strategy.enforce_constraints(cover.travel_calc, cover.tilt_calc)
 
         assert cover.tilt_calc.current_position() == 100
 
@@ -925,12 +925,12 @@ class TestTiltConstraints:
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
-            tilt_mode="before_after",
+            tilt_mode="sequential",
         )
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(50)
 
-        cover._enforce_tilt_constraints()
+        cover._tilt_strategy.enforce_constraints(cover.travel_calc, cover.tilt_calc)
 
         assert cover.tilt_calc.current_position() == 50  # unchanged
 
@@ -938,11 +938,11 @@ class TestTiltConstraints:
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
-            tilt_mode="during",
+            tilt_mode="proportional",
         )
         cover.travel_calc.set_position(50)  # midpoint
         cover.tilt_calc.set_position(30)
 
-        cover._enforce_tilt_constraints()
+        cover._tilt_strategy.enforce_constraints(cover.travel_calc, cover.tilt_calc)
 
         assert cover.tilt_calc.current_position() == 30  # unchanged
