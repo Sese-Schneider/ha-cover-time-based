@@ -225,31 +225,43 @@ class CoverTimeBasedCard extends LitElement {
     const endpoint = pos === "open" ? "closed" : "open";
     const c = this._config;
     const tiltMode = c?.tilt_mode || "none";
-    const hints = {
-      travel_time_open: tiltMode === "before_after"
-        ? "Start with the slats tilted fully closed, then click Finish when the cover is fully open but before the slats start opening"
-        : "Click Finish once the cover is fully open",
-      travel_time_close: tiltMode === "before_after"
-        ? "Start with the slats tilted fully open, then click Finish when the cover is fully closed but before the slats start closing"
-        : "Click Finish once the cover is fully closed",
-      travel_startup_delay: tiltMode === "before_after"
-        ? pos === "open"
-          ? "Start with the slats tilted fully open, then click Finish when the cover is fully closed but before the slats start closing"
-          : "Start with the slats tilted fully closed, then click Finish when the cover is fully open but before the slats start opening"
-        : `Click Finish once the cover is fully ${endpoint}`,
-      tilt_time_open: tiltMode === "before_after"
-        ? "Start with the cover fully closed and the slats tilted fully closed, then click Finish when the slats are fully open"
-        : "Click Finish once the cover slats are fully open",
-      tilt_time_close: tiltMode === "before_after"
-        ? "Start with the cover fully closed and the slats tilted fully open, then click Finish when the slats are fully closed"
-        : "Click Finish once the cover slats are fully closed",
-      tilt_startup_delay: tiltMode === "before_after"
-        ? pos === "open"
-          ? "Start with the cover fully closed and the slats tilted fully open, then click Finish when the slats are fully closed"
-          : "Start with the cover fully closed and the slats tilted fully closed, then click Finish when the slats are fully open"
-        : `Click Finish once the cover slats are fully ${endpoint}`,
-      min_movement_time: "Click Finish as soon as you notice the cover moving",
-    };
+
+    // Mode-specific hints
+    const hints = {};
+
+    if (tiltMode === "sequential") {
+      hints.travel_time_close = "Start with slats fully open. Click Finish when the cover is fully closed, before the slats start tilting.";
+      hints.travel_time_open = "Start with slats fully open. Click Finish when the cover is fully open.";
+      hints.travel_startup_delay = pos === "open"
+        ? "Start with slats fully open. Click Finish when the cover is fully closed, before the slats start tilting."
+        : "Start with slats fully open. Click Finish when the cover is fully open.";
+      hints.tilt_time_close = "Cover must be fully closed. Click Finish when the slats are fully closed.";
+      hints.tilt_time_open = "Cover must be fully closed with slats closed. Click Finish when the slats are fully open.";
+      hints.tilt_startup_delay = pos === "closed_tilt_open" || pos === "open"
+        ? "Cover must be fully closed with slats open. Click Finish when the slats are fully closed."
+        : "Cover must be fully closed with slats closed. Click Finish when the slats are fully open.";
+    } else if (tiltMode === "proportional") {
+      hints.travel_time_close = "Click Finish when the cover is fully closed and slats are fully tilted.";
+      hints.travel_time_open = "Click Finish when the cover is fully open and slats are fully open.";
+      hints.travel_startup_delay = `Click Finish when the cover is fully ${endpoint} and slats match.`;
+    } else if (tiltMode === "dual_motor") {
+      hints.travel_time_close = "Ensure tilt is in safe position. Click Finish when the cover is fully closed.";
+      hints.travel_time_open = "Ensure tilt is in safe position. Click Finish when the cover is fully open.";
+      hints.travel_startup_delay = `Ensure tilt is in safe position. Click Finish when the cover is fully ${endpoint}.`;
+      hints.tilt_time_close = "Cover must be in tilt-allowed position. Click Finish when the slats are fully closed.";
+      hints.tilt_time_open = "Cover must be in tilt-allowed position. Click Finish when the slats are fully open.";
+      hints.tilt_startup_delay = pos === "closed_tilt_open" || pos === "open"
+        ? "Cover must be in tilt-allowed position. Click Finish when the slats are fully closed."
+        : "Cover must be in tilt-allowed position. Click Finish when the slats are fully open.";
+    } else {
+      // none mode
+      hints.travel_time_close = "Click Finish when the cover is fully closed.";
+      hints.travel_time_open = "Click Finish when the cover is fully open.";
+      hints.travel_startup_delay = `Click Finish when the cover is fully ${endpoint}.`;
+    }
+
+    hints.min_movement_time = "Click Finish as soon as you notice the cover moving.";
+
     return hints[attr] || "";
   }
 
