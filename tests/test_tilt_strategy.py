@@ -3,6 +3,7 @@
 from xknx.devices import TravelCalculator
 
 from custom_components.cover_time_based.tilt_strategies import (
+    DualMotorTilt,
     ProportionalTilt,
     SequentialTilt,
     TiltTo,
@@ -585,5 +586,116 @@ class TestSequentialSnapTrackers:
         tilt = TravelCalculator(2.0, 2.0)
         travel.set_position(0)
         tilt.set_position(10)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 0
+
+
+# ===================================================================
+# DualMotorTilt
+# ===================================================================
+
+
+class TestDualMotorTiltProperties:
+    def test_name(self):
+        assert DualMotorTilt().name == "dual_motor"
+
+    def test_uses_tilt_motor(self):
+        assert DualMotorTilt().uses_tilt_motor is True
+
+    def test_can_calibrate_tilt(self):
+        assert DualMotorTilt().can_calibrate_tilt() is True
+
+
+class TestDualMotorPlanMovePosition:
+    def test_moves_tilt_to_safe_before_travel(self):
+        strategy = DualMotorTilt(safe_tilt_position=0)
+        steps = strategy.plan_move_position(
+            target_pos=30, current_pos=100, current_tilt=50
+        )
+        assert steps == [TiltTo(0), TravelTo(30)]
+
+    def test_skips_tilt_when_already_safe(self):
+        strategy = DualMotorTilt(safe_tilt_position=0)
+        steps = strategy.plan_move_position(
+            target_pos=30, current_pos=100, current_tilt=0
+        )
+        assert steps == [TravelTo(30)]
+
+    def test_custom_safe_position(self):
+        strategy = DualMotorTilt(safe_tilt_position=50)
+        steps = strategy.plan_move_position(
+            target_pos=30, current_pos=100, current_tilt=80
+        )
+        assert steps == [TiltTo(50), TravelTo(30)]
+
+    def test_already_at_custom_safe(self):
+        strategy = DualMotorTilt(safe_tilt_position=50)
+        steps = strategy.plan_move_position(
+            target_pos=30, current_pos=100, current_tilt=50
+        )
+        assert steps == [TravelTo(30)]
+
+
+class TestDualMotorPlanMoveTilt:
+    def test_tilts_directly_when_no_boundary(self):
+        strategy = DualMotorTilt()
+        steps = strategy.plan_move_tilt(target_tilt=50, current_pos=30, current_tilt=0)
+        assert steps == [TiltTo(50)]
+
+    def test_travels_to_boundary_when_below_min(self):
+        strategy = DualMotorTilt(min_tilt_allowed_position=80)
+        steps = strategy.plan_move_tilt(target_tilt=50, current_pos=30, current_tilt=0)
+        assert steps == [TravelTo(80), TiltTo(50)]
+
+    def test_tilts_directly_when_at_boundary(self):
+        strategy = DualMotorTilt(min_tilt_allowed_position=80)
+        steps = strategy.plan_move_tilt(target_tilt=50, current_pos=80, current_tilt=0)
+        assert steps == [TiltTo(50)]
+
+    def test_tilts_directly_when_beyond_boundary(self):
+        strategy = DualMotorTilt(min_tilt_allowed_position=80)
+        steps = strategy.plan_move_tilt(target_tilt=50, current_pos=100, current_tilt=0)
+        assert steps == [TiltTo(50)]
+
+    def test_no_boundary_set(self):
+        strategy = DualMotorTilt(min_tilt_allowed_position=None)
+        steps = strategy.plan_move_tilt(target_tilt=50, current_pos=10, current_tilt=0)
+        assert steps == [TiltTo(50)]
+
+
+class TestDualMotorSnapTrackers:
+    def test_forces_tilt_to_safe_when_below_min(self):
+        strategy = DualMotorTilt(safe_tilt_position=0, min_tilt_allowed_position=80)
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(50)
+        tilt.set_position(30)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 0
+
+    def test_no_op_when_at_boundary(self):
+        strategy = DualMotorTilt(safe_tilt_position=0, min_tilt_allowed_position=80)
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(80)
+        tilt.set_position(30)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 30
+
+    def test_no_op_when_no_boundary(self):
+        strategy = DualMotorTilt(safe_tilt_position=0, min_tilt_allowed_position=None)
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(30)
+        tilt.set_position(50)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 50
+
+    def test_already_at_safe_position(self):
+        strategy = DualMotorTilt(safe_tilt_position=0, min_tilt_allowed_position=80)
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(50)
+        tilt.set_position(0)
         strategy.snap_trackers_to_physical(travel, tilt)
         assert tilt.current_position() == 0
