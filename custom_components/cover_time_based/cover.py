@@ -52,6 +52,11 @@ DEFAULT_ENDPOINT_RUNON_TIME = 2.0
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
 CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
 CONF_STOP_SWITCH_ENTITY_ID = "stop_switch_entity_id"
+CONF_SAFE_TILT_POSITION = "safe_tilt_position"
+CONF_MIN_TILT_ALLOWED_POSITION = "min_tilt_allowed_position"
+CONF_TILT_OPEN_SWITCH = "tilt_open_switch"
+CONF_TILT_CLOSE_SWITCH = "tilt_close_switch"
+CONF_TILT_STOP_SWITCH = "tilt_stop_switch"
 CONF_IS_BUTTON = "is_button"
 CONF_INPUT_MODE = "input_mode"
 CONF_PULSE_TIME = "pulse_time"
@@ -271,8 +276,8 @@ def _create_cover_from_options(options, device_id="", name=""):
         tilt_mode_str,
         options.get(CONF_TILT_TIME_CLOSE),
         options.get(CONF_TILT_TIME_OPEN),
-        safe_tilt_position=options.get("safe_tilt_position", 0),
-        min_tilt_allowed_position=options.get("min_tilt_allowed_position"),
+        safe_tilt_position=options.get(CONF_SAFE_TILT_POSITION, 0),
+        min_tilt_allowed_position=options.get(CONF_MIN_TILT_ALLOWED_POSITION),
     )
 
     # Common params for all subclasses

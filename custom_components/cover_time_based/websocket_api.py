@@ -17,12 +17,17 @@ from .cover import (
     CONF_DEVICE_TYPE,
     CONF_INPUT_MODE,
     CONF_MIN_MOVEMENT_TIME,
+    CONF_MIN_TILT_ALLOWED_POSITION,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
+    CONF_SAFE_TILT_POSITION,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_ENDPOINT_RUNON_TIME,
+    CONF_TILT_CLOSE_SWITCH,
     CONF_TILT_MODE,
+    CONF_TILT_OPEN_SWITCH,
     CONF_TILT_STARTUP_DELAY,
+    CONF_TILT_STOP_SWITCH,
     CONF_TILT_TIME_CLOSE,
     CONF_TILT_TIME_OPEN,
     CONF_TRAVEL_STARTUP_DELAY,
@@ -175,13 +180,13 @@ async def ws_get_config(
         vol.Optional("min_movement_time"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
-        vol.Optional("safe_tilt_position"): vol.All(int, vol.Range(min=0, max=100)),
-        vol.Optional("min_tilt_allowed_position"): vol.Any(
+        vol.Optional(CONF_SAFE_TILT_POSITION): vol.All(int, vol.Range(min=0, max=100)),
+        vol.Optional(CONF_MIN_TILT_ALLOWED_POSITION): vol.Any(
             None, vol.All(int, vol.Range(min=0, max=100))
         ),
-        vol.Optional("tilt_open_switch"): str,
-        vol.Optional("tilt_close_switch"): str,
-        vol.Optional("tilt_stop_switch"): str,
+        vol.Optional(CONF_TILT_OPEN_SWITCH): str,
+        vol.Optional(CONF_TILT_CLOSE_SWITCH): str,
+        vol.Optional(CONF_TILT_STOP_SWITCH): str,
     }
 )
 @websocket_api.async_response
