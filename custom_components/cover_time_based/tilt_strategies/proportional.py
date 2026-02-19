@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from .base import TiltStrategy, calc_coupled_target
+from .base import TiltStrategy, TiltTo, TravelTo, calc_coupled_target
 
 if TYPE_CHECKING:
     from xknx.devices import TravelCalculator
@@ -77,3 +77,28 @@ class ProportionalTilt(TiltStrategy):
     def can_calibrate_tilt(self) -> bool:
         """Tilt calibration is not allowed in proportional mode."""
         return False
+
+    @property
+    def name(self) -> str:
+        return "proportional"
+
+    @property
+    def uses_tilt_motor(self) -> bool:
+        return False
+
+    def plan_move_position(self, target_pos, current_pos, current_tilt):
+        return [TravelTo(target_pos, coupled_tilt=target_pos)]
+
+    def plan_move_tilt(self, target_tilt, current_pos, current_tilt):
+        return [TiltTo(target_tilt, coupled_travel=target_tilt)]
+
+    def snap_trackers_to_physical(self, travel_calc, tilt_calc):
+        # Same logic as existing enforce_constraints
+        current_travel = travel_calc.current_position()
+        current_tilt_pos = tilt_calc.current_position()
+        if current_travel == 0 and current_tilt_pos != 0:
+            _LOGGER.debug("ProportionalTilt :: Travel at 0%%, forcing tilt to 0%% (was %d%%)", current_tilt_pos)
+            tilt_calc.set_position(0)
+        elif current_travel == 100 and current_tilt_pos != 100:
+            _LOGGER.debug("ProportionalTilt :: Travel at 100%%, forcing tilt to 100%% (was %d%%)", current_tilt_pos)
+            tilt_calc.set_position(100)

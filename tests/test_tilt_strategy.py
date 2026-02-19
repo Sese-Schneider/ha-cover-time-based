@@ -400,3 +400,72 @@ class TestProportionalTiltCanCalibrate:
     def test_cannot_calibrate(self):
         strategy = ProportionalTilt()
         assert strategy.can_calibrate_tilt() is False
+
+
+# --- Proportional new interface tests ---
+
+
+class TestProportionalTiltProperties:
+    def test_name(self):
+        assert ProportionalTilt().name == "proportional"
+
+    def test_uses_tilt_motor(self):
+        assert ProportionalTilt().uses_tilt_motor is False
+
+
+class TestProportionalPlanMovePosition:
+    def test_returns_travel_with_coupled_tilt(self):
+        strategy = ProportionalTilt()
+        steps = strategy.plan_move_position(target_pos=30, current_pos=100, current_tilt=100)
+        assert steps == [TravelTo(30, coupled_tilt=30)]
+
+    def test_fully_open(self):
+        strategy = ProportionalTilt()
+        steps = strategy.plan_move_position(target_pos=0, current_pos=100, current_tilt=100)
+        assert steps == [TravelTo(0, coupled_tilt=0)]
+
+    def test_fully_closed(self):
+        strategy = ProportionalTilt()
+        steps = strategy.plan_move_position(target_pos=100, current_pos=0, current_tilt=0)
+        assert steps == [TravelTo(100, coupled_tilt=100)]
+
+
+class TestProportionalPlanMoveTilt:
+    def test_returns_tilt_with_coupled_travel(self):
+        strategy = ProportionalTilt()
+        steps = strategy.plan_move_tilt(target_tilt=50, current_pos=80, current_tilt=100)
+        assert steps == [TiltTo(50, coupled_travel=50)]
+
+    def test_fully_open(self):
+        strategy = ProportionalTilt()
+        steps = strategy.plan_move_tilt(target_tilt=0, current_pos=50, current_tilt=50)
+        assert steps == [TiltTo(0, coupled_travel=0)]
+
+
+class TestProportionalSnapTrackers:
+    def test_forces_tilt_to_zero_at_travel_zero(self):
+        strategy = ProportionalTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(0)
+        tilt.set_position(5)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 0
+
+    def test_forces_tilt_to_100_at_travel_100(self):
+        strategy = ProportionalTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(100)
+        tilt.set_position(95)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 100
+
+    def test_no_op_at_midpoint(self):
+        strategy = ProportionalTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(50)
+        tilt.set_position(30)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 30
