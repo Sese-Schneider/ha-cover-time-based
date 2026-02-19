@@ -416,19 +416,44 @@ class CoverTimeBasedCard extends LitElement {
     }
   }
 
-  async _onPositionChange(value) {
+  async _onPositionPresetChange(value) {
     this._knownPosition = value;
     if (value === "unknown") return;
-    const position = value === "open" ? 100 : 0;
+
+    const tiltMode = this._config?.tilt_mode || "none";
+    const hasTilt = tiltMode !== "none";
+
+    // Determine position and tilt values from preset
+    let position, tiltPosition;
+    switch (value) {
+      case "open":
+        position = 100; // HA convention: 100 = fully open
+        tiltPosition = hasTilt ? 100 : null;
+        break;
+      case "closed":
+        // Proportional/none mode: position+tilt both closed
+        position = 0;
+        tiltPosition = hasTilt ? 0 : null;
+        break;
+      case "closed_tilt_open":
+        position = 0;
+        tiltPosition = 100;
+        break;
+      case "closed_tilt_closed":
+        position = 0;
+        tiltPosition = 0;
+        break;
+    }
+
     try {
       await this.hass.callService(DOMAIN, "set_known_position", {
         entity_id: this._selectedEntity,
         position,
       });
-      if (this._config?.tilt_mode && this._config.tilt_mode !== "none") {
+      if (tiltPosition != null) {
         await this.hass.callService(DOMAIN, "set_known_tilt_position", {
           entity_id: this._selectedEntity,
-          tilt_position: position,
+          tilt_position: tiltPosition,
         });
       }
       this.updateComplete.then(() => {
@@ -880,6 +905,9 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _renderPositionReset() {
+    const tiltMode = this._config?.tilt_mode || "none";
+    const hasIndependentTilt = tiltMode === "sequential" || tiltMode === "dual_motor";
+
     return html`
       <div class="section">
         <div class="field-label">Current Position</div>
@@ -891,11 +919,18 @@ class CoverTimeBasedCard extends LitElement {
             <select
               class="ha-select"
               id="position-select"
-              @change=${(e) => this._onPositionChange(e.target.value)}
+              @change=${(e) => this._onPositionPresetChange(e.target.value)}
             >
               <option value="unknown" ?selected=${this._knownPosition === "unknown"}>Unknown</option>
               <option value="open" ?selected=${this._knownPosition === "open"}>Fully open</option>
-              <option value="closed" ?selected=${this._knownPosition === "closed"}>Fully closed</option>
+              ${hasIndependentTilt
+                ? html`
+                    <option value="closed_tilt_open" ?selected=${this._knownPosition === "closed_tilt_open"}>Fully closed, tilt open</option>
+                    <option value="closed_tilt_closed" ?selected=${this._knownPosition === "closed_tilt_closed"}>Fully closed, tilt closed</option>
+                  `
+                : html`
+                    <option value="closed" ?selected=${this._knownPosition === "closed"}>Fully closed</option>
+                  `}
             </select>
           </div>
         </div>
@@ -906,12 +941,12 @@ class CoverTimeBasedCard extends LitElement {
   _renderCalibration(calibrating) {
     const state = this._getEntityState();
     const attrs = state?.attributes || {};
-    const hasTilt =
-      this._config?.tilt_mode && this._config.tilt_mode !== "none";
+    const tiltMode = this._config?.tilt_mode || "none";
+    const hasTiltCalibration = tiltMode === "sequential" || tiltMode === "dual_motor";
 
     const availableAttributes = Object.entries(ATTRIBUTE_LABELS).filter(
       ([key]) => {
-        if (!hasTilt && key.startsWith("tilt_")) return false;
+        if (!hasTiltCalibration && key.startsWith("tilt_")) return false;
         return true;
       }
     );
@@ -923,6 +958,13 @@ class CoverTimeBasedCard extends LitElement {
       disabledKeys.add("travel_time_open");
       disabledKeys.add("tilt_time_open");
     } else if (this._knownPosition === "closed") {
+      // Proportional/none: position closed (tilt matches)
+      disabledKeys.add("travel_time_close");
+      disabledKeys.add("tilt_time_close");
+    } else if (this._knownPosition === "closed_tilt_open") {
+      disabledKeys.add("travel_time_close");
+      disabledKeys.add("tilt_time_open");
+    } else if (this._knownPosition === "closed_tilt_closed") {
       disabledKeys.add("travel_time_close");
       disabledKeys.add("tilt_time_close");
     }
