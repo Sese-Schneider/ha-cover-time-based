@@ -581,6 +581,7 @@ class CoverTimeBasedCard extends LitElement {
               ${this._renderDeviceType(c)} ${this._renderInputEntities(c)}
               ${this._renderEndpointRunon(c)}
               ${this._renderInputMode(c)} ${this._renderTiltSupport(c)}
+              ${this._renderTiltMotorSection(c)}
             </fieldset>
           `
         : html`
@@ -749,6 +750,74 @@ class CoverTimeBasedCard extends LitElement {
             Separate tilt motor
           </option>
         </select>
+      </div>
+    `;
+  }
+
+  _renderTiltMotorSection(c) {
+    if (c.tilt_mode !== "dual_motor") return "";
+
+    return html`
+      <div class="section">
+        <div class="field-label">Tilt Motor</div>
+        <div class="entity-grid">
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${c.tilt_open_switch || ""}
+            .includeDomains=${["switch"]}
+            label="Tilt open switch"
+            @value-changed=${(e) =>
+              this._onSwitchEntityChange("tilt_open_switch", e)}
+          ></ha-entity-picker>
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${c.tilt_close_switch || ""}
+            .includeDomains=${["switch"]}
+            label="Tilt close switch"
+            @value-changed=${(e) =>
+              this._onSwitchEntityChange("tilt_close_switch", e)}
+          ></ha-entity-picker>
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${c.tilt_stop_switch || ""}
+            .includeDomains=${["switch"]}
+            label="Tilt stop switch (optional)"
+            @value-changed=${(e) =>
+              this._onSwitchEntityChange("tilt_stop_switch", e)}
+          ></ha-entity-picker>
+        </div>
+        <div class="dual-motor-config">
+          <ha-textfield
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            label="Safe tilt position"
+            helper="Tilt moves here before travel (0 = fully open)"
+            .value=${String(c.safe_tilt_position ?? 0)}
+            @change=${(e) => {
+              const v = parseInt(e.target.value);
+              if (!isNaN(v) && v >= 0 && v <= 100) {
+                this._updateLocal({ safe_tilt_position: v });
+              }
+            }}
+          ></ha-textfield>
+          <ha-textfield
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            label="Min tilt allowed position (optional)"
+            helper="Cover must be at least this closed before tilting"
+            .value=${c.min_tilt_allowed_position != null ? String(c.min_tilt_allowed_position) : ""}
+            @change=${(e) => {
+              const v = e.target.value.trim();
+              this._updateLocal({
+                min_tilt_allowed_position: v === "" ? null : parseInt(v),
+              });
+            }}
+          ></ha-textfield>
+        </div>
       </div>
     `;
   }
@@ -1069,6 +1138,17 @@ class CoverTimeBasedCard extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+
+      /* Dual motor config */
+      .dual-motor-config {
+        display: flex;
+        gap: 16px;
+        margin-top: 12px;
+      }
+
+      .dual-motor-config ha-textfield {
+        flex: 1;
       }
 
       .inline-field {
