@@ -306,7 +306,27 @@ class CoverTimeBasedCard extends LitElement {
       this._updateLocal({
         tilt_time_close: null,
         tilt_time_open: null,
+        tilt_startup_delay: null,
         tilt_mode: "none",
+        // Clear dual-motor fields
+        safe_tilt_position: null,
+        min_tilt_allowed_position: null,
+        tilt_open_switch: null,
+        tilt_close_switch: null,
+        tilt_stop_switch: null,
+      });
+    } else if (mode === "proportional") {
+      // Proportional: tilt derived from position, no tilt times needed
+      this._updateLocal({
+        tilt_mode: mode,
+        tilt_time_close: null,
+        tilt_time_open: null,
+        tilt_startup_delay: null,
+        safe_tilt_position: null,
+        min_tilt_allowed_position: null,
+        tilt_open_switch: null,
+        tilt_close_switch: null,
+        tilt_stop_switch: null,
       });
     } else {
       const updates = { tilt_mode: mode };
@@ -316,6 +336,14 @@ class CoverTimeBasedCard extends LitElement {
       }
       if (this._config.tilt_time_open == null) {
         updates.tilt_time_open = 5.0;
+      }
+      // Clear dual-motor fields when switching to sequential
+      if (mode === "sequential") {
+        updates.safe_tilt_position = null;
+        updates.min_tilt_allowed_position = null;
+        updates.tilt_open_switch = null;
+        updates.tilt_close_switch = null;
+        updates.tilt_stop_switch = null;
       }
       this._updateLocal(updates);
     }
@@ -711,11 +739,14 @@ class CoverTimeBasedCard extends LitElement {
           <option value="none" ?selected=${tiltMode === "none"}>
             Not supported
           </option>
-          <option value="before_after" ?selected=${tiltMode === "before_after"}>
-            Tilts before/after cover movement
+          <option value="sequential" ?selected=${tiltMode === "sequential"}>
+            Closes then tilts
           </option>
-          <option value="during" ?selected=${tiltMode === "during"}>
-            Tilts with cover movement
+          <option value="proportional" ?selected=${tiltMode === "proportional"}>
+            Tilts with movement
+          </option>
+          <option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
+            Separate tilt motor
           </option>
         </select>
       </div>
@@ -723,7 +754,7 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _renderTimingTable(c) {
-    const hasTilt = c.tilt_mode && c.tilt_mode !== "none";
+    const hasTiltTimes = c.tilt_mode === "sequential" || c.tilt_mode === "dual_motor";
 
     const rows = [
       ["Travel time (close)", "travel_time_close", c.travel_time_close],
@@ -731,7 +762,7 @@ class CoverTimeBasedCard extends LitElement {
       ["Travel startup delay", "travel_startup_delay", c.travel_startup_delay],
     ];
 
-    if (hasTilt) {
+    if (hasTiltTimes) {
       rows.push(
         ["Tilt time (close)", "tilt_time_close", c.tilt_time_close],
         ["Tilt time (open)", "tilt_time_open", c.tilt_time_open],
