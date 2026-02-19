@@ -459,13 +459,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         tilt_target = None
         if self._tilt_strategy is not None:
-            tilt_target = self._tilt_strategy.calc_tilt_for_travel(
-                movement_time,
-                closing,
-                self.tilt_calc,
-                self._tilting_time_close,
-                self._tilting_time_open,
-            )
+            current_pos = self.travel_calc.current_position()
+            current_tilt = self.tilt_calc.current_position()
+            if current_pos is not None and current_tilt is not None:
+                steps = self._tilt_strategy.plan_move_position(
+                    target, current_pos, current_tilt
+                )
+                tilt_target = self._extract_coupled_tilt(steps)
 
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
@@ -525,13 +525,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         travel_target = None
         if self._tilt_strategy is not None:
-            travel_target = self._tilt_strategy.calc_travel_for_tilt(
-                movement_time,
-                closing,
-                self.travel_calc,
-                self._travel_time_close,
-                self._travel_time_open,
-            )
+            current_pos = self.travel_calc.current_position()
+            current_tilt = self.tilt_calc.current_position()
+            if current_pos is not None and current_tilt is not None:
+                steps = self._tilt_strategy.plan_move_tilt(
+                    target, current_pos, current_tilt
+                )
+                travel_target = self._extract_coupled_travel(steps)
 
         _LOGGER.debug(
             "_async_move_tilt_to_endpoint :: target=%d, tilt_distance=%f%%, movement_time=%fs, travel_pos=%s",
@@ -559,7 +559,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._cancel_delay_task()
         self._handle_stop()
         if self._tilt_strategy is not None:
-            self._tilt_strategy.enforce_constraints(self.travel_calc, self.tilt_calc)
+            self._tilt_strategy.snap_trackers_to_physical(
+                self.travel_calc, self.tilt_calc
+            )
         await self._send_stop()
         self.async_write_ha_state()
         self._last_command = None
@@ -655,13 +657,12 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         tilt_target = None
         if self._tilt_strategy is not None:
-            tilt_target = self._tilt_strategy.calc_tilt_for_travel(
-                movement_time,
-                closing,
-                self.tilt_calc,
-                self._tilting_time_close,
-                self._tilting_time_open,
-            )
+            current_tilt = self.tilt_calc.current_position()
+            if current is not None and current_tilt is not None:
+                steps = self._tilt_strategy.plan_move_position(
+                    target, current, current_tilt
+                )
+                tilt_target = self._extract_coupled_tilt(steps)
 
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
@@ -717,13 +718,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         travel_target = None
         if self._tilt_strategy is not None:
-            travel_target = self._tilt_strategy.calc_travel_for_tilt(
-                movement_time,
-                closing,
-                self.travel_calc,
-                self._travel_time_close,
-                self._travel_time_open,
-            )
+            current_pos = self.travel_calc.current_position()
+            if current is not None and current_pos is not None:
+                steps = self._tilt_strategy.plan_move_tilt(target, current_pos, current)
+                travel_target = self._extract_coupled_travel(steps)
 
         if self._is_movement_too_short(
             movement_time, target, current, "set_tilt_position"
@@ -830,7 +828,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         await self._async_handle_command(SERVICE_STOP_COVER)
         self.travel_calc.set_position(position)
         if self._tilt_strategy is not None:
-            self._tilt_strategy.enforce_constraints(self.travel_calc, self.tilt_calc)
+            self._tilt_strategy.snap_trackers_to_physical(
+                self.travel_calc, self.tilt_calc
+            )
         self._last_command = None
 
     async def set_known_tilt_position(self, **kwargs):
@@ -1191,6 +1191,40 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         new_options = {**entry.options, conf_key: value}
         self.hass.config_entries.async_update_entry(entry, options=new_options)
+
+    @staticmethod
+    def _extract_coupled_tilt(steps):
+        """Extract the tilt target from a movement plan.
+
+        For coupled steps (proportional), returns the coupled_tilt value.
+        For multi-step plans (sequential), returns the TiltTo target.
+        Returns None if no tilt movement in the plan.
+        """
+        from .tilt_strategies import TiltTo, TravelTo
+
+        for step in steps:
+            if isinstance(step, TravelTo) and step.coupled_tilt is not None:
+                return step.coupled_tilt
+            if isinstance(step, TiltTo):
+                return step.target
+        return None
+
+    @staticmethod
+    def _extract_coupled_travel(steps):
+        """Extract the travel target from a movement plan.
+
+        For coupled steps (proportional), returns the coupled_travel value.
+        For multi-step plans (sequential), returns the TravelTo target.
+        Returns None if no travel movement in the plan.
+        """
+        from .tilt_strategies import TiltTo, TravelTo
+
+        for step in steps:
+            if isinstance(step, TiltTo) and step.coupled_travel is not None:
+                return step.coupled_travel
+            if isinstance(step, TravelTo):
+                return step.target
+        return None
 
     async def _async_handle_command(self, command, *args):
         if command == SERVICE_CLOSE_COVER:

@@ -139,7 +139,9 @@ class ToggleModeCover(SwitchCoverTimeBased):
         self._cancel_delay_task()
         self._handle_stop()
         if self._tilt_strategy is not None:
-            self._tilt_strategy.enforce_constraints(self.travel_calc, self.tilt_calc)
+            self._tilt_strategy.snap_trackers_to_physical(
+                self.travel_calc, self.tilt_calc
+            )
         if was_active:
             await self._send_stop()
         self.async_write_ha_state()

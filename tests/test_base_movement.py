@@ -116,13 +116,27 @@ class TestOpenStopsOppositeDirection:
 
 
 class TestCloseWithTiltCoupling:
-    """Closing with tilt support should also move tilt toward closed."""
+    """Closing with tilt support should also move tilt when plan calls for it."""
 
     @pytest.mark.asyncio
-    async def test_close_also_starts_tilt_travel(self, make_cover):
+    async def test_close_no_tilt_when_already_flat_sequential(self, make_cover):
+        """Sequential: closing with tilt already flat does not move tilt."""
         cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        assert cover.travel_calc.is_traveling()
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_close_also_starts_tilt_travel_when_tilted(self, make_cover):
+        """Sequential: closing with tilt not flat should flatten tilt first."""
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(50)
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
@@ -132,6 +146,7 @@ class TestCloseWithTiltCoupling:
 
     @pytest.mark.asyncio
     async def test_open_also_starts_tilt_travel(self, make_cover):
+        """Sequential: opening with tilt at 100 should flatten tilt."""
         cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(100)
@@ -205,10 +220,11 @@ class TestOpenTilt:
 
 
 class TestTiltStopsTravelFirst:
-    """Tilt movement should stop any active travel first."""
+    """Tilt movement should stop any active travel first, then restart if plan requires it."""
 
     @pytest.mark.asyncio
-    async def test_close_tilt_stops_active_travel(self, make_cover):
+    async def test_close_tilt_restarts_travel_when_plan_requires(self, make_cover):
+        """Sequential: tilt close from pos 50 needs travel to 100 first."""
         cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -217,8 +233,9 @@ class TestTiltStopsTravelFirst:
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover_tilt()
 
-        # Travel should have been stopped
-        assert not cover.travel_calc.is_traveling()
+        # Sequential plan_move_tilt requires travel to 100 before tilting,
+        # so travel restarts toward 100 as a coupled target
+        assert cover.travel_calc.is_traveling()
         # Tilt should be traveling
         assert cover.tilt_calc.is_traveling()
 
@@ -259,13 +276,34 @@ class TestTiltWithTravelCoupling:
         assert cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_close_tilt_without_coupling_does_not_move_travel(self, make_cover):
+    async def test_close_tilt_sequential_moves_travel_to_closed_first(self, make_cover):
+        """Sequential: tilting from pos 50 requires travel to 100 first."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
             tilt_mode="sequential",
         )
         cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover_tilt()
+
+        assert cover.tilt_calc.is_traveling()
+        # Sequential plan requires travel to 100 before tilting
+        assert cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_close_tilt_sequential_no_travel_when_already_closed(
+        self, make_cover
+    ):
+        """Sequential: tilting when already at closed position does not move travel."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential",
+        )
+        cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -365,10 +403,24 @@ class TestSetPositionWithTilt:
     """set_position with tilt support should also calculate tilt target."""
 
     @pytest.mark.asyncio
-    async def test_set_position_also_moves_tilt(self, make_cover):
+    async def test_set_position_no_tilt_when_already_flat_sequential(self, make_cover):
+        """Sequential: closing with tilt already flat does not move tilt."""
         cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(0)  # close fully
+
+        assert cover.travel_calc.is_traveling()
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_set_position_also_moves_tilt_when_tilted(self, make_cover):
+        """Sequential: closing with non-flat tilt should flatten tilt."""
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(50)
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.set_position(0)  # close fully
@@ -422,8 +474,8 @@ class TestSetTiltPosition:
         cover.hass.services.async_call.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_set_tilt_stops_active_travel(self, make_cover):
-        """set_tilt_position should stop any active travel (not a direction change)."""
+    async def test_set_tilt_restarts_travel_when_plan_requires(self, make_cover):
+        """Sequential: set_tilt_position stops active travel, then restarts to 100."""
         cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -432,8 +484,9 @@ class TestSetTiltPosition:
         with patch.object(cover, "async_write_ha_state"):
             await cover.set_tilt_position(50)
 
-        # Travel should be stopped, tilt should be moving
-        assert not cover.travel_calc.is_traveling()
+        # Sequential plan requires travel to 100 before tilting,
+        # so travel restarts toward 100 as a coupled target
+        assert cover.travel_calc.is_traveling()
         assert cover.tilt_calc.is_traveling()
 
 
@@ -457,13 +510,32 @@ class TestSetTiltWithTravelCoupling:
         assert cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_set_tilt_does_not_move_travel_when_uncoupled(self, make_cover):
+    async def test_set_tilt_sequential_moves_travel_to_closed_first(self, make_cover):
+        """Sequential: set_tilt from pos 50 requires travel to 100 first."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
             tilt_mode="sequential",
         )
         cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(0)
+
+        assert cover.tilt_calc.is_traveling()
+        # Sequential plan requires travel to 100 before tilting
+        assert cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_set_tilt_sequential_no_travel_when_already_closed(self, make_cover):
+        """Sequential: set_tilt from pos 100 does not move travel."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential",
+        )
+        cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -904,7 +976,9 @@ class TestTiltConstraints:
         cover.travel_calc.set_position(0)  # fully open
         cover.tilt_calc.set_position(50)
 
-        cover._tilt_strategy.enforce_constraints(cover.travel_calc, cover.tilt_calc)
+        cover._tilt_strategy.snap_trackers_to_physical(
+            cover.travel_calc, cover.tilt_calc
+        )
 
         assert cover.tilt_calc.current_position() == 0
 
@@ -917,11 +991,14 @@ class TestTiltConstraints:
         cover.travel_calc.set_position(100)  # fully closed
         cover.tilt_calc.set_position(50)
 
-        cover._tilt_strategy.enforce_constraints(cover.travel_calc, cover.tilt_calc)
+        cover._tilt_strategy.snap_trackers_to_physical(
+            cover.travel_calc, cover.tilt_calc
+        )
 
         assert cover.tilt_calc.current_position() == 100
 
-    def test_no_constraint_without_coupling(self, make_cover):
+    def test_sequential_forces_tilt_flat_when_not_closed(self, make_cover):
+        """Sequential: tilt is forced to 0 when travel is not at closed (100)."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -930,7 +1007,25 @@ class TestTiltConstraints:
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(50)
 
-        cover._tilt_strategy.enforce_constraints(cover.travel_calc, cover.tilt_calc)
+        cover._tilt_strategy.snap_trackers_to_physical(
+            cover.travel_calc, cover.tilt_calc
+        )
+
+        assert cover.tilt_calc.current_position() == 0  # forced flat
+
+    def test_sequential_no_constraint_when_closed(self, make_cover):
+        """Sequential: tilt unchanged when travel is at closed (100)."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential",
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(50)
+
+        cover._tilt_strategy.snap_trackers_to_physical(
+            cover.travel_calc, cover.tilt_calc
+        )
 
         assert cover.tilt_calc.current_position() == 50  # unchanged
 
@@ -943,6 +1038,8 @@ class TestTiltConstraints:
         cover.travel_calc.set_position(50)  # midpoint
         cover.tilt_calc.set_position(30)
 
-        cover._tilt_strategy.enforce_constraints(cover.travel_calc, cover.tilt_calc)
+        cover._tilt_strategy.snap_trackers_to_physical(
+            cover.travel_calc, cover.tilt_calc
+        )
 
         assert cover.tilt_calc.current_position() == 30  # unchanged
