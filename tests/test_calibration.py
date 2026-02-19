@@ -56,6 +56,65 @@ class TestCalibrationState:
         assert SERVICE_STOP_CALIBRATION == "stop_calibration"
 
 
+class TestGetCalibratableAttributes:
+    """Test get_calibratable_attributes filters by tilt mode."""
+
+    def test_none_mode_excludes_tilt(self):
+        from custom_components.cover_time_based.calibration import (
+            get_calibratable_attributes,
+        )
+
+        attrs = get_calibratable_attributes("none")
+        assert "travel_time_close" in attrs
+        assert "travel_time_open" in attrs
+        assert "travel_startup_delay" in attrs
+        assert "min_movement_time" in attrs
+        assert "tilt_time_close" not in attrs
+        assert "tilt_time_open" not in attrs
+        assert "tilt_startup_delay" not in attrs
+
+    def test_sequential_includes_tilt(self):
+        from custom_components.cover_time_based.calibration import (
+            get_calibratable_attributes,
+        )
+
+        attrs = get_calibratable_attributes("sequential")
+        assert "travel_time_close" in attrs
+        assert "tilt_time_close" in attrs
+        assert "tilt_time_open" in attrs
+        assert "tilt_startup_delay" in attrs
+
+    def test_proportional_excludes_tilt(self):
+        from custom_components.cover_time_based.calibration import (
+            get_calibratable_attributes,
+        )
+
+        attrs = get_calibratable_attributes("proportional")
+        assert "travel_time_close" in attrs
+        assert "tilt_time_close" not in attrs
+        assert "tilt_time_open" not in attrs
+        assert "tilt_startup_delay" not in attrs
+
+    def test_dual_motor_includes_tilt(self):
+        from custom_components.cover_time_based.calibration import (
+            get_calibratable_attributes,
+        )
+
+        attrs = get_calibratable_attributes("dual_motor")
+        assert "travel_time_close" in attrs
+        assert "tilt_time_close" in attrs
+        assert "tilt_time_open" in attrs
+        assert "tilt_startup_delay" in attrs
+
+    def test_returns_list(self):
+        from custom_components.cover_time_based.calibration import (
+            get_calibratable_attributes,
+        )
+
+        result = get_calibratable_attributes("none")
+        assert isinstance(result, list)
+
+
 class TestStartCalibrationTravelTime:
     @pytest.mark.asyncio
     async def test_start_travel_time_close_moves_cover(self, make_cover):
