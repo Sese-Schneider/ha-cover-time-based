@@ -2,27 +2,27 @@
 
 from xknx.devices import TravelCalculator
 
-from custom_components.cover_time_based.tilt_strategy import (
+from custom_components.cover_time_based.tilt_strategies import (
     ProportionalTilt,
     SequentialTilt,
-    _calc_coupled_target,
+    calc_coupled_target,
 )
 
 
 # ===================================================================
-# _calc_coupled_target helper
+# calc_coupled_target helper
 # ===================================================================
 
 
 class TestCalcCoupledTarget:
-    """Test the module-level _calc_coupled_target helper."""
+    """Test the module-level calc_coupled_target helper."""
 
     def test_closing_from_zero(self):
         """Closing from position 0 should move forward proportionally."""
         calc = TravelCalculator(10.0, 10.0)
         calc.set_position(0)
         # 5s movement with 10s total = 50% distance
-        result = _calc_coupled_target(
+        result = calc_coupled_target(
             5.0,
             closing=True,
             coupled_calc=calc,
@@ -36,7 +36,7 @@ class TestCalcCoupledTarget:
         calc = TravelCalculator(10.0, 10.0)
         calc.set_position(50)
         # 2.5s movement with 10s total = 25% distance
-        result = _calc_coupled_target(
+        result = calc_coupled_target(
             2.5,
             closing=True,
             coupled_calc=calc,
@@ -50,7 +50,7 @@ class TestCalcCoupledTarget:
         calc = TravelCalculator(10.0, 10.0)
         calc.set_position(80)
         # 5s movement with 10s total = 50% distance, 80+50=130 -> clamped to 100
-        result = _calc_coupled_target(
+        result = calc_coupled_target(
             5.0,
             closing=True,
             coupled_calc=calc,
@@ -64,7 +64,7 @@ class TestCalcCoupledTarget:
         calc = TravelCalculator(10.0, 10.0)
         calc.set_position(100)
         # 5s movement with 10s total = 50% distance
-        result = _calc_coupled_target(
+        result = calc_coupled_target(
             5.0,
             closing=False,
             coupled_calc=calc,
@@ -78,7 +78,7 @@ class TestCalcCoupledTarget:
         calc = TravelCalculator(10.0, 10.0)
         calc.set_position(50)
         # 2.5s movement with 10s total = 25% distance
-        result = _calc_coupled_target(
+        result = calc_coupled_target(
             2.5,
             closing=False,
             coupled_calc=calc,
@@ -92,7 +92,7 @@ class TestCalcCoupledTarget:
         calc = TravelCalculator(10.0, 10.0)
         calc.set_position(20)
         # 5s movement with 10s total = 50% distance, 20-50=-30 -> clamped to 0
-        result = _calc_coupled_target(
+        result = calc_coupled_target(
             5.0,
             closing=False,
             coupled_calc=calc,
@@ -106,7 +106,7 @@ class TestCalcCoupledTarget:
         calc = TravelCalculator(10.0, 20.0)
         calc.set_position(0)
         # 5s movement with 10s close time = 50% distance
-        result = _calc_coupled_target(
+        result = calc_coupled_target(
             5.0,
             closing=True,
             coupled_calc=calc,
@@ -120,7 +120,7 @@ class TestCalcCoupledTarget:
         calc = TravelCalculator(10.0, 20.0)
         calc.set_position(100)
         # 5s movement with 20s open time = 25% distance
-        result = _calc_coupled_target(
+        result = calc_coupled_target(
             5.0,
             closing=False,
             coupled_calc=calc,

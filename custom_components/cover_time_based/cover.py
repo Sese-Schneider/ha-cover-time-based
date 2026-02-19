@@ -237,15 +237,15 @@ def _resolve_entity(hass, entity_id):
 
 def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open):
     """Map tilt_mode config string to a TiltStrategy instance (or None)."""
-    from .tilt_strategy import ProportionalTilt, SequentialTilt
+    from .tilt_strategies import ProportionalTilt, SequentialTilt
 
     has_tilt_times = tilt_time_close is not None and tilt_time_open is not None
     if not has_tilt_times:
         return None
 
-    if tilt_mode_str in ("proportional", "during"):
+    if tilt_mode_str == "proportional":
         return ProportionalTilt()
-    # "sequential", "before_after", or any other value with tilt times → sequential
+    # "sequential" or any other value with tilt times → sequential
     return SequentialTilt()
 
 
@@ -363,13 +363,7 @@ def _migrate_yaml_keys(config):
                 config[new_key] = config[old_key]
             config.pop(old_key)
 
-    # Migrate travel_moves_with_tilt boolean → tilt_mode string
-    if CONF_TRAVEL_MOVES_WITH_TILT in config:
-        if CONF_TILT_MODE not in config:
-            config[CONF_TILT_MODE] = (
-                "proportional" if config[CONF_TRAVEL_MOVES_WITH_TILT] else "sequential"
-            )
-        config.pop(CONF_TRAVEL_MOVES_WITH_TILT)
+    # travel_moves_with_tilt is kept as a separate boolean option (not converted)
 
 
 def devices_from_config(domain_config):
