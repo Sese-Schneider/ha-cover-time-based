@@ -235,6 +235,20 @@ def _resolve_entity(hass, entity_id):
     return entity
 
 
+def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open):
+    """Map tilt_mode config string to a TiltStrategy instance (or None)."""
+    from .tilt_strategy import ProportionalTilt, SequentialTilt
+
+    has_tilt_times = tilt_time_close is not None and tilt_time_open is not None
+    if not has_tilt_times:
+        return None
+
+    if tilt_mode_str in ("proportional", "during"):
+        return ProportionalTilt()
+    # "sequential", "before_after", or any other value with tilt times → sequential
+    return SequentialTilt()
+
+
 def _create_cover_from_options(options, device_id="", name=""):
     """Create the appropriate cover subclass based on options."""
     from .cover_wrapped import WrappedCoverTimeBased
@@ -244,11 +258,18 @@ def _create_cover_from_options(options, device_id="", name=""):
 
     device_type = options.get(CONF_DEVICE_TYPE, DEVICE_TYPE_SWITCH)
 
+    tilt_mode_str = options.get(CONF_TILT_MODE, "none")
+    tilt_strategy = _resolve_tilt_strategy(
+        tilt_mode_str,
+        options.get(CONF_TILT_TIME_CLOSE),
+        options.get(CONF_TILT_TIME_OPEN),
+    )
+
     # Common params for all subclasses
     common = dict(
         device_id=device_id,
         name=name,
-        tilt_mode=options.get(CONF_TILT_MODE, "none"),
+        tilt_strategy=tilt_strategy,
         travel_time_close=options.get(CONF_TRAVEL_TIME_CLOSE),
         travel_time_open=options.get(CONF_TRAVEL_TIME_OPEN),
         tilt_time_close=options.get(CONF_TILT_TIME_CLOSE),

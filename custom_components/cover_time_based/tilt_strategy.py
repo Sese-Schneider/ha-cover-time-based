@@ -35,7 +35,9 @@ def _calc_coupled_target(
     coupled_time = coupled_time_close if closing else coupled_time_open
     coupled_distance = (movement_time / coupled_time) * 100.0
     current = coupled_calc.current_position()
-    assert current is not None, "coupled calculator position must be set before coupling"
+    assert current is not None, (
+        "coupled calculator position must be set before coupling"
+    )
     if closing:
         return min(100, int(current + coupled_distance))
     return max(0, int(current - coupled_distance))

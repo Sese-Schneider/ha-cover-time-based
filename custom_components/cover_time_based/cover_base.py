@@ -51,7 +51,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self,
         device_id,
         name,
-        tilt_mode,
+        tilt_strategy,
         travel_time_close,
         travel_time_open,
         tilt_time_close,
@@ -64,7 +64,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Initialize the cover."""
         self._unique_id = device_id
 
-        self._tilt_mode_config = tilt_mode
+        self._tilt_strategy = tilt_strategy
         self._travel_time_close = travel_time_close
         self._travel_time_open = travel_time_open
         self._tilting_time_close = tilt_time_close
@@ -90,7 +90,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._travel_time_close,
             self._travel_time_open,
         )
-        if self._has_tilt_support():
+        if self._tilting_time_close is not None and self._tilting_time_open is not None:
             self.tilt_calc = TravelCalculator(
                 self._tilting_time_close,
                 self._tilting_time_open,
@@ -171,22 +171,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._startup_delay_task.cancel()
             self._startup_delay_task = None
 
-    def _calc_coupled_target(
-        self, movement_time, closing, coupled_calc, coupled_time_down, coupled_time_up
-    ):
-        """Calculate target position for a coupled calculator based on primary movement time.
-
-        When travel moves, tilt moves proportionally (and vice versa when
-        travel_moves_with_tilt is enabled). This computes how far the coupled
-        calculator should move given the primary movement duration.
-        """
-        coupled_time = coupled_time_down if closing else coupled_time_up
-        coupled_distance = (movement_time / coupled_time) * 100.0
-        current = coupled_calc.current_position()
-        if closing:
-            return min(100, current + coupled_distance)
-        return max(0, current - coupled_distance)
-
     def _begin_movement(
         self, target, coupled_target, primary_calc, coupled_calc, startup_delay
     ):
@@ -242,20 +226,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Return the name of the cover."""
         return self._name
 
-    @property
-    def _tilt_mode(self):
-        """Return tilt mode: 'none', 'during', or 'before_after'."""
-        has_tilt = (
-            self._tilting_time_close is not None or self._tilting_time_open is not None
-        )
-        if not has_tilt:
-            return "none"
-        return (
-            self._tilt_mode_config
-            if self._tilt_mode_config != "none"
-            else "before_after"
-        )
-
     def _are_entities_configured(self) -> bool:
         """Return True if the required input entities are configured.
 
@@ -310,8 +280,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def extra_state_attributes(self):
         """Return the device state attributes."""
         attr = {}
-        if self._tilt_mode_config is not None:
-            attr[CONF_TILT_MODE] = self._tilt_mode_config
+        if self._tilt_strategy is not None:
+            from .tilt_strategy import ProportionalTilt, SequentialTilt
+
+            if isinstance(self._tilt_strategy, ProportionalTilt):
+                attr[CONF_TILT_MODE] = "proportional"
+            elif isinstance(self._tilt_strategy, SequentialTilt):
+                attr[CONF_TILT_MODE] = "sequential"
         if self._travel_time_close is not None:
             attr[CONF_TRAVEL_TIME_CLOSE] = self._travel_time_close
         if self._travel_time_open is not None:
@@ -488,8 +463,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._last_command = command
 
         tilt_target = None
-        if self._has_tilt_support():
-            tilt_target = self._calc_coupled_target(
+        if self._tilt_strategy is not None:
+            tilt_target = self._tilt_strategy.calc_tilt_for_travel(
                 movement_time,
                 closing,
                 self.tilt_calc,
@@ -554,8 +529,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         movement_time = (tilt_distance / 100.0) * tilt_time
 
         travel_target = None
-        if self._tilt_mode == "during":
-            travel_target = self._calc_coupled_target(
+        if self._tilt_strategy is not None:
+            travel_target = self._tilt_strategy.calc_travel_for_tilt(
                 movement_time,
                 closing,
                 self.travel_calc,
@@ -588,7 +563,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
         self._handle_stop()
-        self._enforce_tilt_constraints()
+        if self._tilt_strategy is not None:
+            self._tilt_strategy.enforce_constraints(self.travel_calc, self.tilt_calc)
         await self._send_stop()
         self.async_write_ha_state()
         self._last_command = None
@@ -683,8 +659,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._last_command = command
 
         tilt_target = None
-        if self._has_tilt_support():
-            tilt_target = self._calc_coupled_target(
+        if self._tilt_strategy is not None:
+            tilt_target = self._tilt_strategy.calc_tilt_for_travel(
                 movement_time,
                 closing,
                 self.tilt_calc,
@@ -745,8 +721,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         movement_time = (abs(target - current) / 100.0) * tilt_time
 
         travel_target = None
-        if self._tilt_mode == "during":
-            travel_target = self._calc_coupled_target(
+        if self._tilt_strategy is not None:
+            travel_target = self._tilt_strategy.calc_travel_for_tilt(
                 movement_time,
                 closing,
                 self.travel_calc,
@@ -805,34 +781,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     def _has_tilt_support(self):
         """Return if cover has tilt support."""
-        return (
-            self._tilting_time_close is not None and self._tilting_time_open is not None
-        )
-
-    def _enforce_tilt_constraints(self):
-        """Enforce tilt position constraints at travel boundaries."""
-        if not self._has_tilt_support():
-            return
-
-        if self._tilt_mode != "during":
-            return
-
-        current_travel = self.travel_calc.current_position()
-        current_tilt = self.tilt_calc.current_position()
-
-        if current_travel == 0 and current_tilt != 0:
-            _LOGGER.debug(
-                "_enforce_tilt_constraints :: Travel at 0%%, forcing tilt to 0%% (was %d%%)",
-                current_tilt,
-            )
-            self.tilt_calc.set_position(0)
-
-        elif current_travel == 100 and current_tilt != 100:
-            _LOGGER.debug(
-                "_enforce_tilt_constraints :: Travel at 100%%, forcing tilt to 100%% (was %d%%)",
-                current_tilt,
-            )
-            self.tilt_calc.set_position(100)
+        return self._tilt_strategy is not None
 
     async def auto_stop_if_necessary(self):
         """Do auto stop if necessary."""
@@ -842,7 +791,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             if self._has_tilt_support():
                 self.tilt_calc.stop()
 
-            self._enforce_tilt_constraints()
+            if self._tilt_strategy is not None:
+                self._tilt_strategy.enforce_constraints(
+                    self.travel_calc, self.tilt_calc
+                )
 
             current_travel = self.travel_calc.current_position()
             if (
@@ -882,7 +834,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._handle_stop()
         await self._async_handle_command(SERVICE_STOP_COVER)
         self.travel_calc.set_position(position)
-        self._enforce_tilt_constraints()
+        if self._tilt_strategy is not None:
+            self._tilt_strategy.enforce_constraints(self.travel_calc, self.tilt_calc)
         self._last_command = None
 
     async def set_known_tilt_position(self, **kwargs):
@@ -903,9 +856,12 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         # Validate BEFORE creating state
         if attribute in ("tilt_time_close", "tilt_time_open"):
-            if self._tilt_mode == "during":
+            if (
+                self._tilt_strategy is not None
+                and not self._tilt_strategy.can_calibrate_tilt()
+            ):
                 raise HomeAssistantError(
-                    "Tilt time calibration not available when tilt mode is 'during'"
+                    "Tilt time calibration not available in proportional tilt mode"
                 )
 
         if attribute == "travel_startup_delay":
