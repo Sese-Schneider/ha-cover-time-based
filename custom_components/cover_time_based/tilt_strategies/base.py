@@ -92,3 +92,39 @@ class TiltStrategy(ABC):
     @abstractmethod
     def can_calibrate_tilt(self) -> bool:
         """Whether tilt calibration is allowed."""
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Strategy name for config/state."""
+
+    @property
+    @abstractmethod
+    def uses_tilt_motor(self) -> bool:
+        """Whether TiltTo steps require a separate tilt motor."""
+
+    @abstractmethod
+    def plan_move_position(
+        self,
+        target_pos: int,
+        current_pos: int,
+        current_tilt: int,
+    ) -> list[TiltTo | TravelTo]:
+        """Plan steps to move cover to target_pos."""
+
+    @abstractmethod
+    def plan_move_tilt(
+        self,
+        target_tilt: int,
+        current_pos: int,
+        current_tilt: int,
+    ) -> list[TiltTo | TravelTo]:
+        """Plan steps to move tilt to target_tilt."""
+
+    @abstractmethod
+    def snap_trackers_to_physical(
+        self,
+        travel_calc: TravelCalculator,
+        tilt_calc: TravelCalculator,
+    ) -> None:
+        """Correct tracker drift after stop to match physical reality."""
