@@ -148,7 +148,9 @@ async def ws_get_config(
         vol.Optional("close_switch_entity_id"): vol.Any(str, None),
         vol.Optional("stop_switch_entity_id"): vol.Any(str, None),
         vol.Optional("cover_entity_id"): vol.Any(str, None),
-        vol.Optional("tilt_mode"): vol.In(["none", "sequential", "proportional"]),
+        vol.Optional("tilt_mode"): vol.In(
+            ["none", "sequential", "proportional", "dual_motor"]
+        ),
         vol.Optional("travel_time_close"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
@@ -173,6 +175,13 @@ async def ws_get_config(
         vol.Optional("min_movement_time"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
+        vol.Optional("safe_tilt_position"): vol.All(int, vol.Range(min=0, max=100)),
+        vol.Optional("min_tilt_allowed_position"): vol.Any(
+            None, vol.All(int, vol.Range(min=0, max=100))
+        ),
+        vol.Optional("tilt_open_switch"): str,
+        vol.Optional("tilt_close_switch"): str,
+        vol.Optional("tilt_stop_switch"): str,
     }
 )
 @websocket_api.async_response
