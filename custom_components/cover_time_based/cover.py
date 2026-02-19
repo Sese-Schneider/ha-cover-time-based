@@ -367,7 +367,7 @@ def _migrate_yaml_keys(config):
     if CONF_TRAVEL_MOVES_WITH_TILT in config:
         if CONF_TILT_MODE not in config:
             config[CONF_TILT_MODE] = (
-                "during" if config[CONF_TRAVEL_MOVES_WITH_TILT] else "before_after"
+                "proportional" if config[CONF_TRAVEL_MOVES_WITH_TILT] else "sequential"
             )
         config.pop(CONF_TRAVEL_MOVES_WITH_TILT)
 

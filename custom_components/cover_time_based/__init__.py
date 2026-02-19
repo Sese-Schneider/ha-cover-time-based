@@ -82,12 +82,30 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if not has_tilt:
                     new_options["tilt_mode"] = "none"
                 elif old_val:
-                    new_options["tilt_mode"] = "during"
+                    new_options["tilt_mode"] = "proportional"
                 else:
-                    new_options["tilt_mode"] = "before_after"
+                    new_options["tilt_mode"] = "sequential"
 
         hass.config_entries.async_update_entry(entry, options=new_options, version=2)
         _LOGGER.debug("Migration to version 2 complete for %s", entry.entry_id)
+
+    if entry.version <= 2:
+        _LOGGER.debug(
+            "Migrating config entry %s from version %d to 3",
+            entry.entry_id,
+            entry.version,
+        )
+        if entry.version == 2:
+            new_options = dict(entry.options)
+
+        tilt_mode = new_options.get("tilt_mode")
+        if tilt_mode == "during":
+            new_options["tilt_mode"] = "proportional"
+        elif tilt_mode == "before_after":
+            new_options["tilt_mode"] = "sequential"
+
+        hass.config_entries.async_update_entry(entry, options=new_options, version=3)
+        _LOGGER.debug("Migration to version 3 complete for %s", entry.entry_id)
 
     return True
 
