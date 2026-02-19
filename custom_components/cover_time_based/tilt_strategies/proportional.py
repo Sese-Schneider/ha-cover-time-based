@@ -86,10 +86,14 @@ class ProportionalTilt(TiltStrategy):
     def uses_tilt_motor(self) -> bool:
         return False
 
-    def plan_move_position(self, target_pos, current_pos, current_tilt):
+    def plan_move_position(
+        self, target_pos: int, current_pos: int, current_tilt: int
+    ) -> list[TiltTo | TravelTo]:
         return [TravelTo(target_pos, coupled_tilt=target_pos)]
 
-    def plan_move_tilt(self, target_tilt, current_pos, current_tilt):
+    def plan_move_tilt(
+        self, target_tilt: int, current_pos: int, current_tilt: int
+    ) -> list[TiltTo | TravelTo]:
         return [TiltTo(target_tilt, coupled_travel=target_tilt)]
 
     def snap_trackers_to_physical(self, travel_calc, tilt_calc):

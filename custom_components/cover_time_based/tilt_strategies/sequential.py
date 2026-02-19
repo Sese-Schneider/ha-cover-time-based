@@ -69,15 +69,19 @@ class SequentialTilt(TiltStrategy):
     def uses_tilt_motor(self) -> bool:
         return False
 
-    def plan_move_position(self, target_pos, current_pos, current_tilt):
-        steps = []
+    def plan_move_position(
+        self, target_pos: int, current_pos: int, current_tilt: int
+    ) -> list[TiltTo | TravelTo]:
+        steps: list[TiltTo | TravelTo] = []
         if current_tilt != 0:
             steps.append(TiltTo(0))  # flatten slats before travel
         steps.append(TravelTo(target_pos))
         return steps
 
-    def plan_move_tilt(self, target_tilt, current_pos, current_tilt):
-        steps = []
+    def plan_move_tilt(
+        self, target_tilt: int, current_pos: int, current_tilt: int
+    ) -> list[TiltTo | TravelTo]:
+        steps: list[TiltTo | TravelTo] = []
         if current_pos != 100:
             steps.append(TravelTo(100))  # must be at closed position
         steps.append(TiltTo(target_tilt))
