@@ -416,24 +416,32 @@ class TestProportionalTiltProperties:
 class TestProportionalPlanMovePosition:
     def test_returns_travel_with_coupled_tilt(self):
         strategy = ProportionalTilt()
-        steps = strategy.plan_move_position(target_pos=30, current_pos=100, current_tilt=100)
+        steps = strategy.plan_move_position(
+            target_pos=30, current_pos=100, current_tilt=100
+        )
         assert steps == [TravelTo(30, coupled_tilt=30)]
 
     def test_fully_open(self):
         strategy = ProportionalTilt()
-        steps = strategy.plan_move_position(target_pos=0, current_pos=100, current_tilt=100)
+        steps = strategy.plan_move_position(
+            target_pos=0, current_pos=100, current_tilt=100
+        )
         assert steps == [TravelTo(0, coupled_tilt=0)]
 
     def test_fully_closed(self):
         strategy = ProportionalTilt()
-        steps = strategy.plan_move_position(target_pos=100, current_pos=0, current_tilt=0)
+        steps = strategy.plan_move_position(
+            target_pos=100, current_pos=0, current_tilt=0
+        )
         assert steps == [TravelTo(100, coupled_tilt=100)]
 
 
 class TestProportionalPlanMoveTilt:
     def test_returns_tilt_with_coupled_travel(self):
         strategy = ProportionalTilt()
-        steps = strategy.plan_move_tilt(target_tilt=50, current_pos=80, current_tilt=100)
+        steps = strategy.plan_move_tilt(
+            target_tilt=50, current_pos=80, current_tilt=100
+        )
         assert steps == [TiltTo(50, coupled_travel=50)]
 
     def test_fully_open(self):
@@ -485,27 +493,37 @@ class TestSequentialTiltProperties:
 class TestSequentialPlanMovePosition:
     def test_flattens_tilt_before_travel(self):
         strategy = SequentialTilt()
-        steps = strategy.plan_move_position(target_pos=30, current_pos=100, current_tilt=80)
+        steps = strategy.plan_move_position(
+            target_pos=30, current_pos=100, current_tilt=80
+        )
         assert steps == [TiltTo(0), TravelTo(30)]
 
     def test_skips_tilt_when_already_flat(self):
         strategy = SequentialTilt()
-        steps = strategy.plan_move_position(target_pos=30, current_pos=100, current_tilt=0)
+        steps = strategy.plan_move_position(
+            target_pos=30, current_pos=100, current_tilt=0
+        )
         assert steps == [TravelTo(30)]
 
     def test_opening_fully(self):
         strategy = SequentialTilt()
-        steps = strategy.plan_move_position(target_pos=0, current_pos=100, current_tilt=100)
+        steps = strategy.plan_move_position(
+            target_pos=0, current_pos=100, current_tilt=100
+        )
         assert steps == [TiltTo(0), TravelTo(0)]
 
     def test_closing_fully_from_open(self):
         strategy = SequentialTilt()
-        steps = strategy.plan_move_position(target_pos=100, current_pos=0, current_tilt=0)
+        steps = strategy.plan_move_position(
+            target_pos=100, current_pos=0, current_tilt=0
+        )
         assert steps == [TravelTo(100)]
 
     def test_partial_move_with_flat_tilt(self):
         strategy = SequentialTilt()
-        steps = strategy.plan_move_position(target_pos=50, current_pos=80, current_tilt=0)
+        steps = strategy.plan_move_position(
+            target_pos=50, current_pos=80, current_tilt=0
+        )
         assert steps == [TravelTo(50)]
 
 
@@ -522,7 +540,9 @@ class TestSequentialPlanMoveTilt:
 
     def test_tilt_fully_closed(self):
         strategy = SequentialTilt()
-        steps = strategy.plan_move_tilt(target_tilt=100, current_pos=100, current_tilt=0)
+        steps = strategy.plan_move_tilt(
+            target_tilt=100, current_pos=100, current_tilt=0
+        )
         assert steps == [TiltTo(100)]
 
     def test_tilt_open_from_partially_tilted(self):

@@ -87,5 +87,9 @@ class SequentialTilt(TiltStrategy):
         current_travel = travel_calc.current_position()
         current_tilt_pos = tilt_calc.current_position()
         if current_travel != 100 and current_tilt_pos != 0:
-            _LOGGER.debug("SequentialTilt :: Travel at %d%% (not closed), forcing tilt to 0%% (was %d%%)", current_travel, current_tilt_pos)
+            _LOGGER.debug(
+                "SequentialTilt :: Travel at %d%% (not closed), forcing tilt to 0%% (was %d%%)",
+                current_travel,
+                current_tilt_pos,
+            )
             tilt_calc.set_position(0)

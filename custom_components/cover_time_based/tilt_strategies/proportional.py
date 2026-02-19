@@ -97,8 +97,14 @@ class ProportionalTilt(TiltStrategy):
         current_travel = travel_calc.current_position()
         current_tilt_pos = tilt_calc.current_position()
         if current_travel == 0 and current_tilt_pos != 0:
-            _LOGGER.debug("ProportionalTilt :: Travel at 0%%, forcing tilt to 0%% (was %d%%)", current_tilt_pos)
+            _LOGGER.debug(
+                "ProportionalTilt :: Travel at 0%%, forcing tilt to 0%% (was %d%%)",
+                current_tilt_pos,
+            )
             tilt_calc.set_position(0)
         elif current_travel == 100 and current_tilt_pos != 100:
-            _LOGGER.debug("ProportionalTilt :: Travel at 100%%, forcing tilt to 100%% (was %d%%)", current_tilt_pos)
+            _LOGGER.debug(
+                "ProportionalTilt :: Travel at 100%%, forcing tilt to 100%% (was %d%%)",
+                current_tilt_pos,
+            )
             tilt_calc.set_position(100)
