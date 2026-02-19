@@ -27,7 +27,7 @@ def _make_pulse_cover(
     cover = PulseModeCover(
         device_id="test_pulse",
         name="Test Pulse",
-        tilt_mode="none",
+        tilt_strategy=None,
         travel_time_close=30,
         travel_time_open=30,
         tilt_time_close=None,

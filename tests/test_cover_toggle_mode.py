@@ -35,7 +35,7 @@ def _make_toggle_cover(
     cover = ToggleModeCover(
         device_id="test_toggle",
         name="Test Toggle",
-        tilt_mode="none",
+        tilt_strategy=None,
         travel_time_close=30,
         travel_time_open=30,
         tilt_time_close=None,

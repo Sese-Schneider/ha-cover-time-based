@@ -26,7 +26,7 @@ def _make_switch_cover(
     cover = SwitchModeCover(
         device_id="test_switch",
         name="Test Switch",
-        tilt_mode="none",
+        tilt_strategy=None,
         travel_time_close=30,
         travel_time_open=30,
         tilt_time_close=None,
