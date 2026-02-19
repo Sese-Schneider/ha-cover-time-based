@@ -5,8 +5,44 @@ from xknx.devices import TravelCalculator
 from custom_components.cover_time_based.tilt_strategies import (
     ProportionalTilt,
     SequentialTilt,
+    TiltTo,
+    TravelTo,
     calc_coupled_target,
 )
+
+
+# ===================================================================
+# MovementStep dataclasses
+# ===================================================================
+
+
+class TestMovementSteps:
+    """Test MovementStep dataclasses."""
+
+    def test_tilt_to_defaults(self):
+        step = TiltTo(50)
+        assert step.target == 50
+        assert step.coupled_travel is None
+
+    def test_tilt_to_with_coupling(self):
+        step = TiltTo(50, coupled_travel=30)
+        assert step.target == 50
+        assert step.coupled_travel == 30
+
+    def test_travel_to_defaults(self):
+        step = TravelTo(30)
+        assert step.target == 30
+        assert step.coupled_tilt is None
+
+    def test_travel_to_with_coupling(self):
+        step = TravelTo(30, coupled_tilt=30)
+        assert step.target == 30
+        assert step.coupled_tilt == 30
+
+    def test_equality(self):
+        assert TiltTo(50) == TiltTo(50)
+        assert TravelTo(30) == TravelTo(30)
+        assert TiltTo(50) != TravelTo(50)
 
 
 # ===================================================================

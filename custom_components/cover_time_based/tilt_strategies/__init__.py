@@ -3,12 +3,15 @@
 Tilt strategies determine how travel and tilt movements are coupled.
 """
 
-from .base import TiltStrategy, calc_coupled_target
+from .base import MovementStep, TiltStrategy, TiltTo, TravelTo, calc_coupled_target
 from .proportional import ProportionalTilt
 from .sequential import SequentialTilt
 
 __all__ = [
+    "MovementStep",
     "TiltStrategy",
+    "TiltTo",
+    "TravelTo",
     "calc_coupled_target",
     "ProportionalTilt",
     "SequentialTilt",

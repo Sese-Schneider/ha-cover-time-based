@@ -4,12 +4,32 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from xknx.devices import TravelCalculator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class TiltTo:
+    """Step: move tilt to target position."""
+
+    target: int
+    coupled_travel: int | None = None
+
+
+@dataclass(frozen=True)
+class TravelTo:
+    """Step: move travel to target position."""
+
+    target: int
+    coupled_tilt: int | None = None
+
+
+MovementStep = TiltTo | TravelTo
 
 
 def calc_coupled_target(
