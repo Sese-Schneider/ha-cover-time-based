@@ -71,41 +71,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _rename_key(new_options, "tilting_time_down", "tilt_time_close")
         _rename_key(new_options, "tilting_time_up", "tilt_time_open")
 
-        # Convert travel_moves_with_tilt boolean → tilt_mode string
-        if "travel_moves_with_tilt" in new_options:
-            old_val = new_options.pop("travel_moves_with_tilt")
-            if "tilt_mode" not in new_options:
-                has_tilt = (
-                    new_options.get("tilt_time_close") is not None
-                    or new_options.get("tilt_time_open") is not None
-                )
-                if not has_tilt:
-                    new_options["tilt_mode"] = "none"
-                elif old_val:
-                    new_options["tilt_mode"] = "proportional"
-                else:
-                    new_options["tilt_mode"] = "sequential"
+        # Set tilt_mode based on whether tilt times are configured.
+        # travel_moves_with_tilt is kept as a separate boolean option.
+        if "tilt_mode" not in new_options:
+            has_tilt = (
+                new_options.get("tilt_time_close") is not None
+                or new_options.get("tilt_time_open") is not None
+            )
+            new_options["tilt_mode"] = "sequential" if has_tilt else "none"
 
         hass.config_entries.async_update_entry(entry, options=new_options, version=2)
         _LOGGER.debug("Migration to version 2 complete for %s", entry.entry_id)
-
-    if entry.version <= 2:
-        _LOGGER.debug(
-            "Migrating config entry %s from version %d to 3",
-            entry.entry_id,
-            entry.version,
-        )
-        if entry.version == 2:
-            new_options = dict(entry.options)
-
-        tilt_mode = new_options.get("tilt_mode")
-        if tilt_mode == "during":
-            new_options["tilt_mode"] = "proportional"
-        elif tilt_mode == "before_after":
-            new_options["tilt_mode"] = "sequential"
-
-        hass.config_entries.async_update_entry(entry, options=new_options, version=3)
-        _LOGGER.debug("Migration to version 3 complete for %s", entry.entry_id)
 
     return True
 
