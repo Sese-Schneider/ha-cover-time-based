@@ -83,34 +83,5 @@ class DualMotorTilt(TiltStrategy):
             )
             tilt_calc.set_position(self._safe_tilt_position)
 
-    # --- Legacy interface (stubs for ABC compliance) ---
-
-    def calc_tilt_for_travel(
-        self,
-        movement_time: float,
-        closing: bool,
-        tilt_calc: TravelCalculator,
-        tilt_time_close: float,
-        tilt_time_open: float,
-    ) -> int | None:
-        return None
-
-    def calc_travel_for_tilt(
-        self,
-        movement_time: float,
-        closing: bool,
-        travel_calc: TravelCalculator,
-        travel_time_close: float,
-        travel_time_open: float,
-    ) -> int | None:
-        return None
-
-    def enforce_constraints(
-        self,
-        travel_calc: TravelCalculator,
-        tilt_calc: TravelCalculator,
-    ) -> None:
-        self.snap_trackers_to_physical(travel_calc, tilt_calc)
-
     def can_calibrate_tilt(self) -> bool:
         return True
