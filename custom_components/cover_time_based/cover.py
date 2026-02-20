@@ -295,6 +295,9 @@ def _create_cover_from_options(options, device_id="", name=""):
             CONF_ENDPOINT_RUNON_TIME, DEFAULT_ENDPOINT_RUNON_TIME
         ),
         min_movement_time=options.get(CONF_MIN_MOVEMENT_TIME),
+        tilt_open_switch=options.get(CONF_TILT_OPEN_SWITCH),
+        tilt_close_switch=options.get(CONF_TILT_CLOSE_SWITCH),
+        tilt_stop_switch=options.get(CONF_TILT_STOP_SWITCH),
     )
 
     if device_type == DEVICE_TYPE_COVER:

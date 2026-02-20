@@ -60,6 +60,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         tilt_startup_delay,
         endpoint_runon_time,
         min_movement_time,
+        tilt_open_switch=None,
+        tilt_close_switch=None,
+        tilt_stop_switch=None,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -73,6 +76,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._tilt_startup_delay = tilt_startup_delay
         self._endpoint_runon_time = endpoint_runon_time
         self._min_movement_time = min_movement_time
+        self._tilt_open_switch_id = tilt_open_switch
+        self._tilt_close_switch_id = tilt_close_switch
+        self._tilt_stop_switch_id = tilt_stop_switch
 
         if name:
             self._name = name
@@ -558,7 +564,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
         self._handle_stop()
-        if self._tilt_strategy is not None:
+        if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
@@ -774,7 +780,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     def _has_tilt_support(self):
         """Return if cover has tilt support."""
-        return self._tilt_strategy is not None
+        return self._tilt_strategy is not None and hasattr(self, "tilt_calc")
 
     async def auto_stop_if_necessary(self):
         """Do auto stop if necessary."""
@@ -785,7 +791,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 self.tilt_calc.stop()
 
             if self._tilt_strategy is not None:
-                self._tilt_strategy.enforce_constraints(
+                self._tilt_strategy.snap_trackers_to_physical(
                     self.travel_calc, self.tilt_calc
                 )
 
@@ -827,7 +833,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._handle_stop()
         await self._async_handle_command(SERVICE_STOP_COVER)
         self.travel_calc.set_position(position)
-        if self._tilt_strategy is not None:
+        if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
@@ -835,6 +841,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def set_known_tilt_position(self, **kwargs):
         """We want to do a few things when we get a position"""
+        if not self._has_tilt_support():
+            return
         position = kwargs[ATTR_TILT_POSITION]
         await self._async_handle_command(SERVICE_STOP_COVER)
         self.tilt_calc.set_position(position)
@@ -1102,6 +1110,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             return
 
         is_tilt = "tilt" in calibration.attribute
+        if is_tilt and not hasattr(self, "tilt_calc"):
+            return
         calc = self.tilt_calc if is_tilt else self.travel_calc
 
         # Cover ended at the endpoint in the direction of travel
@@ -1254,3 +1264,61 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     @abstractmethod
     async def _send_stop(self) -> None:
         """Send the stop command to the underlying device."""
+
+    # --- Tilt motor raw commands (dual_motor only) ---
+
+    def _has_tilt_motor(self) -> bool:
+        """Return True if tilt motor switches are configured."""
+        return bool(self._tilt_open_switch_id and self._tilt_close_switch_id)
+
+    async def _send_tilt_open(self) -> None:
+        """Send open to the tilt motor (bypasses position tracker)."""
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._tilt_close_switch_id},
+            False,
+        )
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_on",
+            {"entity_id": self._tilt_open_switch_id},
+            False,
+        )
+
+    async def _send_tilt_close(self) -> None:
+        """Send close to the tilt motor (bypasses position tracker)."""
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._tilt_open_switch_id},
+            False,
+        )
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_on",
+            {"entity_id": self._tilt_close_switch_id},
+            False,
+        )
+
+    async def _send_tilt_stop(self) -> None:
+        """Send stop to the tilt motor (bypasses position tracker)."""
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._tilt_open_switch_id},
+            False,
+        )
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._tilt_close_switch_id},
+            False,
+        )
+        if self._tilt_stop_switch_id:
+            await self.hass.services.async_call(
+                "homeassistant",
+                "turn_on",
+                {"entity_id": self._tilt_stop_switch_id},
+                False,
+            )

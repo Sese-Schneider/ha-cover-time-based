@@ -42,7 +42,6 @@ class CoverTimeBasedCard extends LitElement {
       _config: { type: Object },
       _loading: { type: Boolean },
       _saving: { type: Boolean },
-      _dirty: { type: Boolean },
       _activeTab: { type: String },
       _knownPosition: { type: String },
       _loadError: { type: String },
@@ -55,7 +54,6 @@ class CoverTimeBasedCard extends LitElement {
     this._config = null;
     this._loading = false;
     this._saving = false;
-    this._dirty = false;
     this._activeTab = "device";
     this._knownPosition = "unknown";
     this._helpersLoaded = false;
@@ -144,6 +142,7 @@ class CoverTimeBasedCard extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
     if (this._isCalibrating()) {
       this._onStopCalibration(true);
     }
@@ -172,7 +171,6 @@ class CoverTimeBasedCard extends LitElement {
         type: "cover_time_based/get_config",
         entity_id: this._selectedEntity,
       });
-      this._dirty = false;
     } catch (err) {
       console.error("Failed to load config:", err);
       this._config = null;
@@ -183,10 +181,15 @@ class CoverTimeBasedCard extends LitElement {
 
   _updateLocal(updates) {
     this._config = { ...this._config, ...updates };
-    this._dirty = true;
+    this._scheduleAutoSave();
   }
 
-  async _save() {
+  _scheduleAutoSave() {
+    if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
+    this._autoSaveTimer = setTimeout(() => this._autoSave(), 500);
+  }
+
+  async _autoSave() {
     if (!this._selectedEntity || !this.hass || !this._config) return;
     this._saving = true;
     try {
@@ -196,9 +199,6 @@ class CoverTimeBasedCard extends LitElement {
         entity_id: this._selectedEntity,
         ...fields,
       });
-      this._dirty = false;
-      // Reload to get server-confirmed values
-      await this._loadConfig();
     } catch (err) {
       console.error("Failed to save config:", err);
     }
@@ -214,6 +214,7 @@ class CoverTimeBasedCard extends LitElement {
 
   _isCalibrating() {
     if (this._calibratingOverride === false) return false;
+    if (this._calibratingOverride === true) return true;
     const state = this._getEntityState();
     return state?.attributes?.calibration_active === true;
   }
@@ -342,20 +343,18 @@ class CoverTimeBasedCard extends LitElement {
       });
     } else {
       const updates = { tilt_mode: mode };
-      // Initialize tilt times if enabling for the first time
-      if (this._config.tilt_time_close == null) {
-        updates.tilt_time_close = 5.0;
-      }
-      if (this._config.tilt_time_open == null) {
-        updates.tilt_time_open = 5.0;
-      }
-      // Clear dual-motor fields when switching to sequential
       if (mode === "sequential") {
+        // Clear dual-motor fields when switching to sequential
         updates.safe_tilt_position = null;
         updates.min_tilt_allowed_position = null;
         updates.tilt_open_switch = null;
         updates.tilt_close_switch = null;
         updates.tilt_stop_switch = null;
+      } else if (mode === "dual_motor") {
+        // Default min_tilt_allowed_position to fully closed
+        if (this._config.min_tilt_allowed_position == null) {
+          updates.min_tilt_allowed_position = 100;
+        }
       }
       this._updateLocal(updates);
     }
@@ -363,6 +362,7 @@ class CoverTimeBasedCard extends LitElement {
 
   async _onStartCalibration() {
     const attrSelect = this.shadowRoot.querySelector("#cal-attribute");
+    const savedPosition = this._knownPosition;
 
     const data = {
       entity_id: this._selectedEntity,
@@ -370,13 +370,13 @@ class CoverTimeBasedCard extends LitElement {
       timeout: 300,
     };
 
-    if (this._knownPosition === "open") {
+    if (savedPosition === "open") {
       data.direction = "close";
-    } else if (this._knownPosition === "closed") {
+    } else if (savedPosition === "closed" || savedPosition === "closed_tilt_open" || savedPosition === "closed_tilt_closed") {
       data.direction = "open";
     }
 
-    this._knownPosition = "unknown";
+    this._calibratingAttribute = attrSelect.value;
     this._calibratingOverride = undefined;
 
     try {
@@ -384,12 +384,14 @@ class CoverTimeBasedCard extends LitElement {
         type: `${DOMAIN}/start_calibration`,
         ...data,
       });
+      this._knownPosition = "unknown";
+      this._calibratingOverride = true;
+      this.requestUpdate();
     } catch (err) {
       console.error("Start calibration failed:", err);
+      const msg = err?.message || String(err);
+      alert(`Calibration failed: ${msg}`);
     }
-
-    const posSelect = this.shadowRoot.querySelector("#position-select");
-    if (posSelect) posSelect.value = "unknown";
   }
 
   async _onStopCalibration(cancel = false) {
@@ -416,6 +418,9 @@ class CoverTimeBasedCard extends LitElement {
       open_cover: "open",
       close_cover: "close",
       stop_cover: "stop",
+      tilt_open: "tilt_open",
+      tilt_close: "tilt_close",
+      tilt_stop: "tilt_stop",
     };
     try {
       await this.hass.callWS({
@@ -482,11 +487,6 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _onCreateNew() {
-    if (this._dirty) {
-      if (!confirm("You have unsaved changes. Discard and continue?")) {
-        return;
-      }
-    }
     // Navigate to helpers/add with domain param — HA auto-opens the config flow
     window.history.pushState(
       null,
@@ -532,11 +532,8 @@ class CoverTimeBasedCard extends LitElement {
           @value-changed=${(e) => {
             const newEntity = e.detail?.value || "";
             if (newEntity === this._selectedEntity) return;
-            if (this._dirty || this._isCalibrating()) {
-              const msg = this._isCalibrating()
-                ? "A calibration is running. Cancel it and continue?"
-                : "You have unsaved changes. Discard and continue?";
-              if (!confirm(msg)) {
+            if (this._isCalibrating()) {
+              if (!confirm("A calibration is running. Cancel it and continue?")) {
                 const current = this._selectedEntity;
                 const picker = e.target;
                 picker.value = current;
@@ -552,7 +549,6 @@ class CoverTimeBasedCard extends LitElement {
             }
             this._selectedEntity = newEntity;
             this._config = null;
-            this._dirty = false;
             this._loadError = null;
             this._knownPosition = "unknown";
             this._calibratingOverride = undefined;
@@ -583,7 +579,7 @@ class CoverTimeBasedCard extends LitElement {
             </strong>
             <span class="entity-id">${this._selectedEntity}</span>
           </div>
-          ${this._activeTab === "timing" ? html`
+          ${this._activeTab === "timing" && !(this._config?.tilt_open_switch && this._config?.tilt_close_switch) ? html`
             <div class="cover-controls">
               <ha-button title="Open" @click=${() => this._onCoverCommand("open_cover")}>
                 <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
@@ -597,6 +593,34 @@ class CoverTimeBasedCard extends LitElement {
             </div>
           ` : ""}
         </div>
+        ${this._activeTab === "timing" && this._config?.tilt_open_switch && this._config?.tilt_close_switch ? html`
+          <div class="cover-controls-wrapper">
+            <div class="cover-controls">
+              <span class="controls-label">Cover</span>
+              <ha-button title="Open" @click=${() => this._onCoverCommand("open_cover")}>
+                <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title="Stop" @click=${() => this._onCoverCommand("stop_cover")}>
+                <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title="Close" @click=${() => this._onCoverCommand("close_cover")}>
+                <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+            </div>
+            <div class="cover-controls">
+              <span class="controls-label">Tilt</span>
+              <ha-button title="Tilt open" @click=${() => this._onCoverCommand("tilt_open")}>
+                <ha-icon icon="mdi:arrow-top-right" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title="Tilt stop" @click=${() => this._onCoverCommand("tilt_stop")}>
+                <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title="Tilt close" @click=${() => this._onCoverCommand("tilt_close")}>
+                <ha-icon icon="mdi:arrow-bottom-left" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+            </div>
+          </div>
+        ` : ""}
       </div>
 
       <div class="tabs">
@@ -606,9 +630,8 @@ class CoverTimeBasedCard extends LitElement {
         >Device</button>
         <button
           class="tab ${this._activeTab === "timing" ? "active" : ""}"
-          ?disabled=${!this._hasRequiredEntities(c) || this._dirty}
+          ?disabled=${!this._hasRequiredEntities(c)}
           @click=${() => { this._activeTab = "timing"; }}
-          title=${this._dirty ? "Save changes before calibrating" : ""}
         >Calibration</button>
       </div>
 
@@ -627,15 +650,8 @@ class CoverTimeBasedCard extends LitElement {
             ${this._renderTimingTable(c)}
           `}
 
-      ${this._dirty
-        ? html`
-            <div class="save-bar">
-              <ha-button @click=${this._loadConfig}>Discard</ha-button>
-              <ha-button unelevated @click=${this._save} ?disabled=${this._saving}>
-                ${this._saving ? "Saving..." : "Save"}
-              </ha-button>
-            </div>
-          `
+      ${this._saving
+        ? html`<div class="save-bar"><span class="saving-indicator">Saving...</span></div>`
         : ""}
     `;
   }
@@ -963,12 +979,21 @@ class CoverTimeBasedCard extends LitElement {
       }
     );
 
+    const c = this._config;
+    const hasTravel = c?.travel_time_close || c?.travel_time_open;
+    const hasTilt = c?.tilt_time_close || c?.tilt_time_open;
+
     const disabledKeys = new Set();
     if (this._knownPosition === "unknown") {
       availableAttributes.forEach(([key]) => disabledKeys.add(key));
     } else if (this._knownPosition === "open") {
       disabledKeys.add("travel_time_open");
       disabledKeys.add("tilt_time_open");
+      if (hasTiltCalibration) {
+        // Tilt only changes when cover is closed — can't test from open
+        disabledKeys.add("tilt_time_close");
+        disabledKeys.add("tilt_startup_delay");
+      }
     } else if (this._knownPosition === "closed") {
       // Proportional/none: position closed (tilt matches)
       disabledKeys.add("travel_time_close");
@@ -979,7 +1004,16 @@ class CoverTimeBasedCard extends LitElement {
     } else if (this._knownPosition === "closed_tilt_closed") {
       disabledKeys.add("travel_time_close");
       disabledKeys.add("tilt_time_close");
+      // Tilt must open before travel can move
+      disabledKeys.add("travel_time_open");
+      disabledKeys.add("travel_startup_delay");
+      disabledKeys.add("min_movement_time");
     }
+
+    // Startup delay requires the corresponding time to be calibrated first
+    if (!hasTravel) disabledKeys.add("travel_startup_delay");
+    if (!hasTilt) disabledKeys.add("tilt_startup_delay");
+    if (!hasTravel) disabledKeys.add("min_movement_time");
 
     if (calibrating) {
       return html`
@@ -990,7 +1024,7 @@ class CoverTimeBasedCard extends LitElement {
           </div>
           <div class="cal-form">
             <div class="cal-status">
-              <strong>${ATTRIBUTE_LABELS[attrs.calibration_attribute]}</strong>
+              <strong>${ATTRIBUTE_LABELS[attrs.calibration_attribute || this._calibratingAttribute]}</strong>
               ${attrs.calibration_step
                 ? html`<span class="cal-step"
                     >Step ${attrs.calibration_step}</span
@@ -1113,10 +1147,27 @@ class CoverTimeBasedCard extends LitElement {
         font-family: var(--code-font-family, monospace);
       }
 
+      .cover-controls-wrapper {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 4px 0;
+      }
+
       .cover-controls {
         display: flex;
+        align-items: center;
         gap: 4px;
         flex-shrink: 0;
+      }
+
+      .controls-label {
+        font-size: 11px;
+        color: inherit;
+        opacity: 0.8;
+        white-space: nowrap;
+        min-width: 36px;
+        text-align: right;
       }
 
       /* Tabs */
@@ -1372,14 +1423,17 @@ class CoverTimeBasedCard extends LitElement {
         margin-top: 8px;
       }
 
-      /* Save bar */
+      /* Save indicator */
       .save-bar {
         display: flex;
         justify-content: flex-end;
-        gap: 8px;
-        padding: 12px 0;
-        margin-bottom: 16px;
-        border-bottom: 1px solid var(--divider-color, #e0e0e0);
+        padding: 8px 0;
+      }
+
+      .saving-indicator {
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        font-style: italic;
       }
 
       .loading {

@@ -190,7 +190,9 @@ async def ws_get_config(
         vol.Optional("min_movement_time"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
-        vol.Optional("safe_tilt_position"): vol.All(int, vol.Range(min=0, max=100)),
+        vol.Optional("safe_tilt_position"): vol.Any(
+            None, vol.All(int, vol.Range(min=0, max=100))
+        ),
         vol.Optional("min_tilt_allowed_position"): vol.Any(
             None, vol.All(int, vol.Range(min=0, max=100))
         ),
@@ -317,7 +319,9 @@ async def ws_stop_calibration(
     {
         "type": "cover_time_based/raw_command",
         vol.Required("entity_id"): str,
-        vol.Required("command"): vol.In(["open", "close", "stop"]),
+        vol.Required("command"): vol.In(
+            ["open", "close", "stop", "tilt_open", "tilt_close", "tilt_stop"]
+        ),
     }
 )
 @websocket_api.async_response
@@ -340,6 +344,27 @@ async def ws_raw_command(
             await entity._send_close()
         elif command == "stop":
             await entity._send_stop()
+        elif command == "tilt_open":
+            if not entity._has_tilt_motor():
+                connection.send_error(
+                    msg["id"], "not_supported", "Tilt motor not configured"
+                )
+                return
+            await entity._send_tilt_open()
+        elif command == "tilt_close":
+            if not entity._has_tilt_motor():
+                connection.send_error(
+                    msg["id"], "not_supported", "Tilt motor not configured"
+                )
+                return
+            await entity._send_tilt_close()
+        elif command == "tilt_stop":
+            if not entity._has_tilt_motor():
+                connection.send_error(
+                    msg["id"], "not_supported", "Tilt motor not configured"
+                )
+                return
+            await entity._send_tilt_stop()
     except Exception as exc:  # noqa: BLE001
         connection.send_error(msg["id"], "failed", str(exc))
         return
