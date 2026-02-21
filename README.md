@@ -16,11 +16,13 @@ It improves the original integration by adding tilt control, synchronized travel
 ### Features:
 
 - **Control the height of your cover based on time**.
-- **Control the tilt of your cover based on time**.
-- **Synchronized movement:** Travel and tilt move proportionally on the same motor.
+- **Control the tilt of your cover based on time** with three tilt modes: inline, sequential (closes then tilts), or separate tilt motor.
+- **Synchronized movement:** Travel and tilt move proportionally on the same motor (inline mode).
 - **Multiple input modes:** Latching switches, momentary pulse buttons, or toggle-style relays.
 - **Wrap an existing cover:** Add time-based position tracking to any cover entity.
+- **External state monitoring:** Detects physical switch presses and keeps the position tracker in sync.
 - **Built-in calibration:** Measure timing parameters directly from the UI.
+- **Translatable UI:** All card strings are translatable. English, Portuguese, and Polish included.
 - **Optional endpoint delay:** Configurable relay delay at endpoints for covers with mechanical endstops.
 - **Minimum movement time:** Prevents position drift from very short relay activations.
 - **Motor startup compensation:** Optional delay compensation for motor inertia to improve position accuracy for travel and tilt.
@@ -138,12 +140,14 @@ All settings are available through the configuration card. Here is the full refe
 
 ### Tilt
 
-| Option               | Description                                                                        | Default |
-| -------------------- | ---------------------------------------------------------------------------------- | ------- |
-| Tilt mode            | `none` (no tilt), `before_after` (independent tilt), or `during` (tilt with travel) | none    |
-| Tilt time close      | Time in seconds to tilt the cover fully closed                                      | None    |
-| Tilt time open       | Time in seconds to tilt the cover fully open                                        | None    |
-| Tilt startup delay   | Motor startup compensation for tilt                                                 | None    |
+| Option                     | Description                                                                         | Default |
+| -------------------------- | ----------------------------------------------------------------------------------- | ------- |
+| Tilt mode                  | `none`, `inline`, `sequential`, or `dual_motor` (see below)                         | none    |
+| Tilt time close            | Time in seconds to tilt the cover fully closed                                      | None    |
+| Tilt time open             | Time in seconds to tilt the cover fully open                                        | None    |
+| Tilt startup delay         | Motor startup compensation for tilt                                                 | None    |
+| Safe tilt position         | Tilt position required before travel moves (dual_motor only)                        | 100     |
+| Max tilt allowed position  | Cover must be at or below this position to tilt (dual_motor only)                   | None    |
 
 ### Pulse/Toggle mode
 
@@ -158,21 +162,40 @@ All settings are available through the configuration card. Here is the full refe
 The **tilt mode** setting controls how tilt and travel interact:
 
 - **None:** Tilt is disabled. Only position tracking is used.
-- **Before/After:** Tilt is independent of travel. You can adjust tilt without affecting position, and travel commands adjust tilt proportionally but tilt commands do not move travel.
-- **During:** Tilt and travel are synchronized on the same motor. Both tilt and travel movements affect each other proportionally.
+- **Inline:** Tilt and travel are synchronized on the same motor. Both tilt and travel movements affect each other proportionally.
+- **Sequential (closes then tilts):** Tilt is independent of travel. The cover fully closes before the slats start tilting. Travel commands adjust tilt proportionally, but tilt commands do not move travel.
+- **Separate tilt motor (dual_motor):** A separate motor controls the tilt. Requires dedicated tilt open/close/stop switches. Tilt is only allowed when the cover is in a safe position (configurable).
 
-### Synchronized travel and tilt
+### Synchronized travel and tilt (inline mode)
 
-When tilt is enabled, travel movements always adjust tilt proportionally. With tilt mode set to **during**, tilt movements also cause proportional travel changes.
+In inline mode, travel and tilt are synchronized. Travel movements always adjust tilt proportionally, and tilt movements also cause proportional travel changes.
 
 **Example:** With `travel_time=10s` and `tilt_time=5s`, moving travel 50% changes tilt 100%.
+
+### Separate tilt motor (dual_motor mode)
+
+For covers with a dedicated tilt motor, configure:
+
+- **Tilt open/close/stop switches:** The relay switches controlling the tilt motor.
+- **Safe tilt position:** The tilt moves to this position before travel starts (default: 100 = fully open).
+- **Max tilt allowed position:** Tilt is only allowed when the cover position is at or below this value (e.g., 0 = only when fully closed).
+
+### External state monitoring
+
+The integration monitors the underlying switch entities for external changes (e.g., physical button presses, other automations). When an external state change is detected, the position tracker is updated to stay in sync with the actual motor.
+
+Each input mode handles external changes differently:
+
+- **Switch (latching):** ON = motor running, OFF = motor stopped.
+- **Pulse (momentary):** A complete ON→OFF pulse represents one press.
+- **Toggle:** Both ON→OFF and OFF→ON transitions are treated as toggle presses, with debounce to handle momentary switches.
 
 ### Automatic position constraints
 
 At endpoint positions, tilt is automatically constrained to prevent drift:
 
-- **At 0% (fully open):** Tilt is set to 0% (horizontal)
-- **At 100% (fully closed):** Tilt is set to 100% (vertical)
+- **At 0% (fully closed):** Tilt is set to 0% (fully closed)
+- **At 100% (fully open):** Tilt is set to 100% (fully open)
 
 ### Endpoint run-on time
 
@@ -246,6 +269,6 @@ Stop an active calibration test and save the result.
 [commits-shield]: https://img.shields.io/github/commit-activity/y/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
 [commits]: https://github.com/Sese-Schneider/ha-cover-time-based/commits/main
 [license-shield]: https://img.shields.io/github/license/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
-[maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg?style=for-the-badge
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg?style=for-the-badge
 [releases-shield]: https://img.shields.io/github/release/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
 [releases]: https://github.com/Sese-Schneider/ha-cover-time-based/releases
