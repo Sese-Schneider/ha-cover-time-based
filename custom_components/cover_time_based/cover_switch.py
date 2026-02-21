@@ -27,10 +27,13 @@ class SwitchCoverTimeBased(CoverTimeBased):
         return bool(self._open_switch_entity_id and self._close_switch_entity_id)
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
-        """Handle external state change in pulse/toggle mode.
+        """Handle external state change in pulse mode.
 
-        In pulse/toggle mode, a physical press produces ON->OFF.
+        In pulse mode, a physical press produces ON->OFF.
         We react on the OFF transition (pulse complete).
+
+        Toggle mode overrides this to react to both ON->OFF and OFF->ON,
+        with debounce to handle momentary switches.
         """
         if old_val != "on" or new_val != "off":
             return

@@ -44,26 +44,18 @@ class WrappedCoverTimeBased(CoverTimeBased):
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle state changes on the wrapped cover entity.
 
-        When the underlying cover starts moving externally, update the
-        position tracker. When it stops, stop tracking.
+        Unlike switch-based covers, a wrapped cover's state transitions
+        are explicit — we mirror whatever the inner cover is doing.
+        This handles start, stop, AND direction changes (opening→closing).
         """
-        was_moving = old_val in _MOVING_STATES
-        now_moving = new_val in _MOVING_STATES
-
-        if now_moving and not was_moving:
-            # Cover started moving externally
-            if new_val == _OPENING:
-                _LOGGER.debug(
-                    "_handle_external_state_change :: wrapped cover started opening"
-                )
-                await self.async_open_cover()
-            elif new_val == _CLOSING:
-                _LOGGER.debug(
-                    "_handle_external_state_change :: wrapped cover started closing"
-                )
-                await self.async_close_cover()
-        elif was_moving and not now_moving:
-            # Cover stopped moving
+        if new_val == _OPENING:
+            _LOGGER.debug("_handle_external_state_change :: wrapped cover opening")
+            await self.async_open_cover()
+        elif new_val == _CLOSING:
+            _LOGGER.debug("_handle_external_state_change :: wrapped cover closing")
+            await self.async_close_cover()
+        elif old_val in _MOVING_STATES:
+            # Was moving, now stopped
             _LOGGER.debug("_handle_external_state_change :: wrapped cover stopped")
             await self.async_stop_cover()
 

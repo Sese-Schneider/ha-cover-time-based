@@ -77,23 +77,21 @@ class TestExtraStateAttributes:
 
     def test_attributes_with_all_values(self, make_cover):
         cover = make_cover(
-            travel_time_down=25.0,
-            travel_time_up=20.0,
-            tilt_time_down=5.0,
-            tilt_time_up=4.0,
-            travel_moves_with_tilt=True,
-            travel_delay_at_end=1.5,
+            travel_time_close=25.0,
+            travel_time_open=20.0,
+            tilt_time_close=5.0,
+            tilt_time_open=4.0,
+            endpoint_runon_time=1.5,
             min_movement_time=0.5,
             travel_startup_delay=0.3,
             tilt_startup_delay=0.2,
         )
         attrs = cover.extra_state_attributes
-        assert attrs["travelling_time_down"] == 25.0
-        assert attrs["travelling_time_up"] == 20.0
-        assert attrs["tilting_time_down"] == 5.0
-        assert attrs["tilting_time_up"] == 4.0
-        assert attrs["travel_moves_with_tilt"] is True
-        assert attrs["travel_delay_at_end"] == 1.5
+        assert attrs["travel_time_close"] == 25.0
+        assert attrs["travel_time_open"] == 20.0
+        assert attrs["tilt_time_close"] == 5.0
+        assert attrs["tilt_time_open"] == 4.0
+        assert attrs["endpoint_runon_time"] == 1.5
         assert attrs["min_movement_time"] == 0.5
         assert attrs["travel_startup_delay"] == 0.3
         assert attrs["tilt_startup_delay"] == 0.2
@@ -101,13 +99,14 @@ class TestExtraStateAttributes:
     def test_attributes_with_no_optional_values(self, make_cover):
         cover = make_cover()
         attrs = cover.extra_state_attributes
-        # travel_time_down/up are always set (default 30)
-        assert attrs["travelling_time_down"] == 30
-        assert attrs["travelling_time_up"] == 30
+        # travel_time_close/open are always set (default 30)
+        assert attrs["travel_time_close"] == 30
+        assert attrs["travel_time_open"] == 30
+        # endpoint_runon_time defaults to 2.0
+        assert attrs["endpoint_runon_time"] == 2.0
         # Optional values should not be present when None
-        assert "tilting_time_down" not in attrs
-        assert "tilting_time_up" not in attrs
-        assert "travel_delay_at_end" not in attrs
+        assert "tilt_time_close" not in attrs
+        assert "tilt_time_open" not in attrs
         assert "min_movement_time" not in attrs
         assert "travel_startup_delay" not in attrs
         assert "tilt_startup_delay" not in attrs
@@ -132,7 +131,7 @@ class TestSupportedFeatures:
         assert not (features & CoverEntityFeature.OPEN_TILT)
 
     def test_tilt_features_with_tilt_support(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(50)
         features = cover.supported_features
@@ -141,11 +140,11 @@ class TestSupportedFeatures:
         assert features & CoverEntityFeature.STOP_TILT
         assert features & CoverEntityFeature.SET_TILT_POSITION
 
-    def test_no_set_position_when_position_unknown(self, make_cover):
+    def test_set_position_always_available(self, make_cover):
         cover = make_cover()
-        # Don't set position — it remains None
+        # SET_POSITION is always available, even when position is unknown
         features = cover.supported_features
-        assert not (features & CoverEntityFeature.SET_POSITION)
+        assert features & CoverEntityFeature.SET_POSITION
 
 
 # ===================================================================
@@ -165,13 +164,13 @@ class TestAsyncSetCoverPosition:
             await cover.async_set_cover_position(position=50)
 
         assert cover.travel_calc.is_traveling()
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        assert cover._last_command == SERVICE_OPEN_COVER
 
     @pytest.mark.asyncio
     async def test_async_set_cover_tilt_position_calls_set_tilt_position(
         self, make_cover
     ):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
 
@@ -179,7 +178,7 @@ class TestAsyncSetCoverPosition:
             await cover.async_set_cover_tilt_position(tilt_position=50)
 
         assert cover.tilt_calc.is_traveling()
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        assert cover._last_command == SERVICE_OPEN_COVER
 
 
 # ===================================================================
@@ -203,12 +202,11 @@ class TestStateRestoration:
             ):
                 await cover.async_added_to_hass()
 
-        # HA position 70 -> internal position 30
-        assert cover.travel_calc.current_position() == 30
+        assert cover.travel_calc.current_position() == 70
 
     @pytest.mark.asyncio
     async def test_restores_position_and_tilt_from_old_state(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
 
         old_state = MagicMock()
         old_state.attributes = {
@@ -222,8 +220,8 @@ class TestStateRestoration:
             ):
                 await cover.async_added_to_hass()
 
-        assert cover.travel_calc.current_position() == 40
-        assert cover.tilt_calc.current_position() == 20
+        assert cover.travel_calc.current_position() == 60
+        assert cover.tilt_calc.current_position() == 80
 
     @pytest.mark.asyncio
     async def test_no_restore_when_no_old_state(self, make_cover):
@@ -350,7 +348,7 @@ class TestAutoStopWithTilt:
 
     @pytest.mark.asyncio
     async def test_auto_stop_stops_tilt_calc(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         # Both at target, position reached
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(100)
@@ -373,7 +371,7 @@ class TestDelayedStopCompletion:
 
     @pytest.mark.asyncio
     async def test_delayed_stop_completes_and_sends_stop(self, make_cover):
-        cover = make_cover(travel_delay_at_end=0.01)
+        cover = make_cover(endpoint_runon_time=0.01)
         cover._last_command = SERVICE_CLOSE_COVER
 
         with patch.object(cover, "async_write_ha_state"):
@@ -394,7 +392,7 @@ class TestStopTravelIfTravelingWithTilt:
     """Test _stop_travel_if_traveling stops tilt as well."""
 
     def test_stops_both_travel_and_tilt(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
         cover.tilt_calc.set_position(50)
@@ -417,7 +415,7 @@ class TestSetPositionEdgeCases:
     @pytest.mark.asyncio
     async def test_direction_change_stops_tilt_too(self, make_cover):
         """Direction change during set_position should stop tilt if traveling."""
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -439,7 +437,7 @@ class TestSetPositionEdgeCases:
         cover._last_command = SERVICE_CLOSE_COVER
 
         with patch.object(cover, "async_write_ha_state"):
-            # After stopping, current should be ~50, and target = 100-50 = 50
+            # After stopping, current should be ~50, same as target
             await cover.set_position(50)
 
         # This hits the target == current after stop branch
@@ -447,7 +445,7 @@ class TestSetPositionEdgeCases:
     @pytest.mark.asyncio
     async def test_set_position_cancels_active_relay_delay(self, make_cover):
         """Active relay delay should be cancelled before new position movement."""
-        cover = make_cover(travel_delay_at_end=10.0)
+        cover = make_cover(endpoint_runon_time=10.0)
         cover.travel_calc.set_position(50)
 
         async def fake_delay():
@@ -471,7 +469,7 @@ class TestSetTiltPositionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_direction_change_stops_both_tilt_and_travel(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(50)
         cover.tilt_calc.start_travel_down()
@@ -486,23 +484,23 @@ class TestSetTiltPositionEdgeCases:
     @pytest.mark.asyncio
     async def test_direction_change_reaches_tilt_target_after_stop(self, make_cover):
         """If tilt target equals current after stopping, should not move."""
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(50)
         cover.tilt_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER
 
         with patch.object(cover, "async_write_ha_state"):
-            # Target = 100 - 50 = 50, same as current after stop
+            # Target = 50, same as current after stop
             await cover.set_tilt_position(50)
 
     @pytest.mark.asyncio
     async def test_set_tilt_cancels_active_relay_delay(self, make_cover):
         """Active relay delay should be cancelled before new tilt movement."""
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_delay_at_end=10.0,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            endpoint_runon_time=10.0,
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(50)
@@ -529,8 +527,8 @@ class TestTiltEndpointStartupDelay:
     @pytest.mark.asyncio
     async def test_tilt_direction_change_cancels_startup_delay(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
             tilt_startup_delay=10.0,
         )
         cover.travel_calc.set_position(50)
@@ -557,12 +555,12 @@ class TestTiltEndpointStartupDelay:
     @pytest.mark.asyncio
     async def test_tilt_same_direction_during_startup_delay_skips(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
             tilt_startup_delay=10.0,
         )
         cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(0)
+        cover.tilt_calc.set_position(50)
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover_tilt()
@@ -579,12 +577,12 @@ class TestTiltEndpointStartupDelay:
     async def test_tilt_cancels_active_relay_delay(self, make_cover):
         """Tilt endpoint movement should cancel active relay delay."""
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
-            travel_delay_at_end=10.0,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            endpoint_runon_time=10.0,
         )
         cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(0)
+        cover.tilt_calc.set_position(50)
 
         async def fake_delay():
             await asyncio.sleep(100)
@@ -776,7 +774,7 @@ class TestStartupDelayCompletion:
     @pytest.mark.asyncio
     async def test_startup_delay_completes_and_starts_tracking(self, make_cover):
         cover = make_cover(travel_startup_delay=0.01)
-        cover.travel_calc.set_position(0)
+        cover.travel_calc.set_position(100)
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
@@ -875,7 +873,7 @@ class TestPositionReached:
         assert cover.position_reached() is False
 
     def test_position_reached_with_tilt_both_reached(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel(50)
         cover.tilt_calc.set_position(50)
@@ -883,7 +881,7 @@ class TestPositionReached:
         assert cover.position_reached() is True
 
     def test_position_reached_with_tilt_not_reached(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel(50)
         cover.tilt_calc.set_position(0)
@@ -900,16 +898,16 @@ class TestIsOpeningClosingWithTilt:
     """Test is_opening/is_closing when only tilt is traveling."""
 
     def test_is_opening_from_tilt(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(100)
+        cover.tilt_calc.set_position(0)
         cover.tilt_calc.start_travel_up()
         assert cover.is_opening is True
 
     def test_is_closing_from_tilt(self, make_cover):
-        cover = make_cover(tilt_time_down=5.0, tilt_time_up=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
         cover.tilt_calc.start_travel_down()
         assert cover.is_closing is True
 
@@ -974,16 +972,16 @@ class TestSetTiltPositionStartupDelay:
     @pytest.mark.asyncio
     async def test_same_direction_startup_delay_skips(self, make_cover):
         cover = make_cover(
-            tilt_time_down=5.0,
-            tilt_time_up=5.0,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
             tilt_startup_delay=10.0,
         )
         cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(0)
+        cover.tilt_calc.set_position(50)
 
         # Start closing tilt (creates startup delay)
         with patch.object(cover, "async_write_ha_state"):
-            await cover.set_tilt_position(0)  # close direction
+            await cover.set_tilt_position(20)  # close direction
 
         task1 = cover._startup_delay_task
         assert task1 is not None
@@ -991,7 +989,7 @@ class TestSetTiltPositionStartupDelay:
 
         # Same direction set_tilt during startup delay should skip
         with patch.object(cover, "async_write_ha_state"):
-            await cover.set_tilt_position(20)  # still close direction
+            await cover.set_tilt_position(10)  # still close direction
 
         # Task should not have been restarted
         assert cover._startup_delay_task is task1

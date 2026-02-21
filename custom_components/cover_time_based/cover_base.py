@@ -138,6 +138,9 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             "_open_switch_entity_id",
             "_close_switch_entity_id",
             "_stop_switch_entity_id",
+            "_tilt_open_switch_id",
+            "_tilt_close_switch_id",
+            "_tilt_stop_switch_id",
         ):
             entity_id = getattr(self, attr, None)
             if entity_id:
@@ -221,7 +224,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self.stop_auto_updater()
 
         await self._async_handle_command(SERVICE_STOP_COVER)
-        if self._has_tilt_motor():
+        if self._has_tilt_motor() and not self._triggered_externally:
             await self._send_tilt_stop()
 
     def _stop_travel_if_traveling(self):
@@ -949,7 +952,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     @callback
     def auto_updater_hook(self, now):
         """Call for the autoupdater."""
-        _LOGGER.debug("auto_updater_hook")
         self.async_schedule_update_ha_state()
         if self.position_reached():
             _LOGGER.debug("auto_updater_hook :: position_reached")
@@ -1051,10 +1053,11 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._tilt_restore_target = restore_target
 
         closing_tilt = tilt_target < current_tilt
-        if closing_tilt:
-            await self._send_tilt_close()
-        else:
-            await self._send_tilt_open()
+        if not self._triggered_externally:
+            if closing_tilt:
+                await self._send_tilt_close()
+            else:
+                await self._send_tilt_open()
 
         self.tilt_calc.start_travel(tilt_target)
         self.start_auto_updater()
@@ -1660,12 +1663,52 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             )
             return
 
+        # Tilt switches: pulse-mode (ON→OFF = command complete)
+        if entity_id in (
+            self._tilt_open_switch_id,
+            self._tilt_close_switch_id,
+            self._tilt_stop_switch_id,
+        ):
+            self._triggered_externally = True
+            try:
+                await self._handle_external_tilt_state_change(
+                    entity_id, old_val, new_val
+                )
+            finally:
+                self._triggered_externally = False
+            return
+
         # External state change detected — handle per mode
         self._triggered_externally = True
         try:
             await self._handle_external_state_change(entity_id, old_val, new_val)
         finally:
             self._triggered_externally = False
+
+    async def _handle_external_tilt_state_change(self, entity_id, old_val, new_val):
+        """Handle external state change on tilt switches (dual_motor).
+
+        Tilt switches use pulse-mode behavior: a complete ON→OFF pulse
+        represents a command. We react on the OFF transition (pulse complete).
+        """
+        if old_val != "on" or new_val != "off":
+            return
+
+        if entity_id == self._tilt_open_switch_id:
+            _LOGGER.debug(
+                "_handle_external_tilt_state_change :: external tilt open pulse detected"
+            )
+            await self.async_open_cover_tilt()
+        elif entity_id == self._tilt_close_switch_id:
+            _LOGGER.debug(
+                "_handle_external_tilt_state_change :: external tilt close pulse detected"
+            )
+            await self.async_close_cover_tilt()
+        elif entity_id == self._tilt_stop_switch_id:
+            _LOGGER.debug(
+                "_handle_external_tilt_state_change :: external tilt stop pulse detected"
+            )
+            await self.async_stop_cover()
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle external state change. Override in subclasses for mode-specific behavior."""
@@ -1710,6 +1753,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def _send_tilt_open(self) -> None:
         """Send open to the tilt motor (bypasses position tracker)."""
+        self._mark_switch_pending(self._tilt_close_switch_id, 1)
+        self._mark_switch_pending(self._tilt_open_switch_id, 2)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -1725,6 +1770,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def _send_tilt_close(self) -> None:
         """Send close to the tilt motor (bypasses position tracker)."""
+        self._mark_switch_pending(self._tilt_open_switch_id, 1)
+        self._mark_switch_pending(self._tilt_close_switch_id, 2)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -1740,6 +1787,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def _send_tilt_stop(self) -> None:
         """Send stop to the tilt motor (bypasses position tracker)."""
+        self._mark_switch_pending(self._tilt_open_switch_id, 1)
+        self._mark_switch_pending(self._tilt_close_switch_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -1753,6 +1802,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             False,
         )
         if self._tilt_stop_switch_id:
+            self._mark_switch_pending(self._tilt_stop_switch_id, 2)
             await self.hass.services.async_call(
                 "homeassistant",
                 "turn_on",

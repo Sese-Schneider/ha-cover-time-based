@@ -10,9 +10,11 @@ from custom_components.cover_time_based.cover import (
     CONF_COVER_ENTITY_ID,
     CONF_DEVICE_TYPE,
     CONF_INPUT_MODE,
+    CONF_MAX_TILT_ALLOWED_POSITION,
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
+    CONF_SAFE_TILT_POSITION,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_ENDPOINT_RUNON_TIME,
     CONF_TILT_CLOSE_SWITCH,
@@ -71,6 +73,8 @@ def make_cover(make_hass):
         tilt_open_switch=None,
         tilt_close_switch=None,
         tilt_stop_switch=None,
+        safe_tilt_position=None,
+        max_tilt_allowed_position=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -119,6 +123,10 @@ def make_cover(make_hass):
             options[CONF_TILT_CLOSE_SWITCH] = tilt_close_switch
         if tilt_stop_switch is not None:
             options[CONF_TILT_STOP_SWITCH] = tilt_stop_switch
+        if safe_tilt_position is not None:
+            options[CONF_SAFE_TILT_POSITION] = safe_tilt_position
+        if max_tilt_allowed_position is not None:
+            options[CONF_MAX_TILT_ALLOWED_POSITION] = max_tilt_allowed_position
 
         cover = _create_cover_from_options(
             options,

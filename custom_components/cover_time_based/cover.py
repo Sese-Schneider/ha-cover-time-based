@@ -253,7 +253,7 @@ def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwa
 
     if tilt_mode_str == "dual_motor":
         return DualMotorTilt(
-            safe_tilt_position=kwargs.get("safe_tilt_position", 100),
+            safe_tilt_position=kwargs.get("safe_tilt_position") or 100,
             max_tilt_allowed_position=kwargs.get("max_tilt_allowed_position"),
         )
     if tilt_mode_str == "inline":
