@@ -40,6 +40,7 @@ class TestCalibrationState:
         from custom_components.cover_time_based.calibration import (
             CALIBRATION_STEP_PAUSE,
             CALIBRATION_OVERHEAD_STEPS,
+            CALIBRATION_TILT_OVERHEAD_STEPS,
             CALIBRATION_MIN_MOVEMENT_START,
             CALIBRATION_MIN_MOVEMENT_INCREMENT,
             CALIBRATABLE_ATTRIBUTES,
@@ -49,6 +50,7 @@ class TestCalibrationState:
 
         assert CALIBRATION_STEP_PAUSE == 2.0
         assert CALIBRATION_OVERHEAD_STEPS == 8
+        assert CALIBRATION_TILT_OVERHEAD_STEPS == 3
         assert CALIBRATION_MIN_MOVEMENT_START == 0.1
         assert CALIBRATION_MIN_MOVEMENT_INCREMENT == 0.1
         assert len(CALIBRATABLE_ATTRIBUTES) == 7
