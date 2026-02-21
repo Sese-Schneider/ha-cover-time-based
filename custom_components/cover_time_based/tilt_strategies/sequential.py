@@ -34,12 +34,16 @@ class SequentialTilt(TiltStrategy):
     def uses_tilt_motor(self) -> bool:
         return False
 
+    @property
+    def restores_tilt(self) -> bool:
+        return False
+
     def plan_move_position(
         self, target_pos: int, current_pos: int, current_tilt: int
     ) -> list[TiltTo | TravelTo]:
         steps: list[TiltTo | TravelTo] = []
-        if current_tilt != 0:
-            steps.append(TiltTo(0))  # flatten slats before travel
+        if current_tilt != 100:
+            steps.append(TiltTo(100))  # flatten slats (fully open) before travel
         steps.append(TravelTo(target_pos))
         return steps
 
@@ -47,18 +51,18 @@ class SequentialTilt(TiltStrategy):
         self, target_tilt: int, current_pos: int, current_tilt: int
     ) -> list[TiltTo | TravelTo]:
         steps: list[TiltTo | TravelTo] = []
-        if current_pos != 100:
-            steps.append(TravelTo(100))  # must be at closed position
+        if current_pos != 0:
+            steps.append(TravelTo(0))  # must be at closed position
         steps.append(TiltTo(target_tilt))
         return steps
 
     def snap_trackers_to_physical(self, travel_calc, tilt_calc):
         current_travel = travel_calc.current_position()
         current_tilt_pos = tilt_calc.current_position()
-        if current_travel != 100 and current_tilt_pos != 0:
+        if current_travel != 0 and current_tilt_pos != 100:
             _LOGGER.debug(
-                "SequentialTilt :: Travel at %d%% (not closed), forcing tilt to 0%% (was %d%%)",
+                "SequentialTilt :: Travel at %d%% (not closed), forcing tilt to 100%% (was %d%%)",
                 current_travel,
                 current_tilt_pos,
             )
-            tilt_calc.set_position(0)
+            tilt_calc.set_position(100)

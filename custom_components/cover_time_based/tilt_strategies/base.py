@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from xknx.devices import TravelCalculator
+    from ..travel_calculator import TravelCalculator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,8 +52,8 @@ def calc_coupled_target(
         "coupled calculator position must be set before coupling"
     )
     if closing:
-        return min(100, int(current + coupled_distance))
-    return max(0, int(current - coupled_distance))
+        return max(0, int(current - coupled_distance))
+    return min(100, int(current + coupled_distance))
 
 
 class TiltStrategy(ABC):
@@ -72,6 +72,11 @@ class TiltStrategy(ABC):
     @abstractmethod
     def uses_tilt_motor(self) -> bool:
         """Whether TiltTo steps require a separate tilt motor."""
+
+    @property
+    @abstractmethod
+    def restores_tilt(self) -> bool:
+        """Whether tilt should be restored after a position change."""
 
     @abstractmethod
     def plan_move_position(
