@@ -59,6 +59,8 @@ class SequentialTilt(TiltStrategy):
     def snap_trackers_to_physical(self, travel_calc, tilt_calc):
         current_travel = travel_calc.current_position()
         current_tilt_pos = tilt_calc.current_position()
+        if current_travel is None or current_tilt_pos is None:
+            return
         if current_travel != 0 and current_tilt_pos != 100:
             _LOGGER.debug(
                 "SequentialTilt :: Travel at %d%% (not closed), forcing tilt to 100%% (was %d%%)",
