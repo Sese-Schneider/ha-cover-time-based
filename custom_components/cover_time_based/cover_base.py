@@ -1505,33 +1505,6 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
         raise ValueError(f"Unexpected calibration attribute: {attribute}")
 
-    def _save_calibration_result(self, attribute, value):
-        """Save the calibration result to the config entry options."""
-        attribute_to_conf = {
-            "travel_time_close": CONF_TRAVEL_TIME_CLOSE,
-            "travel_time_open": CONF_TRAVEL_TIME_OPEN,
-            "tilt_time_close": CONF_TILT_TIME_CLOSE,
-            "tilt_time_open": CONF_TILT_TIME_OPEN,
-            "travel_startup_delay": CONF_TRAVEL_STARTUP_DELAY,
-            "tilt_startup_delay": CONF_TILT_STARTUP_DELAY,
-            "min_movement_time": CONF_MIN_MOVEMENT_TIME,
-        }
-        conf_key = attribute_to_conf.get(attribute)
-        if conf_key is None:
-            _LOGGER.error("Unknown calibration attribute: %s", attribute)
-            return
-
-        entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
-        if entry is None:
-            _LOGGER.error(
-                "Config entry %s not found, cannot save calibration result",
-                self._config_entry_id,
-            )
-            return
-
-        new_options = {**entry.options, conf_key: value}
-        self.hass.config_entries.async_update_entry(entry, options=new_options)
-
     @staticmethod
     def _extract_coupled_tilt(steps):
         """Extract the tilt target from a movement plan.

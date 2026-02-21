@@ -23,21 +23,6 @@ CALIBRATABLE_ATTRIBUTES = [
     "min_movement_time",
 ]
 
-# Tilt modes that support independent tilt calibration
-_TILT_CALIBRATION_MODES = {"sequential", "dual_motor"}
-
-
-def get_calibratable_attributes(tilt_mode: str) -> list[str]:
-    """Return calibratable attributes filtered by tilt mode.
-
-    Modes without independent tilt exclude tilt attributes because
-    tilt is either derived from position or not configured.
-    """
-    if tilt_mode in _TILT_CALIBRATION_MODES:
-        return list(CALIBRATABLE_ATTRIBUTES)
-    return [a for a in CALIBRATABLE_ATTRIBUTES if not a.startswith("tilt_")]
-
-
 SERVICE_START_CALIBRATION = "start_calibration"
 SERVICE_STOP_CALIBRATION = "stop_calibration"
 

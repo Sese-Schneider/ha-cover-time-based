@@ -32,30 +32,6 @@ class TravelTo:
 MovementStep = TiltTo | TravelTo
 
 
-def calc_coupled_target(
-    movement_time: float,
-    closing: bool,
-    coupled_calc: TravelCalculator,
-    coupled_time_close: float,
-    coupled_time_open: float,
-) -> int:
-    """Calculate target position for a coupled calculator based on primary movement time.
-
-    When travel moves, tilt moves proportionally (and vice versa when
-    travel_moves_with_tilt is enabled). This computes how far the coupled
-    calculator should move given the primary movement duration.
-    """
-    coupled_time = coupled_time_close if closing else coupled_time_open
-    coupled_distance = (movement_time / coupled_time) * 100.0
-    current = coupled_calc.current_position()
-    assert current is not None, (
-        "coupled calculator position must be set before coupling"
-    )
-    if closing:
-        return max(0, int(current - coupled_distance))
-    return min(100, int(current + coupled_distance))
-
-
 class TiltStrategy(ABC):
     """Base class for tilt mode strategies."""
 

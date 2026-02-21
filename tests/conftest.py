@@ -28,12 +28,13 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
     DEFAULT_PULSE_TIME,
-    DEFAULT_TRAVEL_TIME,
     DEVICE_TYPE_COVER,
     DEVICE_TYPE_SWITCH,
     INPUT_MODE_SWITCH,
     _create_cover_from_options,
 )
+
+DEFAULT_TRAVEL_TIME = 30
 
 
 @pytest.fixture

@@ -455,10 +455,6 @@ class TestResolveTiltStrategy:
         result = _resolve_tilt_strategy("sequential", 2.0, 2.0)
         assert isinstance(result, SequentialTilt)
 
-    def test_proportional_treated_as_none(self):
-        result = _resolve_tilt_strategy("proportional", 2.0, 2.0)
-        assert result is None
-
     def test_dual_motor_defaults(self):
         result = _resolve_tilt_strategy("dual_motor", 2.0, 2.0)
         assert isinstance(result, DualMotorTilt)

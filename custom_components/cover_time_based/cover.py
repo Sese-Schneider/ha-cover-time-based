@@ -46,7 +46,6 @@ CONF_TRAVEL_STARTUP_DELAY = "travel_startup_delay"
 CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
 CONF_ENDPOINT_RUNON_TIME = "endpoint_runon_time"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
-DEFAULT_TRAVEL_TIME = 30
 DEFAULT_ENDPOINT_RUNON_TIME = 2.0
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
@@ -78,8 +77,6 @@ BASE_DEVICE_SCHEMA = {
 }
 
 CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
-CONF_TRAVEL_MOTOR_OVERHEAD = "travel_motor_overhead"
-CONF_TILT_MOTOR_OVERHEAD = "tilt_motor_overhead"
 
 TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT): cv.boolean,
@@ -91,8 +88,6 @@ TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
     vol.Optional(CONF_ENDPOINT_RUNON_TIME): cv.positive_float,
     vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
-    vol.Optional(CONF_TRAVEL_MOTOR_OVERHEAD): cv.positive_float,
-    vol.Optional(CONF_TILT_MOTOR_OVERHEAD): cv.positive_float,
     vol.Optional(CONF_MIN_MOVEMENT_TIME): cv.positive_float,
 }
 
@@ -137,8 +132,6 @@ DEFAULTS_SCHEMA = vol.Schema(
             CONF_ENDPOINT_RUNON_TIME, default=DEFAULT_ENDPOINT_RUNON_TIME
         ): vol.Any(cv.positive_float, None),
         vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
-        vol.Optional(CONF_TRAVEL_MOTOR_OVERHEAD): cv.positive_float,
-        vol.Optional(CONF_TILT_MOTOR_OVERHEAD): cv.positive_float,
         vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
             cv.positive_float, None
         ),
@@ -244,7 +237,7 @@ def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwa
     """Map tilt_mode config string to a TiltStrategy instance (or None)."""
     from .tilt_strategies import DualMotorTilt, InlineTilt, SequentialTilt
 
-    if tilt_mode_str in ("none", "proportional"):
+    if tilt_mode_str == "none":
         return None
 
     has_tilt_times = tilt_time_close is not None and tilt_time_open is not None
@@ -364,8 +357,6 @@ def _resolve_input_mode(device_id, config, defaults):
 
 _YAML_KEY_RENAMES = {
     CONF_TRAVEL_DELAY_AT_END: CONF_ENDPOINT_RUNON_TIME,
-    CONF_TRAVEL_MOTOR_OVERHEAD: CONF_TRAVEL_STARTUP_DELAY,
-    CONF_TILT_MOTOR_OVERHEAD: CONF_TILT_STARTUP_DELAY,
     CONF_TRAVELLING_TIME_DOWN: CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVELLING_TIME_UP: CONF_TRAVEL_TIME_OPEN,
     CONF_TILTING_TIME_DOWN: CONF_TILT_TIME_CLOSE,
@@ -380,8 +371,6 @@ def _migrate_yaml_keys(config):
             if new_key not in config:
                 config[new_key] = config[old_key]
             config.pop(old_key)
-
-    # travel_moves_with_tilt is kept as a separate boolean option (not converted)
 
 
 def devices_from_config(domain_config):

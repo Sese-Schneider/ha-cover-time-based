@@ -3,7 +3,7 @@
 Tilt strategies determine how travel and tilt movements are coupled.
 """
 
-from .base import MovementStep, TiltStrategy, TiltTo, TravelTo, calc_coupled_target
+from .base import MovementStep, TiltStrategy, TiltTo, TravelTo
 from .dual_motor import DualMotorTilt
 from .inline import InlineTilt
 from .sequential import SequentialTilt
@@ -16,5 +16,4 @@ __all__ = [
     "TiltStrategy",
     "TiltTo",
     "TravelTo",
-    "calc_coupled_target",
 ]
