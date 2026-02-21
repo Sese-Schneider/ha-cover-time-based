@@ -401,25 +401,31 @@ class TestInlinePlanMoveTilt:
 
 
 class TestInlineSnapTrackers:
-    def test_forces_tilt_closed_at_position_zero(self):
+    """snap_trackers_to_physical is a no-op for inline tilt.
+
+    Endpoint coupling is handled by plan_move_position pre-steps,
+    not by post-stop snapping. Tilt can be any value at any position.
+    """
+
+    def test_no_snap_at_closed_endpoint(self):
         strategy = InlineTilt()
         travel = TravelCalculator(10.0, 10.0)
         tilt = TravelCalculator(2.0, 2.0)
         travel.set_position(0)
         tilt.set_position(50)
         strategy.snap_trackers_to_physical(travel, tilt)
-        assert tilt.current_position() == 0
+        assert tilt.current_position() == 50
 
-    def test_forces_tilt_open_at_position_hundred(self):
+    def test_no_snap_at_open_endpoint(self):
         strategy = InlineTilt()
         travel = TravelCalculator(10.0, 10.0)
         tilt = TravelCalculator(2.0, 2.0)
         travel.set_position(100)
         tilt.set_position(50)
         strategy.snap_trackers_to_physical(travel, tilt)
-        assert tilt.current_position() == 100
+        assert tilt.current_position() == 50
 
-    def test_no_op_at_mid_position(self):
+    def test_no_snap_at_mid_position(self):
         strategy = InlineTilt()
         travel = TravelCalculator(10.0, 10.0)
         tilt = TravelCalculator(2.0, 2.0)
@@ -427,21 +433,3 @@ class TestInlineSnapTrackers:
         tilt.set_position(30)
         strategy.snap_trackers_to_physical(travel, tilt)
         assert tilt.current_position() == 30
-
-    def test_already_correct_at_closed(self):
-        strategy = InlineTilt()
-        travel = TravelCalculator(10.0, 10.0)
-        tilt = TravelCalculator(2.0, 2.0)
-        travel.set_position(0)
-        tilt.set_position(0)
-        strategy.snap_trackers_to_physical(travel, tilt)
-        assert tilt.current_position() == 0
-
-    def test_already_correct_at_open(self):
-        strategy = InlineTilt()
-        travel = TravelCalculator(10.0, 10.0)
-        tilt = TravelCalculator(2.0, 2.0)
-        travel.set_position(100)
-        tilt.set_position(100)
-        strategy.snap_trackers_to_physical(travel, tilt)
-        assert tilt.current_position() == 100

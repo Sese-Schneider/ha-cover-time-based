@@ -55,17 +55,7 @@ class InlineTilt(TiltStrategy):
         return [TiltTo(target_tilt)]
 
     def snap_trackers_to_physical(self, travel_calc, tilt_calc):
-        current_travel = travel_calc.current_position()
-        current_tilt = tilt_calc.current_position()
-        if current_travel == 0 and current_tilt != 0:
-            _LOGGER.debug(
-                "InlineTilt :: Travel at 0%% (closed), forcing tilt to 0%% (was %d%%)",
-                current_tilt,
-            )
-            tilt_calc.set_position(0)
-        elif current_travel == 100 and current_tilt != 100:
-            _LOGGER.debug(
-                "InlineTilt :: Travel at 100%% (open), forcing tilt to 100%% (was %d%%)",
-                current_tilt,
-            )
-            tilt_calc.set_position(100)
+        # No-op: inline tilt allows any tilt value at any position.
+        # Endpoint coupling during travel is handled by plan_move_position
+        # pre-steps (TiltTo before TravelTo), not by post-stop snapping.
+        pass

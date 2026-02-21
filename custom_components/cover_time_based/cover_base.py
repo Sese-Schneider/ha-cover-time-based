@@ -500,10 +500,22 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     and self._tilt_strategy.uses_tilt_motor
                     and current_tilt != tilt_target
                 ):
+                    # At endpoints, snap tilt to endpoint after travel
+                    restore = target if target in (0, 100) else current_tilt
                     await self._start_tilt_pre_step(
-                        tilt_target, target, command, current_tilt
+                        tilt_target, target, command, restore
                     )
                     return
+
+                # Dual motor: pre-step skipped (tilt already at safe),
+                # but still need to snap tilt to endpoint after travel
+                if (
+                    tilt_target is not None
+                    and self._tilt_strategy.uses_tilt_motor
+                    and target in (0, 100)
+                    and current_tilt != target
+                ):
+                    self._tilt_restore_target = target
 
                 # Shared motor with restore: save tilt for post-travel restore
                 if (
@@ -739,10 +751,22 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     and self._tilt_strategy.uses_tilt_motor
                     and current_tilt != tilt_target
                 ):
+                    # At endpoints, snap tilt to endpoint after travel
+                    restore = target if target in (0, 100) else current_tilt
                     await self._start_tilt_pre_step(
-                        tilt_target, target, command, current_tilt
+                        tilt_target, target, command, restore
                     )
                     return
+
+                # Dual motor: pre-step skipped (tilt already at safe),
+                # but still need to snap tilt to endpoint after travel
+                if (
+                    tilt_target is not None
+                    and self._tilt_strategy.uses_tilt_motor
+                    and target in (0, 100)
+                    and current_tilt != target
+                ):
+                    self._tilt_restore_target = target
 
                 # Shared motor with restore: save tilt for post-travel restore
                 if (
