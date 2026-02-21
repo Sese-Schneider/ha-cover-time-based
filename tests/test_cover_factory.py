@@ -41,7 +41,7 @@ from custom_components.cover_time_based.cover_toggle_mode import ToggleModeCover
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
 from custom_components.cover_time_based.tilt_strategies import (
     DualMotorTilt,
-    ProportionalTilt,
+    InlineTilt,
     SequentialTilt,
 )
 
@@ -455,15 +455,15 @@ class TestResolveTiltStrategy:
         result = _resolve_tilt_strategy("sequential", 2.0, 2.0)
         assert isinstance(result, SequentialTilt)
 
-    def test_proportional(self):
+    def test_proportional_treated_as_none(self):
         result = _resolve_tilt_strategy("proportional", 2.0, 2.0)
-        assert isinstance(result, ProportionalTilt)
+        assert result is None
 
     def test_dual_motor_defaults(self):
         result = _resolve_tilt_strategy("dual_motor", 2.0, 2.0)
         assert isinstance(result, DualMotorTilt)
-        assert result._safe_tilt_position == 0
-        assert result._min_tilt_allowed_position is None
+        assert result._safe_tilt_position == 100
+        assert result._max_tilt_allowed_position is None
 
     def test_dual_motor_with_options(self):
         result = _resolve_tilt_strategy(
@@ -471,11 +471,15 @@ class TestResolveTiltStrategy:
             2.0,
             2.0,
             safe_tilt_position=10,
-            min_tilt_allowed_position=80,
+            max_tilt_allowed_position=80,
         )
         assert isinstance(result, DualMotorTilt)
         assert result._safe_tilt_position == 10
-        assert result._min_tilt_allowed_position == 80
+        assert result._max_tilt_allowed_position == 80
+
+    def test_inline(self):
+        result = _resolve_tilt_strategy("inline", 2.0, 2.0)
+        assert isinstance(result, InlineTilt)
 
     def test_unknown_mode_defaults_to_sequential(self):
         result = _resolve_tilt_strategy("unknown_value", 2.0, 2.0)

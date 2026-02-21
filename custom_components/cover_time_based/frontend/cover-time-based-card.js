@@ -241,10 +241,6 @@ class CoverTimeBasedCard extends LitElement {
       hints.tilt_startup_delay = pos === "closed_tilt_open" || pos === "open"
         ? "Cover must be fully closed with slats open. Click Finish when the slats are fully closed."
         : "Cover must be fully closed with slats closed. Click Finish when the slats are fully open.";
-    } else if (tiltMode === "proportional") {
-      hints.travel_time_close = "Click Finish when the cover is fully closed and slats are fully tilted.";
-      hints.travel_time_open = "Click Finish when the cover is fully open and slats are fully open.";
-      hints.travel_startup_delay = `Click Finish when the cover is fully ${endpoint} and slats match.`;
     } else if (tiltMode === "dual_motor") {
       hints.travel_time_close = "Ensure tilt is in safe position. Click Finish when the cover is fully closed.";
       hints.travel_time_open = "Ensure tilt is in safe position. Click Finish when the cover is fully open.";
@@ -323,20 +319,7 @@ class CoverTimeBasedCard extends LitElement {
         tilt_mode: "none",
         // Clear dual-motor fields
         safe_tilt_position: null,
-        min_tilt_allowed_position: null,
-        tilt_open_switch: null,
-        tilt_close_switch: null,
-        tilt_stop_switch: null,
-      });
-    } else if (mode === "proportional") {
-      // Proportional: tilt derived from position, no tilt times needed
-      this._updateLocal({
-        tilt_mode: mode,
-        tilt_time_close: null,
-        tilt_time_open: null,
-        tilt_startup_delay: null,
-        safe_tilt_position: null,
-        min_tilt_allowed_position: null,
+        max_tilt_allowed_position: null,
         tilt_open_switch: null,
         tilt_close_switch: null,
         tilt_stop_switch: null,
@@ -346,15 +329,22 @@ class CoverTimeBasedCard extends LitElement {
       if (mode === "sequential") {
         // Clear dual-motor fields when switching to sequential
         updates.safe_tilt_position = null;
-        updates.min_tilt_allowed_position = null;
+        updates.max_tilt_allowed_position = null;
         updates.tilt_open_switch = null;
         updates.tilt_close_switch = null;
         updates.tilt_stop_switch = null;
       } else if (mode === "dual_motor") {
-        // Default min_tilt_allowed_position to fully closed
-        if (this._config.min_tilt_allowed_position == null) {
-          updates.min_tilt_allowed_position = 100;
+        // Default max_tilt_allowed_position to 0 (fully closed)
+        if (this._config.max_tilt_allowed_position == null) {
+          updates.max_tilt_allowed_position = 0;
         }
+      } else if (mode === "inline") {
+        // Clear dual-motor fields when switching to inline
+        updates.safe_tilt_position = null;
+        updates.max_tilt_allowed_position = null;
+        updates.tilt_open_switch = null;
+        updates.tilt_close_switch = null;
+        updates.tilt_stop_switch = null;
       }
       this._updateLocal(updates);
     }
@@ -448,7 +438,7 @@ class CoverTimeBasedCard extends LitElement {
         tiltPosition = hasTilt ? 100 : null;
         break;
       case "closed":
-        // Proportional/none mode: position+tilt both closed
+        // Position+tilt both closed
         position = 0;
         tiltPosition = hasTilt ? 0 : null;
         break;
@@ -796,11 +786,11 @@ class CoverTimeBasedCard extends LitElement {
           <option value="sequential" ?selected=${tiltMode === "sequential"}>
             Closes then tilts
           </option>
-          <option value="proportional" ?selected=${tiltMode === "proportional"}>
-            Tilts with movement
-          </option>
-          <option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
+<option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
             Separate tilt motor
+          </option>
+          <option value="inline" ?selected=${tiltMode === "inline"}>
+            Tilts inline with travel
           </option>
         </select>
       </div>
@@ -846,8 +836,8 @@ class CoverTimeBasedCard extends LitElement {
             max="100"
             step="1"
             label="Safe tilt position"
-            helper="Tilt moves here before travel (0 = fully open)"
-            .value=${String(c.safe_tilt_position ?? 0)}
+            helper="Tilt moves here before travel (100 = fully open)"
+            .value=${String(c.safe_tilt_position ?? 100)}
             @change=${(e) => {
               const v = parseInt(e.target.value);
               if (!isNaN(v) && v >= 0 && v <= 100) {
@@ -860,13 +850,13 @@ class CoverTimeBasedCard extends LitElement {
             min="0"
             max="100"
             step="1"
-            label="Min tilt allowed position (optional)"
-            helper="Cover must be at least this closed before tilting"
-            .value=${c.min_tilt_allowed_position != null ? String(c.min_tilt_allowed_position) : ""}
+            label="Max tilt allowed position (optional)"
+            helper="Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)"
+            .value=${c.max_tilt_allowed_position != null ? String(c.max_tilt_allowed_position) : ""}
             @change=${(e) => {
               const v = e.target.value.trim();
               this._updateLocal({
-                min_tilt_allowed_position: v === "" ? null : parseInt(v),
+                max_tilt_allowed_position: v === "" ? null : parseInt(v),
               });
             }}
           ></ha-textfield>
@@ -876,7 +866,7 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _renderTimingTable(c) {
-    const hasTiltTimes = c.tilt_mode === "sequential" || c.tilt_mode === "dual_motor";
+    const hasTiltTimes = c.tilt_mode === "sequential" || c.tilt_mode === "dual_motor" || c.tilt_mode === "inline";
 
     const rows = [
       ["Travel time (close)", "travel_time_close", c.travel_time_close],
@@ -995,7 +985,7 @@ class CoverTimeBasedCard extends LitElement {
         disabledKeys.add("tilt_startup_delay");
       }
     } else if (this._knownPosition === "closed") {
-      // Proportional/none: position closed (tilt matches)
+      // Position closed (tilt matches)
       disabledKeys.add("travel_time_close");
       disabledKeys.add("tilt_time_close");
     } else if (this._knownPosition === "closed_tilt_open") {

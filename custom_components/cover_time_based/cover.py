@@ -53,7 +53,7 @@ CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
 CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
 CONF_STOP_SWITCH_ENTITY_ID = "stop_switch_entity_id"
 CONF_SAFE_TILT_POSITION = "safe_tilt_position"
-CONF_MIN_TILT_ALLOWED_POSITION = "min_tilt_allowed_position"
+CONF_MAX_TILT_ALLOWED_POSITION = "max_tilt_allowed_position"
 CONF_TILT_OPEN_SWITCH = "tilt_open_switch"
 CONF_TILT_CLOSE_SWITCH = "tilt_close_switch"
 CONF_TILT_STOP_SWITCH = "tilt_stop_switch"
@@ -242,22 +242,22 @@ def _resolve_entity(hass, entity_id):
 
 def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwargs):
     """Map tilt_mode config string to a TiltStrategy instance (or None)."""
-    from .tilt_strategies import DualMotorTilt, ProportionalTilt, SequentialTilt
+    from .tilt_strategies import DualMotorTilt, InlineTilt, SequentialTilt
 
-    if tilt_mode_str == "none":
+    if tilt_mode_str in ("none", "proportional"):
         return None
 
     has_tilt_times = tilt_time_close is not None and tilt_time_open is not None
     if not has_tilt_times:
         return None
 
-    if tilt_mode_str == "proportional":
-        return ProportionalTilt()
     if tilt_mode_str == "dual_motor":
         return DualMotorTilt(
-            safe_tilt_position=kwargs.get("safe_tilt_position", 0),
-            min_tilt_allowed_position=kwargs.get("min_tilt_allowed_position"),
+            safe_tilt_position=kwargs.get("safe_tilt_position", 100),
+            max_tilt_allowed_position=kwargs.get("max_tilt_allowed_position"),
         )
+    if tilt_mode_str == "inline":
+        return InlineTilt()
     # "sequential" or any other value with tilt times → sequential
     return SequentialTilt()
 
@@ -276,8 +276,8 @@ def _create_cover_from_options(options, device_id="", name=""):
         tilt_mode_str,
         options.get(CONF_TILT_TIME_CLOSE),
         options.get(CONF_TILT_TIME_OPEN),
-        safe_tilt_position=options.get(CONF_SAFE_TILT_POSITION, 0),
-        min_tilt_allowed_position=options.get(CONF_MIN_TILT_ALLOWED_POSITION),
+        safe_tilt_position=options.get(CONF_SAFE_TILT_POSITION, 100),
+        max_tilt_allowed_position=options.get(CONF_MAX_TILT_ALLOWED_POSITION),
     )
 
     # Common params for all subclasses

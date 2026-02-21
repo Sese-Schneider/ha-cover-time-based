@@ -17,7 +17,7 @@ from .cover import (
     CONF_DEVICE_TYPE,
     CONF_INPUT_MODE,
     CONF_MIN_MOVEMENT_TIME,
-    CONF_MIN_TILT_ALLOWED_POSITION,
+    CONF_MAX_TILT_ALLOWED_POSITION,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_SAFE_TILT_POSITION,
@@ -65,7 +65,7 @@ _FIELD_MAP = {
     "endpoint_runon_time": CONF_ENDPOINT_RUNON_TIME,
     "min_movement_time": CONF_MIN_MOVEMENT_TIME,
     "safe_tilt_position": CONF_SAFE_TILT_POSITION,
-    "min_tilt_allowed_position": CONF_MIN_TILT_ALLOWED_POSITION,
+    "max_tilt_allowed_position": CONF_MAX_TILT_ALLOWED_POSITION,
     "tilt_open_switch": CONF_TILT_OPEN_SWITCH,
     "tilt_close_switch": CONF_TILT_CLOSE_SWITCH,
     "tilt_stop_switch": CONF_TILT_STOP_SWITCH,
@@ -139,8 +139,8 @@ async def ws_get_config(
                 CONF_ENDPOINT_RUNON_TIME, DEFAULT_ENDPOINT_RUNON_TIME
             ),
             "min_movement_time": options.get(CONF_MIN_MOVEMENT_TIME),
-            "safe_tilt_position": options.get(CONF_SAFE_TILT_POSITION, 0),
-            "min_tilt_allowed_position": options.get(CONF_MIN_TILT_ALLOWED_POSITION),
+            "safe_tilt_position": options.get(CONF_SAFE_TILT_POSITION, 100),
+            "max_tilt_allowed_position": options.get(CONF_MAX_TILT_ALLOWED_POSITION),
             "tilt_open_switch": options.get(CONF_TILT_OPEN_SWITCH),
             "tilt_close_switch": options.get(CONF_TILT_CLOSE_SWITCH),
             "tilt_stop_switch": options.get(CONF_TILT_STOP_SWITCH),
@@ -164,7 +164,7 @@ async def ws_get_config(
         vol.Optional("stop_switch_entity_id"): vol.Any(str, None),
         vol.Optional("cover_entity_id"): vol.Any(str, None),
         vol.Optional("tilt_mode"): vol.In(
-            ["none", "sequential", "proportional", "dual_motor"]
+            ["none", "sequential", "dual_motor", "inline"]
         ),
         vol.Optional("travel_time_close"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
@@ -193,7 +193,7 @@ async def ws_get_config(
         vol.Optional("safe_tilt_position"): vol.Any(
             None, vol.All(int, vol.Range(min=0, max=100))
         ),
-        vol.Optional("min_tilt_allowed_position"): vol.Any(
+        vol.Optional("max_tilt_allowed_position"): vol.Any(
             None, vol.All(int, vol.Range(min=0, max=100))
         ),
         vol.Optional("tilt_open_switch"): vol.Any(str, None),
