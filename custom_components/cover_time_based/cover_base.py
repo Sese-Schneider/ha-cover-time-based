@@ -159,6 +159,43 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self.tilt_calc.stop()
             self.stop_auto_updater()
 
+    async def _abandon_active_lifecycle(self):
+        """Abandon any active multi-phase tilt lifecycle (pre-step, restore).
+
+        Called at the start of every movement method. If a tilt restore or
+        tilt pre-step is in progress, stops all hardware and calculators.
+        Always clears the pending restore target so it won't fire after
+        the next travel completes.
+        """
+        was_restoring = self._tilt_restore_active
+        was_pre_stepping = self._pending_travel_target is not None
+
+        # Always clear multi-phase state
+        self._tilt_restore_target = None
+        self._tilt_restore_active = False
+        self._pending_travel_target = None
+        self._pending_travel_command = None
+
+        if not was_restoring and not was_pre_stepping:
+            return
+
+        _LOGGER.debug(
+            "_abandon_active_lifecycle :: abandoning %s",
+            "tilt restore" if was_restoring else "tilt pre-step",
+        )
+
+        self._cancel_startup_delay_task()
+
+        if self.travel_calc.is_traveling():
+            self.travel_calc.stop()
+        if self._has_tilt_support() and self.tilt_calc.is_traveling():
+            self.tilt_calc.stop()
+        self.stop_auto_updater()
+
+        await self._async_handle_command(SERVICE_STOP_COVER)
+        if self._has_tilt_motor():
+            await self._send_tilt_stop()
+
     def _stop_travel_if_traveling(self):
         """Stop cover movement if it's currently traveling."""
         if self.travel_calc.is_traveling():
@@ -435,6 +472,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def _async_move_to_endpoint(self, target):
         """Move cover to an endpoint (0=fully closed, 100=fully open)."""
+        await self._abandon_active_lifecycle()
+
         closing = target == 0
         command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
         opposite_command = SERVICE_OPEN_COVER if closing else SERVICE_CLOSE_COVER
@@ -549,6 +588,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def _async_move_tilt_to_endpoint(self, target):
         """Move tilt to an endpoint (0=fully closed, 100=fully open)."""
+        await self._abandon_active_lifecycle()
+
         closing = target == 0
         command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
         opposite_command = SERVICE_OPEN_COVER if closing else SERVICE_CLOSE_COVER
@@ -682,6 +723,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def set_position(self, position):
         """Move cover to a designated position."""
+        await self._abandon_active_lifecycle()
         current = self.travel_calc.current_position()
         target = position
         _LOGGER.debug(
@@ -790,6 +832,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def set_tilt_position(self, position):
         """Move cover tilt to a designated position."""
+        await self._abandon_active_lifecycle()
         current = self.tilt_calc.current_position()
         target = position
         _LOGGER.debug(
@@ -1180,7 +1223,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def _start_overhead_test(self, attribute, direction):
         """Start automated step test for motor overhead."""
-        from .calibration import CALIBRATION_OVERHEAD_STEPS
+        from .calibration import (
+            CALIBRATION_OVERHEAD_STEPS,
+            CALIBRATION_TILT_OVERHEAD_STEPS,
+        )
 
         if attribute == "travel_startup_delay":
             position = self.current_cover_position
@@ -1189,6 +1235,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 travel_time = self._travel_time_open or self._travel_time_close
             else:
                 travel_time = self._travel_time_close or self._travel_time_open
+            num_steps = CALIBRATION_OVERHEAD_STEPS
         else:
             position = self.current_cover_tilt_position
             move_command = self._resolve_direction(direction, position)
@@ -1196,6 +1243,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 travel_time = self._tilting_time_open or self._tilting_time_close
             else:
                 travel_time = self._tilting_time_close or self._tilting_time_open
+            num_steps = CALIBRATION_TILT_OVERHEAD_STEPS
 
         _LOGGER.debug(
             "overhead test: position=%s, direction=%s, travel_time=%.2f",
@@ -1204,13 +1252,12 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             travel_time,
         )
 
-        # Each step is 1/10th of total travel time, but we only do 8 steps
         step_duration = travel_time / 10
         self._calibration.step_duration = step_duration
         self._calibration.move_command = move_command
 
         self._calibration.automation_task = self.hass.async_create_task(
-            self._run_overhead_steps(step_duration, CALIBRATION_OVERHEAD_STEPS)
+            self._run_overhead_steps(step_duration, num_steps)
         )
 
     async def _run_overhead_steps(self, step_duration, num_steps):

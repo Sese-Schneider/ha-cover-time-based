@@ -1676,3 +1676,199 @@ class TestInlineTiltConstraints:
         )
 
         assert cover.tilt_calc.current_position() == 40
+
+
+# ===================================================================
+# Abandon active lifecycle: new command cancels pending phases
+# ===================================================================
+
+
+class TestAbandonActiveLifecycle:
+    """New movement commands abandon any active multi-phase lifecycle."""
+
+    def _make_dual_motor_cover(self, make_cover):
+        return make_cover(
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+        )
+
+    def _make_inline_cover(self, make_cover):
+        return make_cover(
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+        )
+
+    # -- During tilt pre-step (dual motor) --
+
+    @pytest.mark.asyncio
+    async def test_tilt_during_pre_step_cancels_pending_travel(self, make_cover):
+        """New tilt command during tilt pre-step cancels the pending travel."""
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Start: position 30% triggers tilt pre-step (tilt 50→100 safe)
+            await cover.set_position(30)
+
+        assert cover.tilt_calc.is_traveling()
+        assert cover._pending_travel_target == 30
+
+        with patch.object(cover, "async_write_ha_state"):
+            # New tilt command: should cancel pending travel to 30
+            await cover.set_tilt_position(10)
+
+        # Pending travel is gone
+        assert cover._pending_travel_target is None
+        # Tilt is now moving toward 10
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc._travel_to_position == 10
+        # Travel never started
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_new_position_during_pre_step_restarts(self, make_cover):
+        """New position command during tilt pre-step cancels and restarts."""
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Start: position 30% triggers tilt pre-step
+            await cover.set_position(30)
+
+        assert cover._pending_travel_target == 30
+
+        with patch.object(cover, "async_write_ha_state"):
+            # New position command: should restart with new target
+            await cover.set_position(80)
+
+        # Old pending travel is gone, new pre-step for 80% started
+        assert cover._pending_travel_target == 80
+        assert cover.tilt_calc.is_traveling()
+
+    # -- During tilt restore (dual motor) --
+
+    @pytest.mark.asyncio
+    async def test_new_position_during_restore_cancels_restore(self, make_cover):
+        """New position command during tilt restore cancels the restore."""
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(30)
+        cover.tilt_calc.set_position(100)  # at safe position
+
+        # Simulate active tilt restore (tilt motor moving back to old position)
+        cover.tilt_calc.start_travel(50)
+        cover._tilt_restore_active = True
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(80)
+
+        # Restore is cancelled, new movement started
+        assert cover._tilt_restore_active is False
+        # New command proceeds (tilt pre-step or direct travel)
+        assert cover.tilt_calc.is_traveling() or cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_new_tilt_during_restore_cancels_restore(self, make_cover):
+        """New tilt command during tilt restore cancels restore and tilts."""
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(30)
+        cover.tilt_calc.set_position(80)
+
+        # Simulate active tilt restore
+        cover.tilt_calc.start_travel(50)
+        cover._tilt_restore_active = True
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(20)
+
+        assert cover._tilt_restore_active is False
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc._travel_to_position == 20
+
+    # -- During travel with pending restore --
+
+    @pytest.mark.asyncio
+    async def test_new_tilt_during_travel_clears_pending_restore(self, make_cover):
+        """New tilt command while traveling clears the pending restore target."""
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(80)
+        cover.tilt_calc.set_position(30)  # not at endpoint, so restore is set
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Travel to 50% with pending restore (inline, non-endpoint)
+            await cover.set_position(50)
+
+        assert cover.travel_calc.is_traveling()
+        assert cover._tilt_restore_target == 30
+
+        with patch.object(cover, "async_write_ha_state"):
+            # New tilt command: clears pending restore
+            await cover.set_tilt_position(80)
+
+        assert cover._tilt_restore_target is None
+
+    # -- During inline tilt restore --
+
+    @pytest.mark.asyncio
+    async def test_new_position_during_inline_restore(self, make_cover):
+        """New position during inline tilt restore cancels restore."""
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(60)
+
+        # Simulate active inline restore (main motor reversing)
+        cover.tilt_calc.start_travel(30)
+        cover._tilt_restore_active = True
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(80)
+
+        assert cover._tilt_restore_active is False
+        assert cover.travel_calc.is_traveling()
+
+    # -- Endpoint commands during lifecycle --
+
+    @pytest.mark.asyncio
+    async def test_close_during_pre_step_abandons_and_closes(self, make_cover):
+        """async_close_cover during pre-step abandons and starts fresh close."""
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(30)
+
+        assert cover._pending_travel_target == 30
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # Old pre-step is gone, fresh close started
+        assert cover._pending_travel_target == 0 or cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_open_tilt_during_restore_abandons(self, make_cover):
+        """Tilt endpoint command during restore abandons restore."""
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(30)
+        cover.tilt_calc.set_position(60)
+
+        cover.tilt_calc.start_travel(50)
+        cover._tilt_restore_active = True
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover_tilt()
+
+        assert cover._tilt_restore_active is False
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc._travel_to_position == 100
