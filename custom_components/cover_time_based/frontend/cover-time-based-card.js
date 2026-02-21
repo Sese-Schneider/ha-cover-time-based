@@ -250,6 +250,17 @@ class CoverTimeBasedCard extends LitElement {
       hints.tilt_startup_delay = pos === "closed_tilt_open" || pos === "open"
         ? "Cover must be in tilt-allowed position. Click Finish when the slats are fully closed."
         : "Cover must be in tilt-allowed position. Click Finish when the slats are fully open.";
+    } else if (tiltMode === "inline") {
+      hints.travel_time_close = "Start with slats fully open. Click Finish when the cover is fully closed and slats are fully closed.";
+      hints.travel_time_open = "Start with slats fully closed. Click Finish when the cover is fully open and slats are fully open.";
+      hints.travel_startup_delay = pos === "open"
+        ? "Start with slats fully open. Click Finish when the cover is fully closed and slats are fully closed."
+        : "Start with slats fully closed. Click Finish when the cover is fully open and slats are fully open.";
+      hints.tilt_time_close = "Start with slats fully open. Click Finish when the slats are fully closed.";
+      hints.tilt_time_open = "Start with slats fully closed. Click Finish when the slats are fully open.";
+      hints.tilt_startup_delay = pos === "closed_tilt_open" || pos === "open"
+        ? "Start with slats fully open. Click Finish when the slats are fully closed."
+        : "Start with slats fully closed. Click Finish when the slats are fully open.";
     } else {
       // none mode
       hints.travel_time_close = "Click Finish when the cover is fully closed.";
@@ -924,7 +935,7 @@ class CoverTimeBasedCard extends LitElement {
 
   _renderPositionReset() {
     const tiltMode = this._config?.tilt_mode || "none";
-    const hasIndependentTilt = tiltMode === "sequential" || tiltMode === "dual_motor";
+    const hasIndependentTilt = tiltMode === "sequential" || tiltMode === "dual_motor" || tiltMode === "inline";
 
     return html`
       <div class="section">
@@ -960,7 +971,7 @@ class CoverTimeBasedCard extends LitElement {
     const state = this._getEntityState();
     const attrs = state?.attributes || {};
     const tiltMode = this._config?.tilt_mode || "none";
-    const hasTiltCalibration = tiltMode === "sequential" || tiltMode === "dual_motor";
+    const hasTiltCalibration = tiltMode === "sequential" || tiltMode === "dual_motor" || tiltMode === "inline";
 
     const availableAttributes = Object.entries(ATTRIBUTE_LABELS).filter(
       ([key]) => {
