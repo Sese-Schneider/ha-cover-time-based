@@ -136,3 +136,31 @@ class TestWrappedViaHandleCommand:
         assert _calls(cover.hass.services.async_call) == [
             _cover_svc("stop_cover", "cover.inner"),
         ]
+
+
+# ---------------------------------------------------------------------------
+# async_added_to_hass — state listener registration
+# ---------------------------------------------------------------------------
+
+
+class TestWrappedAsyncAddedToHass:
+    """Test that async_added_to_hass registers a state listener."""
+
+    @pytest.mark.asyncio
+    async def test_registers_cover_listener(self):
+        cover = _make_wrapped_cover(cover_entity_id="cover.inner")
+        unsub = MagicMock()
+
+        with (
+            patch.object(cover, "async_get_last_state", return_value=None),
+            patch(
+                "custom_components.cover_time_based.cover_wrapped.async_track_state_change_event",
+                return_value=unsub,
+            ) as mock_track,
+        ):
+            await cover.async_added_to_hass()
+
+        mock_track.assert_called_once()
+        # Verify the entity list includes the wrapped cover
+        assert mock_track.call_args[0][1] == ["cover.inner"]
+        assert unsub in cover._state_listener_unsubs

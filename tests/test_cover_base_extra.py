@@ -1026,3 +1026,138 @@ class TestMarkSwitchPendingTimeout:
         # Pending should have been cleared
         assert "switch.open" not in cover._pending_switch
         assert "switch.open" not in cover._pending_switch_timers
+
+
+# ===================================================================
+# Unconfigured entity paths
+# ===================================================================
+
+
+class TestUnconfiguredEntity:
+    """Test _get_missing_configuration, available, _require_configured."""
+
+    def test_unconfigured_not_available(self, make_cover):
+        """Cover with no switch entities is not available."""
+        cover = make_cover(open_switch="", close_switch="")
+        assert cover.available is False
+
+    def test_no_travel_times_not_available(self, make_cover):
+        """Cover with no travel times is not available."""
+        cover = make_cover()
+        cover._travel_time_close = None
+        cover._travel_time_open = None
+        assert cover.available is False
+
+    @pytest.mark.asyncio
+    async def test_require_configured_raises(self, make_cover):
+        """Moving an unconfigured cover raises HomeAssistantError."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = make_cover(open_switch="", close_switch="")
+        with pytest.raises(HomeAssistantError, match="not configured"):
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_set_cover_position(position=50)
+
+    @pytest.mark.asyncio
+    async def test_require_travel_time_raises(self, make_cover):
+        """Moving without travel time configured raises HomeAssistantError."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = make_cover()
+        cover._travel_time_close = None
+        cover._travel_time_open = None
+        with pytest.raises(HomeAssistantError, match="[Tt]ravel time"):
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_set_cover_position(position=50)
+
+
+# ===================================================================
+# Removal during calibration
+# ===================================================================
+
+
+class TestRemovalDuringCalibration:
+    """Test async_will_remove_from_hass cancels calibration tasks."""
+
+    @pytest.mark.asyncio
+    async def test_cleanup_cancels_calibration_tasks(self, make_cover):
+        cover = make_cover()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_close", timeout=120.0)
+        assert cover._calibration is not None
+        timeout_task = cover._calibration.timeout_task
+
+        await cover.async_will_remove_from_hass()
+        await asyncio.sleep(0)  # Let event loop process cancellation
+
+        assert cover._calibration is None
+        assert timeout_task.cancelled()
+
+
+# ===================================================================
+# Unknown position paths
+# ===================================================================
+
+
+class TestSetPositionFromUnknown:
+    """Test set_position when current position is None."""
+
+    @pytest.mark.asyncio
+    async def test_set_position_closing_from_unknown(self, make_cover):
+        """target <= 50 assumes cover is at 100 and closes."""
+        cover = make_cover()
+        assert cover.travel_calc.current_position() is None
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_position(position=30)
+
+        # TravelCalculator snaps immediately when position is None,
+        # so the close command was sent and position is now at target
+        assert cover.travel_calc.current_position() == 30
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_set_position_opening_from_unknown(self, make_cover):
+        """target > 50 assumes cover is at 0 and opens."""
+        cover = make_cover()
+        assert cover.travel_calc.current_position() is None
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_position(position=70)
+
+        assert cover.travel_calc.current_position() == 70
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+
+class TestSetTiltFromUnknown:
+    """Test set_tilt_position when current tilt is None."""
+
+    @pytest.mark.asyncio
+    async def test_set_tilt_closing_from_unknown(self, make_cover):
+        """target <= 50 assumes tilt is at 100 and closes."""
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
+        assert cover.tilt_calc.current_position() is None
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_tilt_position(tilt_position=30)
+
+        # TravelCalculator snaps immediately when position is None
+        assert cover.tilt_calc.current_position() == 30
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+
+# ===================================================================
+# set_known_tilt_position on cover without tilt
+# ===================================================================
+
+
+class TestSetKnownTiltNoTilt:
+    """Test set_known_tilt_position on a cover without tilt support."""
+
+    @pytest.mark.asyncio
+    async def test_no_op_without_tilt_support(self, make_cover):
+        cover = make_cover()  # No tilt configured
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_known_tilt_position(tilt_position=50)
+        # Should not crash, no service call for tilt
+        # Position didn't change from None

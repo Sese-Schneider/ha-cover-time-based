@@ -306,6 +306,99 @@ class TestMinMovementTimeCalibration:
         assert result["value"] == pytest.approx(0.5)
 
 
+class TestCalibrationEdgeCases:
+    """Test edge cases for calibration."""
+
+    @pytest.mark.asyncio
+    async def test_tilt_calibration_rejected_when_strategy_forbids(self, make_cover):
+        """Tilt time calibration should be rejected when strategy says no."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="sequential"
+        )
+        # Mock strategy to reject tilt calibration
+        cover._tilt_strategy.can_calibrate_tilt = lambda: False
+        with pytest.raises(HomeAssistantError, match="[Tt]ilt.*not available"):
+            await cover.start_calibration(attribute="tilt_time_close", timeout=30.0)
+
+    def test_resolve_direction_explicit_close(self, make_cover):
+        """_resolve_direction returns CLOSE for explicit 'close'."""
+        from custom_components.cover_time_based.cover_base import CoverTimeBased
+        from homeassistant.const import SERVICE_CLOSE_COVER
+
+        result = CoverTimeBased._resolve_direction("close", 75)
+        assert result == SERVICE_CLOSE_COVER
+
+    def test_resolve_direction_explicit_open(self, make_cover):
+        """_resolve_direction returns OPEN for explicit 'open'."""
+        from custom_components.cover_time_based.cover_base import CoverTimeBased
+        from homeassistant.const import SERVICE_OPEN_COVER
+
+        result = CoverTimeBased._resolve_direction("open", 25)
+        assert result == SERVICE_OPEN_COVER
+
+    def test_resolve_direction_auto_from_low_position(self, make_cover):
+        """_resolve_direction auto-detects OPEN when position < 50."""
+        from custom_components.cover_time_based.cover_base import CoverTimeBased
+        from homeassistant.const import SERVICE_OPEN_COVER
+
+        result = CoverTimeBased._resolve_direction(None, 25)
+        assert result == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_stop_min_movement_no_pulses_returns_zero(self, make_cover):
+        """Stopping min_movement calibration before any pulses returns 0."""
+        cover = make_cover()
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="min_movement_time", timeout=60.0)
+            # Cancel the automation task before any pulses
+            cover._calibration.automation_task.cancel()
+            await asyncio.sleep(0)
+            result = await cover.stop_calibration()
+
+        assert result["value"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_stop_overhead_before_continuous_returns_zero(self, make_cover):
+        """Stopping overhead calibration before continuous phase returns 0."""
+        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_startup_delay", timeout=300.0
+            )
+            # Cancel automation task before continuous phase
+            cover._calibration.automation_task.cancel()
+            await asyncio.sleep(0)
+            # continuous_start is still None
+            result = await cover.stop_calibration()
+
+        assert result["value"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_start_with_explicit_direction(self, make_cover):
+        """start_calibration with direction='close' passes through."""
+        from homeassistant.const import SERVICE_CLOSE_COVER
+
+        cover = make_cover()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_time_close", timeout=120.0, direction="close"
+            )
+
+        assert cover._calibration.move_command == SERVICE_CLOSE_COVER
+
+
 class TestCalibrationTimeout:
     @pytest.mark.asyncio
     async def test_timeout_stops_motor_and_clears_state(self, make_cover):

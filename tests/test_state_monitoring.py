@@ -750,3 +750,329 @@ class TestToggleE2EThroughStateListener:
 
         # Handler should have been called (not filtered)
         assert cover._last_command == SERVICE_OPEN_COVER
+
+
+# ===================================================================
+# External tilt state changes (pulse mode — base class handler)
+# Covers cover_base.py lines 1664-1688
+# ===================================================================
+
+
+class TestExternalTiltPulseMode:
+    """Test _handle_external_tilt_state_change in pulse mode (base class).
+
+    Pulse mode: ON→OFF = command complete (pulse finished).
+    Only reacts to ON→OFF transitions; OFF→ON is ignored.
+    """
+
+    def _make_tilt_cover(self, make_cover):
+        return make_cover(
+            input_mode=INPUT_MODE_PULSE,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+        )
+
+    @pytest.mark.asyncio
+    async def test_tilt_open_pulse_on_to_off(self, make_cover):
+        """ON→OFF on tilt open switch triggers async_open_cover_tilt."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_open", "on", "off"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_tilt_close_pulse_on_to_off(self, make_cover):
+        """ON→OFF on tilt close switch triggers async_close_cover_tilt."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_close", "on", "off"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_tilt_stop_pulse_on_to_off(self, make_cover):
+        """ON→OFF on tilt stop switch triggers async_stop_cover."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        cover.tilt_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_stop", "on", "off"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover._last_command is None
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_tilt_non_pulse_ignored(self, make_cover):
+        """OFF→ON transitions on tilt switches are ignored in pulse mode."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_open", "off", "on"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert not cover.tilt_calc.is_traveling()
+
+
+# ===================================================================
+# External tilt state changes (switch/latching mode)
+# Covers cover_switch_mode.py lines 50-77
+# ===================================================================
+
+
+class TestExternalTiltSwitchMode:
+    """Test _handle_external_tilt_state_change in switch (latching) mode.
+
+    ON = relay is driving the motor → start tracking.
+    OFF = relay released → stop tracking.
+    """
+
+    def _make_tilt_cover(self, make_cover):
+        # input_mode defaults to INPUT_MODE_SWITCH in make_cover
+        return make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+        )
+
+    @pytest.mark.asyncio
+    async def test_tilt_open_on(self, make_cover):
+        """Tilt open switch ON triggers async_open_cover_tilt."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_open", "off", "on"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_tilt_open_off_stops(self, make_cover):
+        """Tilt open switch OFF stops the tilt tracker."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        cover.tilt_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_open", "on", "off"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover._last_command is None
+
+    @pytest.mark.asyncio
+    async def test_tilt_close_on(self, make_cover):
+        """Tilt close switch ON triggers async_close_cover_tilt."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_close", "off", "on"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_tilt_close_off_stops(self, make_cover):
+        """Tilt close switch OFF stops the tilt tracker."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        cover.tilt_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_close", "on", "off"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover._last_command is None
+
+    @pytest.mark.asyncio
+    async def test_tilt_stop_on(self, make_cover):
+        """Tilt stop switch ON triggers async_stop_cover."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        cover.tilt_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_stop", "off", "on"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover._last_command is None
+
+
+# ===================================================================
+# External tilt state changes (toggle mode)
+# Covers cover_toggle_mode.py lines 128-166
+# ===================================================================
+
+
+class TestExternalTiltToggleMode:
+    """Test _handle_external_tilt_state_change in toggle mode.
+
+    Uses debounce + toggle logic. If tilt is already traveling,
+    any toggle is treated as stop. If idle, dispatches open/close.
+    """
+
+    def _make_tilt_cover(self, make_cover):
+        return make_cover(
+            input_mode=INPUT_MODE_TOGGLE,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+
+    @pytest.mark.asyncio
+    async def test_tilt_open_toggle_when_idle(self, make_cover):
+        """Toggle tilt open switch when idle → opens tilt."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_open", "off", "on"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_tilt_open_toggle_while_traveling_stops(self, make_cover):
+        """Toggle tilt open switch while tilt is traveling → stops."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        cover.tilt_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_open", "on", "off"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover._last_command is None
+
+    @pytest.mark.asyncio
+    async def test_tilt_close_toggle_when_idle(self, make_cover):
+        """Toggle tilt close switch when idle → closes tilt."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_close", "off", "on"
+                )
+            finally:
+                cover._triggered_externally = False
+
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_tilt_toggle_debounced(self, make_cover):
+        """Second toggle within debounce window is ignored."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                # First toggle: starts opening tilt
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_open", "off", "on"
+                )
+                assert cover.tilt_calc.is_traveling()
+
+                # Second toggle within debounce window: ignored
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_open", "on", "off"
+                )
+                # Should still be traveling (debounced, not stopped)
+                assert cover.tilt_calc.is_traveling()
+            finally:
+                cover._triggered_externally = False

@@ -292,6 +292,26 @@ class TestDualMotorSnapTrackers:
         strategy.snap_trackers_to_physical(travel, tilt)
         assert tilt.current_position() == 100
 
+    def test_snap_returns_early_when_travel_position_none(self):
+        """snap_trackers_to_physical returns early when travel position is None."""
+        strategy = DualMotorTilt(safe_tilt_position=100, max_tilt_allowed_position=20)
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        # travel position is None (never set), tilt is set
+        tilt.set_position(30)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 30  # unchanged
+
+    def test_snap_returns_early_when_tilt_position_none(self):
+        """snap_trackers_to_physical returns early when tilt position is None."""
+        strategy = DualMotorTilt(safe_tilt_position=100, max_tilt_allowed_position=20)
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        # travel is set, tilt position is None (never set)
+        travel.set_position(50)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() is None  # unchanged
+
 
 # ===================================================================
 # InlineTilt

@@ -309,3 +309,51 @@ class TestToggleDirectionChange:
             await cover.async_open_cover()
 
         mock_stop.assert_awaited_once()
+
+
+# ===================================================================
+# Stop with tilt: snap_trackers_to_physical
+# ===================================================================
+
+
+class TestToggleStopWithTilt:
+    @pytest.mark.asyncio
+    async def test_stop_with_tilt_snaps_trackers(self):
+        """Stopping toggle cover with tilt calls snap_trackers_to_physical."""
+        tilt_strategy = MagicMock()
+        tilt_strategy.snap_trackers_to_physical = MagicMock()
+        tilt_strategy.uses_tilt_motor = False
+        tilt_strategy.restores_tilt = False
+
+        cover = ToggleModeCover(
+            device_id="test_toggle_tilt",
+            name="Test Toggle Tilt",
+            tilt_strategy=tilt_strategy,
+            travel_time_close=30,
+            travel_time_open=30,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            travel_startup_delay=None,
+            tilt_startup_delay=None,
+            endpoint_runon_time=None,
+            min_movement_time=None,
+            open_switch_entity_id="switch.open",
+            close_switch_entity_id="switch.close",
+            stop_switch_entity_id=None,
+            pulse_time=1.0,
+        )
+        hass = MagicMock()
+        hass.services.async_call = AsyncMock()
+        hass.async_create_task = lambda coro: asyncio.ensure_future(coro)
+        cover.hass = hass
+
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_stop_cover()
+
+        tilt_strategy.snap_trackers_to_physical.assert_called_once_with(
+            cover.travel_calc, cover.tilt_calc
+        )

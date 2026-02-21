@@ -1,7 +1,7 @@
 """Tests for the WebSocket API module."""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -616,3 +616,536 @@ class TestDualMotorFieldRoundTrip:
         assert result["tilt_open_switch"] is None
         assert result["tilt_close_switch"] is None
         assert result["tilt_stop_switch"] is None
+
+
+# ---------------------------------------------------------------------------
+# Unwrapped calibration / raw_command handlers
+# ---------------------------------------------------------------------------
+
+_ws_start_calibration = _unwrap(ws_start_calibration)
+_ws_stop_calibration = _unwrap(ws_stop_calibration)
+_ws_raw_command = _unwrap(ws_raw_command)
+
+
+# ---------------------------------------------------------------------------
+# ws_update_config — wrap-self rejection
+# ---------------------------------------------------------------------------
+
+
+class TestWsUpdateConfigWrappedSelf:
+    """Test that ws_update_config rejects wrapping another CTB entity."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_wrapping_ctb_entity(self):
+        hass, config_entry, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        # Target entity belongs to cover_time_based
+        target_entry = MagicMock()
+        target_entry.platform = DOMAIN
+
+        entity_reg_for_update = MagicMock()
+        entity_reg_for_update.async_get.side_effect = lambda eid: (
+            target_entry if eid == "cover.other_ctb" else entity_reg.async_get(eid)
+        )
+
+        with (
+            patch(
+                "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+                return_value=(config_entry, None),
+            ),
+            patch(
+                "custom_components.cover_time_based.websocket_api.er.async_get",
+                return_value=entity_reg_for_update,
+            ),
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "cover_entity_id": "cover.other_ctb",
+                },
+            )
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "invalid_entity"
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_allows_wrapping_non_ctb_entity(self):
+        hass, config_entry, _ = _make_hass(options={})
+        conn = _make_connection()
+
+        target_entry = MagicMock()
+        target_entry.platform = "other_integration"
+
+        entity_reg_for_update = MagicMock()
+        entity_reg_for_update.async_get.return_value = target_entry
+
+        with (
+            patch(
+                "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+                return_value=(config_entry, None),
+            ),
+            patch(
+                "custom_components.cover_time_based.websocket_api.er.async_get",
+                return_value=entity_reg_for_update,
+            ),
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "cover_entity_id": "cover.other",
+                },
+            )
+
+        conn.send_result.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_allows_update_without_cover_entity_id(self):
+        hass, config_entry, _ = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "device_type": DEVICE_TYPE_SWITCH,
+                },
+            )
+
+        conn.send_result.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _resolve_entity (websocket_api version, returns None on error)
+# ---------------------------------------------------------------------------
+
+
+class TestWsResolveEntity:
+    """Test _resolve_entity from websocket_api.py."""
+
+    def test_returns_none_no_component(self):
+        from custom_components.cover_time_based.websocket_api import _resolve_entity
+
+        hass = MagicMock()
+        hass.data = {}
+        assert _resolve_entity(hass, "cover.test") is None
+
+    def test_returns_none_entity_not_found(self):
+        from custom_components.cover_time_based.websocket_api import _resolve_entity
+
+        component = MagicMock()
+        component.get_entity.return_value = None
+        hass = MagicMock()
+        hass.data = {"entity_components": {"cover": component}}
+        assert _resolve_entity(hass, "cover.test") is None
+
+    def test_returns_none_wrong_type(self):
+        from custom_components.cover_time_based.websocket_api import _resolve_entity
+
+        component = MagicMock()
+        component.get_entity.return_value = MagicMock()  # not CoverTimeBased
+        hass = MagicMock()
+        hass.data = {"entity_components": {"cover": component}}
+        assert _resolve_entity(hass, "cover.test") is None
+
+    def test_returns_entity_when_valid(self):
+        from custom_components.cover_time_based.websocket_api import _resolve_entity
+        from custom_components.cover_time_based.cover import _create_cover_from_options
+
+        entity = _create_cover_from_options(
+            {
+                "device_type": "switch",
+                "open_switch_entity_id": "switch.open",
+                "close_switch_entity_id": "switch.close",
+                "input_mode": "switch",
+                "travel_time_close": 30,
+                "travel_time_open": 30,
+            },
+            device_id="test",
+            name="Test",
+        )
+        component = MagicMock()
+        component.get_entity.return_value = entity
+        hass = MagicMock()
+        hass.data = {"entity_components": {"cover": component}}
+
+        result = _resolve_entity(hass, "cover.test")
+        assert result is entity
+
+
+# ---------------------------------------------------------------------------
+# ws_start_calibration
+# ---------------------------------------------------------------------------
+
+
+class TestWsStartCalibration:
+    """Tests for ws_start_calibration handler."""
+
+    @pytest.mark.asyncio
+    async def test_entity_not_found(self):
+        hass = MagicMock()
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=None,
+        ):
+            await _ws_start_calibration(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/start_calibration",
+                    "entity_id": ENTITY_ID,
+                    "attribute": "travel_time_close",
+                    "timeout": 60,
+                },
+            )
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "not_found"
+
+    @pytest.mark.asyncio
+    async def test_success(self):
+        hass = MagicMock()
+        conn = _make_connection()
+        entity = MagicMock()
+        entity.start_calibration = AsyncMock()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_start_calibration(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/start_calibration",
+                    "entity_id": ENTITY_ID,
+                    "attribute": "travel_time_close",
+                    "timeout": 60,
+                },
+            )
+
+        entity.start_calibration.assert_awaited_once_with(
+            attribute="travel_time_close", timeout=60
+        )
+        conn.send_result.assert_called_once_with(1, {"success": True})
+
+    @pytest.mark.asyncio
+    async def test_with_direction(self):
+        hass = MagicMock()
+        conn = _make_connection()
+        entity = MagicMock()
+        entity.start_calibration = AsyncMock()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_start_calibration(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/start_calibration",
+                    "entity_id": ENTITY_ID,
+                    "attribute": "travel_time_close",
+                    "timeout": 60,
+                    "direction": "close",
+                },
+            )
+
+        call_kwargs = entity.start_calibration.call_args[1]
+        assert call_kwargs["direction"] == "close"
+
+    @pytest.mark.asyncio
+    async def test_exception(self):
+        hass = MagicMock()
+        conn = _make_connection()
+        entity = MagicMock()
+        entity.start_calibration = AsyncMock(
+            side_effect=Exception("already in progress")
+        )
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_start_calibration(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/start_calibration",
+                    "entity_id": ENTITY_ID,
+                    "attribute": "travel_time_close",
+                    "timeout": 60,
+                },
+            )
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "failed"
+
+
+# ---------------------------------------------------------------------------
+# ws_stop_calibration
+# ---------------------------------------------------------------------------
+
+
+class TestWsStopCalibration:
+    """Tests for ws_stop_calibration handler."""
+
+    @pytest.mark.asyncio
+    async def test_entity_not_found(self):
+        hass = MagicMock()
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=None,
+        ):
+            await _ws_stop_calibration(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/stop_calibration",
+                    "entity_id": ENTITY_ID,
+                    "cancel": False,
+                },
+            )
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "not_found"
+
+    @pytest.mark.asyncio
+    async def test_success(self):
+        hass = MagicMock()
+        conn = _make_connection()
+        entity = MagicMock()
+        entity.stop_calibration = AsyncMock(
+            return_value={"attribute": "travel_time_close", "value": 45.0}
+        )
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_stop_calibration(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/stop_calibration",
+                    "entity_id": ENTITY_ID,
+                    "cancel": False,
+                },
+            )
+
+        conn.send_result.assert_called_once()
+        result = conn.send_result.call_args[0][1]
+        assert result["attribute"] == "travel_time_close"
+        assert result["value"] == 45.0
+
+    @pytest.mark.asyncio
+    async def test_exception(self):
+        hass = MagicMock()
+        conn = _make_connection()
+        entity = MagicMock()
+        entity.stop_calibration = AsyncMock(side_effect=Exception("no calibration"))
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_stop_calibration(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/stop_calibration",
+                    "entity_id": ENTITY_ID,
+                    "cancel": False,
+                },
+            )
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "failed"
+
+
+# ---------------------------------------------------------------------------
+# ws_raw_command
+# ---------------------------------------------------------------------------
+
+
+class TestWsRawCommand:
+    """Tests for ws_raw_command handler."""
+
+    def _make_entity(self, *, has_tilt_motor=False):
+        entity = MagicMock()
+        entity._send_open = AsyncMock()
+        entity._send_close = AsyncMock()
+        entity._send_stop = AsyncMock()
+        entity._send_tilt_open = AsyncMock()
+        entity._send_tilt_close = AsyncMock()
+        entity._send_tilt_stop = AsyncMock()
+        entity._has_tilt_motor = MagicMock(return_value=has_tilt_motor)
+        return entity
+
+    def _msg(self, command):
+        return {
+            "id": 1,
+            "type": "cover_time_based/raw_command",
+            "entity_id": ENTITY_ID,
+            "command": command,
+        }
+
+    @pytest.mark.asyncio
+    async def test_entity_not_found(self):
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=None,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("open"))
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "not_found"
+
+    @pytest.mark.asyncio
+    async def test_open(self):
+        entity = self._make_entity()
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("open"))
+        entity._send_open.assert_awaited_once()
+        conn.send_result.assert_called_once_with(1, {"success": True})
+
+    @pytest.mark.asyncio
+    async def test_close(self):
+        entity = self._make_entity()
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("close"))
+        entity._send_close.assert_awaited_once()
+        conn.send_result.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stop(self):
+        entity = self._make_entity()
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("stop"))
+        entity._send_stop.assert_awaited_once()
+        conn.send_result.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_tilt_open(self):
+        entity = self._make_entity(has_tilt_motor=True)
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_open"))
+        entity._send_tilt_open.assert_awaited_once()
+        conn.send_result.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_tilt_open_not_supported(self):
+        entity = self._make_entity(has_tilt_motor=False)
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_open"))
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "not_supported"
+
+    @pytest.mark.asyncio
+    async def test_tilt_close(self):
+        entity = self._make_entity(has_tilt_motor=True)
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_close"))
+        entity._send_tilt_close.assert_awaited_once()
+        conn.send_result.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_tilt_close_not_supported(self):
+        entity = self._make_entity(has_tilt_motor=False)
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_close"))
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "not_supported"
+
+    @pytest.mark.asyncio
+    async def test_tilt_stop(self):
+        entity = self._make_entity(has_tilt_motor=True)
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_stop"))
+        entity._send_tilt_stop.assert_awaited_once()
+        conn.send_result.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_tilt_stop_not_supported(self):
+        entity = self._make_entity(has_tilt_motor=False)
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_stop"))
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "not_supported"
+
+    @pytest.mark.asyncio
+    async def test_exception(self):
+        entity = self._make_entity()
+        entity._send_open = AsyncMock(side_effect=Exception("hw error"))
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            return_value=entity,
+        ):
+            await _ws_raw_command(MagicMock(), conn, self._msg("open"))
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "failed"
