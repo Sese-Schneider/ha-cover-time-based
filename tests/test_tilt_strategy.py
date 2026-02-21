@@ -4,6 +4,7 @@ from custom_components.cover_time_based.travel_calculator import TravelCalculato
 
 from custom_components.cover_time_based.tilt_strategies import (
     DualMotorTilt,
+    InlineTilt,
     SequentialTilt,
     TiltTo,
     TravelTo,
@@ -287,6 +288,160 @@ class TestDualMotorSnapTrackers:
         travel = TravelCalculator(10.0, 10.0)
         tilt = TravelCalculator(2.0, 2.0)
         travel.set_position(50)
+        tilt.set_position(100)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 100
+
+
+# ===================================================================
+# InlineTilt
+# ===================================================================
+
+
+class TestInlineTiltProperties:
+    def test_name(self):
+        assert InlineTilt().name == "inline"
+
+    def test_uses_tilt_motor(self):
+        assert InlineTilt().uses_tilt_motor is False
+
+    def test_restores_tilt(self):
+        assert InlineTilt().restores_tilt is True
+
+    def test_can_calibrate_tilt(self):
+        assert InlineTilt().can_calibrate_tilt() is True
+
+
+class TestInlinePlanMovePosition:
+    def test_closing_with_tilt_open_adds_pre_step(self):
+        """Closing from open tilt: tilt closes first, then travel."""
+        strategy = InlineTilt()
+        steps = strategy.plan_move_position(
+            target_pos=30, current_pos=80, current_tilt=100
+        )
+        assert steps == [TiltTo(0), TravelTo(30)]
+
+    def test_closing_with_tilt_already_closed_skips_pre_step(self):
+        """Closing when tilt already closed: just travel."""
+        strategy = InlineTilt()
+        steps = strategy.plan_move_position(
+            target_pos=30, current_pos=80, current_tilt=0
+        )
+        assert steps == [TravelTo(30)]
+
+    def test_opening_with_tilt_closed_adds_pre_step(self):
+        """Opening from closed tilt: tilt opens first, then travel."""
+        strategy = InlineTilt()
+        steps = strategy.plan_move_position(
+            target_pos=80, current_pos=30, current_tilt=0
+        )
+        assert steps == [TiltTo(100), TravelTo(80)]
+
+    def test_opening_with_tilt_already_open_skips_pre_step(self):
+        """Opening when tilt already open: just travel."""
+        strategy = InlineTilt()
+        steps = strategy.plan_move_position(
+            target_pos=80, current_pos=30, current_tilt=100
+        )
+        assert steps == [TravelTo(80)]
+
+    def test_closing_to_endpoint_still_has_pre_step(self):
+        """Even targeting 0%, tilt phase still happens for timing."""
+        strategy = InlineTilt()
+        steps = strategy.plan_move_position(
+            target_pos=0, current_pos=50, current_tilt=100
+        )
+        assert steps == [TiltTo(0), TravelTo(0)]
+
+    def test_opening_to_endpoint_still_has_pre_step(self):
+        """Even targeting 100%, tilt phase still happens for timing."""
+        strategy = InlineTilt()
+        steps = strategy.plan_move_position(
+            target_pos=100, current_pos=50, current_tilt=0
+        )
+        assert steps == [TiltTo(100), TravelTo(100)]
+
+    def test_closing_with_partial_tilt_adds_pre_step(self):
+        """Closing with tilt at 60% (not fully closed): pre-step needed."""
+        strategy = InlineTilt()
+        steps = strategy.plan_move_position(
+            target_pos=20, current_pos=70, current_tilt=60
+        )
+        assert steps == [TiltTo(0), TravelTo(20)]
+
+    def test_opening_with_partial_tilt_adds_pre_step(self):
+        """Opening with tilt at 40% (not fully open): pre-step needed."""
+        strategy = InlineTilt()
+        steps = strategy.plan_move_position(
+            target_pos=70, current_pos=20, current_tilt=40
+        )
+        assert steps == [TiltTo(100), TravelTo(70)]
+
+
+class TestInlinePlanMoveTilt:
+    def test_tilt_only_no_travel(self):
+        """Tilt command: just tilt, no travel coupling."""
+        strategy = InlineTilt()
+        steps = strategy.plan_move_tilt(
+            target_tilt=50, current_pos=30, current_tilt=100
+        )
+        assert steps == [TiltTo(50)]
+
+    def test_tilt_at_fully_open(self):
+        strategy = InlineTilt()
+        steps = strategy.plan_move_tilt(
+            target_tilt=0, current_pos=100, current_tilt=100
+        )
+        assert steps == [TiltTo(0)]
+
+    def test_tilt_at_closed(self):
+        strategy = InlineTilt()
+        steps = strategy.plan_move_tilt(target_tilt=80, current_pos=0, current_tilt=0)
+        assert steps == [TiltTo(80)]
+
+
+class TestInlineSnapTrackers:
+    def test_forces_tilt_closed_at_position_zero(self):
+        strategy = InlineTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(0)
+        tilt.set_position(50)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 0
+
+    def test_forces_tilt_open_at_position_hundred(self):
+        strategy = InlineTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(100)
+        tilt.set_position(50)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 100
+
+    def test_no_op_at_mid_position(self):
+        strategy = InlineTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(50)
+        tilt.set_position(30)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 30
+
+    def test_already_correct_at_closed(self):
+        strategy = InlineTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(0)
+        tilt.set_position(0)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 0
+
+    def test_already_correct_at_open(self):
+        strategy = InlineTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(100)
         tilt.set_position(100)
         strategy.snap_trackers_to_physical(travel, tilt)
         assert tilt.current_position() == 100
