@@ -11,18 +11,21 @@ A Home Assistant integration to control your cover based on time.
 
 This integration is based on [davidramosweb/home-assistant-custom-components-cover-time-based](https://github.com/davidramosweb/home-assistant-custom-components-cover-time-based/).
 
-It improves the original integration by adding tilt control and synchronized travel/tilt movements.
+It improves the original integration by adding tilt control, synchronized travel/tilt movements, and a visual configuration card.
 
 ### Features:
 
 - **Control the height of your cover based on time**.
-- **Control the tilt of your cover based on time**.
-- **Synchronized movement:** Travel and tilt move proportionally on the same motor.
+- **Control the tilt of your cover based on time** with three tilt modes: inline, sequential (closes then tilts), or separate tilt motor.
+- **Synchronized movement:** Travel and tilt move proportionally on the same motor (inline mode).
+- **Multiple input modes:** Latching switches, momentary pulse buttons, or toggle-style relays.
+- **Wrap an existing cover:** Add time-based position tracking to any cover entity.
+- **External state monitoring:** Detects physical switch presses and keeps the position tracker in sync.
+- **Built-in calibration:** Measure timing parameters directly from the UI.
+- **Translatable UI:** All card strings are translatable. English, Portuguese, and Polish included.
 - **Optional endpoint delay:** Configurable relay delay at endpoints for covers with mechanical endstops.
 - **Minimum movement time:** Prevents position drift from very short relay activations.
-- **Motor startup compensation:** Optional delay compensation for motor inertia to improve position accuracy.
-
-_To enable tilt control you need to add the `tilting_time_down` and `tilting_time_up` options to your configuration.yaml._
+- **Motor startup compensation:** Optional delay compensation for motor inertia to improve position accuracy for travel and tilt.
 
 ## Install
 
@@ -41,7 +44,22 @@ Click here:
 
 ## Setup
 
-### Example configuration.yaml entry
+### Creating a cover via the UI
+
+1. Go to **Settings → Devices & Services → Helpers**
+2. Click **Create Helper → Cover Time Based**
+3. Enter a name for your cover
+4. Add the **Cover Time Based** card to a Lovelace dashboard
+5. Use the card to configure and calibrate all settings: device type, input entities, timing, tilt, and more
+
+The configuration card provides a visual interface for all settings and supports built-in calibration to measure timing parameters automatically.
+
+### YAML configuration (deprecated)
+
+> **Note:** YAML configuration is deprecated and will be removed in a future version. Please use the UI method described above instead. Existing YAML configurations will continue to work, and a deprecation notice will appear in your Home Assistant repairs panel.
+
+<details>
+<summary>Show YAML configuration (deprecated)</summary>
 
 #### Basic configuration with individual device settings:
 
@@ -64,174 +82,193 @@ cover:
         tilt_startup_delay: 0.08
 ```
 
-#### Configuration with shared defaults:
 
-```yaml
-cover:
-  - platform: cover_time_based
-    # Optional: Default values for all devices
-    defaults:
-      travelling_time_down: 49.2
-      travelling_time_up: 50.7
-      tilting_time_down: 1.5
-      tilting_time_up: 1.5
-      travel_delay_at_end: 1.5
-      min_movement_time: 0.5
-      travel_startup_delay: 0.1
-      tilt_startup_delay: 0.08
+#### YAML options
 
-    devices:
-      # This device uses all defaults
-      bedroom_left:
-        name: Bedroom Left
-        open_switch_entity_id: switch.bedroom_left_open
-        close_switch_entity_id: switch.bedroom_left_close
+| Name                   | Type    | Requirement                                     | Description                                                               | Default |
+| ---------------------- | ------- | ----------------------------------------------- | ------------------------------------------------------------------------- | ------- |
+| name                   | string  | **Required**                                    | Name of the created entity                                                |         |
+| open_switch_entity_id  | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for opening the cover                             |         |
+| close_switch_entity_id | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover                             |         |
+| stop_switch_entity_id  | entity  | _Optional_                                      | Entity ID of the switch for stopping the cover                            | None    |
+| cover_entity_id        | entity  | **Required** or `open_\|close_switch_entity_id` | Entity ID of an existing cover entity                                     |         |
+| is_button              | boolean | _Optional_                                      | Set to `true` for momentary pulse buttons (same as `input_mode: pulse`)   | false   |
+| travelling_time_down   | float   | _Optional_                                      | Time in seconds to close the cover                                        | 30      |
+| travelling_time_up     | float   | _Optional_                                      | Time in seconds to open the cover                                         | 30      |
+| tilting_time_down      | float   | _Optional_                                      | Time in seconds to tilt the cover fully closed                            | None    |
+| tilting_time_up         | float   | _Optional_                                      | Time in seconds to tilt the cover fully open                              | None    |
+| travel_moves_with_tilt | boolean | _Optional_                                      | Whether tilt movements also cause proportional travel changes             | false   |
+| travel_delay_at_end    | float   | _Optional_                                      | Additional relay time (seconds) at endpoints for position reset           | None    |
+| min_movement_time      | float   | _Optional_                                      | Minimum movement duration (seconds) - blocks shorter movements            | None    |
+| travel_startup_delay   | float   | _Optional_                                      | Motor startup time compensation (seconds) for travel movements            | None    |
+| tilt_startup_delay     | float   | _Optional_                                      | Motor startup time compensation (seconds) for tilt movements              | None    |
+| pulse_time             | float   | _Optional_                                      | Duration in seconds for button press in pulse mode                        | 1.0     |
 
-      # This device overrides some defaults
-      bedroom_right:
-        name: Bedroom Right
-        travelling_time_down: 52.0 # Override default
-        open_switch_entity_id: switch.bedroom_right_open
-        close_switch_entity_id: switch.bedroom_right_close
+</details>
 
-      # This device explicitly disables startup delay
-      kitchen:
-        name: Kitchen
-        travel_startup_delay: null # Override to disable
-        open_switch_entity_id: switch.kitchen_open
-        close_switch_entity_id: switch.kitchen_close
-```
+## Device types
 
-### Options
+### Switch-based covers
 
-| Name                   | Type         | Requirement                                     | Description                                                               | Default |
-| ---------------------- | ------------ | ----------------------------------------------- | ------------------------------------------------------------------------- | ------- |
-| name                   | string       | **Required**                                    | Name of the created entity                                                |         |
-| open_switch_entity_id  | state entity | **Required** or `cover_entity_id`               | Entity ID of the switch for opening the cover                             |         |
-| close_switch_entity_id | state entity | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover                             |         |
-| stop_switch_entity_id  | state entity | _Optional_ or `cover_entity_id`                 | Entity ID of the switch for stopping the cover                            | None    |
-| cover_entity_id        | state entity | **Required** or `open_\|close_switch_entity_id` | Entity ID of a existing cover entity                                      |         |
-| travel_moves_with_tilt | boolean      | _Optional_                                      | Whether tilt movements also cause proportional travel changes             | False   |
-| travelling_time_down   | int          | _Optional_                                      | Time it takes in seconds to close the cover                               | 30      |
-| travelling_time_up     | int          | _Optional_                                      | Time it takes in seconds to open the cover                                | 30      |
-| tilting_time_down      | float        | _Optional_                                      | Time it takes in seconds to tilt the cover all the way down               | None    |
-| tilting_time_up        | float        | _Optional_                                      | Time it takes in seconds to tilt the cover all the way up                 | None    |
-| travel_delay_at_end    | float        | _Optional_                                      | Additional relay time (seconds) at endpoints (0%/100%) for position reset | None    |
-| min_movement_time      | float        | _Optional_                                      | Minimum movement duration (seconds) - blocks shorter movements            | None    |
-| travel_startup_delay   | float        | _Optional_                                      | Motor startup time compensation (seconds) for travel movements            | None    |
-| tilt_startup_delay     | float        | _Optional_                                      | Motor startup time compensation (seconds) for tilt movements              | None    |
-| input_mode             | string       | _Optional_ (`cover_entity_id` not supported)    | `switch` (latching), `pulse` (momentary+stop), `toggle` (same btn stops)  | switch  |
-| pulse_time             | float        | _Optional_                                      | Duration in seconds for button press in `pulse`/`toggle` modes            | 1.0     |
+Control a cover using two relay switches (one for open, one for close), with an optional stop switch.
 
-## Advanced Features
+Three input modes are available:
 
-### Default Values (defaults)
+| Mode       | Description                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------- |
+| **Switch** | Latching relays. The direction switch stays ON for the entire movement. Default mode.           |
+| **Pulse**  | Momentary pulse buttons. The switch is pulsed ON briefly, then turned OFF. The motor controller latches internally. |
+| **Toggle** | Toggle-style relays. A second pulse on the same direction button stops the motor.               |
 
-You can define default values for timing parameters that will be used by all devices unless explicitly overridden. This reduces configuration duplication when you have multiple covers with similar characteristics.
+### Wrapped covers
 
-**How it works:**
+Wrap an existing cover entity to add time-based position tracking. Useful for covers that already have basic open/close/stop functionality but lack position tracking.
 
-- Values in `defaults` section apply to all devices
-- Device-specific values override defaults
-- Explicit `null` in device config overrides defaults (disables feature)
-- If neither defaults nor device config specify a value, schema defaults are used
+## Configuration options
 
-**Priority order:**
+All settings are available through the configuration card. Here is the full reference:
 
-1. Device-specific value (highest priority)
-2. Defaults value
-3. Schema default (lowest priority)
+### Timing
 
-### Synchronized Travel and Tilt
+| Option                 | Description                                                                | Default |
+| ---------------------- | -------------------------------------------------------------------------- | ------- |
+| Travel time close      | Time in seconds for the cover to fully close                               |         |
+| Travel time open       | Time in seconds for the cover to fully open                                |         |
+| Endpoint run-on time   | Extra relay time at endpoints (0%/100%) to reset position                  | 2.0     |
+| Min movement time      | Minimum movement duration - blocks shorter movements to prevent drift      | None    |
+| Travel startup delay   | Motor startup compensation for travel (see below)                          | None    |
 
-When both `tilting_time_down/up` are configured, the integration simulates realistic blind behavior:
+### Tilt
 
-- **Travel movements** always adjust tilt proportionally
-- **Tilt movements** affect travel only when `travel_moves_with_tilt: true`
-- Movements are time-synchronized and stop simultaneously
+| Option                     | Description                                                                         | Default |
+| -------------------------- | ----------------------------------------------------------------------------------- | ------- |
+| Tilt mode                  | `none`, `inline`, `sequential`, or `dual_motor` (see below)                         | none    |
+| Tilt time close            | Time in seconds to tilt the cover fully closed                                      | None    |
+| Tilt time open             | Time in seconds to tilt the cover fully open                                        | None    |
+| Tilt startup delay         | Motor startup compensation for tilt                                                 | None    |
+| Safe tilt position         | Tilt position required before travel moves (dual_motor only)                        | 100     |
+| Max tilt allowed position  | Cover must be at or below this position to tilt (dual_motor only)                   | None    |
 
-**Example:** With `travelling_time=10s` and `tilting_time=5s`, moving travel 50% changes tilt 100%.
+### Pulse/Toggle mode
 
-### Travel Moves With Tilt (travel_moves_with_tilt)
+| Option     | Description                                          | Default |
+| ---------- | ---------------------------------------------------- | ------- |
+| Pulse time | Duration in seconds for the momentary button pulse   | 1.0     |
 
-Controls whether tilt adjustments cause proportional travel movement.
+## Advanced features
 
-- **`false` (default):** Only travel movements affect tilt. Tilt can be adjusted independently.
-- **`true`:** Both travel and tilt movements are synchronized on the same motor.
+### Tilt modes
 
-```yaml
-travel_moves_with_tilt: true
-```
+The **tilt mode** setting controls how tilt and travel interact:
 
-### Automatic Position Constraints
+- **None:** Tilt is disabled. Only position tracking is used.
+- **Inline:** Tilt and travel are synchronized on the same motor. Both tilt and travel movements affect each other proportionally.
+- **Sequential (closes then tilts):** Tilt is independent of travel. The cover fully closes before the slats start tilting. Travel commands adjust tilt proportionally, but tilt commands do not move travel.
+- **Separate tilt motor (dual_motor):** A separate motor controls the tilt. Requires dedicated tilt open/close/stop switches. Tilt is only allowed when the cover is in a safe position (configurable).
+
+### Synchronized travel and tilt (inline mode)
+
+In inline mode, travel and tilt are synchronized. Travel movements always adjust tilt proportionally, and tilt movements also cause proportional travel changes.
+
+**Example:** With `travel_time=10s` and `tilt_time=5s`, moving travel 50% changes tilt 100%.
+
+### Separate tilt motor (dual_motor mode)
+
+For covers with a dedicated tilt motor, configure:
+
+- **Tilt open/close/stop switches:** The relay switches controlling the tilt motor.
+- **Safe tilt position:** The tilt moves to this position before travel starts (default: 100 = fully open).
+- **Max tilt allowed position:** Tilt is only allowed when the cover position is at or below this value (e.g., 0 = only when fully closed).
+
+### External state monitoring
+
+The integration monitors the underlying switch entities for external changes (e.g., physical button presses, other automations). When an external state change is detected, the position tracker is updated to stay in sync with the actual motor.
+
+Each input mode handles external changes differently:
+
+- **Switch (latching):** ON = motor running, OFF = motor stopped.
+- **Pulse (momentary):** A complete ON→OFF pulse represents one press.
+- **Toggle:** Both ON→OFF and OFF→ON transitions are treated as toggle presses, with debounce to handle momentary switches.
+
+### Automatic position constraints
 
 At endpoint positions, tilt is automatically constrained to prevent drift:
 
-- **At 0% (fully open):** Tilt is set to 0% (horizontal)
-- **At 100% (fully closed):** Tilt is set to 100% (vertical)
+- **At 0% (fully closed):** Tilt is set to 0% (fully closed)
+- **At 100% (fully open):** Tilt is set to 100% (fully open)
 
-### Endpoint Delay (travel_delay_at_end)
+### Endpoint run-on time
 
-For covers with mechanical endstops, keeps the relay active for additional time after reaching endpoints to reset position.
+For covers with mechanical endstops, keeps the relay active for additional time after reaching endpoints to reset position. Recommended values: 1.0 - 3.0 seconds.
 
-```yaml
-travel_delay_at_end: 2.0
-```
+### Minimum movement time
 
-Recommended values: 1.0 - 3.0 seconds
+Prevents position drift by blocking relay activations too brief to physically move the cover. Movements to 0% or 100% are always allowed. Recommended values: 0.5 - 1.5 seconds.
 
-### Minimum Movement Time (min_movement_time)
+### Motor startup delay
 
-Prevents position drift by blocking relay activations too brief to physically move the cover. Movements to 0% or 100% are always allowed.
+Compensates for motor inertia by delaying position tracking after relay activation. This improves position accuracy, especially for short movements.
 
-```yaml
-min_movement_time: 0.5
-```
-
-Recommended values: 0.5 - 1.5 seconds
-
-### Motor Startup Delay (travel_startup_delay, tilt_startup_delay)
-
-Optional feature to compensate for **motor inertia** by delaying position tracking after relay activation. This improves position accuracy, especially for short movements.
-
-**The problem:**
-
-- Motors have startup inertia - after relay turns ON, there's a brief delay before the cover actually starts moving
-- This delay (typically 0.05-0.15s) is counted in timing but doesn't move the cover
-- For long movements (e.g., 30s), this is negligible (0.3% error)
-- For short movements (e.g., 0.5s), this is significant (20-30% error)
-- Multiple short movements accumulate drift
+**The problem:** Motors have startup inertia. After the relay turns ON, there's a brief delay before the cover starts moving. For long movements (e.g., 30s) this is negligible, but for short movements (e.g., 0.5s) it can cause 20-30% position error that accumulates over time.
 
 **How it works:**
 
 1. Relay turns ON immediately
-2. Waits for `startup_delay` (motor is starting up)
-3. Only then starts counting position change in Home Assistant
-4. Can be cancelled at any time (STOP or direction change)
+2. Waits for the configured startup delay (motor is starting up)
+3. Only then starts counting position change
+4. Can be cancelled at any time (stop or direction change)
 
-**Example:**
+Recommended values: 0.05 - 0.15 seconds. Can be configured separately for travel and tilt.
 
-```yaml
-travel_startup_delay: 0.1 # 100ms startup delay for travel
-tilt_startup_delay: 0.08 # 80ms startup delay for tilt
+### Calibration
 
-# User command: Tilt 1% (normally 0.03s)
-# Actual timing: Relay ON for 0.11s total (0.08s startup + 0.03s movement)
-# Result: Cover actually moves 1%
-```
+The configuration card includes built-in calibration to measure timing parameters automatically. During calibration, the cover moves in a specified direction and you stop it when it reaches the desired endpoint. The measured time is saved directly to the configuration.
 
-**Recommended values:** 0.05 - 0.15 seconds
+Calibratable parameters: `travel_time_close`, `travel_time_open`, `tilt_time_close`, `tilt_time_open`, `travel_startup_delay`, `tilt_startup_delay`, `min_movement_time`.
 
-**Important notes:**
+## Services
 
-- This is a fixed time per relay activation, not a percentage
-- Works best when calibrated for your specific motor
-- Can be different for travel and tilt if needed
-- Compatible with `min_movement_time` and `travel_delay_at_end`
+### `cover_time_based.set_known_position`
+
+Manually set the internal position of a cover. Useful for correcting drift.
+
+| Field     | Description                                    |
+| --------- | ---------------------------------------------- |
+| entity_id | The cover entity                               |
+| position  | The position to set (0-100)                    |
+
+### `cover_time_based.set_known_tilt_position`
+
+Manually set the internal tilt position of a cover.
+
+| Field         | Description                                    |
+| ------------- | ---------------------------------------------- |
+| entity_id     | The cover entity                               |
+| tilt_position | The tilt position to set (0-100)               |
+
+### `cover_time_based.start_calibration`
+
+Start a calibration test to measure a timing parameter.
+
+| Field     | Description                                                              |
+| --------- | ------------------------------------------------------------------------ |
+| entity_id | The cover entity                                                         |
+| attribute | The timing parameter to calibrate                                        |
+| timeout   | Safety timeout in seconds - motor auto-stops if stop_calibration is not called |
+| direction | Direction to move (`open` or `close`). Auto-detects if not set           |
+
+### `cover_time_based.stop_calibration`
+
+Stop an active calibration test and save the result.
+
+| Field     | Description                                        |
+| --------- | -------------------------------------------------- |
+| entity_id | The cover entity                                   |
+| cancel    | If `true`, discard the results without saving      |
 
 [commits-shield]: https://img.shields.io/github/commit-activity/y/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
 [commits]: https://github.com/Sese-Schneider/ha-cover-time-based/commits/main
 [license-shield]: https://img.shields.io/github/license/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
-[maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg?style=for-the-badge
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg?style=for-the-badge
 [releases-shield]: https://img.shields.io/github/release/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
 [releases]: https://github.com/Sese-Schneider/ha-cover-time-based/releases

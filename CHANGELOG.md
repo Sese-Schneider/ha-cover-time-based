@@ -1,3 +1,30 @@
+## Unreleased
+
+### Features
+
+- **External state monitoring:** Detects physical switch presses and keeps the position tracker in sync with actual motor state. Supports all input modes (switch, pulse, toggle) for both cover and tilt switches.
+- **Separate tilt motor (dual_motor) mode:** Support for covers with a dedicated tilt motor, with configurable safe tilt position and max tilt allowed position.
+- **Inline tilt mode:** Support for covers where the tilt mechanism is part of the main travel range (e.g. Venetian blinds), with configurable tilt range within the overall travel.
+- **Tilt switch monitoring:** Monitors tilt switch entities for external changes in all modes (pulse, switch, toggle).
+- **Translatable frontend card:** All card strings externalized to `strings.json` with `_t()` helper. Translations for English, Portuguese, and Polish included.
+- **Toggle mode improvements:** Debounce for momentary switches, cross-direction external toggles treated as stop, HA UI direction changes still reverse.
+
+### Improvements
+
+- Replaced external `xknx` TravelCalculator dependency with a local HA-convention copy (no external dependencies)
+- Updated calibration hint descriptions for all tilt modes (inline, sequential, dual_motor)
+- Frontend defaults safe_tilt_position=100 and max_tilt_allowed_position=0 for new dual_motor configs
+- Cleaned up diagnostic logging in toggle mode
+- Improved test coverage from 66% to 97% (478 tests)
+
+### Bug Fixes
+
+- Fixed pulse mode stop switch not stopping the position tracker
+- Fixed toggle mode external state handler only reacting to ON→OFF (now handles both transitions)
+- Fixed switch mode tilt handler using pulse-mode behavior (now uses latching: ON=start, OFF=stop)
+- Fixed tilt switch echo filtering (pending=2 for direction switches to handle ON+OFF transitions)
+- Fixed wrapped cover handler not tracking direction changes (opening→closing)
+
 ## 3.0.0 (2025-12-10)
 
 ### Features
