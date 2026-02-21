@@ -189,8 +189,8 @@ class TestToggleCloseWhileClosing:
     async def test_close_while_closing_stops(self):
         cover = _make_toggle_cover()
 
-        # Simulate currently closing
-        cover.travel_calc.set_position(0)
+        # Simulate currently closing (position 100 = fully open)
+        cover.travel_calc.set_position(100)
         cover.travel_calc.start_travel_down()
 
         with (
@@ -209,8 +209,8 @@ class TestToggleOpenWhileOpening:
     async def test_open_while_opening_stops(self):
         cover = _make_toggle_cover()
 
-        # Simulate currently opening
-        cover.travel_calc.set_position(100)
+        # Simulate currently opening (position 0 = fully closed)
+        cover.travel_calc.set_position(0)
         cover.travel_calc.start_travel_up()
 
         with (
@@ -251,8 +251,8 @@ class TestToggleDirectionChange:
     async def test_close_while_opening_stops_first(self):
         cover = _make_toggle_cover()
 
-        # Simulate currently opening
-        cover.travel_calc.set_position(100)
+        # Simulate currently opening (position 0 = fully closed)
+        cover.travel_calc.set_position(0)
         cover.travel_calc.start_travel_up()
         cover._last_command = SERVICE_OPEN_COVER
 
@@ -274,8 +274,8 @@ class TestToggleDirectionChange:
     async def test_open_while_closing_stops_first(self):
         cover = _make_toggle_cover()
 
-        # Simulate currently closing
-        cover.travel_calc.set_position(0)
+        # Simulate currently closing (position 100 = fully open)
+        cover.travel_calc.set_position(100)
         cover.travel_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER
 

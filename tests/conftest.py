@@ -15,8 +15,11 @@ from custom_components.cover_time_based.cover import (
     CONF_PULSE_TIME,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_ENDPOINT_RUNON_TIME,
+    CONF_TILT_CLOSE_SWITCH,
     CONF_TILT_MODE,
+    CONF_TILT_OPEN_SWITCH,
     CONF_TILT_STARTUP_DELAY,
+    CONF_TILT_STOP_SWITCH,
     CONF_TILT_TIME_CLOSE,
     CONF_TILT_TIME_OPEN,
     CONF_TRAVEL_STARTUP_DELAY,
@@ -65,6 +68,9 @@ def make_cover(make_hass):
         tilt_startup_delay=None,
         endpoint_runon_time=None,
         min_movement_time=None,
+        tilt_open_switch=None,
+        tilt_close_switch=None,
+        tilt_stop_switch=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -107,6 +113,12 @@ def make_cover(make_hass):
             options[CONF_ENDPOINT_RUNON_TIME] = endpoint_runon_time
         if min_movement_time is not None:
             options[CONF_MIN_MOVEMENT_TIME] = min_movement_time
+        if tilt_open_switch is not None:
+            options[CONF_TILT_OPEN_SWITCH] = tilt_open_switch
+        if tilt_close_switch is not None:
+            options[CONF_TILT_CLOSE_SWITCH] = tilt_close_switch
+        if tilt_stop_switch is not None:
+            options[CONF_TILT_STOP_SWITCH] = tilt_stop_switch
 
         cover = _create_cover_from_options(
             options,

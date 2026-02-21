@@ -22,7 +22,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install homeassistant xknx==3.11.0
+          pip install homeassistant
           pip install pytest pytest-asyncio pytest-homeassistant-custom-component
 
       - name: Run tests

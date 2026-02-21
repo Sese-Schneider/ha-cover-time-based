@@ -84,12 +84,12 @@ class TestGetCalibratableAttributes:
         assert "tilt_time_open" in attrs
         assert "tilt_startup_delay" in attrs
 
-    def test_proportional_excludes_tilt(self):
+    def test_none_excludes_tilt(self):
         from custom_components.cover_time_based.calibration import (
             get_calibratable_attributes,
         )
 
-        attrs = get_calibratable_attributes("proportional")
+        attrs = get_calibratable_attributes("none")
         assert "travel_time_close" in attrs
         assert "tilt_time_close" not in attrs
         assert "tilt_time_open" not in attrs
@@ -271,16 +271,6 @@ class TestCalibrationTiltTime:
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="tilt_time_open", timeout=30.0)
         assert cover._calibration.attribute == "tilt_time_open"
-
-    @pytest.mark.asyncio
-    async def test_tilt_rejected_when_tilt_mode_during(self, make_cover):
-        from homeassistant.exceptions import HomeAssistantError
-
-        cover = make_cover(
-            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="proportional"
-        )
-        with pytest.raises(HomeAssistantError, match="proportional tilt mode"):
-            await cover.start_calibration(attribute="tilt_time_close", timeout=30.0)
 
 
 class TestMotorOverheadCalibration:

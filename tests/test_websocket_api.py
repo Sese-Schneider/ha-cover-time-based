@@ -217,7 +217,7 @@ class TestWsGetConfig:
             CONF_TRAVEL_TIME_OPEN: 50,
             CONF_TILT_TIME_CLOSE: 3.0,
             CONF_TILT_TIME_OPEN: 3.5,
-            CONF_TILT_MODE: "proportional",
+            CONF_TILT_MODE: "sequential",
             CONF_TRAVEL_STARTUP_DELAY: 1.2,
             CONF_TILT_STARTUP_DELAY: 0.8,
             CONF_MIN_MOVEMENT_TIME: 0.5,
@@ -248,7 +248,7 @@ class TestWsGetConfig:
         assert result["travel_time_open"] == 50
         assert result["tilt_time_close"] == 3.0
         assert result["tilt_time_open"] == 3.5
-        assert result["tilt_mode"] == "proportional"
+        assert result["tilt_mode"] == "sequential"
         assert result["travel_startup_delay"] == 1.2
         assert result["tilt_startup_delay"] == 0.8
         assert result["min_movement_time"] == 0.5
@@ -444,14 +444,14 @@ class TestWsUpdateConfig:
                     "entity_id": ENTITY_ID,
                     "tilt_time_close": 5.0,
                     "tilt_time_open": 5.5,
-                    "tilt_mode": "proportional",
+                    "tilt_mode": "sequential",
                 },
             )
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_options[CONF_TILT_TIME_CLOSE] == 5.0
         assert new_options[CONF_TILT_TIME_OPEN] == 5.5
-        assert new_options[CONF_TILT_MODE] == "proportional"
+        assert new_options[CONF_TILT_MODE] == "sequential"
 
     @pytest.mark.asyncio
     async def test_clear_tilt_fields(self):
@@ -459,7 +459,7 @@ class TestWsUpdateConfig:
             options={
                 CONF_TILT_TIME_CLOSE: 5.0,
                 CONF_TILT_TIME_OPEN: 5.0,
-                CONF_TILT_MODE: "proportional",
+                CONF_TILT_MODE: "sequential",
             }
         )
         conn = _make_connection()
@@ -530,7 +530,7 @@ class TestDualMotorFieldRoundTrip:
             "input_mode": "switch",
             "tilt_mode": "dual_motor",
             "safe_tilt_position": 10,
-            "min_tilt_allowed_position": 80,
+            "max_tilt_allowed_position": 80,
             "tilt_open_switch": "switch.tilt_open",
             "tilt_close_switch": "switch.tilt_close",
             "tilt_stop_switch": "switch.tilt_stop",
@@ -554,7 +554,7 @@ class TestDualMotorFieldRoundTrip:
 
         result = connection.send_result.call_args[0][1]
         assert result["safe_tilt_position"] == 10
-        assert result["min_tilt_allowed_position"] == 80
+        assert result["max_tilt_allowed_position"] == 80
         assert result["tilt_open_switch"] == "switch.tilt_open"
         assert result["tilt_close_switch"] == "switch.tilt_close"
         assert result["tilt_stop_switch"] == "switch.tilt_stop"
@@ -572,7 +572,7 @@ class TestDualMotorFieldRoundTrip:
             "type": "cover_time_based/update_config",
             "entity_id": ENTITY_ID,
             "safe_tilt_position": 15,
-            "min_tilt_allowed_position": 90,
+            "max_tilt_allowed_position": 90,
             "tilt_open_switch": "switch.tilt_up",
             "tilt_close_switch": "switch.tilt_down",
             "tilt_stop_switch": "switch.tilt_stop",
@@ -587,7 +587,7 @@ class TestDualMotorFieldRoundTrip:
 
         new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_opts["safe_tilt_position"] == 15
-        assert new_opts["min_tilt_allowed_position"] == 90
+        assert new_opts["max_tilt_allowed_position"] == 90
         assert new_opts["tilt_open_switch"] == "switch.tilt_up"
         assert new_opts["tilt_close_switch"] == "switch.tilt_down"
         assert new_opts["tilt_stop_switch"] == "switch.tilt_stop"
@@ -611,8 +611,8 @@ class TestDualMotorFieldRoundTrip:
             await handler(hass, connection, msg)
 
         result = connection.send_result.call_args[0][1]
-        assert result["safe_tilt_position"] == 0
-        assert result["min_tilt_allowed_position"] is None
+        assert result["safe_tilt_position"] == 100  # HA default: fully open
+        assert result["max_tilt_allowed_position"] is None
         assert result["tilt_open_switch"] is None
         assert result["tilt_close_switch"] is None
         assert result["tilt_stop_switch"] is None

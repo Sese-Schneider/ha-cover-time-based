@@ -32,8 +32,8 @@ class TestToggleCloseWhileMoving:
     async def test_close_while_closing_stops(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
 
-        # Simulate that the cover is currently closing (position 0 = fully open)
-        cover.travel_calc.set_position(0)
+        # Simulate that the cover is currently closing (position 100 = fully open)
+        cover.travel_calc.set_position(100)
         cover.travel_calc.start_travel_down()
 
         with (
@@ -50,8 +50,8 @@ class TestToggleCloseWhileMoving:
     async def test_open_while_opening_stops(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
 
-        # Simulate that the cover is currently opening (position 100 = fully closed)
-        cover.travel_calc.set_position(100)
+        # Simulate that the cover is currently opening (position 0 = fully closed)
+        cover.travel_calc.set_position(0)
         cover.travel_calc.start_travel_up()
 
         with (
@@ -106,8 +106,8 @@ class TestStopBeforeDirectionChange:
     async def test_close_while_opening_stops_first(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
 
-        # Simulate that the cover is currently opening (position 100 = fully closed)
-        cover.travel_calc.set_position(100)
+        # Simulate that the cover is currently opening (position 0 = fully closed)
+        cover.travel_calc.set_position(0)
         cover.travel_calc.start_travel_up()
         cover._last_command = SERVICE_OPEN_COVER
 
@@ -126,8 +126,8 @@ class TestStopBeforeDirectionChange:
     async def test_open_while_closing_stops_first(self, make_cover):
         cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
 
-        # Simulate that the cover is currently closing (position 0 = fully open)
-        cover.travel_calc.set_position(0)
+        # Simulate that the cover is currently closing (position 100 = fully open)
+        cover.travel_calc.set_position(100)
         cover.travel_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER
 
