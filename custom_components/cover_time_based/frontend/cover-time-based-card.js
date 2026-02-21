@@ -4,6 +4,8 @@
  * A Lovelace card for configuring and calibrating cover_time_based entities.
  * Uses HA built-in elements (ha-entity-picker, ha-textfield, ha-checkbox,
  * ha-button) for consistent look and feel.
+ *
+ * All user-visible strings are translatable via strings.json / translations/.
  */
 
 import {
@@ -14,15 +16,106 @@ import {
 
 const DOMAIN = "cover_time_based";
 
-const ATTRIBUTE_LABELS = {
-  travel_time_close: "Travel time (close)",
-  travel_time_open: "Travel time (open)",
-  travel_startup_delay: "Travel startup delay",
-  tilt_time_close: "Tilt time (close)",
-  tilt_time_open: "Tilt time (open)",
-  tilt_startup_delay: "Tilt startup delay",
-  min_movement_time: "Minimum movement time",
+// English fallback strings — keys match the flattened paths in strings.json "card" section.
+// When translations load successfully, they override these via _t().
+const EN = {
+  "header": "Cover Time Based Configuration",
+  "loading": "Loading...",
+  "saving": "Saving...",
+  "confirm_cancel_calibration": "A calibration is running. Cancel it and continue?",
+  "create_new": "+ Create new cover entity",
+  "yaml_warning": "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings \u2192 Devices & Services \u2192 Helpers \u2192 Create Helper \u2192 Cover Time Based.",
+  "tabs.device": "Device",
+  "tabs.calibration": "Calibration",
+  "device_type.label": "Device Type",
+  "device_type.switch": "Control via switches",
+  "device_type.cover": "Wrap an existing cover entity",
+  "entities.cover_entity": "Cover Entity",
+  "entities.switch_entities": "Switch Entities",
+  "entities.open_switch": "Open switch",
+  "entities.close_switch": "Close switch",
+  "entities.stop_switch": "Stop switch (optional)",
+  "input_mode.label": "Input Mode",
+  "input_mode.switch": "Switch (latching)",
+  "input_mode.pulse": "Pulse (momentary)",
+  "input_mode.toggle": "Toggle (same button)",
+  "input_mode.pulse_time": "Pulse time",
+  "endpoint_runon.label": "Endpoint Run-on Time",
+  "endpoint_runon.helper": "Additional travel time at endpoints (0%/100%) for position reset",
+  "tilt.label": "Tilting",
+  "tilt.none": "Not supported",
+  "tilt.sequential": "Closes then tilts",
+  "tilt.dual_motor": "Separate tilt motor",
+  "tilt.inline": "Tilts inline with travel",
+  "tilt_motor.label": "Tilt Motor",
+  "tilt_motor.open_switch": "Tilt open switch",
+  "tilt_motor.close_switch": "Tilt close switch",
+  "tilt_motor.stop_switch": "Tilt stop switch (optional)",
+  "tilt_motor.safe_position": "Safe tilt position",
+  "tilt_motor.safe_position_helper": "Tilt moves here before travel (100 = fully open)",
+  "tilt_motor.max_allowed_position": "Max tilt allowed position (optional)",
+  "tilt_motor.max_allowed_helper": "Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)",
+  "timing.attribute_header": "Attribute",
+  "timing.value_header": "Value",
+  "timing.not_set": "Not set",
+  "timing.travel_time_close": "Travel time (close)",
+  "timing.travel_time_open": "Travel time (open)",
+  "timing.travel_startup_delay": "Travel startup delay",
+  "timing.tilt_time_close": "Tilt time (close)",
+  "timing.tilt_time_open": "Tilt time (open)",
+  "timing.tilt_startup_delay": "Tilt startup delay",
+  "timing.min_movement_time": "Minimum movement time",
+  "position.label": "Current Position",
+  "position.helper": "Move cover to a known endpoint, then set position.",
+  "position.unknown": "Unknown",
+  "position.open": "Fully open",
+  "position.closed": "Fully closed",
+  "position.closed_tilt_open": "Fully closed, tilt open",
+  "position.closed_tilt_closed": "Fully closed, tilt closed",
+  "calibration.label": "Timing Calibration",
+  "calibration.attribute_label": "Attribute",
+  "calibration.start": "Start",
+  "calibration.active": "Calibration Active",
+  "calibration.step": "Step {step}",
+  "calibration.cancel": "Cancel",
+  "calibration.finish": "Finish",
+  "calibration.set_position_first": "Set position to start calibration.",
+  "controls.cover_label": "Cover",
+  "controls.tilt_label": "Tilt",
+  "controls.open": "Open",
+  "controls.stop": "Stop",
+  "controls.close": "Close",
+  "controls.tilt_open": "Tilt open",
+  "controls.tilt_stop": "Tilt stop",
+  "controls.tilt_close": "Tilt close",
+  "hints.sequential.travel_time_close": "Start with cover fully open. Click Finish when the cover is fully closed, before the slats start tilting.",
+  "hints.sequential.travel_time_open": "Start with cover closed and slats open. Click Finish when the cover is fully open.",
+  "hints.sequential.tilt_time_close": "Start with cover closed but slats open. Click Finish when the slats are fully closed.",
+  "hints.sequential.tilt_time_open": "Start with cover and slats closed. Click Finish when the slats are open.",
+  "hints.dual_motor.travel_time_close": "Start with cover open and slats in safe position. Click Finish when the cover is fully closed.",
+  "hints.dual_motor.travel_time_open": "Start with cover closed and slats in safe position. Click Finish when the cover is fully open.",
+  "hints.dual_motor.tilt_time_close": "Start with cover closed and slats open. Click Finish when the slats are fully closed.",
+  "hints.dual_motor.tilt_time_open": "Start with both cover and slats closed. Click Finish when the slats are fully open.",
+  "hints.inline.travel_time_close": "Start with both cover and slats fully open. Click Finish when both are fully closed.",
+  "hints.inline.travel_time_open": "Start with both cover and slats fully closed. Click Finish when both are fully open.",
+  "hints.inline.tilt_time_close": "Start with slats fully open. Click Finish when the slats are fully closed.",
+  "hints.inline.tilt_time_open": "Start with slats fully closed. Click Finish when the slats are fully open.",
+  "hints.none.travel_time_close": "Click Finish when the cover is fully closed.",
+  "hints.none.travel_time_open": "Click Finish when the cover is fully open.",
+  "hints.min_movement_time": "Click Finish as soon as you notice the cover moving.",
 };
+
+// Timing attributes shown in calibration dropdown and timing table.
+// Keys are config attribute names; values are translation keys.
+const TIMING_ATTRIBUTES = [
+  ["travel_time_close", "timing.travel_time_close"],
+  ["travel_time_open", "timing.travel_time_open"],
+  ["travel_startup_delay", "timing.travel_startup_delay"],
+  ["tilt_time_close", "timing.tilt_time_close"],
+  ["tilt_time_open", "timing.tilt_time_open"],
+  ["tilt_startup_delay", "timing.tilt_startup_delay"],
+  ["min_movement_time", "timing.min_movement_time"],
+];
 
 const ATTRIBUTE_TO_CONFIG = {
   travel_time_close: "travel_time_close",
@@ -57,7 +150,47 @@ class CoverTimeBasedCard extends LitElement {
     this._activeTab = "device";
     this._knownPosition = "unknown";
     this._helpersLoaded = false;
+    this._translations = null;
+    this._translationsLoaded = false;
   }
+
+  // --- Translation support ---
+
+  _t(key, replacements) {
+    let str;
+    if (this._translations) {
+      const fullKey = `component.${DOMAIN}.card.${key}`;
+      str = this._translations[fullKey];
+    }
+    if (!str) str = EN[key] || key;
+    if (replacements) {
+      for (const [k, v] of Object.entries(replacements)) {
+        str = str.replace(`{${k}}`, v);
+      }
+    }
+    return str;
+  }
+
+  async _loadTranslations() {
+    if (this._translationsLoaded || !this.hass) return;
+    this._translationsLoaded = true;
+    try {
+      const result = await this.hass.callWS({
+        type: "frontend/get_translations",
+        language: this.hass.language,
+        category: "card",
+        integration: DOMAIN,
+      });
+      if (result?.resources) {
+        this._translations = result.resources;
+        this.requestUpdate();
+      }
+    } catch (_) {
+      // Fallback to EN defaults — card remains fully functional
+    }
+  }
+
+  // --- Lifecycle ---
 
   _getScrollParent() {
     let el = this;
@@ -122,6 +255,13 @@ class CoverTimeBasedCard extends LitElement {
 
     // Load entity list from full registry (includes config_entry_id)
     this._loadEntityList();
+    this._loadTranslations();
+  }
+
+  updated(changedProperties) {
+    if (changedProperties.has("hass") && this.hass && !this._translationsLoaded) {
+      this._loadTranslations();
+    }
   }
 
   async _loadEntityList() {
@@ -174,7 +314,7 @@ class CoverTimeBasedCard extends LitElement {
     } catch (err) {
       console.error("Failed to load config:", err);
       this._config = null;
-      this._loadError = "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings → Devices & Services → Helpers → Create Helper → Cover Time Based.";
+      this._loadError = this._t("yaml_warning");
     }
     this._loading = false;
   }
@@ -223,56 +363,23 @@ class CoverTimeBasedCard extends LitElement {
     const select = this.shadowRoot?.querySelector("#cal-attribute");
     const attr = select?.value;
     const pos = this._knownPosition;
-    const endpoint = pos === "open" ? "closed" : "open";
     const c = this._config;
     const tiltMode = c?.tilt_mode || "none";
 
-    // Mode-specific hints
-    const hints = {};
-
-    if (tiltMode === "sequential") {
-      hints.travel_time_close = "Start with cover fully open. Click Finish when the cover is fully closed, before the slats start tilting.";
-      hints.travel_time_open = "Start with cover closed and slats open. Click Finish when the cover is fully open.";
-      hints.travel_startup_delay = pos === "open"
-        ? hints.travel_time_close
-        : hints.travel_time_open;
-      hints.tilt_time_close = "Start with cover closed but slats open. Click Finish when the slats are fully closed.";
-      hints.tilt_time_open = "Start with cover and slats closed. Click Finish when the slats are open.";
-      hints.tilt_startup_delay = pos === "closed_tilt_open" || pos === "open"
-        ? hints.tilt_time_close
-        : hints.tilt_time_open;
-    } else if (tiltMode === "dual_motor") {
-      hints.travel_time_close = "Start with cover open and slats in safe position. Click Finish when the cover is fully closed.";
-      hints.travel_time_open = "Start with cover closed and slats in safe position. Click Finish when the cover is fully open.";
-      hints.travel_startup_delay = pos === "open"
-        ? hints.travel_time_close
-        : hints.travel_time_open;
-      hints.tilt_time_open = "Start with both cover and slats closed. Click Finish when the slats are fully open.";
-      hints.tilt_time_close = "Start with cover closed and slats open. Click Finish when the slats are fully closed.";
-      hints.tilt_startup_delay = pos === "closed_tilt_open" || pos === "open"
-        ? hints.tilt_time_close
-        : hints.tilt_time_open;
-    } else if (tiltMode === "inline") {
-      hints.travel_time_close = "Start with both cover and slats fully open. Click Finish when both are fully closed.";
-      hints.travel_time_open = "Start with both cover and slats fully closed. Click Finish when both are fully open.";
-      hints.travel_startup_delay = pos === "open"
-        ? hints.travel_time_close
-        : hints.travel_time_open;
-      hints.tilt_time_close = "Start with slats fully open. Click Finish when the slats are fully closed.";
-      hints.tilt_time_open = "Start with slats fully closed. Click Finish when the slats are fully open.";
-      hints.tilt_startup_delay = pos === "closed_tilt_open" || pos === "open"
-        ? hints.tilt_time_close
-        : hints.tilt_time_open;
-    } else {
-      // none mode
-      hints.travel_time_close = "Click Finish when the cover is fully closed.";
-      hints.travel_time_open = "Click Finish when the cover is fully open.";
-      hints.travel_startup_delay = `Click Finish when the cover is fully ${endpoint}.`;
+    // Startup delay uses the same hint as the corresponding direction
+    let effectiveAttr = attr;
+    if (attr === "travel_startup_delay") {
+      effectiveAttr = pos === "open" ? "travel_time_close" : "travel_time_open";
+    } else if (attr === "tilt_startup_delay") {
+      effectiveAttr = (pos === "closed_tilt_open" || pos === "open")
+        ? "tilt_time_close" : "tilt_time_open";
     }
 
-    hints.min_movement_time = "Click Finish as soon as you notice the cover moving.";
+    if (attr === "min_movement_time") {
+      return this._t("hints.min_movement_time");
+    }
 
-    return hints[attr] || "";
+    return this._t(`hints.${tiltMode}.${effectiveAttr}`);
   }
 
   _hasRequiredEntities(c) {
@@ -509,7 +616,7 @@ class CoverTimeBasedCard extends LitElement {
     if (!this.hass) return html``;
     return html`
       <ha-card>
-        <div class="card-header">Cover Time Based Configuration</div>
+        <div class="card-header">${this._t("header")}</div>
         <div class="card-content">
           ${this._renderEntityPicker()}
           ${this._selectedEntity && this._config
@@ -520,7 +627,7 @@ class CoverTimeBasedCard extends LitElement {
             : ""}
           ${this._loading
             ? html`<div class="loading">
-                <ha-icon icon="mdi:loading" class="spin"></ha-icon> Loading...
+                <ha-icon icon="mdi:loading" class="spin"></ha-icon> ${this._t("loading")}
               </div>`
             : ""}
         </div>
@@ -540,7 +647,7 @@ class CoverTimeBasedCard extends LitElement {
             const newEntity = e.detail?.value || "";
             if (newEntity === this._selectedEntity) return;
             if (this._isCalibrating()) {
-              if (!confirm("A calibration is running. Cancel it and continue?")) {
+              if (!confirm(this._t("confirm_cancel_calibration"))) {
                 const current = this._selectedEntity;
                 const picker = e.target;
                 picker.value = current;
@@ -566,7 +673,7 @@ class CoverTimeBasedCard extends LitElement {
         <a class="create-new-link" href="#" @click=${(e) => {
           e.preventDefault();
           this._onCreateNew();
-        }}>+ Create new cover entity</a>
+        }}>${this._t("create_new")}</a>
       </div>
     `;
   }
@@ -588,13 +695,13 @@ class CoverTimeBasedCard extends LitElement {
           </div>
           ${this._activeTab === "timing" && !(this._config?.tilt_open_switch && this._config?.tilt_close_switch) ? html`
             <div class="cover-controls">
-              <ha-button title="Open" @click=${() => this._onCoverCommand("open_cover")}>
+              <ha-button title=${this._t("controls.open")} @click=${() => this._onCoverCommand("open_cover")}>
                 <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
               </ha-button>
-              <ha-button title="Stop" @click=${() => this._onCoverCommand("stop_cover")}>
+              <ha-button title=${this._t("controls.stop")} @click=${() => this._onCoverCommand("stop_cover")}>
                 <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
               </ha-button>
-              <ha-button title="Close" @click=${() => this._onCoverCommand("close_cover")}>
+              <ha-button title=${this._t("controls.close")} @click=${() => this._onCoverCommand("close_cover")}>
                 <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
               </ha-button>
             </div>
@@ -603,26 +710,26 @@ class CoverTimeBasedCard extends LitElement {
         ${this._activeTab === "timing" && this._config?.tilt_open_switch && this._config?.tilt_close_switch ? html`
           <div class="cover-controls-wrapper">
             <div class="cover-controls">
-              <span class="controls-label">Cover</span>
-              <ha-button title="Open" @click=${() => this._onCoverCommand("open_cover")}>
+              <span class="controls-label">${this._t("controls.cover_label")}</span>
+              <ha-button title=${this._t("controls.open")} @click=${() => this._onCoverCommand("open_cover")}>
                 <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
               </ha-button>
-              <ha-button title="Stop" @click=${() => this._onCoverCommand("stop_cover")}>
+              <ha-button title=${this._t("controls.stop")} @click=${() => this._onCoverCommand("stop_cover")}>
                 <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
               </ha-button>
-              <ha-button title="Close" @click=${() => this._onCoverCommand("close_cover")}>
+              <ha-button title=${this._t("controls.close")} @click=${() => this._onCoverCommand("close_cover")}>
                 <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
               </ha-button>
             </div>
             <div class="cover-controls">
-              <span class="controls-label">Tilt</span>
-              <ha-button title="Tilt open" @click=${() => this._onCoverCommand("tilt_open")}>
+              <span class="controls-label">${this._t("controls.tilt_label")}</span>
+              <ha-button title=${this._t("controls.tilt_open")} @click=${() => this._onCoverCommand("tilt_open")}>
                 <ha-icon icon="mdi:arrow-top-right" style="--mdc-icon-size: 18px;"></ha-icon>
               </ha-button>
-              <ha-button title="Tilt stop" @click=${() => this._onCoverCommand("tilt_stop")}>
+              <ha-button title=${this._t("controls.tilt_stop")} @click=${() => this._onCoverCommand("tilt_stop")}>
                 <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
               </ha-button>
-              <ha-button title="Tilt close" @click=${() => this._onCoverCommand("tilt_close")}>
+              <ha-button title=${this._t("controls.tilt_close")} @click=${() => this._onCoverCommand("tilt_close")}>
                 <ha-icon icon="mdi:arrow-bottom-left" style="--mdc-icon-size: 18px;"></ha-icon>
               </ha-button>
             </div>
@@ -634,12 +741,12 @@ class CoverTimeBasedCard extends LitElement {
         <button
           class="tab ${this._activeTab === "device" ? "active" : ""}"
           @click=${() => { this._activeTab = "device"; }}
-        >Device</button>
+        >${this._t("tabs.device")}</button>
         <button
           class="tab ${this._activeTab === "timing" ? "active" : ""}"
           ?disabled=${!this._hasRequiredEntities(c)}
           @click=${() => { this._activeTab = "timing"; }}
-        >Calibration</button>
+        >${this._t("tabs.calibration")}</button>
       </div>
 
       ${this._activeTab === "device"
@@ -658,7 +765,7 @@ class CoverTimeBasedCard extends LitElement {
           `}
 
       ${this._saving
-        ? html`<div class="save-bar"><span class="saving-indicator">Saving...</span></div>`
+        ? html`<div class="save-bar"><span class="saving-indicator">${this._t("saving")}</span></div>`
         : ""}
     `;
   }
@@ -666,13 +773,13 @@ class CoverTimeBasedCard extends LitElement {
   _renderDeviceType(c) {
     return html`
       <div class="section">
-        <div class="field-label">Device Type</div>
+        <div class="field-label">${this._t("device_type.label")}</div>
         <select class="ha-select" @change=${this._onDeviceTypeChange}>
           <option value="switch" ?selected=${c.device_type === "switch"}>
-            Control via switches
+            ${this._t("device_type.switch")}
           </option>
           <option value="cover" ?selected=${c.device_type === "cover"}>
-            Wrap an existing cover entity
+            ${this._t("device_type.cover")}
           </option>
         </select>
       </div>
@@ -688,7 +795,7 @@ class CoverTimeBasedCard extends LitElement {
             .value=${c.cover_entity_id || ""}
             .includeDomains=${["cover"]}
             .entityFilter=${this._filterNonTimeBased}
-            label="Cover Entity"
+            label=${this._t("entities.cover_entity")}
             @value-changed=${this._onCoverEntityChange}
           ></ha-entity-picker>
         </div>
@@ -697,13 +804,13 @@ class CoverTimeBasedCard extends LitElement {
 
     return html`
       <div class="section">
-        <div class="field-label">Switch Entities</div>
+        <div class="field-label">${this._t("entities.switch_entities")}</div>
         <div class="entity-grid">
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.open_switch_entity_id || ""}
             .includeDomains=${["switch"]}
-            label="Open switch"
+            label=${this._t("entities.open_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("open_switch_entity_id", e)}
           ></ha-entity-picker>
@@ -711,7 +818,7 @@ class CoverTimeBasedCard extends LitElement {
             .hass=${this.hass}
             .value=${c.close_switch_entity_id || ""}
             .includeDomains=${["switch"]}
-            label="Close switch"
+            label=${this._t("entities.close_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("close_switch_entity_id", e)}
           ></ha-entity-picker>
@@ -719,7 +826,7 @@ class CoverTimeBasedCard extends LitElement {
             .hass=${this.hass}
             .value=${c.stop_switch_entity_id || ""}
             .includeDomains=${["switch"]}
-            label="Stop switch (optional)"
+            label=${this._t("entities.stop_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("stop_switch_entity_id", e)}
           ></ha-entity-picker>
@@ -734,16 +841,16 @@ class CoverTimeBasedCard extends LitElement {
 
     return html`
       <div class="section">
-        <div class="field-label">Input Mode</div>
+        <div class="field-label">${this._t("input_mode.label")}</div>
         <select class="ha-select" @change=${this._onInputModeChange}>
           <option value="switch" ?selected=${c.input_mode === "switch"}>
-            Switch (latching)
+            ${this._t("input_mode.switch")}
           </option>
           <option value="pulse" ?selected=${c.input_mode === "pulse"}>
-            Pulse (momentary)
+            ${this._t("input_mode.pulse")}
           </option>
           <option value="toggle" ?selected=${c.input_mode === "toggle"}>
-            Toggle (same button)
+            ${this._t("input_mode.toggle")}
           </option>
         </select>
         ${showPulseTime
@@ -755,7 +862,7 @@ class CoverTimeBasedCard extends LitElement {
                   max="10"
                   step="0.1"
                   suffix="s"
-                  label="Pulse time"
+                  label=${this._t("input_mode.pulse_time")}
                   .value=${String(c.pulse_time || 1.0)}
                   @change=${this._onPulseTimeChange}
                 ></ha-textfield>
@@ -769,9 +876,9 @@ class CoverTimeBasedCard extends LitElement {
   _renderEndpointRunon(c) {
     return html`
       <div class="section">
-        <div class="field-label">Endpoint Run-on Time</div>
+        <div class="field-label">${this._t("endpoint_runon.label")}</div>
         <div class="helper-text">
-          Additional travel time at endpoints (0%/100%) for position reset
+          ${this._t("endpoint_runon.helper")}
         </div>
         <ha-textfield
           type="number"
@@ -795,19 +902,19 @@ class CoverTimeBasedCard extends LitElement {
 
     return html`
       <div class="section">
-        <div class="field-label">Tilting</div>
+        <div class="field-label">${this._t("tilt.label")}</div>
         <select class="ha-select" @change=${this._onTiltModeChange}>
           <option value="none" ?selected=${tiltMode === "none"}>
-            Not supported
+            ${this._t("tilt.none")}
           </option>
           <option value="sequential" ?selected=${tiltMode === "sequential"}>
-            Closes then tilts
+            ${this._t("tilt.sequential")}
           </option>
 <option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
-            Separate tilt motor
+            ${this._t("tilt.dual_motor")}
           </option>
           <option value="inline" ?selected=${tiltMode === "inline"}>
-            Tilts inline with travel
+            ${this._t("tilt.inline")}
           </option>
         </select>
       </div>
@@ -819,13 +926,13 @@ class CoverTimeBasedCard extends LitElement {
 
     return html`
       <div class="section">
-        <div class="field-label">Tilt Motor</div>
+        <div class="field-label">${this._t("tilt_motor.label")}</div>
         <div class="entity-grid">
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.tilt_open_switch || ""}
             .includeDomains=${["switch"]}
-            label="Tilt open switch"
+            label=${this._t("tilt_motor.open_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_open_switch", e)}
           ></ha-entity-picker>
@@ -833,7 +940,7 @@ class CoverTimeBasedCard extends LitElement {
             .hass=${this.hass}
             .value=${c.tilt_close_switch || ""}
             .includeDomains=${["switch"]}
-            label="Tilt close switch"
+            label=${this._t("tilt_motor.close_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_close_switch", e)}
           ></ha-entity-picker>
@@ -841,7 +948,7 @@ class CoverTimeBasedCard extends LitElement {
             .hass=${this.hass}
             .value=${c.tilt_stop_switch || ""}
             .includeDomains=${["switch"]}
-            label="Tilt stop switch (optional)"
+            label=${this._t("tilt_motor.stop_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_stop_switch", e)}
           ></ha-entity-picker>
@@ -852,8 +959,8 @@ class CoverTimeBasedCard extends LitElement {
             min="0"
             max="100"
             step="1"
-            label="Safe tilt position"
-            helper="Tilt moves here before travel (100 = fully open)"
+            label=${this._t("tilt_motor.safe_position")}
+            helper=${this._t("tilt_motor.safe_position_helper")}
             .value=${String(c.safe_tilt_position ?? 100)}
             @change=${(e) => {
               const v = parseInt(e.target.value);
@@ -867,8 +974,8 @@ class CoverTimeBasedCard extends LitElement {
             min="0"
             max="100"
             step="1"
-            label="Max tilt allowed position (optional)"
-            helper="Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)"
+            label=${this._t("tilt_motor.max_allowed_position")}
+            helper=${this._t("tilt_motor.max_allowed_helper")}
             .value=${c.max_tilt_allowed_position != null ? String(c.max_tilt_allowed_position) : ""}
             @change=${(e) => {
               const v = e.target.value.trim();
@@ -886,41 +993,41 @@ class CoverTimeBasedCard extends LitElement {
     const hasTiltTimes = c.tilt_mode === "sequential" || c.tilt_mode === "dual_motor" || c.tilt_mode === "inline";
 
     const rows = [
-      ["Travel time (close)", "travel_time_close", c.travel_time_close],
-      ["Travel time (open)", "travel_time_open", c.travel_time_open],
-      ["Travel startup delay", "travel_startup_delay", c.travel_startup_delay],
+      ["timing.travel_time_close", "travel_time_close", c.travel_time_close],
+      ["timing.travel_time_open", "travel_time_open", c.travel_time_open],
+      ["timing.travel_startup_delay", "travel_startup_delay", c.travel_startup_delay],
     ];
 
     if (hasTiltTimes) {
       rows.push(
-        ["Tilt time (close)", "tilt_time_close", c.tilt_time_close],
-        ["Tilt time (open)", "tilt_time_open", c.tilt_time_open],
-        ["Tilt startup delay", "tilt_startup_delay", c.tilt_startup_delay]
+        ["timing.tilt_time_close", "tilt_time_close", c.tilt_time_close],
+        ["timing.tilt_time_open", "tilt_time_open", c.tilt_time_open],
+        ["timing.tilt_startup_delay", "tilt_startup_delay", c.tilt_startup_delay]
       );
     }
 
-    rows.push(["Minimum movement time", "min_movement_time", c.min_movement_time]);
+    rows.push(["timing.min_movement_time", "min_movement_time", c.min_movement_time]);
 
     return html`
       <div class="section">
         <table class="timing-table">
           <thead>
             <tr>
-              <th>Attribute</th>
-              <th>Value</th>
+              <th>${this._t("timing.attribute_header")}</th>
+              <th>${this._t("timing.value_header")}</th>
             </tr>
           </thead>
           <tbody>
             ${rows.map(
-              ([label, key, value]) => html`
+              ([labelKey, key, value]) => html`
                 <tr>
-                  <td>${label}</td>
+                  <td>${this._t(labelKey)}</td>
                   <td class="value-cell">
                     <input
                       type="number"
                       class="timing-input"
                       .value=${value != null ? String(value) : ""}
-                      placeholder="Not set"
+                      placeholder=${this._t("timing.not_set")}
                       step="0.1"
                       min="0"
                       max="600"
@@ -945,9 +1052,9 @@ class CoverTimeBasedCard extends LitElement {
 
     return html`
       <div class="section">
-        <div class="field-label">Current Position</div>
+        <div class="field-label">${this._t("position.label")}</div>
         <div class="helper-text">
-          Move cover to a known endpoint, then set position.
+          ${this._t("position.helper")}
         </div>
         <div class="cal-form">
           <div class="cal-field">
@@ -956,15 +1063,15 @@ class CoverTimeBasedCard extends LitElement {
               id="position-select"
               @change=${(e) => this._onPositionPresetChange(e.target.value)}
             >
-              <option value="unknown" ?selected=${this._knownPosition === "unknown"}>Unknown</option>
-              <option value="open" ?selected=${this._knownPosition === "open"}>Fully open</option>
+              <option value="unknown" ?selected=${this._knownPosition === "unknown"}>${this._t("position.unknown")}</option>
+              <option value="open" ?selected=${this._knownPosition === "open"}>${this._t("position.open")}</option>
               ${hasIndependentTilt
                 ? html`
-                    <option value="closed_tilt_open" ?selected=${this._knownPosition === "closed_tilt_open"}>Fully closed, tilt open</option>
-                    <option value="closed_tilt_closed" ?selected=${this._knownPosition === "closed_tilt_closed"}>Fully closed, tilt closed</option>
+                    <option value="closed_tilt_open" ?selected=${this._knownPosition === "closed_tilt_open"}>${this._t("position.closed_tilt_open")}</option>
+                    <option value="closed_tilt_closed" ?selected=${this._knownPosition === "closed_tilt_closed"}>${this._t("position.closed_tilt_closed")}</option>
                   `
                 : html`
-                    <option value="closed" ?selected=${this._knownPosition === "closed"}>Fully closed</option>
+                    <option value="closed" ?selected=${this._knownPosition === "closed"}>${this._t("position.closed")}</option>
                   `}
             </select>
           </div>
@@ -979,7 +1086,7 @@ class CoverTimeBasedCard extends LitElement {
     const tiltMode = this._config?.tilt_mode || "none";
     const hasTiltCalibration = tiltMode === "sequential" || tiltMode === "dual_motor" || tiltMode === "inline";
 
-    const availableAttributes = Object.entries(ATTRIBUTE_LABELS).filter(
+    const availableAttributes = TIMING_ATTRIBUTES.filter(
       ([key]) => {
         if (!hasTiltCalibration && key.startsWith("tilt_")) return false;
         return true;
@@ -1023,26 +1130,28 @@ class CoverTimeBasedCard extends LitElement {
     if (!hasTravel) disabledKeys.add("min_movement_time");
 
     if (calibrating) {
+      const calAttr = attrs.calibration_attribute || this._calibratingAttribute;
+      const calLabel = this._t(`timing.${calAttr}`);
       return html`
         <div class="section calibration-active">
           <div class="field-label cal-label">
             <ha-icon icon="mdi:tune" style="--mdc-icon-size: 20px;"></ha-icon>
-            Calibration Active
+            ${this._t("calibration.active")}
           </div>
           <div class="cal-form">
             <div class="cal-status">
-              <strong>${ATTRIBUTE_LABELS[attrs.calibration_attribute || this._calibratingAttribute]}</strong>
+              <strong>${calLabel}</strong>
               ${attrs.calibration_step
                 ? html`<span class="cal-step"
-                    >Step ${attrs.calibration_step}</span
+                    >${this._t("calibration.step", { step: attrs.calibration_step })}</span
                   >`
                 : ""}
             </div>
             <ha-button @click=${() => this._onStopCalibration(true)}
-              >Cancel</ha-button
+              >${this._t("calibration.cancel")}</ha-button
             >
             <ha-button unelevated @click=${() => this._onStopCalibration(false)}
-              >Finish</ha-button
+              >${this._t("calibration.finish")}</ha-button
             >
           </div>
         </div>
@@ -1051,26 +1160,26 @@ class CoverTimeBasedCard extends LitElement {
 
     return html`
       <div class="section">
-        <div class="field-label">Timing Calibration</div>
+        <div class="field-label">${this._t("calibration.label")}</div>
         <div class="cal-form">
           <div class="cal-field">
-            <label class="sub-label" for="cal-attribute">Attribute</label>
+            <label class="sub-label" for="cal-attribute">${this._t("calibration.attribute_label")}</label>
             <select class="ha-select" id="cal-attribute"
               @change=${() => this.requestUpdate()}
             >
               ${availableAttributes.map(
-                ([key, label]) =>
-                  html`<option value=${key} ?disabled=${disabledKeys.has(key)}>${label}</option>`
+                ([key, labelKey]) =>
+                  html`<option value=${key} ?disabled=${disabledKeys.has(key)}>${this._t(labelKey)}</option>`
               )}
             </select>
           </div>
           <ha-button unelevated ?disabled=${this._knownPosition === "unknown"} @click=${this._onStartCalibration}
-            >Start</ha-button
+            >${this._t("calibration.start")}</ha-button
           >
         </div>
         ${this._knownPosition === "unknown"
           ? html`<div class="helper-text" style="margin-top: 8px;">
-              Set position to start calibration.
+              ${this._t("calibration.set_position_first")}
             </div>`
           : html`<div class="helper-text" style="margin-top: 8px;">
               ${this._getCalibrationHint()}

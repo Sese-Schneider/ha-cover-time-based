@@ -28,5 +28,123 @@
         }
       }
     }
+  },
+  "card": {
+    "header": "Konfiguracja rolet sterowanych czasowo",
+    "loading": "Ładowanie...",
+    "saving": "Zapisywanie...",
+    "confirm_cancel_calibration": "Kalibracja jest w toku. Anulować ją i kontynuować?",
+    "create_new": "+ Utwórz nową encję rolety",
+    "yaml_warning": "Ta encja używa konfiguracji YAML i nie może być konfigurowana z tej karty. Proszę przeprowadzić migrację do interfejsu użytkownika: Ustawienia > Urządzenia i usługi > Pomocniki > Utwórz pomocnik > Roleta sterowana czasowo.",
+    "tabs": {
+      "device": "Urządzenie",
+      "calibration": "Kalibracja"
+    },
+    "device_type": {
+      "label": "Typ urządzenia",
+      "switch": "Sterowanie przez przełączniki",
+      "cover": "Opakuj istniejącą encję rolety"
+    },
+    "entities": {
+      "cover_entity": "Encja rolety",
+      "switch_entities": "Encje przełączników",
+      "open_switch": "Przełącznik otwierania",
+      "close_switch": "Przełącznik zamykania",
+      "stop_switch": "Przełącznik zatrzymania (opcjonalny)"
+    },
+    "input_mode": {
+      "label": "Tryb wejścia",
+      "switch": "Przełącznik (zatrzaskowy)",
+      "pulse": "Impuls (chwilowy)",
+      "toggle": "Przełączanie (ten sam przycisk)",
+      "pulse_time": "Czas impulsu"
+    },
+    "endpoint_runon": {
+      "label": "Czas dobiegu na krańcach",
+      "helper": "Dodatkowy czas ruchu na krańcach (0%/100%) do resetowania pozycji"
+    },
+    "tilt": {
+      "label": "Nachylenie",
+      "none": "Nieobsługiwane",
+      "sequential": "Najpierw zamyka, potem nachyla",
+      "dual_motor": "Osobny silnik nachylenia",
+      "inline": "Nachylenie w trakcie ruchu"
+    },
+    "tilt_motor": {
+      "label": "Silnik nachylenia",
+      "open_switch": "Przełącznik otwierania nachylenia",
+      "close_switch": "Przełącznik zamykania nachylenia",
+      "stop_switch": "Przełącznik zatrzymania nachylenia (opcjonalny)",
+      "safe_position": "Bezpieczna pozycja nachylenia",
+      "safe_position_helper": "Nachylenie przesuwa się tu przed ruchem (100 = w pełni otwarte)",
+      "max_allowed_position": "Maks. dozwolona pozycja nachylenia (opcjonalna)",
+      "max_allowed_helper": "Nachylenie dozwolone tylko gdy pozycja rolety wynosi tyle lub mniej (0 = zamknięta, 100 = otwarta)"
+    },
+    "timing": {
+      "attribute_header": "Atrybut",
+      "value_header": "Wartość",
+      "not_set": "Nieustawione",
+      "travel_time_close": "Czas ruchu (zamykanie)",
+      "travel_time_open": "Czas ruchu (otwieranie)",
+      "travel_startup_delay": "Opóźnienie startu ruchu",
+      "tilt_time_close": "Czas nachylenia (zamykanie)",
+      "tilt_time_open": "Czas nachylenia (otwieranie)",
+      "tilt_startup_delay": "Opóźnienie startu nachylenia",
+      "min_movement_time": "Minimalny czas ruchu"
+    },
+    "position": {
+      "label": "Aktualna pozycja",
+      "helper": "Przesuń roletę do znanego krańca, a następnie ustaw pozycję.",
+      "unknown": "Nieznana",
+      "open": "W pełni otwarta",
+      "closed": "W pełni zamknięta",
+      "closed_tilt_open": "W pełni zamknięta, nachylenie otwarte",
+      "closed_tilt_closed": "W pełni zamknięta, nachylenie zamknięte"
+    },
+    "calibration": {
+      "label": "Kalibracja czasowa",
+      "attribute_label": "Atrybut",
+      "start": "Rozpocznij",
+      "active": "Kalibracja aktywna",
+      "step": "Krok {step}",
+      "cancel": "Anuluj",
+      "finish": "Zakończ",
+      "set_position_first": "Ustaw pozycję, aby rozpocząć kalibrację."
+    },
+    "controls": {
+      "cover_label": "Roleta",
+      "tilt_label": "Nachylenie",
+      "open": "Otwórz",
+      "stop": "Zatrzymaj",
+      "close": "Zamknij",
+      "tilt_open": "Otwórz nachylenie",
+      "tilt_stop": "Zatrzymaj nachylenie",
+      "tilt_close": "Zamknij nachylenie"
+    },
+    "hints": {
+      "sequential": {
+        "travel_time_close": "Zacznij z roletą w pełni otwartą. Kliknij Zakończ, gdy roleta jest w pełni zamknięta, zanim listwy zaczną się nachylać.",
+        "travel_time_open": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+        "tilt_time_close": "Zacznij z zamkniętą roletą, ale otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+        "tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są otwarte."
+      },
+      "dual_motor": {
+        "travel_time_close": "Zacznij z otwartą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni zamknięta.",
+        "travel_time_open": "Zacznij z zamkniętą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+        "tilt_time_close": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+        "tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są w pełni otwarte."
+      },
+      "inline": {
+        "travel_time_close": "Zacznij z roletą i listwami w pełni otwartymi. Kliknij Zakończ, gdy obie są w pełni zamknięte.",
+        "travel_time_open": "Zacznij z roletą i listwami w pełni zamkniętymi. Kliknij Zakończ, gdy obie są w pełni otwarte.",
+        "tilt_time_close": "Zacznij z listwami w pełni otwartymi. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+        "tilt_time_open": "Zacznij z listwami w pełni zamkniętymi. Kliknij Zakończ, gdy listwy są w pełni otwarte."
+      },
+      "none": {
+        "travel_time_close": "Kliknij Zakończ, gdy roleta jest w pełni zamknięta.",
+        "travel_time_open": "Kliknij Zakończ, gdy roleta jest w pełni otwarta."
+      },
+      "min_movement_time": "Kliknij Zakończ, gdy tylko zauważysz ruch rolety."
+    }
   }
 }

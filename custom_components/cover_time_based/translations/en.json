@@ -81,5 +81,123 @@
         }
       }
     }
+  },
+  "card": {
+    "header": "Cover Time Based Configuration",
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "confirm_cancel_calibration": "A calibration is running. Cancel it and continue?",
+    "create_new": "+ Create new cover entity",
+    "yaml_warning": "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings > Devices & Services > Helpers > Create Helper > Cover Time Based.",
+    "tabs": {
+      "device": "Device",
+      "calibration": "Calibration"
+    },
+    "device_type": {
+      "label": "Device Type",
+      "switch": "Control via switches",
+      "cover": "Wrap an existing cover entity"
+    },
+    "entities": {
+      "cover_entity": "Cover Entity",
+      "switch_entities": "Switch Entities",
+      "open_switch": "Open switch",
+      "close_switch": "Close switch",
+      "stop_switch": "Stop switch (optional)"
+    },
+    "input_mode": {
+      "label": "Input Mode",
+      "switch": "Switch (latching)",
+      "pulse": "Pulse (momentary)",
+      "toggle": "Toggle (same button)",
+      "pulse_time": "Pulse time"
+    },
+    "endpoint_runon": {
+      "label": "Endpoint Run-on Time",
+      "helper": "Additional travel time at endpoints (0%/100%) for position reset"
+    },
+    "tilt": {
+      "label": "Tilting",
+      "none": "Not supported",
+      "sequential": "Closes then tilts",
+      "dual_motor": "Separate tilt motor",
+      "inline": "Tilts inline with travel"
+    },
+    "tilt_motor": {
+      "label": "Tilt Motor",
+      "open_switch": "Tilt open switch",
+      "close_switch": "Tilt close switch",
+      "stop_switch": "Tilt stop switch (optional)",
+      "safe_position": "Safe tilt position",
+      "safe_position_helper": "Tilt moves here before travel (100 = fully open)",
+      "max_allowed_position": "Max tilt allowed position (optional)",
+      "max_allowed_helper": "Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)"
+    },
+    "timing": {
+      "attribute_header": "Attribute",
+      "value_header": "Value",
+      "not_set": "Not set",
+      "travel_time_close": "Travel time (close)",
+      "travel_time_open": "Travel time (open)",
+      "travel_startup_delay": "Travel startup delay",
+      "tilt_time_close": "Tilt time (close)",
+      "tilt_time_open": "Tilt time (open)",
+      "tilt_startup_delay": "Tilt startup delay",
+      "min_movement_time": "Minimum movement time"
+    },
+    "position": {
+      "label": "Current Position",
+      "helper": "Move cover to a known endpoint, then set position.",
+      "unknown": "Unknown",
+      "open": "Fully open",
+      "closed": "Fully closed",
+      "closed_tilt_open": "Fully closed, tilt open",
+      "closed_tilt_closed": "Fully closed, tilt closed"
+    },
+    "calibration": {
+      "label": "Timing Calibration",
+      "attribute_label": "Attribute",
+      "start": "Start",
+      "active": "Calibration Active",
+      "step": "Step {step}",
+      "cancel": "Cancel",
+      "finish": "Finish",
+      "set_position_first": "Set position to start calibration."
+    },
+    "controls": {
+      "cover_label": "Cover",
+      "tilt_label": "Tilt",
+      "open": "Open",
+      "stop": "Stop",
+      "close": "Close",
+      "tilt_open": "Tilt open",
+      "tilt_stop": "Tilt stop",
+      "tilt_close": "Tilt close"
+    },
+    "hints": {
+      "sequential": {
+        "travel_time_close": "Start with cover fully open. Click Finish when the cover is fully closed, before the slats start tilting.",
+        "travel_time_open": "Start with cover closed and slats open. Click Finish when the cover is fully open.",
+        "tilt_time_close": "Start with cover closed but slats open. Click Finish when the slats are fully closed.",
+        "tilt_time_open": "Start with cover and slats closed. Click Finish when the slats are open."
+      },
+      "dual_motor": {
+        "travel_time_close": "Start with cover open and slats in safe position. Click Finish when the cover is fully closed.",
+        "travel_time_open": "Start with cover closed and slats in safe position. Click Finish when the cover is fully open.",
+        "tilt_time_close": "Start with cover closed and slats open. Click Finish when the slats are fully closed.",
+        "tilt_time_open": "Start with both cover and slats closed. Click Finish when the slats are fully open."
+      },
+      "inline": {
+        "travel_time_close": "Start with both cover and slats fully open. Click Finish when both are fully closed.",
+        "travel_time_open": "Start with both cover and slats fully closed. Click Finish when both are fully open.",
+        "tilt_time_close": "Start with slats fully open. Click Finish when the slats are fully closed.",
+        "tilt_time_open": "Start with slats fully closed. Click Finish when the slats are fully open."
+      },
+      "none": {
+        "travel_time_close": "Click Finish when the cover is fully closed.",
+        "travel_time_open": "Click Finish when the cover is fully open."
+      },
+      "min_movement_time": "Click Finish as soon as you notice the cover moving."
+    }
   }
 }
