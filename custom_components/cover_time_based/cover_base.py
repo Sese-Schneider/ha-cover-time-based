@@ -26,7 +26,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.helpers.restore_state import RestoreEntity
-from xknx.devices import TravelCalculator, TravelStatus
+from .travel_calculator import TravelCalculator, TravelStatus
 
 from .calibration import CalibrationState
 
@@ -91,6 +91,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._delay_task = None
         self._startup_delay_task = None
         self._last_command = None
+        self._tilt_restore_target: int | None = None
+        self._tilt_restore_active: bool = False
+        self._pending_travel_target: int | None = None
+        self._pending_travel_command: str | None = None
 
         self.travel_calc = TravelCalculator(
             self._travel_time_close,
@@ -112,7 +116,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             and old_state.attributes.get(ATTR_CURRENT_POSITION) is not None
         ):
             self.travel_calc.set_position(
-                100 - int(old_state.attributes.get(ATTR_CURRENT_POSITION))
+                int(old_state.attributes.get(ATTR_CURRENT_POSITION))
             )
 
             if (
@@ -120,7 +124,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 and old_state.attributes.get(ATTR_CURRENT_TILT_POSITION) is not None
             ):
                 self.tilt_calc.set_position(
-                    100 - int(old_state.attributes.get(ATTR_CURRENT_TILT_POSITION))
+                    int(old_state.attributes.get(ATTR_CURRENT_TILT_POSITION))
                 )
 
     async def async_will_remove_from_hass(self):
@@ -140,6 +144,11 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     def _handle_stop(self):
         """Handle stop"""
+        self._tilt_restore_target = None
+        self._tilt_restore_active = False
+        self._pending_travel_target = None
+        self._pending_travel_command = None
+
         if self.travel_calc.is_traveling():
             _LOGGER.debug("_handle_stop :: button stops cover movement")
             self.travel_calc.stop()
@@ -178,17 +187,28 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self._startup_delay_task = None
 
     def _begin_movement(
-        self, target, coupled_target, primary_calc, coupled_calc, startup_delay
+        self,
+        target,
+        coupled_target,
+        primary_calc,
+        coupled_calc,
+        startup_delay,
+        pre_step_delay: float = 0.0,
     ):
         """Start position tracking on primary and optionally coupled calculator.
 
         Begins travel on the primary calculator toward `target`, and if a
         coupled_target is provided, also starts the coupled calculator.
         Then starts the auto updater. Honors motor startup delay if configured.
+
+        If pre_step_delay > 0, the coupled calculator is a pre-step that must
+        complete before the primary starts (e.g. tilt-before-travel in
+        sequential mode). The primary calculator's start is offset by this
+        delay so its position stays put until the pre-step finishes.
         """
 
         def start():
-            primary_calc.start_travel(target)
+            primary_calc.start_travel(target, delay=pre_step_delay)
             if coupled_target is not None:
                 coupled_calc.start_travel(int(coupled_target))
             self.start_auto_updater()
@@ -314,15 +334,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     @property
     def current_cover_position(self) -> int | None:
         """Return the current position of the cover."""
-        current_position = self.travel_calc.current_position()
-        return 100 - current_position if current_position is not None else None
+        return self.travel_calc.current_position()
 
     @property
     def current_cover_tilt_position(self) -> int | None:
         """Return the current tilt of the cover."""
         if self._has_tilt_support():
-            current_position = self.tilt_calc.current_position()
-            return 100 - current_position if current_position is not None else None
+            return self.tilt_calc.current_position()
         return None
 
     @property
@@ -366,19 +384,19 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def supported_features(self) -> CoverEntityFeature:
         """Flag supported features."""
         supported_features = (
-            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
         )
-        if self.current_cover_position is not None:
-            supported_features |= CoverEntityFeature.SET_POSITION
 
         if self._has_tilt_support():
             supported_features |= (
                 CoverEntityFeature.OPEN_TILT
                 | CoverEntityFeature.CLOSE_TILT
                 | CoverEntityFeature.STOP_TILT
+                | CoverEntityFeature.SET_TILT_POSITION
             )
-            if self.current_cover_tilt_position is not None:
-                supported_features |= CoverEntityFeature.SET_TILT_POSITION
 
         return supported_features
 
@@ -404,7 +422,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if self.is_opening:
             _LOGGER.debug("async_close_cover :: currently opening, stopping first")
             await self.async_stop_cover()
-        await self._async_move_to_endpoint(target=100)
+        await self._async_move_to_endpoint(target=0)
 
     async def async_open_cover(self, **kwargs):
         """Open the cover fully."""
@@ -413,11 +431,11 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if self.is_closing:
             _LOGGER.debug("async_open_cover :: currently closing, stopping first")
             await self.async_stop_cover()
-        await self._async_move_to_endpoint(target=0)
+        await self._async_move_to_endpoint(target=100)
 
     async def _async_move_to_endpoint(self, target):
-        """Move cover to an endpoint (0=fully open, 100=fully closed in travel_calc coords)."""
-        closing = target == 100
+        """Move cover to an endpoint (0=fully closed, 100=fully open)."""
+        closing = target == 0
         command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
         opposite_command = SERVICE_OPEN_COVER if closing else SERVICE_CLOSE_COVER
 
@@ -447,7 +465,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             await self._async_handle_command(SERVICE_STOP_COVER)
 
         # Distance assumes full travel when position is unknown
-        default_pos = 0 if closing else 100
+        default_pos = 100 if closing else 0
         travel_distance = abs(
             target - (current if current is not None else default_pos)
         )
@@ -464,6 +482,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._last_command = command
 
         tilt_target = None
+        pre_step_delay = 0.0
+        self._tilt_restore_target = None
         if self._tilt_strategy is not None:
             current_pos = self.travel_calc.current_position()
             current_tilt = self.tilt_calc.current_position()
@@ -472,6 +492,27 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     target, current_pos, current_tilt
                 )
                 tilt_target = self._extract_coupled_tilt(steps)
+                pre_step_delay = self._calculate_pre_step_delay(steps)
+
+                # Dual motor: tilt to safe position first, then travel
+                if (
+                    tilt_target is not None
+                    and self._tilt_strategy.uses_tilt_motor
+                    and current_tilt != tilt_target
+                ):
+                    await self._start_tilt_pre_step(
+                        tilt_target, target, command, current_tilt
+                    )
+                    return
+
+                # Shared motor with restore: save tilt for post-travel restore
+                if (
+                    tilt_target is not None
+                    and self._tilt_strategy.restores_tilt
+                    and not self._tilt_strategy.uses_tilt_motor
+                    and target not in (0, 100)
+                ):
+                    self._tilt_restore_target = current_tilt
 
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
@@ -481,21 +522,22 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self.travel_calc,
             coupled_calc,
             self._travel_startup_delay,
+            pre_step_delay,
         )
 
     async def async_close_cover_tilt(self, **kwargs):
         """Tilt the cover fully closed."""
         _LOGGER.debug("async_close_cover_tilt")
-        await self._async_move_tilt_to_endpoint(target=100)
+        await self._async_move_tilt_to_endpoint(target=0)
 
     async def async_open_cover_tilt(self, **kwargs):
         """Tilt the cover fully open."""
         _LOGGER.debug("async_open_cover_tilt")
-        await self._async_move_tilt_to_endpoint(target=0)
+        await self._async_move_tilt_to_endpoint(target=100)
 
     async def _async_move_tilt_to_endpoint(self, target):
-        """Move tilt to an endpoint (0=fully open, 100=fully closed in tilt_calc coords)."""
-        closing = target == 100
+        """Move tilt to an endpoint (0=fully closed, 100=fully open)."""
+        closing = target == 0
         command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
         opposite_command = SERVICE_OPEN_COVER if closing else SERVICE_CLOSE_COVER
 
@@ -522,7 +564,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         if current_tilt is not None and current_tilt == target:
             return
 
-        default_pos = 0 if closing else 100
+        default_pos = 100 if closing else 0
         tilt_distance = abs(
             target - (current_tilt if current_tilt is not None else default_pos)
         )
@@ -530,6 +572,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         movement_time = (tilt_distance / 100.0) * tilt_time
 
         travel_target = None
+        pre_step_delay = 0.0
         if self._tilt_strategy is not None:
             current_pos = self.travel_calc.current_position()
             current_tilt = self.tilt_calc.current_position()
@@ -538,6 +581,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     target, current_pos, current_tilt
                 )
                 travel_target = self._extract_coupled_travel(steps)
+                pre_step_delay = self._calculate_pre_step_delay(steps)
 
         _LOGGER.debug(
             "_async_move_tilt_to_endpoint :: target=%d, tilt_distance=%f%%, movement_time=%fs, travel_pos=%s",
@@ -555,12 +599,15 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self.tilt_calc,
             self.travel_calc,
             self._tilt_startup_delay,
+            pre_step_delay,
         )
 
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
         self._require_configured()
         _LOGGER.debug("async_stop_cover")
+        tilt_restore_was_active = self._tilt_restore_active
+        tilt_pre_step_was_active = self._pending_travel_target is not None
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
         self._handle_stop()
@@ -569,6 +616,10 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 self.travel_calc, self.tilt_calc
             )
         await self._send_stop()
+        if (
+            tilt_restore_was_active or tilt_pre_step_was_active
+        ) and self._has_tilt_motor():
+            await self._send_tilt_stop()
         self.async_write_ha_state()
         self._last_command = None
 
@@ -610,8 +661,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 label,
                 movement_time,
                 self._min_movement_time,
-                100 - current,
-                100 - target,
+                current,
+                target,
             )
             self.async_write_ha_state()
             return True
@@ -620,12 +671,21 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     async def set_position(self, position):
         """Move cover to a designated position."""
         current = self.travel_calc.current_position()
-        target = 100 - position
-        _LOGGER.debug("set_position :: current: %d, target: %d", current, position)
+        target = position
+        _LOGGER.debug(
+            "set_position :: current: %s, target: %d",
+            current if current is not None else "None",
+            target,
+        )
 
-        if current is None or target > current:
-            command = SERVICE_CLOSE_COVER
+        if current is None:
+            # Position unknown — assume opposite endpoint so full travel occurs
+            closing = target <= 50
+            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
+            current = 100 if closing else 0
         elif target < current:
+            command = SERVICE_CLOSE_COVER
+        elif target > current:
             command = SERVICE_OPEN_COVER
         else:
             return
@@ -662,6 +722,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._last_command = command
 
         tilt_target = None
+        pre_step_delay = 0.0
+        self._tilt_restore_target = None
         if self._tilt_strategy is not None:
             current_tilt = self.tilt_calc.current_position()
             if current is not None and current_tilt is not None:
@@ -669,6 +731,27 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                     target, current, current_tilt
                 )
                 tilt_target = self._extract_coupled_tilt(steps)
+                pre_step_delay = self._calculate_pre_step_delay(steps)
+
+                # Dual motor: tilt to safe position first, then travel
+                if (
+                    tilt_target is not None
+                    and self._tilt_strategy.uses_tilt_motor
+                    and current_tilt != tilt_target
+                ):
+                    await self._start_tilt_pre_step(
+                        tilt_target, target, command, current_tilt
+                    )
+                    return
+
+                # Shared motor with restore: save tilt for post-travel restore
+                if (
+                    tilt_target is not None
+                    and self._tilt_strategy.restores_tilt
+                    and not self._tilt_strategy.uses_tilt_motor
+                    and target not in (0, 100)
+                ):
+                    self._tilt_restore_target = current_tilt
 
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
@@ -678,17 +761,26 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self.travel_calc,
             coupled_calc,
             self._travel_startup_delay,
+            pre_step_delay,
         )
 
     async def set_tilt_position(self, position):
         """Move cover tilt to a designated position."""
         current = self.tilt_calc.current_position()
-        target = 100 - position
-        _LOGGER.debug("set_tilt_position :: current: %d, target: %d", current, target)
+        target = position
+        _LOGGER.debug(
+            "set_tilt_position :: current: %s, target: %d",
+            current if current is not None else "None",
+            target,
+        )
 
-        if current is None or target > current:
-            command = SERVICE_CLOSE_COVER
+        if current is None:
+            closing = target <= 50
+            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
+            current = 100 if closing else 0
         elif target < current:
+            command = SERVICE_CLOSE_COVER
+        elif target > current:
             command = SERVICE_OPEN_COVER
         else:
             return
@@ -723,11 +815,13 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         movement_time = (abs(target - current) / 100.0) * tilt_time
 
         travel_target = None
+        pre_step_delay = 0.0
         if self._tilt_strategy is not None:
             current_pos = self.travel_calc.current_position()
             if current is not None and current_pos is not None:
                 steps = self._tilt_strategy.plan_move_tilt(target, current_pos, current)
                 travel_target = self._extract_coupled_travel(steps)
+                pre_step_delay = self._calculate_pre_step_delay(steps)
 
         if self._is_movement_too_short(
             movement_time, target, current, "set_tilt_position"
@@ -743,6 +837,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             self.tilt_calc,
             self.travel_calc,
             self._tilt_startup_delay,
+            pre_step_delay,
         )
 
     def start_auto_updater(self):
@@ -790,10 +885,35 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             if self._has_tilt_support():
                 self.tilt_calc.stop()
 
+            if self._tilt_restore_active:
+                _LOGGER.debug("auto_stop_if_necessary :: tilt restore complete")
+                self._tilt_restore_active = False
+                if self._has_tilt_motor():
+                    await self._send_tilt_stop()
+                else:
+                    await self._async_handle_command(SERVICE_STOP_COVER)
+                if self._tilt_strategy is not None:
+                    self._tilt_strategy.snap_trackers_to_physical(
+                        self.travel_calc, self.tilt_calc
+                    )
+                self._last_command = None
+                return
+
+            if self._pending_travel_target is not None:
+                # Tilt pre-step complete — start travel phase
+                _LOGGER.debug("auto_stop_if_necessary :: tilt pre-step complete")
+                await self._start_pending_travel()
+                return
+
             if self._tilt_strategy is not None:
                 self._tilt_strategy.snap_trackers_to_physical(
                     self.travel_calc, self.tilt_calc
                 )
+
+            if self._tilt_restore_target is not None:
+                # Travel just completed — start tilt restore phase
+                await self._start_tilt_restore()
+                return
 
             current_travel = self.travel_calc.current_position()
             if (
@@ -813,6 +933,113 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 await self._async_handle_command(SERVICE_STOP_COVER)
             self._last_command = None
 
+    async def _start_tilt_pre_step(
+        self, tilt_target, travel_target, travel_command, restore_target
+    ):
+        """Move tilt to safe position before travel (dual_motor).
+
+        Sends the tilt motor command and starts tilt_calc. When tilt reaches
+        target, auto_stop_if_necessary will call _start_pending_travel to
+        begin the actual cover travel.
+        """
+        current_tilt = self.tilt_calc.current_position()
+        _LOGGER.debug(
+            "_start_tilt_pre_step :: tilt %s→%d, pending travel→%d (%s)",
+            current_tilt,
+            tilt_target,
+            travel_target,
+            travel_command,
+        )
+        self._pending_travel_target = travel_target
+        self._pending_travel_command = travel_command
+        self._tilt_restore_target = restore_target
+
+        closing_tilt = tilt_target < current_tilt
+        if closing_tilt:
+            await self._send_tilt_close()
+        else:
+            await self._send_tilt_open()
+
+        self.tilt_calc.start_travel(tilt_target)
+        self.start_auto_updater()
+
+    async def _start_pending_travel(self):
+        """Start travel after tilt pre-step completes (dual_motor).
+
+        Called by auto_stop_if_necessary when tilt_calc reaches the safe
+        position. Stops the tilt motor, sends the travel command, and starts
+        tracking with travel_calc.
+        """
+        target = self._pending_travel_target
+        command = self._pending_travel_command
+        self._pending_travel_target = None
+        self._pending_travel_command = None
+
+        _LOGGER.debug(
+            "_start_pending_travel :: starting travel to %d (%s)",
+            target,
+            command,
+        )
+
+        # Stop tilt motor
+        await self._send_tilt_stop()
+
+        # Send travel command and start tracking
+        await self._async_handle_command(command)
+        self._last_command = command
+        self._begin_movement(
+            target,
+            None,
+            self.travel_calc,
+            None,
+            self._travel_startup_delay,
+        )
+
+    async def _start_tilt_restore(self):
+        """Restore tilt to its pre-movement position.
+
+        For dual_motor: stops travel motor, starts tilt motor.
+        For shared motor (inline): reverses main motor direction.
+        """
+        restore_target = self._tilt_restore_target
+        self._tilt_restore_target = None
+
+        current_tilt = self.tilt_calc.current_position()
+        if current_tilt is None or current_tilt == restore_target:
+            _LOGGER.debug(
+                "_start_tilt_restore :: no restore needed (current=%s, target=%s)",
+                current_tilt,
+                restore_target,
+            )
+            await self._async_handle_command(SERVICE_STOP_COVER)
+            self._last_command = None
+            return
+
+        _LOGGER.debug(
+            "_start_tilt_restore :: restoring tilt from %d%% to %d%%",
+            current_tilt,
+            restore_target,
+        )
+
+        closing = restore_target < current_tilt
+
+        if self._tilt_strategy.uses_tilt_motor:
+            # Dual motor: stop travel, start tilt motor
+            await self._async_handle_command(SERVICE_STOP_COVER)
+            if closing:
+                await self._send_tilt_close()
+            else:
+                await self._send_tilt_open()
+        else:
+            # Shared motor (inline): reverse main motor direction
+            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
+            await self._async_handle_command(command)
+
+        self.tilt_calc.start_travel(restore_target)
+        self._tilt_restore_active = True
+        self._last_command = None
+        self.start_auto_updater()
+
     async def _delayed_stop(self, delay):
         """Stop the relay after a delay."""
         _LOGGER.debug("_delayed_stop :: waiting %fs before stopping relay", delay)
@@ -828,7 +1055,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             raise
 
     async def set_known_position(self, **kwargs):
-        """We want to do a few things when we get a position"""
+        """Set the cover to a known position (0=closed, 100=open)."""
         position = kwargs[ATTR_POSITION]
         self._handle_stop()
         await self._async_handle_command(SERVICE_STOP_COVER)
@@ -840,7 +1067,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         self._last_command = None
 
     async def set_known_tilt_position(self, **kwargs):
-        """We want to do a few things when we get a position"""
+        """Set the tilt to a known position (0=closed, 100=open)."""
         if not self._has_tilt_support():
             return
         position = kwargs[ATTR_TILT_POSITION]
@@ -864,7 +1091,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
                 and not self._tilt_strategy.can_calibrate_tilt()
             ):
                 raise HomeAssistantError(
-                    "Tilt time calibration not available in proportional tilt mode"
+                    "Tilt time calibration not available for this tilt mode"
                 )
 
         if attribute == "travel_startup_delay":
@@ -1206,7 +1433,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def _extract_coupled_tilt(steps):
         """Extract the tilt target from a movement plan.
 
-        For coupled steps (proportional), returns the coupled_tilt value.
+        For coupled steps, returns the coupled_tilt value.
         For multi-step plans (sequential), returns the TiltTo target.
         Returns None if no tilt movement in the plan.
         """
@@ -1223,7 +1450,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
     def _extract_coupled_travel(steps):
         """Extract the travel target from a movement plan.
 
-        For coupled steps (proportional), returns the coupled_travel value.
+        For coupled steps, returns the coupled_travel value.
         For multi-step plans (sequential), returns the TravelTo target.
         Returns None if no travel movement in the plan.
         """
@@ -1235,6 +1462,41 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
             if isinstance(step, TravelTo):
                 return step.target
         return None
+
+    def _calculate_pre_step_delay(self, steps) -> float:
+        """Calculate delay before the primary calculator should start tracking.
+
+        In sequential tilt mode (single motor), the strategy may plan a
+        pre-step (e.g. TiltTo before TravelTo). The pre-step must complete
+        before the primary movement begins, since both share the same motor.
+        Returns 0.0 if no pre-step or if the strategy uses a separate tilt motor.
+        """
+        from .tilt_strategies import TiltTo, TravelTo
+
+        if (
+            self._tilt_strategy is None
+            or self._tilt_strategy.uses_tilt_motor
+            or len(steps) < 2
+        ):
+            return 0.0
+
+        first, second = steps[0], steps[1]
+
+        # TiltTo before TravelTo: tilt is the pre-step
+        if isinstance(first, TiltTo) and isinstance(second, TravelTo):
+            current_tilt = self.tilt_calc.current_position()
+            if current_tilt is None:
+                return 0.0
+            return self.tilt_calc.calculate_travel_time(current_tilt, first.target)
+
+        # TravelTo before TiltTo: travel is the pre-step
+        if isinstance(first, TravelTo) and isinstance(second, TiltTo):
+            current_pos = self.travel_calc.current_position()
+            if current_pos is None:
+                return 0.0
+            return self.travel_calc.calculate_travel_time(current_pos, first.target)
+
+        return 0.0
 
     async def _async_handle_command(self, command, *args):
         if command == SERVICE_CLOSE_COVER:
