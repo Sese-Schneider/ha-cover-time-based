@@ -1504,3 +1504,175 @@ class TestInlineTiltRestore:
             await cover.set_position(0)
 
         assert cover._tilt_restore_target is None
+
+
+# ===================================================================
+# Inline tilt: set_known_position, properties, and constraints
+# ===================================================================
+
+
+class TestInlineTiltSetKnownPosition:
+    """set_known_position with inline tilt should snap tilt at endpoints."""
+
+    def _make_inline_cover(self, make_cover):
+        return make_cover(
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_known_position_to_closed_snaps_tilt(self, make_cover):
+        """Setting known position to 0% forces tilt to 0%."""
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(80)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_known_position(position=0)
+
+        assert cover.travel_calc.current_position() == 0
+        assert cover.tilt_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_set_known_position_to_open_snaps_tilt(self, make_cover):
+        """Setting known position to 100% forces tilt to 100%."""
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(20)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_known_position(position=100)
+
+        assert cover.travel_calc.current_position() == 100
+        assert cover.tilt_calc.current_position() == 100
+
+    @pytest.mark.asyncio
+    async def test_set_known_position_mid_preserves_tilt(self, make_cover):
+        """Setting known position to mid-range does not change tilt."""
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(80)
+        cover.tilt_calc.set_position(40)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_known_position(position=50)
+
+        assert cover.travel_calc.current_position() == 50
+        assert cover.tilt_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_set_known_tilt_position(self, make_cover):
+        """set_known_tilt_position works with inline tilt."""
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_known_tilt_position(tilt_position=75)
+
+        assert cover.tilt_calc.current_position() == 75
+
+
+class TestInlineTiltCoverProperties:
+    """Cover properties with inline tilt mode."""
+
+    def _make_inline_cover(self, make_cover):
+        return make_cover(
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+        )
+
+    def test_has_tilt_support(self, make_cover):
+        cover = self._make_inline_cover(make_cover)
+        assert cover._has_tilt_support() is True
+
+    def test_tilt_position_reported(self, make_cover):
+        cover = self._make_inline_cover(make_cover)
+        cover.tilt_calc.set_position(60)
+        assert cover.current_cover_tilt_position == 60
+
+    def test_is_closed_requires_both(self, make_cover):
+        """is_closed requires travel=0 AND tilt=0 for inline."""
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(50)
+        assert cover.is_closed is False
+
+    def test_is_closed_when_both_closed(self, make_cover):
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+        assert cover.is_closed is True
+
+    def test_extra_state_attributes_includes_tilt_mode(self, make_cover):
+        cover = self._make_inline_cover(make_cover)
+        attrs = cover.extra_state_attributes
+        assert attrs["tilt_mode"] == "inline"
+
+    def test_extra_state_attributes_includes_tilt_times(self, make_cover):
+        cover = self._make_inline_cover(make_cover)
+        attrs = cover.extra_state_attributes
+        assert attrs["tilt_time_close"] == 2.0
+        assert attrs["tilt_time_open"] == 2.0
+
+
+class TestInlineTiltConstraints:
+    """snap_trackers_to_physical via auto_stop for inline tilt."""
+
+    def _make_inline_cover(self, make_cover):
+        return make_cover(
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+        )
+
+    @pytest.mark.asyncio
+    async def test_auto_stop_at_closed_forces_tilt_closed(self, make_cover):
+        """When travel reaches 0%, snap forces tilt to 0%."""
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # Simulate reaching closed
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.auto_stop_if_necessary()
+
+        assert cover.tilt_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_auto_stop_at_open_forces_tilt_open(self, make_cover):
+        """When travel reaches 100%, snap forces tilt to 100%."""
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+
+        # Simulate reaching open
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.auto_stop_if_necessary()
+
+        assert cover.tilt_calc.current_position() == 100
+
+    def test_snap_at_mid_preserves_tilt(self, make_cover):
+        """snap_trackers_to_physical at mid-position preserves tilt value."""
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(40)
+
+        cover._tilt_strategy.snap_trackers_to_physical(
+            cover.travel_calc, cover.tilt_calc
+        )
+
+        assert cover.tilt_calc.current_position() == 40
