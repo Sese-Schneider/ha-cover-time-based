@@ -1,4 +1,21 @@
 {
+  "config": {
+    "step": {
+      "user": {
+        "title": "Dodaj roletę sterowaną czasowo",
+        "description": "Wybierz nazwę dla rolety. Po utworzeniu dodaj kartę **Cover Time Based** do panelu, aby skonfigurować wszystkie ustawienia.",
+        "data": {
+          "name": "Nazwa"
+        }
+      }
+    }
+  },
+  "issues": {
+    "deprecated_yaml": {
+      "title": "Konfiguracja YAML jest przestarzała",
+      "description": "Konfiguracja Cover Time Based za pomocą YAML jest przestarzała i zostanie usunięta w przyszłej wersji.\n\nProszę usunąć konfigurację YAML i odtworzyć rolety za pomocą interfejsu: **Ustawienia > Urządzenia i usługi > Pomocniki > Utwórz pomocnik > Cover Time Based**."
+    }
+  },
   "services": {
     "set_known_position": {
       "name": "Ustaw pozycję rolety",
@@ -25,6 +42,42 @@
         "position": {
           "name": "Pozycja",
           "description": "Pozycja nachylenia rolety w zakresie od 0 do 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Rozpocznij kalibrację",
+      "description": "Rozpoczyna test kalibracyjny do pomiaru parametru czasowego. Roleta zacznie się poruszać — wywołaj stop_calibration, gdy zostanie osiągnięty punkt docelowy.",
+      "fields": {
+        "entity_id": {
+          "name": "ID encji",
+          "description": "Roleta do kalibracji"
+        },
+        "attribute": {
+          "name": "Atrybut",
+          "description": "Parametr czasowy do kalibracji"
+        },
+        "timeout": {
+          "name": "Limit czasu",
+          "description": "Limit bezpieczeństwa w sekundach — silnik zatrzyma się automatycznie, jeśli stop_calibration nie zostanie wywołane"
+        },
+        "direction": {
+          "name": "Kierunek",
+          "description": "Kierunek ruchu podczas testu. Jeśli nie ustawiono, wykrywany automatycznie na podstawie bieżącej pozycji"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Zatrzymaj kalibrację",
+      "description": "Zatrzymuje aktywny test kalibracyjny. Oblicza wynik i zapisuje go w konfiguracji, chyba że został anulowany.",
+      "fields": {
+        "entity_id": {
+          "name": "ID encji",
+          "description": "Kalibrowana roleta"
+        },
+        "cancel": {
+          "name": "Anuluj",
+          "description": "Jeśli prawda, odrzuć wyniki testu bez zapisywania"
         }
       }
     }
