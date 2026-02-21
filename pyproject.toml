@@ -1,3 +1,13 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.pyright]
+include = ["custom_components"]
+pythonVersion = "3.13"
+# HA base classes (CoverEntity + RestoreEntity) define conflicting attributes
+# that pyright flags but are not actual errors in practice.
+reportIncompatibleVariableOverride = false
+# HA's websocket_api module uses __all__ but pyright still flags decorators
+# like @websocket_command and @async_response as private.
+reportPrivateImportUsage = false

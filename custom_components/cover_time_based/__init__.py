@@ -38,7 +38,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 ]
             )
 
-            hass.data.setdefault(frontend.DATA_EXTRA_MODULE_URL, set())
             frontend.add_extra_js_url(
                 hass, "/cover_time_based_panel/cover-time-based-card.js"
             )

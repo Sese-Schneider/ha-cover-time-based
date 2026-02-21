@@ -87,8 +87,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         else:
             self._name = device_id
 
-        self._config_entry_id = None
-        self._calibration = None
+        self._config_entry_id: str | None = None
+        self._calibration: CalibrationState | None = None
         self._unsubscribe_auto_updater = None
         self._delay_task = None
         self._startup_delay_task = None
@@ -116,22 +116,17 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Only cover's position and tilt matters."""
         old_state = await self.async_get_last_state()
         _LOGGER.debug("async_added_to_hass :: oldState %s", old_state)
-        if (
-            old_state is not None
-            and self.travel_calc is not None
-            and old_state.attributes.get(ATTR_CURRENT_POSITION) is not None
-        ):
-            self.travel_calc.set_position(
-                int(old_state.attributes.get(ATTR_CURRENT_POSITION))
-            )
+        pos = (
+            old_state.attributes.get(ATTR_CURRENT_POSITION)
+            if old_state is not None
+            else None
+        )
+        if old_state is not None and self.travel_calc is not None and pos is not None:
+            self.travel_calc.set_position(int(pos))
 
-            if (
-                self._has_tilt_support()
-                and old_state.attributes.get(ATTR_CURRENT_TILT_POSITION) is not None
-            ):
-                self.tilt_calc.set_position(
-                    int(old_state.attributes.get(ATTR_CURRENT_TILT_POSITION))
-                )
+            tilt_pos = old_state.attributes.get(ATTR_CURRENT_TILT_POSITION)
+            if self._has_tilt_support() and tilt_pos is not None:
+                self.tilt_calc.set_position(int(tilt_pos))
 
         # Register state change listeners for switch entities
         for attr in (
@@ -1102,6 +1097,8 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """
         restore_target = self._tilt_restore_target
         self._tilt_restore_target = None
+        if restore_target is None:
+            return
 
         current_tilt = self.tilt_calc.current_position()
         if current_tilt is None or current_tilt == restore_target:
@@ -1245,6 +1242,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def _start_simple_time_test(self, attribute, direction):
         """Start a simple travel/tilt time test by moving the cover."""
+        assert self._calibration is not None
         if direction:
             self._calibration.move_command = self._resolve_direction(direction, None)
         elif "close" in attribute:
@@ -1255,6 +1253,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def _start_overhead_test(self, attribute, direction):
         """Start automated step test for motor overhead."""
+        assert self._calibration is not None
         from .calibration import (
             CALIBRATION_OVERHEAD_STEPS,
             CALIBRATION_TILT_OVERHEAD_STEPS,
@@ -1299,6 +1298,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         Phase 2: Continuous move for the remaining distance.
         The user calls stop_calibration when the cover reaches the endpoint.
         """
+        assert self._calibration is not None
         from .calibration import CALIBRATION_STEP_PAUSE
 
         move_command = self._calibration.move_command
@@ -1338,6 +1338,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def _run_min_movement_pulses(self):
         """Send increasingly longer pulses until user sees movement."""
+        assert self._calibration is not None
         from .calibration import (
             CALIBRATION_MIN_MOVEMENT_START,
             CALIBRATION_MIN_MOVEMENT_INCREMENT,
@@ -1371,6 +1372,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     async def _calibration_timeout(self):
         """Handle calibration timeout."""
+        assert self._calibration is not None
         try:
             await sleep(self._calibration.timeout)
             _LOGGER.warning(
@@ -1456,6 +1458,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
 
     def _calculate_calibration_result(self):
         """Calculate the calibration result based on attribute type."""
+        assert self._calibration is not None
         attribute = self._calibration.attribute
 
         if "travel_time" in attribute or "tilt_time" in attribute:
@@ -1687,6 +1690,7 @@ class CoverTimeBased(CoverEntity, RestoreEntity):
         """Handle external state change. Override in subclasses for mode-specific behavior."""
 
     async def _async_handle_command(self, command, *args):
+        cmd = command
         if command == SERVICE_CLOSE_COVER:
             cmd = "DOWN"
             self._state = False

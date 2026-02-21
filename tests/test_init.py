@@ -3,6 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+
 from custom_components.cover_time_based import (
     async_setup_entry,
     async_unload_entry,
@@ -16,7 +18,7 @@ class TestIntegrationSetup:
     @pytest.mark.asyncio
     async def test_setup_entry_forwards_platforms(self):
         hass = MagicMock()
-        hass.data = {}
+        hass.data = {DATA_EXTRA_MODULE_URL: set()}
         hass.config_entries.async_forward_entry_setups = AsyncMock()
         hass.http.async_register_static_paths = AsyncMock()
         entry = MagicMock()

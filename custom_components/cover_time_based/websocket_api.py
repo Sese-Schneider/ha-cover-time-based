@@ -112,8 +112,8 @@ async def ws_get_config(
 ) -> None:
     """Handle get_config WebSocket command."""
     config_entry, error = _resolve_config_entry(hass, msg["entity_id"])
-    if error:
-        connection.send_error(msg["id"], "not_found", error)
+    if error or config_entry is None:
+        connection.send_error(msg["id"], "not_found", error or "Config entry not found")
         return
 
     options = config_entry.options
@@ -209,8 +209,8 @@ async def ws_update_config(
 ) -> None:
     """Handle update_config WebSocket command."""
     config_entry, error = _resolve_config_entry(hass, msg["entity_id"])
-    if error:
-        connection.send_error(msg["id"], "not_found", error)
+    if error or config_entry is None:
+        connection.send_error(msg["id"], "not_found", error or "Config entry not found")
         return
 
     # Reject wrapping another cover_time_based entity
