@@ -43,11 +43,7 @@ def calculate_pre_step_delay(steps, tilt_strategy, tilt_calc, travel_calc) -> fl
     before the primary movement begins, since both share the same motor.
     Returns 0.0 if no pre-step or if the strategy uses a separate tilt motor.
     """
-    if (
-        tilt_strategy is None
-        or tilt_strategy.uses_tilt_motor
-        or len(steps) < 2
-    ):
+    if tilt_strategy is None or tilt_strategy.uses_tilt_motor or len(steps) < 2:
         return 0.0
 
     first, second = steps[0], steps[1]

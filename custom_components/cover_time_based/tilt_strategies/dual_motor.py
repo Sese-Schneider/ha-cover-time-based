@@ -29,6 +29,9 @@ class DualMotorTilt(TiltStrategy):
         self._safe_tilt_position = safe_tilt_position
         self._max_tilt_allowed_position = max_tilt_allowed_position
 
+    def can_calibrate_tilt(self) -> bool:
+        return True
+
     @property
     def name(self) -> str:
         return "dual_motor"
@@ -86,6 +89,3 @@ class DualMotorTilt(TiltStrategy):
                 current_tilt,
             )
             tilt_calc.set_position(self._safe_tilt_position)
-
-    def can_calibrate_tilt(self) -> bool:
-        return True

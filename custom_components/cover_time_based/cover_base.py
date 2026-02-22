@@ -115,6 +115,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._tilting_time_open,
             )
 
+    # -----------------------------------------------------------------------
+    # Lifecycle
+    # -----------------------------------------------------------------------
+
     async def async_added_to_hass(self):
         """Only cover's position and tilt matters."""
         old_state = await self.async_get_last_state()
@@ -171,192 +175,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._calibration.automation_task.cancel()
             self._calibration = None
 
-    def _handle_stop(self):
-        """Handle stop"""
-        self._tilt_restore_target = None
-        self._tilt_restore_active = False
-        self._pending_travel_target = None
-        self._pending_travel_command = None
-
-        if self.travel_calc.is_traveling():
-            _LOGGER.debug("_handle_stop :: button stops cover movement")
-            self.travel_calc.stop()
-            self.stop_auto_updater()
-
-        if self._has_tilt_support() and self.tilt_calc.is_traveling():
-            _LOGGER.debug("_handle_stop :: button stops tilt movement")
-            self.tilt_calc.stop()
-            self.stop_auto_updater()
-
-    async def _abandon_active_lifecycle(self):
-        """Abandon any active multi-phase tilt lifecycle (pre-step, restore).
-
-        Called at the start of every movement method. If a tilt restore or
-        tilt pre-step is in progress, stops all hardware and calculators.
-        Always clears the pending restore target so it won't fire after
-        the next travel completes.
-        """
-        was_restoring = self._tilt_restore_active
-        was_pre_stepping = self._pending_travel_target is not None
-
-        # Always clear multi-phase state
-        self._tilt_restore_target = None
-        self._tilt_restore_active = False
-        self._pending_travel_target = None
-        self._pending_travel_command = None
-
-        if not was_restoring and not was_pre_stepping:
-            return
-
-        _LOGGER.debug(
-            "_abandon_active_lifecycle :: abandoning %s",
-            "tilt restore" if was_restoring else "tilt pre-step",
-        )
-
-        self._cancel_startup_delay_task()
-
-        if self.travel_calc.is_traveling():
-            self.travel_calc.stop()
-        if self._has_tilt_support() and self.tilt_calc.is_traveling():
-            self.tilt_calc.stop()
-        self.stop_auto_updater()
-
-        await self._async_handle_command(SERVICE_STOP_COVER)
-        if self._has_tilt_motor() and not self._triggered_externally:
-            await self._send_tilt_stop()
-
-    def _stop_travel_if_traveling(self):
-        """Stop cover movement if it's currently traveling."""
-        if self.travel_calc.is_traveling():
-            _LOGGER.debug("_stop_travel_if_traveling :: stopping cover movement")
-            self.travel_calc.stop()
-            if self._has_tilt_support() and self.tilt_calc.is_traveling():
-                _LOGGER.debug("_stop_travel_if_traveling :: also stopping tilt")
-                self.tilt_calc.stop()
-
-    def _cancel_delay_task(self):
-        """Cancel any active delay task."""
-        if self._delay_task is not None and not self._delay_task.done():
-            _LOGGER.debug("_cancel_delay_task :: cancelling active delay task")
-            self._delay_task.cancel()
-            self._delay_task = None
-            return True
-        return False
-
-    def _cancel_startup_delay_task(self):
-        """Cancel any active startup delay task."""
-        if self._startup_delay_task is not None and not self._startup_delay_task.done():
-            _LOGGER.debug(
-                "_cancel_startup_delay_task :: cancelling active startup delay task"
-            )
-            self._startup_delay_task.cancel()
-            self._startup_delay_task = None
-
-    def _begin_movement(
-        self,
-        target,
-        coupled_target,
-        primary_calc,
-        coupled_calc,
-        startup_delay,
-        pre_step_delay: float = 0.0,
-    ):
-        """Start position tracking on primary and optionally coupled calculator.
-
-        Begins travel on the primary calculator toward `target`, and if a
-        coupled_target is provided, also starts the coupled calculator.
-        Then starts the auto updater. Honors motor startup delay if configured.
-
-        If pre_step_delay > 0, the coupled calculator is a pre-step that must
-        complete before the primary starts (e.g. tilt-before-travel in
-        sequential mode). The primary calculator's start is offset by this
-        delay so its position stays put until the pre-step finishes.
-        """
-
-        def start():
-            primary_calc.start_travel(target, delay=pre_step_delay)
-            if coupled_target is not None:
-                coupled_calc.start_travel(int(coupled_target))
-            self.start_auto_updater()
-
-        self._start_movement(startup_delay, start)
-
-    def _start_movement(self, startup_delay, start_callback):
-        """Start position tracking, optionally after a motor startup delay.
-
-        If startup_delay is set, the relay is already ON but the motor hasn't
-        started moving yet. We wait for the delay, then begin tracking.
-        Otherwise we start tracking immediately.
-        """
-        if startup_delay and startup_delay > 0:
-            self._startup_delay_task = self.hass.async_create_task(
-                self._execute_with_startup_delay(startup_delay, start_callback)
-            )
-        else:
-            start_callback()
-
-    async def _execute_with_startup_delay(self, startup_delay, start_callback):
-        """Wait for motor startup delay, then start position tracking."""
-        _LOGGER.debug(
-            "_execute_with_startup_delay :: waiting %fs before starting position tracking",
-            startup_delay,
-        )
-        try:
-            await sleep(startup_delay)
-            _LOGGER.debug(
-                "_execute_with_startup_delay :: startup delay complete, starting position tracking"
-            )
-            start_callback()
-            self._startup_delay_task = None
-        except asyncio.CancelledError:
-            _LOGGER.debug("_execute_with_startup_delay :: startup delay cancelled")
-            self._startup_delay_task = None
-            raise
+    # -----------------------------------------------------------------------
+    # Properties
+    # -----------------------------------------------------------------------
 
     @property
     def name(self):
         """Return the name of the cover."""
         return self._name
-
-    def _are_entities_configured(self) -> bool:
-        """Return True if the required input entities are configured.
-
-        Subclasses override this to check their specific entity IDs.
-        """
-        return True
-
-    def _get_missing_configuration(self) -> list[str]:
-        """Return list of missing configuration items."""
-        missing = []
-        if not self._are_entities_configured():
-            missing.append("input entities")
-        if self._travel_time_close is None and self._travel_time_open is None:
-            missing.append("travel times")
-        return missing
-
-    @property
-    def available(self) -> bool:
-        """Return True if the cover is properly configured and available."""
-        return len(self._get_missing_configuration()) == 0
-
-    def _require_configured(self) -> None:
-        """Raise if the cover is not properly configured."""
-        missing = self._get_missing_configuration()
-        if missing:
-            raise HomeAssistantError(
-                f"Cover not configured: missing {', '.join(missing)}. "
-                "Please configure using the Cover Time Based card."
-            )
-
-    def _require_travel_time(self, closing: bool) -> float:
-        """Return travel time for the given direction, or raise if not configured."""
-        travel_time = self._travel_time_close if closing else self._travel_time_open
-        if travel_time is None:
-            raise HomeAssistantError(
-                "Travel time not configured. Please configure travel times "
-                "using the Cover Time Based card."
-            )
-        return travel_time
 
     @property
     def unique_id(self):
@@ -369,33 +195,34 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         return None
 
     @property
-    def extra_state_attributes(self):
-        """Return the device state attributes."""
-        attr = {}
-        if self._tilt_strategy is not None:
-            attr[CONF_TILT_MODE] = self._tilt_strategy.name
-        if self._travel_time_close is not None:
-            attr[CONF_TRAVEL_TIME_CLOSE] = self._travel_time_close
-        if self._travel_time_open is not None:
-            attr[CONF_TRAVEL_TIME_OPEN] = self._travel_time_open
-        if self._tilting_time_close is not None:
-            attr[CONF_TILT_TIME_CLOSE] = self._tilting_time_close
-        if self._tilting_time_open is not None:
-            attr[CONF_TILT_TIME_OPEN] = self._tilting_time_open
-        if self._travel_startup_delay is not None:
-            attr[CONF_TRAVEL_STARTUP_DELAY] = self._travel_startup_delay
-        if self._tilt_startup_delay is not None:
-            attr[CONF_TILT_STARTUP_DELAY] = self._tilt_startup_delay
-        if self._endpoint_runon_time is not None:
-            attr[CONF_ENDPOINT_RUNON_TIME] = self._endpoint_runon_time
-        if self._min_movement_time is not None:
-            attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
-        if self._calibration is not None:
-            attr["calibration_active"] = True
-            attr["calibration_attribute"] = self._calibration.attribute
-            if self._calibration.step_count > 0:
-                attr["calibration_step"] = self._calibration.step_count
-        return attr
+    def available(self) -> bool:
+        """Return True if the cover is properly configured and available."""
+        return len(self._get_missing_configuration()) == 0
+
+    @property
+    def assumed_state(self):
+        """Return True because covers can be stopped midway."""
+        return True
+
+    @property
+    def supported_features(self) -> CoverEntityFeature:
+        """Flag supported features."""
+        supported_features = (
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
+        )
+
+        if self._has_tilt_support():
+            supported_features |= (
+                CoverEntityFeature.OPEN_TILT
+                | CoverEntityFeature.CLOSE_TILT
+                | CoverEntityFeature.STOP_TILT
+                | CoverEntityFeature.SET_TILT_POSITION
+            )
+
+        return supported_features
 
     @property
     def current_cover_position(self) -> int | None:
@@ -442,44 +269,37 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         return self.travel_calc.is_closed() and self.tilt_calc.is_closed()
 
     @property
-    def assumed_state(self):
-        """Return True because covers can be stopped midway."""
-        return True
+    def extra_state_attributes(self):
+        """Return the device state attributes."""
+        attr = {}
+        if self._tilt_strategy is not None:
+            attr[CONF_TILT_MODE] = self._tilt_strategy.name
+        if self._travel_time_close is not None:
+            attr[CONF_TRAVEL_TIME_CLOSE] = self._travel_time_close
+        if self._travel_time_open is not None:
+            attr[CONF_TRAVEL_TIME_OPEN] = self._travel_time_open
+        if self._tilting_time_close is not None:
+            attr[CONF_TILT_TIME_CLOSE] = self._tilting_time_close
+        if self._tilting_time_open is not None:
+            attr[CONF_TILT_TIME_OPEN] = self._tilting_time_open
+        if self._travel_startup_delay is not None:
+            attr[CONF_TRAVEL_STARTUP_DELAY] = self._travel_startup_delay
+        if self._tilt_startup_delay is not None:
+            attr[CONF_TILT_STARTUP_DELAY] = self._tilt_startup_delay
+        if self._endpoint_runon_time is not None:
+            attr[CONF_ENDPOINT_RUNON_TIME] = self._endpoint_runon_time
+        if self._min_movement_time is not None:
+            attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
+        if self._calibration is not None:
+            attr["calibration_active"] = True
+            attr["calibration_attribute"] = self._calibration.attribute
+            if self._calibration.step_count > 0:
+                attr["calibration_step"] = self._calibration.step_count
+        return attr
 
-    @property
-    def supported_features(self) -> CoverEntityFeature:
-        """Flag supported features."""
-        supported_features = (
-            CoverEntityFeature.OPEN
-            | CoverEntityFeature.CLOSE
-            | CoverEntityFeature.STOP
-            | CoverEntityFeature.SET_POSITION
-        )
-
-        if self._has_tilt_support():
-            supported_features |= (
-                CoverEntityFeature.OPEN_TILT
-                | CoverEntityFeature.CLOSE_TILT
-                | CoverEntityFeature.STOP_TILT
-                | CoverEntityFeature.SET_TILT_POSITION
-            )
-
-        return supported_features
-
-    async def async_set_cover_position(self, **kwargs):
-        """Move the cover to a specific position."""
-        self._require_configured()
-        if ATTR_POSITION in kwargs:
-            position = kwargs[ATTR_POSITION]
-            _LOGGER.debug("async_set_cover_position: %d", position)
-            await self.set_position(position)
-
-    async def async_set_cover_tilt_position(self, **kwargs):
-        """Move the cover tilt to a specific position."""
-        if ATTR_TILT_POSITION in kwargs:
-            position = kwargs[ATTR_TILT_POSITION]
-            _LOGGER.debug("async_set_cover_tilt_position: %d", position)
-            await self.set_tilt_position(position)
+    # -----------------------------------------------------------------------
+    # Public HA service handlers
+    # -----------------------------------------------------------------------
 
     async def async_close_cover(self, **kwargs):
         """Close the cover fully."""
@@ -499,62 +319,77 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self.async_stop_cover()
         await self._async_move_to_endpoint(target=100)
 
-    async def _plan_tilt_for_travel(
-        self, target: int, command: str, current_pos, current_tilt
-    ) -> tuple[int | None, float, bool]:
-        """Plan tilt coupling for a travel movement.
+    async def async_stop_cover(self, **kwargs):
+        """Turn the device stop."""
+        self._require_configured()
+        _LOGGER.debug("async_stop_cover")
+        tilt_restore_was_active = self._tilt_restore_active
+        tilt_pre_step_was_active = self._pending_travel_target is not None
+        self._cancel_startup_delay_task()
+        self._cancel_delay_task()
+        self._handle_stop()
+        if self._has_tilt_support():
+            self._tilt_strategy.snap_trackers_to_physical(
+                self.travel_calc, self.tilt_calc
+            )
+        if not self._triggered_externally:
+            await self._send_stop()
+            if (
+                tilt_restore_was_active or tilt_pre_step_was_active
+            ) and self._has_tilt_motor():
+                await self._send_tilt_stop()
+        self.async_write_ha_state()
+        self._last_command = None
 
-        Returns (tilt_target, pre_step_delay, started_pre_step).
-        If started_pre_step is True, the caller should return immediately
-        because _start_tilt_pre_step has taken over the movement lifecycle.
-        """
-        tilt_target = None
-        pre_step_delay = 0.0
-        self._tilt_restore_target = None
+    async def async_close_cover_tilt(self, **kwargs):
+        """Tilt the cover fully closed."""
+        _LOGGER.debug("async_close_cover_tilt")
+        await self._async_move_tilt_to_endpoint(target=0)
 
-        if self._tilt_strategy is None:
-            return tilt_target, pre_step_delay, False
+    async def async_open_cover_tilt(self, **kwargs):
+        """Tilt the cover fully open."""
+        _LOGGER.debug("async_open_cover_tilt")
+        await self._async_move_tilt_to_endpoint(target=100)
 
-        if current_pos is None or current_tilt is None:
-            return tilt_target, pre_step_delay, False
+    async def async_set_cover_position(self, **kwargs):
+        """Move the cover to a specific position."""
+        self._require_configured()
+        if ATTR_POSITION in kwargs:
+            position = kwargs[ATTR_POSITION]
+            _LOGGER.debug("async_set_cover_position: %d", position)
+            await self.set_position(position)
 
-        steps = self._tilt_strategy.plan_move_position(
-            target, current_pos, current_tilt
-        )
-        tilt_target = extract_coupled_tilt(steps)
-        pre_step_delay = calculate_pre_step_delay(
-            steps, self._tilt_strategy, self.tilt_calc, self.travel_calc
-        )
+    async def async_set_cover_tilt_position(self, **kwargs):
+        """Move the cover tilt to a specific position."""
+        if ATTR_TILT_POSITION in kwargs:
+            position = kwargs[ATTR_TILT_POSITION]
+            _LOGGER.debug("async_set_cover_tilt_position: %d", position)
+            await self.set_tilt_position(position)
 
-        # Dual motor: tilt to safe position first, then travel
-        if (
-            tilt_target is not None
-            and self._tilt_strategy.uses_tilt_motor
-            and current_tilt != tilt_target
-        ):
-            restore = target if target in (0, 100) else current_tilt
-            await self._start_tilt_pre_step(tilt_target, target, command, restore)
-            return tilt_target, pre_step_delay, True
+    async def set_known_position(self, **kwargs):
+        """Set the cover to a known position (0=closed, 100=open)."""
+        position = kwargs[ATTR_POSITION]
+        self._handle_stop()
+        await self._async_handle_command(SERVICE_STOP_COVER)
+        self.travel_calc.set_position(position)
+        if self._has_tilt_support():
+            self._tilt_strategy.snap_trackers_to_physical(
+                self.travel_calc, self.tilt_calc
+            )
+        self._last_command = None
 
-        # Dual motor: pre-step skipped, but still snap tilt to endpoint
-        if (
-            tilt_target is not None
-            and self._tilt_strategy.uses_tilt_motor
-            and target in (0, 100)
-            and current_tilt != target
-        ):
-            self._tilt_restore_target = target
+    async def set_known_tilt_position(self, **kwargs):
+        """Set the tilt to a known position (0=closed, 100=open)."""
+        if not self._has_tilt_support():
+            return
+        position = kwargs[ATTR_TILT_POSITION]
+        await self._async_handle_command(SERVICE_STOP_COVER)
+        self.tilt_calc.set_position(position)
+        self._last_command = None
 
-        # Shared motor with restore: save tilt for post-travel restore
-        if (
-            tilt_target is not None
-            and self._tilt_strategy.restores_tilt
-            and not self._tilt_strategy.uses_tilt_motor
-            and target not in (0, 100)
-        ):
-            self._tilt_restore_target = current_tilt
-
-        return tilt_target, pre_step_delay, False
+    # -----------------------------------------------------------------------
+    # Movement orchestration
+    # -----------------------------------------------------------------------
 
     async def _async_move_to_endpoint(self, target):
         """Move cover to an endpoint (0=fully closed, 100=fully open)."""
@@ -607,7 +442,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._last_command = command
 
         current_pos = self.travel_calc.current_position()
-        current_tilt = self.tilt_calc.current_position() if self._tilt_strategy else None
+        current_tilt = (
+            self.tilt_calc.current_position() if self._tilt_strategy else None
+        )
         tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
             target, command, current_pos, current_tilt
         )
@@ -624,16 +461,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._travel_startup_delay,
             pre_step_delay,
         )
-
-    async def async_close_cover_tilt(self, **kwargs):
-        """Tilt the cover fully closed."""
-        _LOGGER.debug("async_close_cover_tilt")
-        await self._async_move_tilt_to_endpoint(target=0)
-
-    async def async_open_cover_tilt(self, **kwargs):
-        """Tilt the cover fully open."""
-        _LOGGER.debug("async_open_cover_tilt")
-        await self._async_move_tilt_to_endpoint(target=100)
 
     async def _async_move_tilt_to_endpoint(self, target):
         """Move tilt to an endpoint (0=fully closed, 100=fully open)."""
@@ -683,7 +510,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     target, current_pos, current_tilt
                 )
                 travel_target = extract_coupled_travel(steps)
-                pre_step_delay = calculate_pre_step_delay(steps, self._tilt_strategy, self.tilt_calc, self.travel_calc)
+                pre_step_delay = calculate_pre_step_delay(
+                    steps, self._tilt_strategy, self.tilt_calc, self.travel_calc
+                )
 
         _LOGGER.debug(
             "_async_move_tilt_to_endpoint :: target=%d, tilt_distance=%f%%, movement_time=%fs, travel_pos=%s",
@@ -703,73 +532,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._tilt_startup_delay,
             pre_step_delay,
         )
-
-    async def async_stop_cover(self, **kwargs):
-        """Turn the device stop."""
-        self._require_configured()
-        _LOGGER.debug("async_stop_cover")
-        tilt_restore_was_active = self._tilt_restore_active
-        tilt_pre_step_was_active = self._pending_travel_target is not None
-        self._cancel_startup_delay_task()
-        self._cancel_delay_task()
-        self._handle_stop()
-        if self._has_tilt_support():
-            self._tilt_strategy.snap_trackers_to_physical(
-                self.travel_calc, self.tilt_calc
-            )
-        if not self._triggered_externally:
-            await self._send_stop()
-            if (
-                tilt_restore_was_active or tilt_pre_step_was_active
-            ) and self._has_tilt_motor():
-                await self._send_tilt_stop()
-        self.async_write_ha_state()
-        self._last_command = None
-
-    async def _handle_pre_movement_checks(self, command):
-        """Handle startup delay conflicts and relay delay before a movement.
-
-        Returns (should_proceed, is_direction_change).
-        """
-        is_direction_change = (
-            self._last_command is not None and self._last_command != command
-        )
-
-        # If startup delay active for same direction, don't restart
-        if self._startup_delay_task and not self._startup_delay_task.done():
-            if not is_direction_change:
-                _LOGGER.debug(
-                    "_handle_pre_movement_checks :: startup delay active, skipping"
-                )
-                return False, is_direction_change
-            _LOGGER.debug(
-                "_handle_pre_movement_checks :: direction change, cancelling startup delay"
-            )
-            self._cancel_startup_delay_task()
-            await self._async_handle_command(SERVICE_STOP_COVER)
-
-        return True, is_direction_change
-
-    def _is_movement_too_short(self, movement_time, target, current, label):
-        """Check if movement time is below minimum. Returns True if movement should be skipped."""
-        is_to_endpoint = target in (0, 100)
-        if (
-            self._min_movement_time is not None
-            and self._min_movement_time > 0
-            and not is_to_endpoint
-            and movement_time < self._min_movement_time
-        ):
-            _LOGGER.info(
-                "%s :: movement too short (%fs < %fs), ignoring - from %d%% to %d%%",
-                label,
-                movement_time,
-                self._min_movement_time,
-                current,
-                target,
-            )
-            self.async_write_ha_state()
-            return True
-        return False
 
     async def set_position(self, position):
         """Move cover to a designated position."""
@@ -825,7 +587,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         self._last_command = command
 
-        current_tilt = self.tilt_calc.current_position() if self._tilt_strategy else None
+        current_tilt = (
+            self.tilt_calc.current_position() if self._tilt_strategy else None
+        )
         tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
             target, command, current, current_tilt
         )
@@ -901,7 +665,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             if current is not None and current_pos is not None:
                 steps = self._tilt_strategy.plan_move_tilt(target, current_pos, current)
                 travel_target = extract_coupled_travel(steps)
-                pre_step_delay = calculate_pre_step_delay(steps, self._tilt_strategy, self.tilt_calc, self.travel_calc)
+                pre_step_delay = calculate_pre_step_delay(
+                    steps, self._tilt_strategy, self.tilt_calc, self.travel_calc
+                )
 
         if self._is_movement_too_short(
             movement_time, target, current, "set_tilt_position"
@@ -919,6 +685,230 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._tilt_startup_delay,
             pre_step_delay,
         )
+
+    async def _plan_tilt_for_travel(
+        self, target: int, command: str, current_pos, current_tilt
+    ) -> tuple[int | None, float, bool]:
+        """Plan tilt coupling for a travel movement.
+
+        Returns (tilt_target, pre_step_delay, started_pre_step).
+        If started_pre_step is True, the caller should return immediately
+        because _start_tilt_pre_step has taken over the movement lifecycle.
+        """
+        tilt_target = None
+        pre_step_delay = 0.0
+        self._tilt_restore_target = None
+
+        if self._tilt_strategy is None:
+            return tilt_target, pre_step_delay, False
+
+        if current_pos is None or current_tilt is None:
+            return tilt_target, pre_step_delay, False
+
+        steps = self._tilt_strategy.plan_move_position(
+            target, current_pos, current_tilt
+        )
+        tilt_target = extract_coupled_tilt(steps)
+        pre_step_delay = calculate_pre_step_delay(
+            steps, self._tilt_strategy, self.tilt_calc, self.travel_calc
+        )
+
+        # Dual motor: tilt to safe position first, then travel
+        if (
+            tilt_target is not None
+            and self._tilt_strategy.uses_tilt_motor
+            and current_tilt != tilt_target
+        ):
+            restore = target if target in (0, 100) else current_tilt
+            await self._start_tilt_pre_step(tilt_target, target, command, restore)
+            return tilt_target, pre_step_delay, True
+
+        # Dual motor: pre-step skipped, but still snap tilt to endpoint
+        if (
+            tilt_target is not None
+            and self._tilt_strategy.uses_tilt_motor
+            and target in (0, 100)
+            and current_tilt != target
+        ):
+            self._tilt_restore_target = target
+
+        # Shared motor with restore: save tilt for post-travel restore
+        if (
+            tilt_target is not None
+            and self._tilt_strategy.restores_tilt
+            and not self._tilt_strategy.uses_tilt_motor
+            and target not in (0, 100)
+        ):
+            self._tilt_restore_target = current_tilt
+
+        return tilt_target, pre_step_delay, False
+
+    async def _handle_pre_movement_checks(self, command):
+        """Handle startup delay conflicts and relay delay before a movement.
+
+        Returns (should_proceed, is_direction_change).
+        """
+        is_direction_change = (
+            self._last_command is not None and self._last_command != command
+        )
+
+        # If startup delay active for same direction, don't restart
+        if self._startup_delay_task and not self._startup_delay_task.done():
+            if not is_direction_change:
+                _LOGGER.debug(
+                    "_handle_pre_movement_checks :: startup delay active, skipping"
+                )
+                return False, is_direction_change
+            _LOGGER.debug(
+                "_handle_pre_movement_checks :: direction change, cancelling startup delay"
+            )
+            self._cancel_startup_delay_task()
+            await self._async_handle_command(SERVICE_STOP_COVER)
+
+        return True, is_direction_change
+
+    def _is_movement_too_short(self, movement_time, target, current, label):
+        """Check if movement time is below minimum. Returns True if movement should be skipped."""
+        is_to_endpoint = target in (0, 100)
+        if (
+            self._min_movement_time is not None
+            and self._min_movement_time > 0
+            and not is_to_endpoint
+            and movement_time < self._min_movement_time
+        ):
+            _LOGGER.info(
+                "%s :: movement too short (%fs < %fs), ignoring - from %d%% to %d%%",
+                label,
+                movement_time,
+                self._min_movement_time,
+                current,
+                target,
+            )
+            self.async_write_ha_state()
+            return True
+        return False
+
+    def _require_configured(self) -> None:
+        """Raise if the cover is not properly configured."""
+        missing = self._get_missing_configuration()
+        if missing:
+            raise HomeAssistantError(
+                f"Cover not configured: missing {', '.join(missing)}. "
+                "Please configure using the Cover Time Based card."
+            )
+
+    def _require_travel_time(self, closing: bool) -> float:
+        """Return travel time for the given direction, or raise if not configured."""
+        travel_time = self._travel_time_close if closing else self._travel_time_open
+        if travel_time is None:
+            raise HomeAssistantError(
+                "Travel time not configured. Please configure travel times "
+                "using the Cover Time Based card."
+            )
+        return travel_time
+
+    def _are_entities_configured(self) -> bool:
+        """Return True if the required input entities are configured.
+
+        Subclasses override this to check their specific entity IDs.
+        """
+        return True
+
+    def _get_missing_configuration(self) -> list[str]:
+        """Return list of missing configuration items."""
+        missing = []
+        if not self._are_entities_configured():
+            missing.append("input entities")
+        if self._travel_time_close is None and self._travel_time_open is None:
+            missing.append("travel times")
+        return missing
+
+    def _has_tilt_support(self):
+        """Return if cover has tilt support."""
+        return self._tilt_strategy is not None and hasattr(self, "tilt_calc")
+
+    # -----------------------------------------------------------------------
+    # Movement tracking
+    # -----------------------------------------------------------------------
+
+    def _begin_movement(
+        self,
+        target,
+        coupled_target,
+        primary_calc,
+        coupled_calc,
+        startup_delay,
+        pre_step_delay: float = 0.0,
+    ):
+        """Start position tracking on primary and optionally coupled calculator.
+
+        Begins travel on the primary calculator toward `target`, and if a
+        coupled_target is provided, also starts the coupled calculator.
+        Then starts the auto updater. Honors motor startup delay if configured.
+
+        If pre_step_delay > 0, the coupled calculator is a pre-step that must
+        complete before the primary starts (e.g. tilt-before-travel in
+        sequential mode). The primary calculator's start is offset by this
+        delay so its position stays put until the pre-step finishes.
+        """
+
+        def start():
+            primary_calc.start_travel(target, delay=pre_step_delay)
+            if coupled_target is not None:
+                coupled_calc.start_travel(int(coupled_target))
+            self.start_auto_updater()
+
+        self._start_movement(startup_delay, start)
+
+    def _start_movement(self, startup_delay, start_callback):
+        """Start position tracking, optionally after a motor startup delay.
+
+        If startup_delay is set, the relay is already ON but the motor hasn't
+        started moving yet. We wait for the delay, then begin tracking.
+        Otherwise we start tracking immediately.
+        """
+        if startup_delay and startup_delay > 0:
+            self._startup_delay_task = self.hass.async_create_task(
+                self._execute_with_startup_delay(startup_delay, start_callback)
+            )
+        else:
+            start_callback()
+
+    async def _execute_with_startup_delay(self, startup_delay, start_callback):
+        """Wait for motor startup delay, then start position tracking."""
+        _LOGGER.debug(
+            "_execute_with_startup_delay :: waiting %fs before starting position tracking",
+            startup_delay,
+        )
+        try:
+            await sleep(startup_delay)
+            _LOGGER.debug(
+                "_execute_with_startup_delay :: startup delay complete, starting position tracking"
+            )
+            start_callback()
+            self._startup_delay_task = None
+        except asyncio.CancelledError:
+            _LOGGER.debug("_execute_with_startup_delay :: startup delay cancelled")
+            self._startup_delay_task = None
+            raise
+
+    def _cancel_delay_task(self):
+        """Cancel any active delay task."""
+        if self._delay_task is not None and not self._delay_task.done():
+            _LOGGER.debug("_cancel_delay_task :: cancelling active delay task")
+            self._delay_task.cancel()
+            self._delay_task = None
+            return True
+        return False
+
+    def _cancel_startup_delay_task(self):
+        """Cancel any active startup delay task."""
+        if self._startup_delay_task is not None and not self._startup_delay_task.done():
+            _LOGGER.debug(
+                "_cancel_startup_delay_task :: cancelling active startup delay task"
+            )
+            self._startup_delay_task.cancel()
+            self._startup_delay_task = None
 
     def start_auto_updater(self):
         """Start the autoupdater to update HASS while cover is moving."""
@@ -952,9 +942,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             not self._has_tilt_support() or self.tilt_calc.position_reached()
         )
 
-    def _has_tilt_support(self):
-        """Return if cover has tilt support."""
-        return self._tilt_strategy is not None and hasattr(self, "tilt_calc")
+    # -----------------------------------------------------------------------
+    # Movement lifecycle (auto-stop, pre-step, restore)
+    # -----------------------------------------------------------------------
 
     async def auto_stop_if_necessary(self):
         """Do auto stop if necessary."""
@@ -1011,6 +1001,83 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
             self._last_command = None
+
+    async def _delayed_stop(self, delay):
+        """Stop the relay after a delay."""
+        _LOGGER.debug("_delayed_stop :: waiting %fs before stopping relay", delay)
+        try:
+            await sleep(delay)
+            _LOGGER.debug("_delayed_stop :: delay complete, stopping relay")
+            await self._async_handle_command(SERVICE_STOP_COVER)
+            self._last_command = None
+            self._delay_task = None
+        except asyncio.CancelledError:
+            _LOGGER.debug("_delayed_stop :: delay cancelled")
+            self._delay_task = None
+            raise
+
+    async def _abandon_active_lifecycle(self):
+        """Abandon any active multi-phase tilt lifecycle (pre-step, restore).
+
+        Called at the start of every movement method. If a tilt restore or
+        tilt pre-step is in progress, stops all hardware and calculators.
+        Always clears the pending restore target so it won't fire after
+        the next travel completes.
+        """
+        was_restoring = self._tilt_restore_active
+        was_pre_stepping = self._pending_travel_target is not None
+
+        # Always clear multi-phase state
+        self._tilt_restore_target = None
+        self._tilt_restore_active = False
+        self._pending_travel_target = None
+        self._pending_travel_command = None
+
+        if not was_restoring and not was_pre_stepping:
+            return
+
+        _LOGGER.debug(
+            "_abandon_active_lifecycle :: abandoning %s",
+            "tilt restore" if was_restoring else "tilt pre-step",
+        )
+
+        self._cancel_startup_delay_task()
+
+        if self.travel_calc.is_traveling():
+            self.travel_calc.stop()
+        if self._has_tilt_support() and self.tilt_calc.is_traveling():
+            self.tilt_calc.stop()
+        self.stop_auto_updater()
+
+        await self._async_handle_command(SERVICE_STOP_COVER)
+        if self._has_tilt_motor() and not self._triggered_externally:
+            await self._send_tilt_stop()
+
+    def _stop_travel_if_traveling(self):
+        """Stop cover movement if it's currently traveling."""
+        if self.travel_calc.is_traveling():
+            _LOGGER.debug("_stop_travel_if_traveling :: stopping cover movement")
+            self.travel_calc.stop()
+            if self._has_tilt_support() and self.tilt_calc.is_traveling():
+                _LOGGER.debug("_stop_travel_if_traveling :: also stopping tilt")
+                self.tilt_calc.stop()
+
+    def _handle_stop(self):
+        """Handle stop"""
+        self._tilt_restore_target = None
+        self._tilt_restore_active = False
+        self._pending_travel_target = None
+        self._pending_travel_command = None
+
+        if self.travel_calc.is_traveling():
+            _LOGGER.debug("_handle_stop :: button stops cover movement")
+            self.travel_calc.stop()
+            self.stop_auto_updater()
+
+        if self._has_tilt_support() and self.tilt_calc.is_traveling():
+            _LOGGER.debug("_handle_stop :: button stops tilt movement")
+            self.tilt_calc.stop()
+            self.stop_auto_updater()
 
     async def _start_tilt_pre_step(
         self, tilt_target, travel_target, travel_command, restore_target
@@ -1122,40 +1189,113 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._last_command = None
         self.start_auto_updater()
 
-    async def _delayed_stop(self, delay):
-        """Stop the relay after a delay."""
-        _LOGGER.debug("_delayed_stop :: waiting %fs before stopping relay", delay)
-        try:
-            await sleep(delay)
-            _LOGGER.debug("_delayed_stop :: delay complete, stopping relay")
-            await self._async_handle_command(SERVICE_STOP_COVER)
-            self._last_command = None
-            self._delay_task = None
-        except asyncio.CancelledError:
-            _LOGGER.debug("_delayed_stop :: delay cancelled")
-            self._delay_task = None
-            raise
+    # -----------------------------------------------------------------------
+    # Relay command dispatch
+    # -----------------------------------------------------------------------
 
-    async def set_known_position(self, **kwargs):
-        """Set the cover to a known position (0=closed, 100=open)."""
-        position = kwargs[ATTR_POSITION]
-        self._handle_stop()
-        await self._async_handle_command(SERVICE_STOP_COVER)
-        self.travel_calc.set_position(position)
-        if self._has_tilt_support():
-            self._tilt_strategy.snap_trackers_to_physical(
-                self.travel_calc, self.tilt_calc
+    async def _async_handle_command(self, command, *args):
+        cmd = command
+        if command == SERVICE_CLOSE_COVER:
+            cmd = "DOWN"
+            self._state = False
+            if not self._triggered_externally:
+                await self._send_close()
+        elif command == SERVICE_OPEN_COVER:
+            cmd = "UP"
+            self._state = True
+            if not self._triggered_externally:
+                await self._send_open()
+        elif command == SERVICE_STOP_COVER:
+            cmd = "STOP"
+            self._state = True
+            if not self._triggered_externally:
+                await self._send_stop()
+
+        _LOGGER.debug("_async_handle_command :: %s", cmd)
+        self.async_write_ha_state()
+
+    @abstractmethod
+    async def _send_open(self) -> None:
+        """Send the open command to the underlying device."""
+
+    @abstractmethod
+    async def _send_close(self) -> None:
+        """Send the close command to the underlying device."""
+
+    @abstractmethod
+    async def _send_stop(self) -> None:
+        """Send the stop command to the underlying device."""
+
+    # -----------------------------------------------------------------------
+    # Tilt motor relay commands (dual_motor only)
+    # -----------------------------------------------------------------------
+
+    def _has_tilt_motor(self) -> bool:
+        """Return True if tilt motor switches are configured."""
+        return bool(self._tilt_open_switch_id and self._tilt_close_switch_id)
+
+    async def _send_tilt_open(self) -> None:
+        """Send open to the tilt motor (bypasses position tracker)."""
+        self._mark_switch_pending(self._tilt_close_switch_id, 1)
+        self._mark_switch_pending(self._tilt_open_switch_id, 2)
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._tilt_close_switch_id},
+            False,
+        )
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_on",
+            {"entity_id": self._tilt_open_switch_id},
+            False,
+        )
+
+    async def _send_tilt_close(self) -> None:
+        """Send close to the tilt motor (bypasses position tracker)."""
+        self._mark_switch_pending(self._tilt_open_switch_id, 1)
+        self._mark_switch_pending(self._tilt_close_switch_id, 2)
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._tilt_open_switch_id},
+            False,
+        )
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_on",
+            {"entity_id": self._tilt_close_switch_id},
+            False,
+        )
+
+    async def _send_tilt_stop(self) -> None:
+        """Send stop to the tilt motor (bypasses position tracker)."""
+        self._mark_switch_pending(self._tilt_open_switch_id, 1)
+        self._mark_switch_pending(self._tilt_close_switch_id, 1)
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._tilt_open_switch_id},
+            False,
+        )
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._tilt_close_switch_id},
+            False,
+        )
+        if self._tilt_stop_switch_id:
+            self._mark_switch_pending(self._tilt_stop_switch_id, 2)
+            await self.hass.services.async_call(
+                "homeassistant",
+                "turn_on",
+                {"entity_id": self._tilt_stop_switch_id},
+                False,
             )
-        self._last_command = None
 
-    async def set_known_tilt_position(self, **kwargs):
-        """Set the tilt to a known position (0=closed, 100=open)."""
-        if not self._has_tilt_support():
-            return
-        position = kwargs[ATTR_TILT_POSITION]
-        await self._async_handle_command(SERVICE_STOP_COVER)
-        self.tilt_calc.set_position(position)
-        self._last_command = None
+    # -----------------------------------------------------------------------
+    # Switch echo filtering
+    # -----------------------------------------------------------------------
 
     def _mark_switch_pending(self, entity_id, expected_transitions):
         """Mark a switch as having pending echo transitions to ignore."""
@@ -1241,6 +1381,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         finally:
             self._triggered_externally = False
 
+    # -----------------------------------------------------------------------
+    # External state change handlers
+    # -----------------------------------------------------------------------
+
     async def _handle_external_tilt_state_change(self, entity_id, old_val, new_val):
         """Handle external state change on tilt switches (dual_motor).
 
@@ -1268,101 +1412,3 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle external state change. Override in subclasses for mode-specific behavior."""
-
-    async def _async_handle_command(self, command, *args):
-        cmd = command
-        if command == SERVICE_CLOSE_COVER:
-            cmd = "DOWN"
-            self._state = False
-            if not self._triggered_externally:
-                await self._send_close()
-        elif command == SERVICE_OPEN_COVER:
-            cmd = "UP"
-            self._state = True
-            if not self._triggered_externally:
-                await self._send_open()
-        elif command == SERVICE_STOP_COVER:
-            cmd = "STOP"
-            self._state = True
-            if not self._triggered_externally:
-                await self._send_stop()
-
-        _LOGGER.debug("_async_handle_command :: %s", cmd)
-        self.async_write_ha_state()
-
-    @abstractmethod
-    async def _send_open(self) -> None:
-        """Send the open command to the underlying device."""
-
-    @abstractmethod
-    async def _send_close(self) -> None:
-        """Send the close command to the underlying device."""
-
-    @abstractmethod
-    async def _send_stop(self) -> None:
-        """Send the stop command to the underlying device."""
-
-    # --- Tilt motor raw commands (dual_motor only) ---
-
-    def _has_tilt_motor(self) -> bool:
-        """Return True if tilt motor switches are configured."""
-        return bool(self._tilt_open_switch_id and self._tilt_close_switch_id)
-
-    async def _send_tilt_open(self) -> None:
-        """Send open to the tilt motor (bypasses position tracker)."""
-        self._mark_switch_pending(self._tilt_close_switch_id, 1)
-        self._mark_switch_pending(self._tilt_open_switch_id, 2)
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._tilt_close_switch_id},
-            False,
-        )
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_on",
-            {"entity_id": self._tilt_open_switch_id},
-            False,
-        )
-
-    async def _send_tilt_close(self) -> None:
-        """Send close to the tilt motor (bypasses position tracker)."""
-        self._mark_switch_pending(self._tilt_open_switch_id, 1)
-        self._mark_switch_pending(self._tilt_close_switch_id, 2)
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._tilt_open_switch_id},
-            False,
-        )
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_on",
-            {"entity_id": self._tilt_close_switch_id},
-            False,
-        )
-
-    async def _send_tilt_stop(self) -> None:
-        """Send stop to the tilt motor (bypasses position tracker)."""
-        self._mark_switch_pending(self._tilt_open_switch_id, 1)
-        self._mark_switch_pending(self._tilt_close_switch_id, 1)
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._tilt_open_switch_id},
-            False,
-        )
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._tilt_close_switch_id},
-            False,
-        )
-        if self._tilt_stop_switch_id:
-            self._mark_switch_pending(self._tilt_stop_switch_id, 2)
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_on",
-                {"entity_id": self._tilt_stop_switch_id},
-                False,
-            )

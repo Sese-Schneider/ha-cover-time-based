@@ -242,8 +242,6 @@ async def ws_update_config(
     connection.send_result(msg["id"], {"success": True})
 
 
-
-
 @websocket_api.websocket_command(
     {
         "type": "cover_time_based/start_calibration",

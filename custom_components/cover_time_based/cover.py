@@ -41,6 +41,12 @@ from .helpers import resolve_entity
 
 _LOGGER = logging.getLogger(__name__)
 
+DOMAIN = "cover_time_based"
+
+# ---------------------------------------------------------------------------
+# YAML config constants (deprecated + current)
+# ---------------------------------------------------------------------------
+
 CONF_DEVICES = "devices"
 CONF_DEFAULTS = "defaults"
 
@@ -50,6 +56,8 @@ CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
+CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
+CONF_IS_BUTTON = "is_button"
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
 CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
@@ -59,7 +67,12 @@ CONF_MAX_TILT_ALLOWED_POSITION = "max_tilt_allowed_position"
 CONF_TILT_OPEN_SWITCH = "tilt_open_switch"
 CONF_TILT_CLOSE_SWITCH = "tilt_close_switch"
 CONF_TILT_STOP_SWITCH = "tilt_stop_switch"
-CONF_IS_BUTTON = "is_button"
+CONF_COVER_ENTITY_ID = "cover_entity_id"
+
+# ---------------------------------------------------------------------------
+# Input mode / device type constants
+# ---------------------------------------------------------------------------
+
 CONF_INPUT_MODE = "input_mode"
 CONF_PULSE_TIME = "pulse_time"
 DEFAULT_PULSE_TIME = 1.0
@@ -67,7 +80,6 @@ INPUT_MODE_SWITCH = "switch"
 INPUT_MODE_PULSE = "pulse"
 INPUT_MODE_TOGGLE = "toggle"
 
-CONF_COVER_ENTITY_ID = "cover_entity_id"
 CONF_DEVICE_TYPE = "device_type"
 DEVICE_TYPE_SWITCH = "switch"
 DEVICE_TYPE_COVER = "cover"
@@ -75,11 +87,13 @@ DEVICE_TYPE_COVER = "cover"
 SERVICE_SET_KNOWN_POSITION = "set_known_position"
 SERVICE_SET_KNOWN_TILT_POSITION = "set_known_tilt_position"
 
+# ---------------------------------------------------------------------------
+# Schema definitions
+# ---------------------------------------------------------------------------
+
 BASE_DEVICE_SCHEMA = {
     vol.Required(CONF_NAME): cv.string,
 }
-
-CONF_TRAVEL_DELAY_AT_END = "travel_delay_at_end"
 
 TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT): cv.boolean,
@@ -163,66 +177,69 @@ TILT_POSITION_SCHEMA = cv.make_entity_service_schema(
     }
 )
 
-DOMAIN = "cover_time_based"
+# ---------------------------------------------------------------------------
+# YAML migration helpers
+# ---------------------------------------------------------------------------
+
+_YAML_KEY_RENAMES = {
+    CONF_TRAVEL_DELAY_AT_END: CONF_ENDPOINT_RUNON_TIME,
+    CONF_TRAVELLING_TIME_DOWN: CONF_TRAVEL_TIME_CLOSE,
+    CONF_TRAVELLING_TIME_UP: CONF_TRAVEL_TIME_OPEN,
+    CONF_TILTING_TIME_DOWN: CONF_TILT_TIME_CLOSE,
+    CONF_TILTING_TIME_UP: CONF_TILT_TIME_OPEN,
+}
 
 
-def _register_services(platform):
-    """Register entity services on the given platform."""
-    platform.async_register_entity_service(
-        SERVICE_SET_KNOWN_POSITION, POSITION_SCHEMA, "set_known_position"
-    )
-    platform.async_register_entity_service(
-        SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
-    )
-
-    hass = platform.hass
-
-    if not hass.services.has_service(DOMAIN, SERVICE_START_CALIBRATION):
-
-        async def _handle_start_calibration(call):
-            entity_id = call.data["entity_id"]
-            entity = resolve_entity(hass, entity_id)
-            data = {k: v for k, v in call.data.items() if k != "entity_id"}
-            await entity.start_calibration(**data)
-
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_START_CALIBRATION,
-            _handle_start_calibration,
-            schema=vol.Schema(
-                {
-                    vol.Required("entity_id"): cv.entity_id,
-                    vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
-                    vol.Required("timeout"): vol.All(
-                        vol.Coerce(float), vol.Range(min=1)
-                    ),
-                    vol.Optional("direction"): vol.In(["open", "close"]),
-                }
-            ),
-        )
-
-    if not hass.services.has_service(DOMAIN, SERVICE_STOP_CALIBRATION):
-
-        async def _handle_stop_calibration(call):
-            entity_id = call.data["entity_id"]
-            entity = resolve_entity(hass, entity_id)
-            data = {k: v for k, v in call.data.items() if k != "entity_id"}
-            return await entity.stop_calibration(**data)
-
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_STOP_CALIBRATION,
-            _handle_stop_calibration,
-            schema=vol.Schema(
-                {
-                    vol.Required("entity_id"): cv.entity_id,
-                    vol.Optional("cancel", default=False): cv.boolean,
-                }
-            ),
-            supports_response=SupportsResponse.OPTIONAL,
-        )
+def _migrate_yaml_keys(config):
+    """Migrate deprecated YAML key names to current names."""
+    for old_key, new_key in _YAML_KEY_RENAMES.items():
+        if old_key in config:
+            if new_key not in config:
+                config[new_key] = config[old_key]
+            config.pop(old_key)
 
 
+_TIMING_DEFAULTS = {
+    CONF_TILT_MODE: "none",
+    CONF_TRAVEL_TIME_CLOSE: None,
+    CONF_TRAVEL_TIME_OPEN: None,
+    CONF_TILT_TIME_CLOSE: None,
+    CONF_TILT_TIME_OPEN: None,
+    CONF_TRAVEL_STARTUP_DELAY: None,
+    CONF_TILT_STARTUP_DELAY: None,
+    CONF_ENDPOINT_RUNON_TIME: DEFAULT_ENDPOINT_RUNON_TIME,
+    CONF_MIN_MOVEMENT_TIME: None,
+}
+
+
+def _get_value(key, device_config, defaults_config, schema_default=None):
+    """Get config value with priority: device config > defaults > schema default."""
+    if key in device_config:
+        return device_config[key]
+    if key in defaults_config:
+        return defaults_config[key]
+    return schema_default
+
+
+def _resolve_input_mode(device_id, config, defaults):
+    """Resolve input mode from config, handling legacy is_button key."""
+    # Explicit input_mode takes precedence
+    explicit = config.pop(CONF_INPUT_MODE, None) or defaults.get(CONF_INPUT_MODE)
+    if explicit:
+        config.pop(CONF_IS_BUTTON, None)
+        return explicit
+
+    # Legacy is_button → pulse mode
+    is_button = config.pop(CONF_IS_BUTTON, False)
+    if is_button:
+        return INPUT_MODE_PULSE
+
+    return INPUT_MODE_SWITCH
+
+
+# ---------------------------------------------------------------------------
+# Entity factory
+# ---------------------------------------------------------------------------
 
 
 def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwargs):
@@ -309,62 +326,6 @@ def _create_cover_from_options(options, device_id="", name=""):
         return SwitchModeCover(**switch_args)
 
 
-_TIMING_DEFAULTS = {
-    CONF_TILT_MODE: "none",
-    CONF_TRAVEL_TIME_CLOSE: None,
-    CONF_TRAVEL_TIME_OPEN: None,
-    CONF_TILT_TIME_CLOSE: None,
-    CONF_TILT_TIME_OPEN: None,
-    CONF_TRAVEL_STARTUP_DELAY: None,
-    CONF_TILT_STARTUP_DELAY: None,
-    CONF_ENDPOINT_RUNON_TIME: DEFAULT_ENDPOINT_RUNON_TIME,
-    CONF_MIN_MOVEMENT_TIME: None,
-}
-
-
-def _get_value(key, device_config, defaults_config, schema_default=None):
-    """Get config value with priority: device config > defaults > schema default."""
-    if key in device_config:
-        return device_config[key]
-    if key in defaults_config:
-        return defaults_config[key]
-    return schema_default
-
-
-def _resolve_input_mode(device_id, config, defaults):
-    """Resolve input mode from config, handling legacy is_button key."""
-    # Explicit input_mode takes precedence
-    explicit = config.pop(CONF_INPUT_MODE, None) or defaults.get(CONF_INPUT_MODE)
-    if explicit:
-        config.pop(CONF_IS_BUTTON, None)
-        return explicit
-
-    # Legacy is_button → pulse mode
-    is_button = config.pop(CONF_IS_BUTTON, False)
-    if is_button:
-        return INPUT_MODE_PULSE
-
-    return INPUT_MODE_SWITCH
-
-
-_YAML_KEY_RENAMES = {
-    CONF_TRAVEL_DELAY_AT_END: CONF_ENDPOINT_RUNON_TIME,
-    CONF_TRAVELLING_TIME_DOWN: CONF_TRAVEL_TIME_CLOSE,
-    CONF_TRAVELLING_TIME_UP: CONF_TRAVEL_TIME_OPEN,
-    CONF_TILTING_TIME_DOWN: CONF_TILT_TIME_CLOSE,
-    CONF_TILTING_TIME_UP: CONF_TILT_TIME_OPEN,
-}
-
-
-def _migrate_yaml_keys(config):
-    """Migrate deprecated YAML key names to current names."""
-    for old_key, new_key in _YAML_KEY_RENAMES.items():
-        if old_key in config:
-            if new_key not in config:
-                config[new_key] = config[old_key]
-            config.pop(old_key)
-
-
 def devices_from_config(domain_config):
     """Parse configuration and add cover devices."""
     devices = []
@@ -413,6 +374,11 @@ def devices_from_config(domain_config):
     return devices
 
 
+# ---------------------------------------------------------------------------
+# Platform setup
+# ---------------------------------------------------------------------------
+
+
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the cover platform."""
     _LOGGER.warning(
@@ -450,3 +416,60 @@ async def async_setup_entry(
 
     platform = entity_platform.current_platform.get()
     _register_services(platform)
+
+
+def _register_services(platform):
+    """Register entity services on the given platform."""
+    platform.async_register_entity_service(
+        SERVICE_SET_KNOWN_POSITION, POSITION_SCHEMA, "set_known_position"
+    )
+    platform.async_register_entity_service(
+        SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
+    )
+
+    hass = platform.hass
+
+    if not hass.services.has_service(DOMAIN, SERVICE_START_CALIBRATION):
+
+        async def _handle_start_calibration(call):
+            entity_id = call.data["entity_id"]
+            entity = resolve_entity(hass, entity_id)
+            data = {k: v for k, v in call.data.items() if k != "entity_id"}
+            await entity.start_calibration(**data)
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_START_CALIBRATION,
+            _handle_start_calibration,
+            schema=vol.Schema(
+                {
+                    vol.Required("entity_id"): cv.entity_id,
+                    vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
+                    vol.Required("timeout"): vol.All(
+                        vol.Coerce(float), vol.Range(min=1)
+                    ),
+                    vol.Optional("direction"): vol.In(["open", "close"]),
+                }
+            ),
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_STOP_CALIBRATION):
+
+        async def _handle_stop_calibration(call):
+            entity_id = call.data["entity_id"]
+            entity = resolve_entity(hass, entity_id)
+            data = {k: v for k, v in call.data.items() if k != "entity_id"}
+            return await entity.stop_calibration(**data)
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_STOP_CALIBRATION,
+            _handle_stop_calibration,
+            schema=vol.Schema(
+                {
+                    vol.Required("entity_id"): cv.entity_id,
+                    vol.Optional("cancel", default=False): cv.boolean,
+                }
+            ),
+            supports_response=SupportsResponse.OPTIONAL,
+        )

@@ -51,6 +51,9 @@ def _unwrap(fn):
 # Unwrapped coroutines — bypass @async_response / @websocket_command decorators
 _ws_get_config = _unwrap(ws_get_config)
 _ws_update_config = _unwrap(ws_update_config)
+_ws_start_calibration = _unwrap(ws_start_calibration)
+_ws_stop_calibration = _unwrap(ws_stop_calibration)
+_ws_raw_command = _unwrap(ws_raw_command)
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +282,113 @@ class TestWsGetConfig:
 
 
 # ---------------------------------------------------------------------------
+# Dual-motor field round-tripping
+# ---------------------------------------------------------------------------
+
+
+class TestDualMotorFieldRoundTrip:
+    """Test that dual-motor fields are returned in get_config and saved in update_config."""
+
+    @pytest.fixture
+    def config_entry_with_dual_motor(self):
+        """Config entry with dual_motor options set."""
+        entry = MagicMock()
+        entry.entry_id = ENTRY_ID
+        entry.domain = DOMAIN
+        entry.options = {
+            "device_type": "switch",
+            "input_mode": "switch",
+            "tilt_mode": "dual_motor",
+            "safe_tilt_position": 10,
+            "max_tilt_allowed_position": 80,
+            "tilt_open_switch": "switch.tilt_open",
+            "tilt_close_switch": "switch.tilt_close",
+            "tilt_stop_switch": "switch.tilt_stop",
+        }
+        return entry
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_dual_motor_fields(
+        self, config_entry_with_dual_motor
+    ):
+        hass = MagicMock()
+        connection = MagicMock()
+        msg = {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID}
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry_with_dual_motor, None),
+        ):
+            handler = _unwrap(ws_get_config)
+            await handler(hass, connection, msg)
+
+        result = connection.send_result.call_args[0][1]
+        assert result["safe_tilt_position"] == 10
+        assert result["max_tilt_allowed_position"] == 80
+        assert result["tilt_open_switch"] == "switch.tilt_open"
+        assert result["tilt_close_switch"] == "switch.tilt_close"
+        assert result["tilt_stop_switch"] == "switch.tilt_stop"
+
+    @pytest.mark.asyncio
+    async def test_update_config_saves_dual_motor_fields(self):
+        hass = MagicMock()
+        connection = MagicMock()
+        config_entry = MagicMock()
+        config_entry.options = {"tilt_mode": "dual_motor"}
+        config_entry.domain = DOMAIN
+
+        msg = {
+            "id": 2,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "safe_tilt_position": 15,
+            "max_tilt_allowed_position": 90,
+            "tilt_open_switch": "switch.tilt_up",
+            "tilt_close_switch": "switch.tilt_down",
+            "tilt_stop_switch": "switch.tilt_stop",
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            handler = _unwrap(ws_update_config)
+            await handler(hass, connection, msg)
+
+        new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_opts["safe_tilt_position"] == 15
+        assert new_opts["max_tilt_allowed_position"] == 90
+        assert new_opts["tilt_open_switch"] == "switch.tilt_up"
+        assert new_opts["tilt_close_switch"] == "switch.tilt_down"
+        assert new_opts["tilt_stop_switch"] == "switch.tilt_stop"
+
+    @pytest.mark.asyncio
+    async def test_get_config_defaults_for_missing_dual_motor_fields(self):
+        """When dual_motor fields aren't in options, get_config returns sensible defaults."""
+        hass = MagicMock()
+        connection = MagicMock()
+        config_entry = MagicMock()
+        config_entry.entry_id = ENTRY_ID
+        config_entry.domain = DOMAIN
+        config_entry.options = {"tilt_mode": "sequential"}
+        msg = {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID}
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            handler = _unwrap(ws_get_config)
+            await handler(hass, connection, msg)
+
+        result = connection.send_result.call_args[0][1]
+        assert result["safe_tilt_position"] == 100  # HA default: fully open
+        assert result["max_tilt_allowed_position"] is None
+        assert result["tilt_open_switch"] is None
+        assert result["tilt_close_switch"] is None
+        assert result["tilt_stop_switch"] is None
+
+
+# ---------------------------------------------------------------------------
 # ws_update_config
 # ---------------------------------------------------------------------------
 
@@ -488,146 +598,6 @@ class TestWsUpdateConfig:
 
 
 # ---------------------------------------------------------------------------
-# async_register_websocket_api
-# ---------------------------------------------------------------------------
-
-
-class TestRegistration:
-    """Test that commands are registered correctly."""
-
-    def test_registers_both_commands(self):
-        hass = MagicMock()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.websocket_api.async_register_command"
-        ) as mock_register:
-            async_register_websocket_api(hass)
-
-        assert mock_register.call_count == 5
-        registered_fns = {call[0][1] for call in mock_register.call_args_list}
-        assert ws_get_config in registered_fns
-        assert ws_update_config in registered_fns
-        assert ws_start_calibration in registered_fns
-        assert ws_stop_calibration in registered_fns
-        assert ws_raw_command in registered_fns
-
-
-# ---------------------------------------------------------------------------
-# Dual-motor field round-tripping
-# ---------------------------------------------------------------------------
-
-
-class TestDualMotorFieldRoundTrip:
-    """Test that dual-motor fields are returned in get_config and saved in update_config."""
-
-    @pytest.fixture
-    def config_entry_with_dual_motor(self):
-        """Config entry with dual_motor options set."""
-        entry = MagicMock()
-        entry.entry_id = ENTRY_ID
-        entry.domain = DOMAIN
-        entry.options = {
-            "device_type": "switch",
-            "input_mode": "switch",
-            "tilt_mode": "dual_motor",
-            "safe_tilt_position": 10,
-            "max_tilt_allowed_position": 80,
-            "tilt_open_switch": "switch.tilt_open",
-            "tilt_close_switch": "switch.tilt_close",
-            "tilt_stop_switch": "switch.tilt_stop",
-        }
-        return entry
-
-    @pytest.mark.asyncio
-    async def test_get_config_returns_dual_motor_fields(
-        self, config_entry_with_dual_motor
-    ):
-        hass = MagicMock()
-        connection = MagicMock()
-        msg = {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID}
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
-            return_value=(config_entry_with_dual_motor, None),
-        ):
-            handler = _unwrap(ws_get_config)
-            await handler(hass, connection, msg)
-
-        result = connection.send_result.call_args[0][1]
-        assert result["safe_tilt_position"] == 10
-        assert result["max_tilt_allowed_position"] == 80
-        assert result["tilt_open_switch"] == "switch.tilt_open"
-        assert result["tilt_close_switch"] == "switch.tilt_close"
-        assert result["tilt_stop_switch"] == "switch.tilt_stop"
-
-    @pytest.mark.asyncio
-    async def test_update_config_saves_dual_motor_fields(self):
-        hass = MagicMock()
-        connection = MagicMock()
-        config_entry = MagicMock()
-        config_entry.options = {"tilt_mode": "dual_motor"}
-        config_entry.domain = DOMAIN
-
-        msg = {
-            "id": 2,
-            "type": "cover_time_based/update_config",
-            "entity_id": ENTITY_ID,
-            "safe_tilt_position": 15,
-            "max_tilt_allowed_position": 90,
-            "tilt_open_switch": "switch.tilt_up",
-            "tilt_close_switch": "switch.tilt_down",
-            "tilt_stop_switch": "switch.tilt_stop",
-        }
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
-            return_value=(config_entry, None),
-        ):
-            handler = _unwrap(ws_update_config)
-            await handler(hass, connection, msg)
-
-        new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
-        assert new_opts["safe_tilt_position"] == 15
-        assert new_opts["max_tilt_allowed_position"] == 90
-        assert new_opts["tilt_open_switch"] == "switch.tilt_up"
-        assert new_opts["tilt_close_switch"] == "switch.tilt_down"
-        assert new_opts["tilt_stop_switch"] == "switch.tilt_stop"
-
-    @pytest.mark.asyncio
-    async def test_get_config_defaults_for_missing_dual_motor_fields(self):
-        """When dual_motor fields aren't in options, get_config returns sensible defaults."""
-        hass = MagicMock()
-        connection = MagicMock()
-        config_entry = MagicMock()
-        config_entry.entry_id = ENTRY_ID
-        config_entry.domain = DOMAIN
-        config_entry.options = {"tilt_mode": "sequential"}
-        msg = {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID}
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
-            return_value=(config_entry, None),
-        ):
-            handler = _unwrap(ws_get_config)
-            await handler(hass, connection, msg)
-
-        result = connection.send_result.call_args[0][1]
-        assert result["safe_tilt_position"] == 100  # HA default: fully open
-        assert result["max_tilt_allowed_position"] is None
-        assert result["tilt_open_switch"] is None
-        assert result["tilt_close_switch"] is None
-        assert result["tilt_stop_switch"] is None
-
-
-# ---------------------------------------------------------------------------
-# Unwrapped calibration / raw_command handlers
-# ---------------------------------------------------------------------------
-
-_ws_start_calibration = _unwrap(ws_start_calibration)
-_ws_stop_calibration = _unwrap(ws_stop_calibration)
-_ws_raw_command = _unwrap(ws_raw_command)
-
-
-# ---------------------------------------------------------------------------
 # ws_update_config — wrap-self rejection
 # ---------------------------------------------------------------------------
 
@@ -729,64 +699,6 @@ class TestWsUpdateConfigWrappedSelf:
             )
 
         conn.send_result.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# resolve_entity_or_none (from helpers, returns None on error)
-# ---------------------------------------------------------------------------
-
-
-class TestWsResolveEntity:
-    """Test resolve_entity_or_none from helpers.py."""
-
-    def test_returns_none_no_component(self):
-        from custom_components.cover_time_based.helpers import resolve_entity_or_none
-
-        hass = MagicMock()
-        hass.data = {}
-        assert resolve_entity_or_none(hass, "cover.test") is None
-
-    def test_returns_none_entity_not_found(self):
-        from custom_components.cover_time_based.helpers import resolve_entity_or_none
-
-        component = MagicMock()
-        component.get_entity.return_value = None
-        hass = MagicMock()
-        hass.data = {"entity_components": {"cover": component}}
-        assert resolve_entity_or_none(hass, "cover.test") is None
-
-    def test_returns_none_wrong_type(self):
-        from custom_components.cover_time_based.helpers import resolve_entity_or_none
-
-        component = MagicMock()
-        component.get_entity.return_value = MagicMock()  # not CoverTimeBased
-        hass = MagicMock()
-        hass.data = {"entity_components": {"cover": component}}
-        assert resolve_entity_or_none(hass, "cover.test") is None
-
-    def test_returns_entity_when_valid(self):
-        from custom_components.cover_time_based.helpers import resolve_entity_or_none
-        from custom_components.cover_time_based.cover import _create_cover_from_options
-
-        entity = _create_cover_from_options(
-            {
-                "device_type": "switch",
-                "open_switch_entity_id": "switch.open",
-                "close_switch_entity_id": "switch.close",
-                "input_mode": "switch",
-                "travel_time_close": 30,
-                "travel_time_open": 30,
-            },
-            device_id="test",
-            name="Test",
-        )
-        component = MagicMock()
-        component.get_entity.return_value = entity
-        hass = MagicMock()
-        hass.data = {"entity_components": {"cover": component}}
-
-        result = resolve_entity_or_none(hass, "cover.test")
-        assert result is entity
 
 
 # ---------------------------------------------------------------------------
@@ -1149,3 +1061,85 @@ class TestWsRawCommand:
             await _ws_raw_command(MagicMock(), conn, self._msg("open"))
         conn.send_error.assert_called_once()
         assert conn.send_error.call_args[0][1] == "failed"
+
+
+# ---------------------------------------------------------------------------
+# resolve_entity_or_none (from helpers, returns None on error)
+# ---------------------------------------------------------------------------
+
+
+class TestWsResolveEntity:
+    """Test resolve_entity_or_none from helpers.py."""
+
+    def test_returns_none_no_component(self):
+        from custom_components.cover_time_based.helpers import resolve_entity_or_none
+
+        hass = MagicMock()
+        hass.data = {}
+        assert resolve_entity_or_none(hass, "cover.test") is None
+
+    def test_returns_none_entity_not_found(self):
+        from custom_components.cover_time_based.helpers import resolve_entity_or_none
+
+        component = MagicMock()
+        component.get_entity.return_value = None
+        hass = MagicMock()
+        hass.data = {"entity_components": {"cover": component}}
+        assert resolve_entity_or_none(hass, "cover.test") is None
+
+    def test_returns_none_wrong_type(self):
+        from custom_components.cover_time_based.helpers import resolve_entity_or_none
+
+        component = MagicMock()
+        component.get_entity.return_value = MagicMock()  # not CoverTimeBased
+        hass = MagicMock()
+        hass.data = {"entity_components": {"cover": component}}
+        assert resolve_entity_or_none(hass, "cover.test") is None
+
+    def test_returns_entity_when_valid(self):
+        from custom_components.cover_time_based.helpers import resolve_entity_or_none
+        from custom_components.cover_time_based.cover import _create_cover_from_options
+
+        entity = _create_cover_from_options(
+            {
+                "device_type": "switch",
+                "open_switch_entity_id": "switch.open",
+                "close_switch_entity_id": "switch.close",
+                "input_mode": "switch",
+                "travel_time_close": 30,
+                "travel_time_open": 30,
+            },
+            device_id="test",
+            name="Test",
+        )
+        component = MagicMock()
+        component.get_entity.return_value = entity
+        hass = MagicMock()
+        hass.data = {"entity_components": {"cover": component}}
+
+        result = resolve_entity_or_none(hass, "cover.test")
+        assert result is entity
+
+
+# ---------------------------------------------------------------------------
+# async_register_websocket_api
+# ---------------------------------------------------------------------------
+
+
+class TestRegistration:
+    """Test that commands are registered correctly."""
+
+    def test_registers_both_commands(self):
+        hass = MagicMock()
+        with patch(
+            "custom_components.cover_time_based.websocket_api.websocket_api.async_register_command"
+        ) as mock_register:
+            async_register_websocket_api(hass)
+
+        assert mock_register.call_count == 5
+        registered_fns = {call[0][1] for call in mock_register.call_args_list}
+        assert ws_get_config in registered_fns
+        assert ws_update_config in registered_fns
+        assert ws_start_calibration in registered_fns
+        assert ws_stop_calibration in registered_fns
+        assert ws_raw_command in registered_fns
