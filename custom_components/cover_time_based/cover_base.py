@@ -1221,11 +1221,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if command == SERVICE_CLOSE_COVER:
             cmd = "DOWN"
             self._state = False
+            self._last_command = command
             if not self._triggered_externally:
                 await self._send_close()
         elif command == SERVICE_OPEN_COVER:
             cmd = "UP"
             self._state = True
+            self._last_command = command
             if not self._triggered_externally:
                 await self._send_open()
         elif command == SERVICE_STOP_COVER:

@@ -494,3 +494,104 @@ class TestToggleModeSendTiltStop:
 
         assert _calls(cover.hass.services.async_call) == []
         assert cover._last_tilt_direction is None
+
+
+# ===================================================================
+# _async_handle_command sets _last_command (calibration pattern)
+# ===================================================================
+
+
+class TestToggleHandleCommandSetsLastCommand:
+    """Verify _async_handle_command sets _last_command for open/close.
+
+    This is critical for toggle mode where _send_stop needs _last_command
+    to know which direction button to re-pulse. The calibration code calls
+    _async_handle_command directly (not the public async_open/close_cover),
+    so _async_handle_command must set _last_command itself.
+    """
+
+    @pytest.mark.asyncio
+    async def test_handle_open_sets_last_command(self):
+        cover = _make_toggle_cover()
+        assert cover._last_command is None
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await cover._async_handle_command(SERVICE_OPEN_COVER)
+
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_handle_close_sets_last_command(self):
+        cover = _make_toggle_cover()
+        assert cover._last_command is None
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await cover._async_handle_command(SERVICE_CLOSE_COVER)
+
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_calibration_pattern_open_then_stop(self):
+        """Simulate calibration: _async_handle_command(OPEN) then _send_stop().
+
+        In toggle mode, _send_stop re-pulses the last direction button.
+        This must work when only _async_handle_command was called (not
+        async_open_cover), as the calibration code does.
+        """
+        cover = _make_toggle_cover()
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await cover._async_handle_command(SERVICE_OPEN_COVER)
+            await _drain_tasks(cover)
+            cover.hass.services.async_call.reset_mock()
+
+            await cover._send_stop()
+            await _drain_tasks(cover)
+
+        # _send_stop should re-pulse the open switch to toggle the motor off
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_on", "switch.open"),
+            # pulse completion (background)
+            _ha("turn_off", "switch.open"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_calibration_pattern_close_then_stop(self):
+        """Same pattern for close direction."""
+        cover = _make_toggle_cover()
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await cover._async_handle_command(SERVICE_CLOSE_COVER)
+            await _drain_tasks(cover)
+            cover.hass.services.async_call.reset_mock()
+
+            await cover._send_stop()
+            await _drain_tasks(cover)
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_on", "switch.close"),
+            # pulse completion (background)
+            _ha("turn_off", "switch.close"),
+        ]
