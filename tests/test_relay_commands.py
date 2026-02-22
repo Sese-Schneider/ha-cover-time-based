@@ -381,3 +381,71 @@ class TestWrappedCoverStop:
         assert _calls(cover.hass.services.async_call) == [
             _cover_svc("stop_cover", "cover.inner"),
         ]
+
+
+class TestWrappedCoverTiltMotor:
+    """Tilt motor commands delegated to the wrapped cover entity."""
+
+    def test_has_tilt_motor_with_dual_motor(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+        )
+        assert cover._has_tilt_motor() is True
+
+    def test_has_tilt_motor_false_without_strategy(self, make_cover):
+        cover = make_cover(cover_entity_id="cover.inner")
+        assert cover._has_tilt_motor() is False
+
+    def test_has_tilt_motor_false_with_sequential(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential",
+        )
+        assert cover._has_tilt_motor() is False
+
+    @pytest.mark.asyncio
+    async def test_tilt_open_delegates_to_cover_service(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+        )
+        await cover._send_tilt_open()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("open_cover_tilt", "cover.inner"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_tilt_close_delegates_to_cover_service(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+        )
+        await cover._send_tilt_close()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("close_cover_tilt", "cover.inner"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_tilt_stop_delegates_to_cover_service(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+        )
+        await cover._send_tilt_stop()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("stop_cover_tilt", "cover.inner"),
+        ]

@@ -40,9 +40,7 @@ const EN = {
   "input_mode.pulse": "Pulse (momentary)",
   "input_mode.toggle": "Toggle (same button)",
   "input_mode.pulse_time": "Pulse time",
-  "endpoint_runon.label": "Endpoint Run-on Time",
-  "endpoint_runon.helper": "Additional travel time at endpoints (0%/100%) for position reset",
-  "tilt.label": "Tilting",
+  "tilt.label": "Tilt Mode",
   "tilt.none": "Not supported",
   "tilt.sequential": "Closes then tilts",
   "tilt.dual_motor": "Separate tilt motor",
@@ -56,6 +54,8 @@ const EN = {
   "tilt_motor.max_allowed_position": "Max tilt allowed position (optional)",
   "tilt_motor.max_allowed_helper": "Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)",
   "timing.attribute_header": "Attribute",
+  "timing.travel_attribute_header": "Travel Attribute",
+  "timing.tilt_attribute_header": "Tilt Attribute",
   "timing.value_header": "Value",
   "timing.not_set": "Not set",
   "timing.travel_time_close": "Travel time (close)",
@@ -65,6 +65,7 @@ const EN = {
   "timing.tilt_time_open": "Tilt time (open)",
   "timing.tilt_startup_delay": "Tilt startup delay",
   "timing.min_movement_time": "Minimum movement time",
+  "timing.endpoint_runon_time": "Endpoint run-on time",
   "position.label": "Current Position",
   "position.helper": "Move cover to a known endpoint, then set position.",
   "position.unknown": "Unknown",
@@ -527,6 +528,13 @@ class CoverTimeBasedCard extends LitElement {
     }
   }
 
+  _hasTiltMotor() {
+    const c = this._config;
+    if (!c || c.tilt_mode !== "dual_motor") return false;
+    if (c.device_type === "cover") return true;
+    return !!(c.tilt_open_switch && c.tilt_close_switch);
+  }
+
   async _onCoverCommand(command) {
     const cmdMap = {
       open_cover: "open",
@@ -693,7 +701,7 @@ class CoverTimeBasedCard extends LitElement {
             </strong>
             <span class="entity-id">${this._selectedEntity}</span>
           </div>
-          ${this._activeTab === "timing" && !(this._config?.tilt_open_switch && this._config?.tilt_close_switch) ? html`
+          ${this._activeTab === "timing" && !this._hasTiltMotor() ? html`
             <div class="cover-controls">
               <ha-button title=${this._t("controls.open")} @click=${() => this._onCoverCommand("open_cover")}>
                 <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
@@ -707,7 +715,7 @@ class CoverTimeBasedCard extends LitElement {
             </div>
           ` : ""}
         </div>
-        ${this._activeTab === "timing" && this._config?.tilt_open_switch && this._config?.tilt_close_switch ? html`
+        ${this._activeTab === "timing" && this._hasTiltMotor() ? html`
           <div class="cover-controls-wrapper">
             <div class="cover-controls">
               <span class="controls-label">${this._t("controls.cover_label")}</span>
@@ -753,7 +761,6 @@ class CoverTimeBasedCard extends LitElement {
         ? html`
             <fieldset ?disabled=${disabled}>
               ${this._renderDeviceType(c)} ${this._renderInputEntities(c)}
-              ${this._renderEndpointRunon(c)}
               ${this._renderInputMode(c)} ${this._renderTiltSupport(c)}
               ${this._renderTiltMotorSection(c)}
             </fieldset>
@@ -836,6 +843,7 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _renderInputMode(c) {
+    if (c.device_type === "cover") return "";
     const showPulseTime =
       c.input_mode === "pulse" || c.input_mode === "toggle";
 
@@ -873,31 +881,13 @@ class CoverTimeBasedCard extends LitElement {
     `;
   }
 
-  _renderEndpointRunon(c) {
-    return html`
-      <div class="section">
-        <div class="field-label">${this._t("endpoint_runon.label")}</div>
-        <div class="helper-text">
-          ${this._t("endpoint_runon.helper")}
-        </div>
-        <ha-textfield
-          type="number"
-          min="0"
-          max="10"
-          step="0.1"
-          suffix="s"
-          label=""
-          .value=${String(c.endpoint_runon_time || "")}
-          @change=${(e) => {
-            const v = e.target.value.trim();
-            this._updateLocal({ endpoint_runon_time: v === "" ? null : parseFloat(v) });
-          }}
-        ></ha-textfield>
-      </div>
-    `;
-  }
-
   _renderTiltSupport(c) {
+    if (c.device_type === "cover" && c.cover_entity_id) {
+      const stateObj = this.hass?.states?.[c.cover_entity_id];
+      const features = stateObj?.attributes?.supported_features || 0;
+      // CoverEntityFeature: OPEN_TILT=16, CLOSE_TILT=32
+      if (!(features & (16 | 32))) return "";
+    }
     const tiltMode = c.tilt_mode || "none";
 
     return html`
@@ -927,6 +917,7 @@ class CoverTimeBasedCard extends LitElement {
     return html`
       <div class="section">
         <div class="field-label">${this._t("tilt_motor.label")}</div>
+        ${c.device_type !== "cover" ? html`
         <div class="entity-grid">
           <ha-entity-picker
             .hass=${this.hass}
@@ -953,6 +944,7 @@ class CoverTimeBasedCard extends LitElement {
               this._onSwitchEntityChange("tilt_stop_switch", e)}
           ></ha-entity-picker>
         </div>
+        ` : ""}
         <div class="dual-motor-config">
           <ha-textfield
             type="number"
@@ -989,59 +981,72 @@ class CoverTimeBasedCard extends LitElement {
     `;
   }
 
+  _renderTimingRow([labelKey, key, value]) {
+    return html`
+      <tr>
+        <td>${this._t(labelKey)}</td>
+        <td class="value-cell">
+          <input
+            type="number"
+            class="timing-input"
+            .value=${value != null ? String(value) : ""}
+            placeholder=${this._t("timing.not_set")}
+            step="0.1"
+            min="0"
+            max="600"
+            @change=${(e) => {
+              const v = e.target.value.trim();
+              this._updateLocal({ [key]: v === "" ? null : parseFloat(v) });
+            }}
+          /><span class="unit">s</span>
+        </td>
+      </tr>
+    `;
+  }
+
   _renderTimingTable(c) {
     const hasTiltTimes = c.tilt_mode === "sequential" || c.tilt_mode === "dual_motor" || c.tilt_mode === "inline";
 
-    const rows = [
+    const travelRows = [
       ["timing.travel_time_close", "travel_time_close", c.travel_time_close],
       ["timing.travel_time_open", "travel_time_open", c.travel_time_open],
       ["timing.travel_startup_delay", "travel_startup_delay", c.travel_startup_delay],
+      ["timing.min_movement_time", "min_movement_time", c.min_movement_time],
+      ["timing.endpoint_runon_time", "endpoint_runon_time", c.endpoint_runon_time],
     ];
 
-    if (hasTiltTimes) {
-      rows.push(
-        ["timing.tilt_time_close", "tilt_time_close", c.tilt_time_close],
-        ["timing.tilt_time_open", "tilt_time_open", c.tilt_time_open],
-        ["timing.tilt_startup_delay", "tilt_startup_delay", c.tilt_startup_delay]
-      );
-    }
-
-    rows.push(["timing.min_movement_time", "min_movement_time", c.min_movement_time]);
+    const tiltRows = [
+      ["timing.tilt_time_close", "tilt_time_close", c.tilt_time_close],
+      ["timing.tilt_time_open", "tilt_time_open", c.tilt_time_open],
+      ["timing.tilt_startup_delay", "tilt_startup_delay", c.tilt_startup_delay],
+    ];
 
     return html`
       <div class="section">
         <table class="timing-table">
           <thead>
             <tr>
-              <th>${this._t("timing.attribute_header")}</th>
+              <th>${this._t("timing.travel_attribute_header")}</th>
               <th>${this._t("timing.value_header")}</th>
             </tr>
           </thead>
           <tbody>
-            ${rows.map(
-              ([labelKey, key, value]) => html`
-                <tr>
-                  <td>${this._t(labelKey)}</td>
-                  <td class="value-cell">
-                    <input
-                      type="number"
-                      class="timing-input"
-                      .value=${value != null ? String(value) : ""}
-                      placeholder=${this._t("timing.not_set")}
-                      step="0.1"
-                      min="0"
-                      max="600"
-                      @change=${(e) => {
-                        const v = e.target.value.trim();
-                        this._updateLocal({ [key]: v === "" ? null : parseFloat(v) });
-                      }}
-                    /><span class="unit">s</span>
-                  </td>
-                </tr>
-              `
-            )}
+            ${travelRows.map((row) => this._renderTimingRow(row))}
           </tbody>
         </table>
+        ${hasTiltTimes ? html`
+        <table class="timing-table" style="margin-top: 8px;">
+          <thead>
+            <tr>
+              <th>${this._t("timing.tilt_attribute_header")}</th>
+              <th>${this._t("timing.value_header")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tiltRows.map((row) => this._renderTimingRow(row))}
+          </tbody>
+        </table>
+        ` : ""}
       </div>
     `;
   }
@@ -1265,8 +1270,9 @@ class CoverTimeBasedCard extends LitElement {
 
       .cover-controls-wrapper {
         display: flex;
-        justify-content: flex-end;
-        gap: 12px;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
         padding: 4px 0;
       }
 
@@ -1413,7 +1419,18 @@ class CoverTimeBasedCard extends LitElement {
       .timing-table {
         width: 100%;
         border-collapse: collapse;
+        table-layout: fixed;
         font-size: var(--paper-font-body1_-_font-size, 14px);
+      }
+
+      .timing-table th:first-child,
+      .timing-table td:first-child {
+        width: 65%;
+      }
+
+      .timing-table th:last-child,
+      .timing-table td:last-child {
+        width: 35%;
       }
 
       .timing-table th {

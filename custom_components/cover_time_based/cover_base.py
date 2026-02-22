@@ -101,6 +101,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_travel_target: int | None = None
         self._pending_travel_command: str | None = None
         self._triggered_externally = False
+        self._self_initiated_movement = True
         self._pending_switch = {}
         self._pending_switch_timers = {}
         self._state_listener_unsubs = []
@@ -115,6 +116,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._tilting_time_open,
             )
 
+    def _log(self, msg, *args):
+        """Log a debug message prefixed with the entity ID."""
+        _LOGGER.debug("(%s) " + msg, self.entity_id, *args)
+
     # -----------------------------------------------------------------------
     # Lifecycle
     # -----------------------------------------------------------------------
@@ -122,7 +127,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def async_added_to_hass(self):
         """Only cover's position and tilt matters."""
         old_state = await self.async_get_last_state()
-        _LOGGER.debug("async_added_to_hass :: oldState %s", old_state)
+        self._log("async_added_to_hass :: oldState %s", old_state)
         pos = (
             old_state.attributes.get(ATTR_CURRENT_POSITION)
             if old_state is not None
@@ -304,25 +309,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def async_close_cover(self, **kwargs):
         """Close the cover fully."""
         self._require_configured()
-        _LOGGER.debug("async_close_cover")
+        self._log("async_close_cover")
         if self.is_opening:
-            _LOGGER.debug("async_close_cover :: currently opening, stopping first")
+            self._log("async_close_cover :: currently opening, stopping first")
             await self.async_stop_cover()
         await self._async_move_to_endpoint(target=0)
 
     async def async_open_cover(self, **kwargs):
         """Open the cover fully."""
         self._require_configured()
-        _LOGGER.debug("async_open_cover")
+        self._log("async_open_cover")
         if self.is_closing:
-            _LOGGER.debug("async_open_cover :: currently closing, stopping first")
+            self._log("async_open_cover :: currently closing, stopping first")
             await self.async_stop_cover()
         await self._async_move_to_endpoint(target=100)
 
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
         self._require_configured()
-        _LOGGER.debug("async_stop_cover")
+        self._log("async_stop_cover")
         tilt_restore_was_active = self._tilt_restore_active
         tilt_pre_step_was_active = self._pending_travel_target is not None
         self._cancel_startup_delay_task()
@@ -343,12 +348,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def async_close_cover_tilt(self, **kwargs):
         """Tilt the cover fully closed."""
-        _LOGGER.debug("async_close_cover_tilt")
+        self._log("async_close_cover_tilt")
         await self._async_move_tilt_to_endpoint(target=0)
 
     async def async_open_cover_tilt(self, **kwargs):
         """Tilt the cover fully open."""
-        _LOGGER.debug("async_open_cover_tilt")
+        self._log("async_open_cover_tilt")
         await self._async_move_tilt_to_endpoint(target=100)
 
     async def async_set_cover_position(self, **kwargs):
@@ -356,14 +361,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._require_configured()
         if ATTR_POSITION in kwargs:
             position = kwargs[ATTR_POSITION]
-            _LOGGER.debug("async_set_cover_position: %d", position)
+            self._log("async_set_cover_position: %d", position)
             await self.set_position(position)
 
     async def async_set_cover_tilt_position(self, **kwargs):
         """Move the cover tilt to a specific position."""
         if ATTR_TILT_POSITION in kwargs:
             position = kwargs[ATTR_TILT_POSITION]
-            _LOGGER.debug("async_set_cover_tilt_position: %d", position)
+            self._log("async_set_cover_tilt_position: %d", position)
             await self.set_tilt_position(position)
 
     async def set_known_position(self, **kwargs):
@@ -393,6 +398,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _async_move_to_endpoint(self, target):
         """Move cover to an endpoint (0=fully closed, 100=fully open)."""
+        self._self_initiated_movement = not self._triggered_externally
         await self._abandon_active_lifecycle()
 
         closing = target == 0
@@ -403,7 +409,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # startup delay the position hasn't started changing yet.
         if self._startup_delay_task and not self._startup_delay_task.done():
             if self._last_command == opposite_command:
-                _LOGGER.debug(
+                self._log(
                     "_async_move_to_endpoint :: direction change, cancelling startup delay"
                 )
                 self._cancel_startup_delay_task()
@@ -411,7 +417,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._last_command = None
                 return
             else:
-                _LOGGER.debug(
+                self._log(
                     "_async_move_to_endpoint :: startup delay already active, not restarting"
                 )
                 return
@@ -432,7 +438,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         travel_time = self._require_travel_time(closing)
         movement_time = (travel_distance / 100.0) * travel_time
 
-        _LOGGER.debug(
+        self._log(
             "_async_move_to_endpoint :: target=%d, travel_distance=%f%%, movement_time=%fs",
             target,
             travel_distance,
@@ -472,13 +478,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         if self._startup_delay_task and not self._startup_delay_task.done():
             if self._last_command == opposite_command:
-                _LOGGER.debug(
+                self._log(
                     "_async_move_tilt_to_endpoint :: direction change, cancelling startup delay"
                 )
                 self._cancel_startup_delay_task()
                 await self._async_handle_command(SERVICE_STOP_COVER)
             else:
-                _LOGGER.debug(
+                self._log(
                     "_async_move_tilt_to_endpoint :: startup delay already active, not restarting"
                 )
                 return
@@ -514,7 +520,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     steps, self._tilt_strategy, self.tilt_calc, self.travel_calc
                 )
 
-        _LOGGER.debug(
+        self._log(
             "_async_move_tilt_to_endpoint :: target=%d, tilt_distance=%f%%, movement_time=%fs, travel_pos=%s",
             target,
             tilt_distance,
@@ -535,10 +541,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def set_position(self, position):
         """Move cover to a designated position."""
+        self._self_initiated_movement = not self._triggered_externally
         await self._abandon_active_lifecycle()
         current = self.travel_calc.current_position()
         target = position
-        _LOGGER.debug(
+        self._log(
             "set_position :: current: %s, target: %d",
             current if current is not None else "None",
             target,
@@ -565,7 +572,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
 
         if is_direction_change and self.travel_calc.is_traveling():
-            _LOGGER.debug("set_position :: stopping active travel movement")
+            self._log("set_position :: stopping active travel movement")
             self.travel_calc.stop()
             self.stop_auto_updater()
             if self._has_tilt_support() and self.tilt_calc.is_traveling():
@@ -612,7 +619,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         await self._abandon_active_lifecycle()
         current = self.tilt_calc.current_position()
         target = position
-        _LOGGER.debug(
+        self._log(
             "set_tilt_position :: current: %s, target: %d",
             current if current is not None else "None",
             target,
@@ -755,11 +762,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # If startup delay active for same direction, don't restart
         if self._startup_delay_task and not self._startup_delay_task.done():
             if not is_direction_change:
-                _LOGGER.debug(
+                self._log(
                     "_handle_pre_movement_checks :: startup delay active, skipping"
                 )
                 return False, is_direction_change
-            _LOGGER.debug(
+            self._log(
                 "_handle_pre_movement_checks :: direction change, cancelling startup delay"
             )
             self._cancel_startup_delay_task()
@@ -876,26 +883,26 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _execute_with_startup_delay(self, startup_delay, start_callback):
         """Wait for motor startup delay, then start position tracking."""
-        _LOGGER.debug(
+        self._log(
             "_execute_with_startup_delay :: waiting %fs before starting position tracking",
             startup_delay,
         )
         try:
             await sleep(startup_delay)
-            _LOGGER.debug(
+            self._log(
                 "_execute_with_startup_delay :: startup delay complete, starting position tracking"
             )
             start_callback()
             self._startup_delay_task = None
         except asyncio.CancelledError:
-            _LOGGER.debug("_execute_with_startup_delay :: startup delay cancelled")
+            self._log("_execute_with_startup_delay :: startup delay cancelled")
             self._startup_delay_task = None
             raise
 
     def _cancel_delay_task(self):
         """Cancel any active delay task."""
         if self._delay_task is not None and not self._delay_task.done():
-            _LOGGER.debug("_cancel_delay_task :: cancelling active delay task")
+            self._log("_cancel_delay_task :: cancelling active delay task")
             self._delay_task.cancel()
             self._delay_task = None
             return True
@@ -904,7 +911,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     def _cancel_startup_delay_task(self):
         """Cancel any active startup delay task."""
         if self._startup_delay_task is not None and not self._startup_delay_task.done():
-            _LOGGER.debug(
+            self._log(
                 "_cancel_startup_delay_task :: cancelling active startup delay task"
             )
             self._startup_delay_task.cancel()
@@ -912,9 +919,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     def start_auto_updater(self):
         """Start the autoupdater to update HASS while cover is moving."""
-        _LOGGER.debug("start_auto_updater")
+        self._log("start_auto_updater")
         if self._unsubscribe_auto_updater is None:
-            _LOGGER.debug("init _unsubscribe_auto_updater")
+            self._log("init _unsubscribe_auto_updater")
             interval = timedelta(seconds=0.1)
             self._unsubscribe_auto_updater = async_track_time_interval(
                 self.hass, self.auto_updater_hook, interval
@@ -925,13 +932,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Call for the autoupdater."""
         self.async_schedule_update_ha_state()
         if self.position_reached():
-            _LOGGER.debug("auto_updater_hook :: position_reached")
+            self._log("auto_updater_hook :: position_reached")
             self.stop_auto_updater()
         self.hass.async_create_task(self.auto_stop_if_necessary())
 
     def stop_auto_updater(self):
         """Stop the autoupdater."""
-        _LOGGER.debug("stop_auto_updater")
+        self._log("stop_auto_updater")
         if self._unsubscribe_auto_updater is not None:
             self._unsubscribe_auto_updater()
             self._unsubscribe_auto_updater = None
@@ -949,13 +956,29 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def auto_stop_if_necessary(self):
         """Do auto stop if necessary."""
         if self.position_reached():
-            _LOGGER.debug("auto_stop_if_necessary :: calling stop command")
+            self._log(
+                "auto_stop_if_necessary :: position reached (self_initiated=%s)",
+                self._self_initiated_movement,
+            )
             self.travel_calc.stop()
             if self._has_tilt_support():
                 self.tilt_calc.stop()
 
+            if not self._self_initiated_movement:
+                # Movement was triggered externally — just stop tracking,
+                # don't send relay commands.
+                self._log(
+                    "auto_stop_if_necessary :: external movement, skipping relay stop"
+                )
+                if self._tilt_strategy is not None:
+                    self._tilt_strategy.snap_trackers_to_physical(
+                        self.travel_calc, self.tilt_calc
+                    )
+                self._last_command = None
+                return
+
             if self._tilt_restore_active:
-                _LOGGER.debug("auto_stop_if_necessary :: tilt restore complete")
+                self._log("auto_stop_if_necessary :: tilt restore complete")
                 self._tilt_restore_active = False
                 if self._has_tilt_motor():
                     await self._send_tilt_stop()
@@ -970,7 +993,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
             if self._pending_travel_target is not None:
                 # Tilt pre-step complete — start travel phase
-                _LOGGER.debug("auto_stop_if_necessary :: tilt pre-step complete")
+                self._log("auto_stop_if_necessary :: tilt pre-step complete")
                 await self._start_pending_travel()
                 return
 
@@ -990,7 +1013,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 and self._endpoint_runon_time > 0
                 and (current_travel == 0 or current_travel == 100)
             ):
-                _LOGGER.debug(
+                self._log(
                     "auto_stop_if_necessary :: at endpoint (position=%d), delaying relay stop by %fs",
                     current_travel,
                     self._endpoint_runon_time,
@@ -1004,15 +1027,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _delayed_stop(self, delay):
         """Stop the relay after a delay."""
-        _LOGGER.debug("_delayed_stop :: waiting %fs before stopping relay", delay)
+        self._log("_delayed_stop :: waiting %fs before stopping relay", delay)
         try:
             await sleep(delay)
-            _LOGGER.debug("_delayed_stop :: delay complete, stopping relay")
+            self._log("_delayed_stop :: delay complete, stopping relay")
             await self._async_handle_command(SERVICE_STOP_COVER)
             self._last_command = None
             self._delay_task = None
         except asyncio.CancelledError:
-            _LOGGER.debug("_delayed_stop :: delay cancelled")
+            self._log("_delayed_stop :: delay cancelled")
             self._delay_task = None
             raise
 
@@ -1036,7 +1059,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if not was_restoring and not was_pre_stepping:
             return
 
-        _LOGGER.debug(
+        self._log(
             "_abandon_active_lifecycle :: abandoning %s",
             "tilt restore" if was_restoring else "tilt pre-step",
         )
@@ -1056,10 +1079,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     def _stop_travel_if_traveling(self):
         """Stop cover movement if it's currently traveling."""
         if self.travel_calc.is_traveling():
-            _LOGGER.debug("_stop_travel_if_traveling :: stopping cover movement")
+            self._log("_stop_travel_if_traveling :: stopping cover movement")
             self.travel_calc.stop()
             if self._has_tilt_support() and self.tilt_calc.is_traveling():
-                _LOGGER.debug("_stop_travel_if_traveling :: also stopping tilt")
+                self._log("_stop_travel_if_traveling :: also stopping tilt")
                 self.tilt_calc.stop()
 
     def _handle_stop(self):
@@ -1070,12 +1093,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_travel_command = None
 
         if self.travel_calc.is_traveling():
-            _LOGGER.debug("_handle_stop :: button stops cover movement")
+            self._log("_handle_stop :: button stops cover movement")
             self.travel_calc.stop()
             self.stop_auto_updater()
 
         if self._has_tilt_support() and self.tilt_calc.is_traveling():
-            _LOGGER.debug("_handle_stop :: button stops tilt movement")
+            self._log("_handle_stop :: button stops tilt movement")
             self.tilt_calc.stop()
             self.stop_auto_updater()
 
@@ -1089,7 +1112,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         begin the actual cover travel.
         """
         current_tilt = self.tilt_calc.current_position()
-        _LOGGER.debug(
+        self._log(
             "_start_tilt_pre_step :: tilt %s→%d, pending travel→%d (%s)",
             current_tilt,
             tilt_target,
@@ -1122,7 +1145,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_travel_target = None
         self._pending_travel_command = None
 
-        _LOGGER.debug(
+        self._log(
             "_start_pending_travel :: starting travel to %d (%s)",
             target,
             command,
@@ -1155,7 +1178,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         current_tilt = self.tilt_calc.current_position()
         if current_tilt is None or current_tilt == restore_target:
-            _LOGGER.debug(
+            self._log(
                 "_start_tilt_restore :: no restore needed (current=%s, target=%s)",
                 current_tilt,
                 restore_target,
@@ -1164,7 +1187,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._last_command = None
             return
 
-        _LOGGER.debug(
+        self._log(
             "_start_tilt_restore :: restoring tilt from %d%% to %d%%",
             current_tilt,
             restore_target,
@@ -1211,7 +1234,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             if not self._triggered_externally:
                 await self._send_stop()
 
-        _LOGGER.debug("_async_handle_command :: %s", cmd)
+        self._log("_async_handle_command :: %s", cmd)
         self.async_write_ha_state()
 
     @abstractmethod
@@ -1236,7 +1259,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _send_tilt_open(self) -> None:
         """Send open to the tilt motor (bypasses position tracker)."""
-        self._mark_switch_pending(self._tilt_close_switch_id, 1)
+        if self._switch_is_on(self._tilt_close_switch_id):
+            self._mark_switch_pending(self._tilt_close_switch_id, 1)
         self._mark_switch_pending(self._tilt_open_switch_id, 2)
         await self.hass.services.async_call(
             "homeassistant",
@@ -1253,7 +1277,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _send_tilt_close(self) -> None:
         """Send close to the tilt motor (bypasses position tracker)."""
-        self._mark_switch_pending(self._tilt_open_switch_id, 1)
+        if self._switch_is_on(self._tilt_open_switch_id):
+            self._mark_switch_pending(self._tilt_open_switch_id, 1)
         self._mark_switch_pending(self._tilt_close_switch_id, 2)
         await self.hass.services.async_call(
             "homeassistant",
@@ -1270,8 +1295,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _send_tilt_stop(self) -> None:
         """Send stop to the tilt motor (bypasses position tracker)."""
-        self._mark_switch_pending(self._tilt_open_switch_id, 1)
-        self._mark_switch_pending(self._tilt_close_switch_id, 1)
+        if self._switch_is_on(self._tilt_open_switch_id):
+            self._mark_switch_pending(self._tilt_open_switch_id, 1)
+        if self._switch_is_on(self._tilt_close_switch_id):
+            self._mark_switch_pending(self._tilt_close_switch_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -1297,12 +1324,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # Switch echo filtering
     # -----------------------------------------------------------------------
 
+    def _switch_is_on(self, entity_id) -> bool:
+        """Check if a switch entity is currently on."""
+        state = self.hass.states.get(entity_id)
+        return state is not None and state.state == "on"
+
     def _mark_switch_pending(self, entity_id, expected_transitions):
         """Mark a switch as having pending echo transitions to ignore."""
         self._pending_switch[entity_id] = (
             self._pending_switch.get(entity_id, 0) + expected_transitions
         )
-        _LOGGER.debug(
+        self._log(
             "_mark_switch_pending :: %s pending=%d",
             entity_id,
             self._pending_switch[entity_id],
@@ -1316,7 +1348,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         @callback
         def _clear_pending(_now):
             if entity_id in self._pending_switch:
-                _LOGGER.debug("_mark_switch_pending :: timeout clearing %s", entity_id)
+                self._log("_mark_switch_pending :: timeout clearing %s", entity_id)
                 del self._pending_switch[entity_id]
             self._pending_switch_timers.pop(entity_id, None)
 
@@ -1336,7 +1368,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         new_val = new_state.state
         old_val = old_state.state
 
-        _LOGGER.debug(
+        self._log(
             "_async_switch_state_changed :: %s: %s -> %s (pending=%s)",
             entity_id,
             old_val,
@@ -1353,7 +1385,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 timer = self._pending_switch_timers.pop(entity_id, None)
                 if timer:
                     timer()
-            _LOGGER.debug(
+            self._log(
                 "_async_switch_state_changed :: echo filtered, remaining=%s",
                 self._pending_switch.get(entity_id, 0),
             )
@@ -1395,17 +1427,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
 
         if entity_id == self._tilt_open_switch_id:
-            _LOGGER.debug(
+            self._log(
                 "_handle_external_tilt_state_change :: external tilt open pulse detected"
             )
             await self.async_open_cover_tilt()
         elif entity_id == self._tilt_close_switch_id:
-            _LOGGER.debug(
+            self._log(
                 "_handle_external_tilt_state_change :: external tilt close pulse detected"
             )
             await self.async_close_cover_tilt()
         elif entity_id == self._tilt_stop_switch_id:
-            _LOGGER.debug(
+            self._log(
                 "_handle_external_tilt_state_change :: external tilt stop pulse detected"
             )
             await self.async_stop_cover()

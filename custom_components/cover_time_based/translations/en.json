@@ -112,12 +112,8 @@
       "toggle": "Toggle (same button)",
       "pulse_time": "Pulse time"
     },
-    "endpoint_runon": {
-      "label": "Endpoint Run-on Time",
-      "helper": "Additional travel time at endpoints (0%/100%) for position reset"
-    },
     "tilt": {
-      "label": "Tilting",
+      "label": "Tilt Mode",
       "none": "Not supported",
       "sequential": "Closes then tilts",
       "dual_motor": "Separate tilt motor",
@@ -135,6 +131,8 @@
     },
     "timing": {
       "attribute_header": "Attribute",
+      "travel_attribute_header": "Travel Attribute",
+      "tilt_attribute_header": "Tilt Attribute",
       "value_header": "Value",
       "not_set": "Not set",
       "travel_time_close": "Travel time (close)",
@@ -143,7 +141,8 @@
       "tilt_time_close": "Tilt time (close)",
       "tilt_time_open": "Tilt time (open)",
       "tilt_startup_delay": "Tilt startup delay",
-      "min_movement_time": "Minimum movement time"
+      "min_movement_time": "Minimum movement time",
+      "endpoint_runon_time": "Endpoint run-on time"
     },
     "position": {
       "label": "Current Position",

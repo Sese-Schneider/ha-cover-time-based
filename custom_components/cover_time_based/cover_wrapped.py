@@ -49,14 +49,14 @@ class WrappedCoverTimeBased(CoverTimeBased):
         This handles start, stop, AND direction changes (opening→closing).
         """
         if new_val == _OPENING:
-            _LOGGER.debug("_handle_external_state_change :: wrapped cover opening")
+            self._log("_handle_external_state_change :: wrapped cover opening")
             await self.async_open_cover()
         elif new_val == _CLOSING:
-            _LOGGER.debug("_handle_external_state_change :: wrapped cover closing")
+            self._log("_handle_external_state_change :: wrapped cover closing")
             await self.async_close_cover()
         elif old_val in _MOVING_STATES:
             # Was moving, now stopped
-            _LOGGER.debug("_handle_external_state_change :: wrapped cover stopped")
+            self._log("_handle_external_state_change :: wrapped cover stopped")
             await self.async_stop_cover()
 
     async def _send_open(self) -> None:
@@ -75,4 +75,28 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._mark_switch_pending(self._cover_entity_id, 1)
         await self.hass.services.async_call(
             "cover", "stop_cover", {"entity_id": self._cover_entity_id}, False
+        )
+
+    # --- Tilt motor relay commands ---
+
+    def _has_tilt_motor(self) -> bool:
+        """Wrapped covers use the cover entity for tilt commands."""
+        return self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor
+
+    async def _send_tilt_open(self) -> None:
+        self._mark_switch_pending(self._cover_entity_id, 1)
+        await self.hass.services.async_call(
+            "cover", "open_cover_tilt", {"entity_id": self._cover_entity_id}, False
+        )
+
+    async def _send_tilt_close(self) -> None:
+        self._mark_switch_pending(self._cover_entity_id, 1)
+        await self.hass.services.async_call(
+            "cover", "close_cover_tilt", {"entity_id": self._cover_entity_id}, False
+        )
+
+    async def _send_tilt_stop(self) -> None:
+        self._mark_switch_pending(self._cover_entity_id, 1)
+        await self.hass.services.async_call(
+            "cover", "stop_cover_tilt", {"entity_id": self._cover_entity_id}, False
         )

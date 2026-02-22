@@ -1320,6 +1320,128 @@ class TestDualMotorTiltPreStep:
 
 
 # ===================================================================
+# Wrapped cover + dual_motor: tilt via cover entity services
+# ===================================================================
+
+
+class TestWrappedDualMotorTilt:
+    """Wrapped cover with dual_motor tilt delegates tilt to cover entity."""
+
+    def _make_cover(self, make_cover):
+        return make_cover(
+            cover_entity_id="cover.inner",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+        )
+
+    @pytest.mark.asyncio
+    async def test_pre_step_uses_cover_tilt_service(self, make_cover):
+        """Pre-step should call cover.open_cover_tilt, not relay switches."""
+        cover = self._make_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # Tilt should be traveling to safe position
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc._travel_to_position == 100
+        assert not cover.travel_calc.is_traveling()
+
+        # Should use cover.open_cover_tilt (30 → 100 = opening tilt)
+        calls = cover.hass.services.async_call.call_args_list
+        tilt_calls = [c for c in calls if c[0][1] == "open_cover_tilt"]
+        assert len(tilt_calls) == 1
+        assert tilt_calls[0][0][2]["entity_id"] == "cover.inner"
+
+        # No relay switch calls
+        ha_calls = [c for c in calls if c[0][0] == "homeassistant"]
+        assert len(ha_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_pre_step_complete_uses_cover_stop_tilt(self, make_cover):
+        """When pre-step completes, should call cover.stop_cover_tilt."""
+        cover = self._make_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # Complete tilt pre-step
+        cover.tilt_calc.set_position(100)
+        cover.hass.services.async_call.reset_mock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.auto_stop_if_necessary()
+
+        # Travel should now be running
+        assert cover.travel_calc.is_traveling()
+
+        # Should have called cover.stop_cover_tilt then cover.close_cover
+        calls = cover.hass.services.async_call.call_args_list
+        tilt_stop = [c for c in calls if c[0][1] == "stop_cover_tilt"]
+        assert len(tilt_stop) == 1
+        travel_close = [c for c in calls if c[0][1] == "close_cover"]
+        assert len(travel_close) == 1
+
+    @pytest.mark.asyncio
+    async def test_full_lifecycle(self, make_cover):
+        """Full lifecycle: pre-step → travel → restore, all via cover services."""
+        cover = self._make_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Phase 1: Start → tilt pre-step
+            await cover.async_close_cover()
+            assert cover.tilt_calc.is_traveling()
+            assert not cover.travel_calc.is_traveling()
+
+            # Phase 2: Tilt reaches safe → travel starts
+            cover.tilt_calc.set_position(100)
+            await cover.auto_stop_if_necessary()
+            assert cover.travel_calc.is_traveling()
+
+            # Phase 3: Travel completes → tilt restore starts
+            cover.travel_calc.set_position(0)
+            await cover.auto_stop_if_necessary()
+            assert cover._tilt_restore_active is True
+            assert cover.tilt_calc.is_traveling()
+
+            # Phase 4: Tilt restore completes → all done
+            cover.tilt_calc.set_position(0)
+            await cover.auto_stop_if_necessary()
+            assert cover._tilt_restore_active is False
+            assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_stop_during_pre_step_uses_cover_tilt_stop(self, make_cover):
+        """Stopping during pre-step should call cover.stop_cover_tilt."""
+        cover = self._make_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        cover.hass.services.async_call.reset_mock()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_stop_cover()
+
+        # Should have called cover.stop_cover_tilt
+        calls = cover.hass.services.async_call.call_args_list
+        tilt_stop = [c for c in calls if c[0][1] == "stop_cover_tilt"]
+        assert len(tilt_stop) == 1
+
+        # No relay switch calls
+        ha_calls = [c for c in calls if c[0][0] == "homeassistant"]
+        assert len(ha_calls) == 0
+
+
+# ===================================================================
 # Inline tilt: tilt restore after travel via main motor reversal
 # ===================================================================
 
