@@ -42,6 +42,11 @@ from .const import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
 )
+from .tilt_strategies.planning import (
+    calculate_pre_step_delay,
+    extract_coupled_tilt,
+    extract_coupled_travel,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -554,8 +559,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 steps = self._tilt_strategy.plan_move_position(
                     target, current_pos, current_tilt
                 )
-                tilt_target = self._extract_coupled_tilt(steps)
-                pre_step_delay = self._calculate_pre_step_delay(steps)
+                tilt_target = extract_coupled_tilt(steps)
+                pre_step_delay = calculate_pre_step_delay(steps, self._tilt_strategy, self.tilt_calc, self.travel_calc)
 
                 # Dual motor: tilt to safe position first, then travel
                 if (
@@ -657,8 +662,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 steps = self._tilt_strategy.plan_move_tilt(
                     target, current_pos, current_tilt
                 )
-                travel_target = self._extract_coupled_travel(steps)
-                pre_step_delay = self._calculate_pre_step_delay(steps)
+                travel_target = extract_coupled_travel(steps)
+                pre_step_delay = calculate_pre_step_delay(steps, self._tilt_strategy, self.tilt_calc, self.travel_calc)
 
         _LOGGER.debug(
             "_async_move_tilt_to_endpoint :: target=%d, tilt_distance=%f%%, movement_time=%fs, travel_pos=%s",
@@ -809,8 +814,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 steps = self._tilt_strategy.plan_move_position(
                     target, current, current_tilt
                 )
-                tilt_target = self._extract_coupled_tilt(steps)
-                pre_step_delay = self._calculate_pre_step_delay(steps)
+                tilt_target = extract_coupled_tilt(steps)
+                pre_step_delay = calculate_pre_step_delay(steps, self._tilt_strategy, self.tilt_calc, self.travel_calc)
 
                 # Dual motor: tilt to safe position first, then travel
                 if (
@@ -912,8 +917,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             current_pos = self.travel_calc.current_position()
             if current is not None and current_pos is not None:
                 steps = self._tilt_strategy.plan_move_tilt(target, current_pos, current)
-                travel_target = self._extract_coupled_travel(steps)
-                pre_step_delay = self._calculate_pre_step_delay(steps)
+                travel_target = extract_coupled_travel(steps)
+                pre_step_delay = calculate_pre_step_delay(steps, self._tilt_strategy, self.tilt_calc, self.travel_calc)
 
         if self._is_movement_too_short(
             movement_time, target, current, "set_tilt_position"
@@ -1168,75 +1173,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         await self._async_handle_command(SERVICE_STOP_COVER)
         self.tilt_calc.set_position(position)
         self._last_command = None
-
-    @staticmethod
-    def _extract_coupled_tilt(steps):
-        """Extract the tilt target from a movement plan.
-
-        For coupled steps, returns the coupled_tilt value.
-        For multi-step plans (sequential), returns the TiltTo target.
-        Returns None if no tilt movement in the plan.
-        """
-        from .tilt_strategies import TiltTo, TravelTo
-
-        for step in steps:
-            if isinstance(step, TravelTo) and step.coupled_tilt is not None:
-                return step.coupled_tilt
-            if isinstance(step, TiltTo):
-                return step.target
-        return None
-
-    @staticmethod
-    def _extract_coupled_travel(steps):
-        """Extract the travel target from a movement plan.
-
-        For coupled steps, returns the coupled_travel value.
-        For multi-step plans (sequential), returns the TravelTo target.
-        Returns None if no travel movement in the plan.
-        """
-        from .tilt_strategies import TiltTo, TravelTo
-
-        for step in steps:
-            if isinstance(step, TiltTo) and step.coupled_travel is not None:
-                return step.coupled_travel
-            if isinstance(step, TravelTo):
-                return step.target
-        return None
-
-    def _calculate_pre_step_delay(self, steps) -> float:
-        """Calculate delay before the primary calculator should start tracking.
-
-        In sequential tilt mode (single motor), the strategy may plan a
-        pre-step (e.g. TiltTo before TravelTo). The pre-step must complete
-        before the primary movement begins, since both share the same motor.
-        Returns 0.0 if no pre-step or if the strategy uses a separate tilt motor.
-        """
-        from .tilt_strategies import TiltTo, TravelTo
-
-        if (
-            self._tilt_strategy is None
-            or self._tilt_strategy.uses_tilt_motor
-            or len(steps) < 2
-        ):
-            return 0.0
-
-        first, second = steps[0], steps[1]
-
-        # TiltTo before TravelTo: tilt is the pre-step
-        if isinstance(first, TiltTo) and isinstance(second, TravelTo):
-            current_tilt = self.tilt_calc.current_position()
-            if current_tilt is None:
-                return 0.0
-            return self.tilt_calc.calculate_travel_time(current_tilt, first.target)
-
-        # TravelTo before TiltTo: travel is the pre-step
-        if isinstance(first, TravelTo) and isinstance(second, TiltTo):
-            current_pos = self.travel_calc.current_position()
-            if current_pos is None:
-                return 0.0
-            return self.travel_calc.calculate_travel_time(current_pos, first.target)
-
-        return 0.0
 
     def _mark_switch_pending(self, entity_id, expected_transitions):
         """Mark a switch as having pending echo transitions to ignore."""
