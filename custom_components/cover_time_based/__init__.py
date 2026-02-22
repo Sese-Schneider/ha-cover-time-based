@@ -9,11 +9,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
+from .const import DOMAIN
 from .websocket_api import async_register_websocket_api
 
 _LOGGER = logging.getLogger(__name__)
-
-DOMAIN = "cover_time_based"
 PLATFORMS: list[Platform] = [Platform.COVER]
 _FRONTEND_KEY = f"{DOMAIN}_frontend_registered"
 

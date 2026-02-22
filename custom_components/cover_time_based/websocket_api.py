@@ -42,9 +42,9 @@ from .cover import (
     INPUT_MODE_TOGGLE,
 )
 
-_LOGGER = logging.getLogger(__name__)
+from .const import DOMAIN
 
-DOMAIN = "cover_time_based"
+_LOGGER = logging.getLogger(__name__)
 
 # Map from WS field names to config entry option keys
 _FIELD_MAP = {

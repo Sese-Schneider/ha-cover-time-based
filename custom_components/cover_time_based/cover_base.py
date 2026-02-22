@@ -31,21 +31,19 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .travel_calculator import TravelCalculator, TravelStatus
 
 from .calibration import CalibrationState
+from .const import (
+    CONF_ENDPOINT_RUNON_TIME,
+    CONF_MIN_MOVEMENT_TIME,
+    CONF_TILT_MODE,
+    CONF_TILT_STARTUP_DELAY,
+    CONF_TILT_TIME_CLOSE,
+    CONF_TILT_TIME_OPEN,
+    CONF_TRAVEL_STARTUP_DELAY,
+    CONF_TRAVEL_TIME_CLOSE,
+    CONF_TRAVEL_TIME_OPEN,
+)
 
 _LOGGER = logging.getLogger(__name__)
-
-# Configuration constants used by extra_state_attributes.
-# These are also defined in cover.py for YAML/UI config schemas,
-# but we define them here to avoid circular imports.
-CONF_TILT_MODE = "tilt_mode"
-CONF_TRAVEL_TIME_CLOSE = "travel_time_close"
-CONF_TRAVEL_TIME_OPEN = "travel_time_open"
-CONF_TILT_TIME_CLOSE = "tilt_time_close"
-CONF_TILT_TIME_OPEN = "tilt_time_open"
-CONF_TRAVEL_STARTUP_DELAY = "travel_startup_delay"
-CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
-CONF_ENDPOINT_RUNON_TIME = "endpoint_runon_time"
-CONF_MIN_MOVEMENT_TIME = "min_movement_time"
 
 
 class CoverTimeBased(CoverEntity, RestoreEntity):

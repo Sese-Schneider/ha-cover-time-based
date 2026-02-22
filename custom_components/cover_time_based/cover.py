@@ -24,17 +24,24 @@ from .calibration import (
     SERVICE_START_CALIBRATION,
     SERVICE_STOP_CALIBRATION,
 )
+from .const import (
+    CONF_ENDPOINT_RUNON_TIME,
+    CONF_MIN_MOVEMENT_TIME,
+    CONF_TILT_MODE,
+    CONF_TILT_STARTUP_DELAY,
+    CONF_TILT_TIME_CLOSE,
+    CONF_TILT_TIME_OPEN,
+    CONF_TRAVEL_STARTUP_DELAY,
+    CONF_TRAVEL_TIME_CLOSE,
+    CONF_TRAVEL_TIME_OPEN,
+    DEFAULT_ENDPOINT_RUNON_TIME,
+)
 from .cover_base import CoverTimeBased  # noqa: F401
 
 _LOGGER = logging.getLogger(__name__)
 
 CONF_DEVICES = "devices"
 CONF_DEFAULTS = "defaults"
-CONF_TILT_MODE = "tilt_mode"
-CONF_TRAVEL_TIME_CLOSE = "travel_time_close"
-CONF_TRAVEL_TIME_OPEN = "travel_time_open"
-CONF_TILT_TIME_CLOSE = "tilt_time_close"
-CONF_TILT_TIME_OPEN = "tilt_time_open"
 
 # Deprecated YAML key names (renamed)
 CONF_TRAVEL_MOVES_WITH_TILT = "travel_moves_with_tilt"
@@ -42,11 +49,6 @@ CONF_TRAVELLING_TIME_DOWN = "travelling_time_down"
 CONF_TRAVELLING_TIME_UP = "travelling_time_up"
 CONF_TILTING_TIME_DOWN = "tilting_time_down"
 CONF_TILTING_TIME_UP = "tilting_time_up"
-CONF_TRAVEL_STARTUP_DELAY = "travel_startup_delay"
-CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
-CONF_ENDPOINT_RUNON_TIME = "endpoint_runon_time"
-CONF_MIN_MOVEMENT_TIME = "min_movement_time"
-DEFAULT_ENDPOINT_RUNON_TIME = 2.0
 
 CONF_OPEN_SWITCH_ENTITY_ID = "open_switch_entity_id"
 CONF_CLOSE_SWITCH_ENTITY_ID = "close_switch_entity_id"
