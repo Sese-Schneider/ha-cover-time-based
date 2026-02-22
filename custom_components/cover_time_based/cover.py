@@ -37,6 +37,7 @@ from .const import (
     DEFAULT_ENDPOINT_RUNON_TIME,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
+from .helpers import resolve_entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -180,7 +181,7 @@ def _register_services(platform):
 
         async def _handle_start_calibration(call):
             entity_id = call.data["entity_id"]
-            entity = _resolve_entity(hass, entity_id)
+            entity = resolve_entity(hass, entity_id)
             data = {k: v for k, v in call.data.items() if k != "entity_id"}
             await entity.start_calibration(**data)
 
@@ -204,7 +205,7 @@ def _register_services(platform):
 
         async def _handle_stop_calibration(call):
             entity_id = call.data["entity_id"]
-            entity = _resolve_entity(hass, entity_id)
+            entity = resolve_entity(hass, entity_id)
             data = {k: v for k, v in call.data.items() if k != "entity_id"}
             return await entity.stop_calibration(**data)
 
@@ -222,17 +223,6 @@ def _register_services(platform):
         )
 
 
-def _resolve_entity(hass, entity_id):
-    """Resolve an entity_id to a CoverTimeBased instance."""
-    from homeassistant.exceptions import HomeAssistantError
-
-    component = hass.data.get("entity_components", {}).get("cover")
-    if component is None:
-        raise HomeAssistantError("Cover platform not loaded")
-    entity = component.get_entity(entity_id)
-    if entity is None or not isinstance(entity, CoverTimeBased):
-        raise HomeAssistantError(f"{entity_id} is not a cover_time_based entity")
-    return entity
 
 
 def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwargs):

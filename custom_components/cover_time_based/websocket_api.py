@@ -43,6 +43,7 @@ from .cover import (
 )
 
 from .const import DOMAIN
+from .helpers import resolve_entity_or_none
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -241,17 +242,6 @@ async def ws_update_config(
     connection.send_result(msg["id"], {"success": True})
 
 
-def _resolve_entity(hass: HomeAssistant, entity_id: str):
-    """Resolve an entity_id to a CoverTimeBased entity instance."""
-    from .cover import CoverTimeBased
-
-    component = hass.data.get("entity_components", {}).get("cover")
-    if component is None:
-        return None
-    entity = component.get_entity(entity_id)
-    if entity is None or not isinstance(entity, CoverTimeBased):
-        return None
-    return entity
 
 
 @websocket_api.websocket_command(
@@ -270,7 +260,7 @@ async def ws_start_calibration(
     msg: dict[str, Any],
 ) -> None:
     """Handle start_calibration WebSocket command."""
-    entity = _resolve_entity(hass, msg["entity_id"])
+    entity = resolve_entity_or_none(hass, msg["entity_id"])
     if entity is None:
         connection.send_error(msg["id"], "not_found", "Entity not found")
         return
@@ -301,7 +291,7 @@ async def ws_stop_calibration(
     msg: dict[str, Any],
 ) -> None:
     """Handle stop_calibration WebSocket command."""
-    entity = _resolve_entity(hass, msg["entity_id"])
+    entity = resolve_entity_or_none(hass, msg["entity_id"])
     if entity is None:
         connection.send_error(msg["id"], "not_found", "Entity not found")
         return
@@ -331,7 +321,7 @@ async def ws_raw_command(
     msg: dict[str, Any],
 ) -> None:
     """Send open/close/stop directly to the underlying device, bypassing the position tracker."""
-    entity = _resolve_entity(hass, msg["entity_id"])
+    entity = resolve_entity_or_none(hass, msg["entity_id"])
     if entity is None:
         connection.send_error(msg["id"], "not_found", "Entity not found")
         return

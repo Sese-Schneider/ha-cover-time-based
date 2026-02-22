@@ -732,40 +732,40 @@ class TestWsUpdateConfigWrappedSelf:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_entity (websocket_api version, returns None on error)
+# resolve_entity_or_none (from helpers, returns None on error)
 # ---------------------------------------------------------------------------
 
 
 class TestWsResolveEntity:
-    """Test _resolve_entity from websocket_api.py."""
+    """Test resolve_entity_or_none from helpers.py."""
 
     def test_returns_none_no_component(self):
-        from custom_components.cover_time_based.websocket_api import _resolve_entity
+        from custom_components.cover_time_based.helpers import resolve_entity_or_none
 
         hass = MagicMock()
         hass.data = {}
-        assert _resolve_entity(hass, "cover.test") is None
+        assert resolve_entity_or_none(hass, "cover.test") is None
 
     def test_returns_none_entity_not_found(self):
-        from custom_components.cover_time_based.websocket_api import _resolve_entity
+        from custom_components.cover_time_based.helpers import resolve_entity_or_none
 
         component = MagicMock()
         component.get_entity.return_value = None
         hass = MagicMock()
         hass.data = {"entity_components": {"cover": component}}
-        assert _resolve_entity(hass, "cover.test") is None
+        assert resolve_entity_or_none(hass, "cover.test") is None
 
     def test_returns_none_wrong_type(self):
-        from custom_components.cover_time_based.websocket_api import _resolve_entity
+        from custom_components.cover_time_based.helpers import resolve_entity_or_none
 
         component = MagicMock()
         component.get_entity.return_value = MagicMock()  # not CoverTimeBased
         hass = MagicMock()
         hass.data = {"entity_components": {"cover": component}}
-        assert _resolve_entity(hass, "cover.test") is None
+        assert resolve_entity_or_none(hass, "cover.test") is None
 
     def test_returns_entity_when_valid(self):
-        from custom_components.cover_time_based.websocket_api import _resolve_entity
+        from custom_components.cover_time_based.helpers import resolve_entity_or_none
         from custom_components.cover_time_based.cover import _create_cover_from_options
 
         entity = _create_cover_from_options(
@@ -785,7 +785,7 @@ class TestWsResolveEntity:
         hass = MagicMock()
         hass.data = {"entity_components": {"cover": component}}
 
-        result = _resolve_entity(hass, "cover.test")
+        result = resolve_entity_or_none(hass, "cover.test")
         assert result is entity
 
 
@@ -803,7 +803,7 @@ class TestWsStartCalibration:
         conn = _make_connection()
 
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=None,
         ):
             await _ws_start_calibration(
@@ -829,7 +829,7 @@ class TestWsStartCalibration:
         entity.start_calibration = AsyncMock()
 
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_start_calibration(
@@ -857,7 +857,7 @@ class TestWsStartCalibration:
         entity.start_calibration = AsyncMock()
 
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_start_calibration(
@@ -886,7 +886,7 @@ class TestWsStartCalibration:
         )
 
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_start_calibration(
@@ -919,7 +919,7 @@ class TestWsStopCalibration:
         conn = _make_connection()
 
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=None,
         ):
             await _ws_stop_calibration(
@@ -946,7 +946,7 @@ class TestWsStopCalibration:
         )
 
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_stop_calibration(
@@ -973,7 +973,7 @@ class TestWsStopCalibration:
         entity.stop_calibration = AsyncMock(side_effect=Exception("no calibration"))
 
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_stop_calibration(
@@ -1022,7 +1022,7 @@ class TestWsRawCommand:
     async def test_entity_not_found(self):
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=None,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("open"))
@@ -1034,7 +1034,7 @@ class TestWsRawCommand:
         entity = self._make_entity()
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("open"))
@@ -1046,7 +1046,7 @@ class TestWsRawCommand:
         entity = self._make_entity()
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("close"))
@@ -1058,7 +1058,7 @@ class TestWsRawCommand:
         entity = self._make_entity()
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("stop"))
@@ -1070,7 +1070,7 @@ class TestWsRawCommand:
         entity = self._make_entity(has_tilt_motor=True)
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("tilt_open"))
@@ -1082,7 +1082,7 @@ class TestWsRawCommand:
         entity = self._make_entity(has_tilt_motor=False)
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("tilt_open"))
@@ -1094,7 +1094,7 @@ class TestWsRawCommand:
         entity = self._make_entity(has_tilt_motor=True)
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("tilt_close"))
@@ -1106,7 +1106,7 @@ class TestWsRawCommand:
         entity = self._make_entity(has_tilt_motor=False)
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("tilt_close"))
@@ -1118,7 +1118,7 @@ class TestWsRawCommand:
         entity = self._make_entity(has_tilt_motor=True)
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("tilt_stop"))
@@ -1130,7 +1130,7 @@ class TestWsRawCommand:
         entity = self._make_entity(has_tilt_motor=False)
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("tilt_stop"))
@@ -1143,7 +1143,7 @@ class TestWsRawCommand:
         entity._send_open = AsyncMock(side_effect=Exception("hw error"))
         conn = _make_connection()
         with patch(
-            "custom_components.cover_time_based.websocket_api._resolve_entity",
+            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
             return_value=entity,
         ):
             await _ws_raw_command(MagicMock(), conn, self._msg("open"))

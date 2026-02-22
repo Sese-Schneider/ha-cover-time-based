@@ -1,12 +1,12 @@
-"""Tests for cover.py service registration and _resolve_entity."""
+"""Tests for cover.py service registration and resolve_entity."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.exceptions import HomeAssistantError
 
+from custom_components.cover_time_based.helpers import resolve_entity
 from custom_components.cover_time_based.cover import (
-    _resolve_entity,
     _register_services,
     _create_cover_from_options,
     CONF_DEVICE_TYPE,
@@ -23,26 +23,26 @@ from custom_components.cover_time_based.cover import (
 
 
 # ---------------------------------------------------------------------------
-# _resolve_entity
+# resolve_entity
 # ---------------------------------------------------------------------------
 
 
 class TestResolveEntity:
-    """Test _resolve_entity from cover.py (raises on error)."""
+    """Test resolve_entity from cover.py (raises on error)."""
 
     def test_raises_when_no_cover_component(self):
         hass = MagicMock()
         hass.data = {}
 
         with pytest.raises(HomeAssistantError, match="Cover platform not loaded"):
-            _resolve_entity(hass, "cover.test")
+            resolve_entity(hass, "cover.test")
 
     def test_raises_when_entity_components_has_no_cover(self):
         hass = MagicMock()
         hass.data = {"entity_components": {}}
 
         with pytest.raises(HomeAssistantError, match="Cover platform not loaded"):
-            _resolve_entity(hass, "cover.test")
+            resolve_entity(hass, "cover.test")
 
     def test_raises_when_entity_not_found(self):
         component = MagicMock()
@@ -52,7 +52,7 @@ class TestResolveEntity:
         hass.data = {"entity_components": {"cover": component}}
 
         with pytest.raises(HomeAssistantError, match="cover.test"):
-            _resolve_entity(hass, "cover.test")
+            resolve_entity(hass, "cover.test")
 
     def test_raises_when_not_cover_time_based(self):
         """Entity exists but is not a CoverTimeBased instance."""
@@ -63,7 +63,7 @@ class TestResolveEntity:
         hass.data = {"entity_components": {"cover": component}}
 
         with pytest.raises(HomeAssistantError, match="not a cover_time_based"):
-            _resolve_entity(hass, "cover.test")
+            resolve_entity(hass, "cover.test")
 
     def test_returns_valid_entity(self):
         """Valid CoverTimeBased entity is returned."""
@@ -86,7 +86,7 @@ class TestResolveEntity:
         hass = MagicMock()
         hass.data = {"entity_components": {"cover": component}}
 
-        result = _resolve_entity(hass, "cover.test")
+        result = resolve_entity(hass, "cover.test")
         assert result is entity
 
 
@@ -132,7 +132,7 @@ class TestServiceHandlers:
         from unittest.mock import patch
 
         with patch(
-            "custom_components.cover_time_based.cover._resolve_entity",
+            "custom_components.cover_time_based.cover.resolve_entity",
             return_value=mock_entity,
         ):
             await handler(service_call)
@@ -172,7 +172,7 @@ class TestServiceHandlers:
         from unittest.mock import patch
 
         with patch(
-            "custom_components.cover_time_based.cover._resolve_entity",
+            "custom_components.cover_time_based.cover.resolve_entity",
             return_value=mock_entity,
         ):
             await handler(service_call)
