@@ -499,6 +499,63 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self.async_stop_cover()
         await self._async_move_to_endpoint(target=100)
 
+    async def _plan_tilt_for_travel(
+        self, target: int, command: str, current_pos, current_tilt
+    ) -> tuple[int | None, float, bool]:
+        """Plan tilt coupling for a travel movement.
+
+        Returns (tilt_target, pre_step_delay, started_pre_step).
+        If started_pre_step is True, the caller should return immediately
+        because _start_tilt_pre_step has taken over the movement lifecycle.
+        """
+        tilt_target = None
+        pre_step_delay = 0.0
+        self._tilt_restore_target = None
+
+        if self._tilt_strategy is None:
+            return tilt_target, pre_step_delay, False
+
+        if current_pos is None or current_tilt is None:
+            return tilt_target, pre_step_delay, False
+
+        steps = self._tilt_strategy.plan_move_position(
+            target, current_pos, current_tilt
+        )
+        tilt_target = extract_coupled_tilt(steps)
+        pre_step_delay = calculate_pre_step_delay(
+            steps, self._tilt_strategy, self.tilt_calc, self.travel_calc
+        )
+
+        # Dual motor: tilt to safe position first, then travel
+        if (
+            tilt_target is not None
+            and self._tilt_strategy.uses_tilt_motor
+            and current_tilt != tilt_target
+        ):
+            restore = target if target in (0, 100) else current_tilt
+            await self._start_tilt_pre_step(tilt_target, target, command, restore)
+            return tilt_target, pre_step_delay, True
+
+        # Dual motor: pre-step skipped, but still snap tilt to endpoint
+        if (
+            tilt_target is not None
+            and self._tilt_strategy.uses_tilt_motor
+            and target in (0, 100)
+            and current_tilt != target
+        ):
+            self._tilt_restore_target = target
+
+        # Shared motor with restore: save tilt for post-travel restore
+        if (
+            tilt_target is not None
+            and self._tilt_strategy.restores_tilt
+            and not self._tilt_strategy.uses_tilt_motor
+            and target not in (0, 100)
+        ):
+            self._tilt_restore_target = current_tilt
+
+        return tilt_target, pre_step_delay, False
+
     async def _async_move_to_endpoint(self, target):
         """Move cover to an endpoint (0=fully closed, 100=fully open)."""
         await self._abandon_active_lifecycle()
@@ -549,50 +606,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         self._last_command = command
 
-        tilt_target = None
-        pre_step_delay = 0.0
-        self._tilt_restore_target = None
-        if self._tilt_strategy is not None:
-            current_pos = self.travel_calc.current_position()
-            current_tilt = self.tilt_calc.current_position()
-            if current_pos is not None and current_tilt is not None:
-                steps = self._tilt_strategy.plan_move_position(
-                    target, current_pos, current_tilt
-                )
-                tilt_target = extract_coupled_tilt(steps)
-                pre_step_delay = calculate_pre_step_delay(steps, self._tilt_strategy, self.tilt_calc, self.travel_calc)
-
-                # Dual motor: tilt to safe position first, then travel
-                if (
-                    tilt_target is not None
-                    and self._tilt_strategy.uses_tilt_motor
-                    and current_tilt != tilt_target
-                ):
-                    # At endpoints, snap tilt to endpoint after travel
-                    restore = target if target in (0, 100) else current_tilt
-                    await self._start_tilt_pre_step(
-                        tilt_target, target, command, restore
-                    )
-                    return
-
-                # Dual motor: pre-step skipped (tilt already at safe),
-                # but still need to snap tilt to endpoint after travel
-                if (
-                    tilt_target is not None
-                    and self._tilt_strategy.uses_tilt_motor
-                    and target in (0, 100)
-                    and current_tilt != target
-                ):
-                    self._tilt_restore_target = target
-
-                # Shared motor with restore: save tilt for post-travel restore
-                if (
-                    tilt_target is not None
-                    and self._tilt_strategy.restores_tilt
-                    and not self._tilt_strategy.uses_tilt_motor
-                    and target not in (0, 100)
-                ):
-                    self._tilt_restore_target = current_tilt
+        current_pos = self.travel_calc.current_position()
+        current_tilt = self.tilt_calc.current_position() if self._tilt_strategy else None
+        tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
+            target, command, current_pos, current_tilt
+        )
+        if started:
+            return
 
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
@@ -805,49 +825,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         self._last_command = command
 
-        tilt_target = None
-        pre_step_delay = 0.0
-        self._tilt_restore_target = None
-        if self._tilt_strategy is not None:
-            current_tilt = self.tilt_calc.current_position()
-            if current is not None and current_tilt is not None:
-                steps = self._tilt_strategy.plan_move_position(
-                    target, current, current_tilt
-                )
-                tilt_target = extract_coupled_tilt(steps)
-                pre_step_delay = calculate_pre_step_delay(steps, self._tilt_strategy, self.tilt_calc, self.travel_calc)
-
-                # Dual motor: tilt to safe position first, then travel
-                if (
-                    tilt_target is not None
-                    and self._tilt_strategy.uses_tilt_motor
-                    and current_tilt != tilt_target
-                ):
-                    # At endpoints, snap tilt to endpoint after travel
-                    restore = target if target in (0, 100) else current_tilt
-                    await self._start_tilt_pre_step(
-                        tilt_target, target, command, restore
-                    )
-                    return
-
-                # Dual motor: pre-step skipped (tilt already at safe),
-                # but still need to snap tilt to endpoint after travel
-                if (
-                    tilt_target is not None
-                    and self._tilt_strategy.uses_tilt_motor
-                    and target in (0, 100)
-                    and current_tilt != target
-                ):
-                    self._tilt_restore_target = target
-
-                # Shared motor with restore: save tilt for post-travel restore
-                if (
-                    tilt_target is not None
-                    and self._tilt_strategy.restores_tilt
-                    and not self._tilt_strategy.uses_tilt_motor
-                    and target not in (0, 100)
-                ):
-                    self._tilt_restore_target = current_tilt
+        current_tilt = self.tilt_calc.current_position() if self._tilt_strategy else None
+        tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
+            target, command, current, current_tilt
+        )
+        if started:
+            return
 
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
