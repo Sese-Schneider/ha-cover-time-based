@@ -160,8 +160,10 @@ class CalibrationMixin:
                     num_steps,
                     step_duration,
                 )
+                step_start = time.monotonic()
                 await self._async_handle_command(move_command)
-                await sleep(step_duration)
+                elapsed = time.monotonic() - step_start
+                await sleep(max(0, step_duration - elapsed))
                 await self._send_stop()
                 self._calibration.step_count += 1
                 self.async_write_ha_state()
@@ -208,8 +210,10 @@ class CalibrationMixin:
                 self._calibration.last_pulse_duration = pulse_duration
                 self._calibration.step_count += 1
 
+                step_start = time.monotonic()
                 await self._async_handle_command(self._calibration.move_command)
-                await sleep(pulse_duration)
+                elapsed = time.monotonic() - step_start
+                await sleep(max(0, pulse_duration - elapsed))
                 await self._send_stop()
                 self.async_write_ha_state()
 

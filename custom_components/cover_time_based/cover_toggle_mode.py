@@ -1,5 +1,6 @@
 """Toggle mode cover."""
 
+import asyncio
 import logging
 import time
 from asyncio import sleep
@@ -20,12 +21,30 @@ class ToggleModeCover(SwitchCoverTimeBased):
     In toggle mode, the motor controller toggles state on each pulse.
     A second pulse on the same direction button stops the motor.
     _send_stop therefore re-presses the last-used direction button.
+
+    The send methods return immediately after the ON edge so that position
+    tracking starts from the moment the motor begins moving. The pulse
+    completion (sleep + turn_off) runs in the background.
     """
 
     def __init__(self, pulse_time, **kwargs):
         super().__init__(**kwargs)
         self._pulse_time = pulse_time
         self._last_external_toggle_time = {}
+        self._last_tilt_direction = None
+
+    async def _complete_pulse(self, entity_id):
+        """Complete a relay pulse by turning OFF after pulse_time."""
+        try:
+            await sleep(self._pulse_time)
+            await self.hass.services.async_call(
+                "homeassistant",
+                "turn_off",
+                {"entity_id": entity_id},
+                False,
+            )
+        except asyncio.CancelledError:
+            pass
 
     # --- Public HA service overrides ---
 
@@ -73,6 +92,8 @@ class ToggleModeCover(SwitchCoverTimeBased):
             or (self._startup_delay_task and not self._startup_delay_task.done())
             or (self._delay_task and not self._delay_task.done())
         )
+        tilt_restore_was_active = self._tilt_restore_active
+        tilt_pre_step_was_active = self._pending_travel_target is not None
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
         self._handle_stop()
@@ -82,8 +103,13 @@ class ToggleModeCover(SwitchCoverTimeBased):
             )
         if not self._triggered_externally and was_active:
             await self._send_stop()
+            if (
+                tilt_restore_was_active or tilt_pre_step_was_active
+            ) and self._has_tilt_motor():
+                await self._send_tilt_stop()
         self.async_write_ha_state()
         self._last_command = None
+        self._last_tilt_direction = None
 
     # --- External state change handlers ---
 
@@ -186,13 +212,8 @@ class ToggleModeCover(SwitchCoverTimeBased):
                 {"entity_id": self._stop_switch_entity_id},
                 False,
             )
-        await sleep(self._pulse_time)
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._open_switch_entity_id},
-            False,
-        )
+        # Motor controller acts on ON edge; complete pulse in background
+        self.hass.async_create_task(self._complete_pulse(self._open_switch_entity_id))
 
     async def _send_close(self) -> None:
         if self._switch_is_on(self._open_switch_entity_id):
@@ -220,13 +241,8 @@ class ToggleModeCover(SwitchCoverTimeBased):
                 {"entity_id": self._stop_switch_entity_id},
                 False,
             )
-        await sleep(self._pulse_time)
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._close_switch_entity_id},
-            False,
-        )
+        # Motor controller acts on ON edge; complete pulse in background
+        self.hass.async_create_task(self._complete_pulse(self._close_switch_entity_id))
 
     async def _send_stop(self) -> None:
         if self._last_command == SERVICE_CLOSE_COVER:
@@ -237,12 +253,9 @@ class ToggleModeCover(SwitchCoverTimeBased):
                 {"entity_id": self._close_switch_entity_id},
                 False,
             )
-            await sleep(self._pulse_time)
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._close_switch_entity_id},
-                False,
+            # Motor toggles on ON edge; complete pulse in background
+            self.hass.async_create_task(
+                self._complete_pulse(self._close_switch_entity_id)
             )
         elif self._last_command == SERVICE_OPEN_COVER:
             self._mark_switch_pending(self._open_switch_entity_id, 2)
@@ -252,12 +265,76 @@ class ToggleModeCover(SwitchCoverTimeBased):
                 {"entity_id": self._open_switch_entity_id},
                 False,
             )
-            await sleep(self._pulse_time)
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._open_switch_entity_id},
-                False,
+            # Motor toggles on ON edge; complete pulse in background
+            self.hass.async_create_task(
+                self._complete_pulse(self._open_switch_entity_id)
             )
         else:
             self._log("_send_stop :: toggle mode with no last command, skipping")
+
+    # --- Tilt motor relay commands ---
+
+    async def _send_tilt_open(self) -> None:
+        if self._switch_is_on(self._tilt_close_switch_id):
+            self._mark_switch_pending(self._tilt_close_switch_id, 1)
+        self._mark_switch_pending(self._tilt_open_switch_id, 2)
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._tilt_close_switch_id},
+            False,
+        )
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_on",
+            {"entity_id": self._tilt_open_switch_id},
+            False,
+        )
+        self.hass.async_create_task(self._complete_pulse(self._tilt_open_switch_id))
+        self._last_tilt_direction = "open"
+
+    async def _send_tilt_close(self) -> None:
+        if self._switch_is_on(self._tilt_open_switch_id):
+            self._mark_switch_pending(self._tilt_open_switch_id, 1)
+        self._mark_switch_pending(self._tilt_close_switch_id, 2)
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._tilt_open_switch_id},
+            False,
+        )
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_on",
+            {"entity_id": self._tilt_close_switch_id},
+            False,
+        )
+        self.hass.async_create_task(self._complete_pulse(self._tilt_close_switch_id))
+        self._last_tilt_direction = "close"
+
+    async def _send_tilt_stop(self) -> None:
+        if self._last_tilt_direction == "close":
+            self._mark_switch_pending(self._tilt_close_switch_id, 2)
+            await self.hass.services.async_call(
+                "homeassistant",
+                "turn_on",
+                {"entity_id": self._tilt_close_switch_id},
+                False,
+            )
+            self.hass.async_create_task(
+                self._complete_pulse(self._tilt_close_switch_id)
+            )
+        elif self._last_tilt_direction == "open":
+            self._mark_switch_pending(self._tilt_open_switch_id, 2)
+            await self.hass.services.async_call(
+                "homeassistant",
+                "turn_on",
+                {"entity_id": self._tilt_open_switch_id},
+                False,
+            )
+            self.hass.async_create_task(self._complete_pulse(self._tilt_open_switch_id))
+        else:
+            self._log(
+                "_send_tilt_stop :: toggle mode with no last tilt direction, skipping"
+            )
+        self._last_tilt_direction = None

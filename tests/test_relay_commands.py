@@ -2,6 +2,9 @@
 
 Each test class covers one input mode and verifies the exact sequence
 of service calls that the current implementation sends to Home Assistant.
+
+Pulse/toggle modes defer pulse completion to background tasks. Tests
+drain those tasks to verify the full call sequence.
 """
 
 import pytest
@@ -38,6 +41,13 @@ def _ha(service, entity_id):
 def _cover_svc(service, entity_id):
     """Shorthand for a cover domain service call."""
     return call("cover", service, {"entity_id": entity_id}, False)
+
+
+async def _drain_tasks(cover):
+    """Await all background tasks created during send calls."""
+    for task in cover.hass._test_tasks:
+        await task
+    cover.hass._test_tasks.clear()
 
 
 # ===================================================================
@@ -145,11 +155,12 @@ class TestPulseModeClose:
             ),
         ):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
+            await _drain_tasks(cover)
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.close"),
-            # after pulse sleep
+            # pulse completion (background)
             _ha("turn_off", "switch.close"),
         ]
 
@@ -164,12 +175,13 @@ class TestPulseModeClose:
             ),
         ):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
+            await _drain_tasks(cover)
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.close"),
             _ha("turn_off", "switch.stop"),
-            # after pulse sleep
+            # pulse completion (background)
             _ha("turn_off", "switch.close"),
         ]
 
@@ -188,11 +200,12 @@ class TestPulseModeOpen:
             ),
         ):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
+            await _drain_tasks(cover)
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_on", "switch.open"),
-            # after pulse sleep
+            # pulse completion (background)
             _ha("turn_off", "switch.open"),
         ]
 
@@ -222,12 +235,13 @@ class TestPulseModeStop:
             ),
         ):
             await cover._async_handle_command(SERVICE_STOP_COVER)
+            await _drain_tasks(cover)
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.stop"),
-            # after pulse sleep
+            # pulse completion (background)
             _ha("turn_off", "switch.stop"),
         ]
 
@@ -251,11 +265,12 @@ class TestToggleModeClose:
             ),
         ):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
+            await _drain_tasks(cover)
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.close"),
-            # after pulse sleep
+            # pulse completion (background)
             _ha("turn_off", "switch.close"),
         ]
 
@@ -274,11 +289,12 @@ class TestToggleModeOpen:
             ),
         ):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
+            await _drain_tasks(cover)
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_on", "switch.open"),
-            # after pulse sleep
+            # pulse completion (background)
             _ha("turn_off", "switch.open"),
         ]
 
@@ -298,10 +314,11 @@ class TestToggleModeStop:
             ),
         ):
             await cover._async_handle_command(SERVICE_STOP_COVER)
+            await _drain_tasks(cover)
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_on", "switch.close"),
-            # after pulse sleep
+            # pulse completion (background)
             _ha("turn_off", "switch.close"),
         ]
 
@@ -317,10 +334,11 @@ class TestToggleModeStop:
             ),
         ):
             await cover._async_handle_command(SERVICE_STOP_COVER)
+            await _drain_tasks(cover)
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_on", "switch.open"),
-            # after pulse sleep
+            # pulse completion (background)
             _ha("turn_off", "switch.open"),
         ]
 

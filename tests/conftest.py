@@ -44,7 +44,15 @@ def make_hass():
     def _make():
         hass = MagicMock()
         hass.services.async_call = AsyncMock()
-        hass.async_create_task = lambda coro: asyncio.ensure_future(coro)
+        created_tasks = []
+
+        def create_task(coro):
+            task = asyncio.ensure_future(coro)
+            created_tasks.append(task)
+            return task
+
+        hass.async_create_task = create_task
+        hass._test_tasks = created_tasks
         return hass
 
     return _make
@@ -152,3 +160,7 @@ def make_cover(make_hass):
                 task = getattr(calibration, cal_attr, None)
                 if task is not None and not task.done():
                     task.cancel()
+        # Cancel any background pulse tasks
+        for task in getattr(cover.hass, "_test_tasks", []):
+            if not task.done():
+                task.cancel()
