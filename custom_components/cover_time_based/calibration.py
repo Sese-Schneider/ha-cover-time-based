@@ -39,5 +39,6 @@ class CalibrationState:
     last_pulse_duration: float | None = None
     continuous_start: float | None = None
     move_command: str | None = None
+    saved_startup_delay: float | None = None
     timeout_task: Task | None = field(default=None, repr=False)
     automation_task: Task | None = field(default=None, repr=False)

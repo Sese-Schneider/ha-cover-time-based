@@ -241,6 +241,37 @@ class TestMotorOverheadCalibration:
         assert cover._calibration.step_duration == 6.0
 
     @pytest.mark.asyncio
+    async def test_zeros_startup_delay_during_test(self, make_cover):
+        """Startup delay is zeroed during test and restored after."""
+        cover = make_cover(
+            travel_time_close=60.0,
+            travel_time_open=60.0,
+            travel_startup_delay=0.5,
+        )
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        import time as time_mod
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_startup_delay", timeout=300.0
+            )
+            # During test, delay should be zeroed
+            assert cover._travel_startup_delay is None
+            assert cover._calibration.saved_startup_delay == 0.5
+
+            # Stop calibration (simulate completed test)
+            cover._calibration.step_count = 8
+            cover._calibration.continuous_start = time_mod.monotonic() - 28.0
+            await cover.stop_calibration()
+
+        # After test, delay should be restored
+        assert cover._travel_startup_delay == 0.5
+
+    @pytest.mark.asyncio
     async def test_overhead_calculation(self, make_cover):
         cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
         mock_entry = MagicMock()
@@ -279,6 +310,32 @@ class TestMotorOverheadCalibration:
             await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
         assert cover._calibration.automation_task is not None
         assert cover._calibration.step_duration == 0.5
+
+    @pytest.mark.asyncio
+    async def test_tilt_zeros_startup_delay(self, make_cover):
+        """Tilt startup delay is zeroed during test and restored after."""
+        cover = make_cover(
+            tilt_time_close=10.0,
+            tilt_time_open=10.0,
+            tilt_startup_delay=0.3,
+        )
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        import time as time_mod
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
+            assert cover._tilt_startup_delay is None
+            assert cover._calibration.saved_startup_delay == 0.3
+
+            cover._calibration.step_count = 3
+            cover._calibration.continuous_start = time_mod.monotonic() - 10.0
+            await cover.stop_calibration()
+
+        assert cover._tilt_startup_delay == 0.3
 
     @pytest.mark.asyncio
     async def test_tilt_overhead_calculation(self, make_cover):

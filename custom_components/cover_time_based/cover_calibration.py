@@ -132,7 +132,9 @@ class CalibrationMixin:
             CALIBRATION_TILT_OVERHEAD_STEPS,
         )
 
-        if attribute == "travel_startup_delay":
+        is_tilt = "tilt" in attribute
+
+        if not is_tilt:
             position = self.current_cover_position
             move_command = self._resolve_direction(direction, position)
             if move_command == SERVICE_OPEN_COVER:
@@ -140,6 +142,9 @@ class CalibrationMixin:
             else:
                 travel_time = self._travel_time_close or self._travel_time_open
             num_steps = CALIBRATION_OVERHEAD_STEPS
+            # Zero startup delay during test so tracker doesn't compensate
+            self._calibration.saved_startup_delay = self._travel_startup_delay
+            self._travel_startup_delay = None
         else:
             position = self.current_cover_tilt_position
             move_command = self._resolve_direction(direction, position)
@@ -148,6 +153,9 @@ class CalibrationMixin:
             else:
                 travel_time = self._tilting_time_close or self._tilting_time_open
             num_steps = CALIBRATION_TILT_OVERHEAD_STEPS
+            # Zero startup delay during test so tracker doesn't compensate
+            self._calibration.saved_startup_delay = self._tilt_startup_delay
+            self._tilt_startup_delay = None
 
         assert travel_time is not None
         _LOGGER.debug(
@@ -162,13 +170,15 @@ class CalibrationMixin:
         self._calibration.move_command = move_command
 
         self._calibration.automation_task = self.hass.async_create_task(
-            self._run_overhead_steps(step_duration, num_steps)
+            self._run_overhead_steps(step_duration, num_steps, is_tilt)
         )
 
-    async def _run_overhead_steps(self, step_duration, num_steps):
+    async def _run_overhead_steps(self, step_duration, num_steps, is_tilt):
         """Execute stepped moves then one continuous move for overhead test.
 
-        Phase 1: num_steps stepped moves of step_duration each (with pauses).
+        Phase 1: num_steps stepped moves using the travel calculator's
+        position tracking (same timing as normal operation).  After each
+        step, force-set position to compensate for motor startup delay.
         Phase 2: Continuous move for the remaining distance.
         The user calls stop_calibration when the cover reaches the endpoint.
         """
@@ -177,23 +187,35 @@ class CalibrationMixin:
 
         move_command = self._calibration.move_command
         assert move_command is not None
+        closing = move_command == SERVICE_CLOSE_COVER
+        calc = self.tilt_calc if is_tilt else self.travel_calc
 
         try:
-            # Phase 1: Stepped moves
+            # Phase 1: Stepped moves using travel calculator timing
             for i in range(num_steps):
+                pct = (i + 1) * 10
+                target = (100 - pct) if closing else pct
                 _LOGGER.debug(
-                    "overhead step %d/%d: moving for %.2fs",
+                    "overhead step %d/%d: target=%d%%",
                     i + 1,
                     num_steps,
-                    step_duration,
+                    target,
                 )
-                step_start = time.monotonic()
+                calc.start_travel(target)
                 await self._async_handle_command(move_command)
-                elapsed = time.monotonic() - step_start
-                await sleep(max(0, step_duration - elapsed))
+
+                # Wait for travel calculator to say position reached
+                while calc.current_position() != target:
+                    await sleep(0.05)
+
                 await self._send_stop()
+                calc.stop()
+
+                # Force position — motor fell short due to startup delay
+                calc.set_position(target)
                 self._calibration.step_count += 1
                 self.async_write_ha_state()
+
                 if i < num_steps - 1:
                     await sleep(CALIBRATION_STEP_PAUSE)
 
@@ -307,6 +329,14 @@ class CalibrationMixin:
             # reflect where the cover ended up (at an endpoint).
             self._set_position_after_calibration(self._calibration)
 
+        # Restore startup delay that was zeroed during overhead test
+        if self._calibration.saved_startup_delay is not None:
+            attr = self._calibration.attribute
+            if "tilt" in attr:
+                self._tilt_startup_delay = self._calibration.saved_startup_delay
+            else:
+                self._travel_startup_delay = self._calibration.saved_startup_delay
+
         self._calibration = None
         self.async_write_ha_state()
         return result
@@ -347,10 +377,17 @@ class CalibrationMixin:
             return round(elapsed, 1)
 
         if attribute in ("travel_startup_delay", "tilt_startup_delay"):
+            closing = self._calibration.move_command == SERVICE_CLOSE_COVER
             if attribute == "travel_startup_delay":
-                total_time = self._travel_time_close or self._travel_time_open
+                if closing:
+                    total_time = self._travel_time_close or self._travel_time_open
+                else:
+                    total_time = self._travel_time_open or self._travel_time_close
             else:
-                total_time = self._tilting_time_close or self._tilting_time_open
+                if closing:
+                    total_time = self._tilting_time_close or self._tilting_time_open
+                else:
+                    total_time = self._tilting_time_open or self._tilting_time_close
 
             if not total_time:
                 _LOGGER.warning(
@@ -365,6 +402,12 @@ class CalibrationMixin:
                 )
                 return 0.0
             continuous_time = time.monotonic() - continuous_start
+            # Subtract pulse overhead from continuous phase start for
+            # pulse/toggle modes (the ON command includes a relay pulse
+            # that doesn't contribute to motor travel time).
+            pulse_time = getattr(self, "_pulse_time", None)
+            if pulse_time:
+                continuous_time -= pulse_time
             # Each step covers 1/10 of travel; remaining depends on step count
             expected_remaining = (1.0 - step_count / 10.0) * total_time
             overhead = (continuous_time - expected_remaining) / step_count
