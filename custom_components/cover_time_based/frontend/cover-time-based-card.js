@@ -5,7 +5,7 @@
  * Uses HA built-in elements (ha-entity-picker, ha-textfield, ha-checkbox,
  * ha-button) for consistent look and feel.
  *
- * All user-visible strings are translatable via strings.json / translations/.
+ * All user-visible strings are translatable. Translations are embedded below.
  */
 
 import {
@@ -16,8 +16,8 @@ import {
 
 const DOMAIN = "cover_time_based";
 
-// English fallback strings — keys match the flattened paths in strings.json "card" section.
-// When translations load successfully, they override these via _t().
+// Embedded translations — keys are flattened dotted paths.
+// English is the default; other languages override specific keys.
 const EN = {
   "header": "Cover Time Based Configuration",
   "loading": "Loading...",
@@ -104,6 +104,180 @@ const EN = {
   "hints.min_movement_time": "Click Finish as soon as you notice the cover moving.",
 };
 
+const TRANSLATIONS = {
+  en: EN,
+  pt: {
+    "header": "Configuração de Estore Baseado em Tempo",
+    "loading": "A carregar...",
+    "saving": "A guardar...",
+    "confirm_cancel_calibration": "Existe uma calibração em curso. Cancelar e continuar?",
+    "create_new": "+ Criar nova entidade de estore",
+    "yaml_warning": "Esta entidade utiliza configuração YAML e não pode ser configurada a partir deste cartão. Por favor, migre para a interface gráfica: Definições > Dispositivos e Serviços > Auxiliares > Criar Auxiliar > Estore Baseado em Tempo.",
+    "tabs.device": "Dispositivo",
+    "tabs.calibration": "Calibração",
+    "control_mode.label": "Modo de Controlo",
+    "control_mode.wrapped": "Encapsular uma entidade de estore existente",
+    "control_mode.switch": "Interruptor (travamento)",
+    "control_mode.pulse": "Pulso (momentâneo)",
+    "control_mode.toggle": "Alternar (mesmo botão)",
+    "control_mode.pulse_time": "Duração do pulso",
+    "entities.cover_entity": "Entidade de Estore",
+    "entities.switch_entities": "Entidades de Interruptor",
+    "entities.open_switch": "Interruptor de abrir",
+    "entities.close_switch": "Interruptor de fechar",
+    "entities.stop_switch": "Interruptor de parar",
+    "tilt.label": "Inclinação",
+    "tilt.none": "Não suportado",
+    "tilt.sequential": "Fecha e depois inclina",
+    "tilt.dual_motor": "Motor de inclinação separado",
+    "tilt.inline": "Inclina durante o deslocamento",
+    "tilt_motor.label": "Motor de Inclinação",
+    "tilt_motor.open_switch": "Interruptor de abrir inclinação",
+    "tilt_motor.close_switch": "Interruptor de fechar inclinação",
+    "tilt_motor.stop_switch": "Interruptor de parar inclinação",
+    "tilt_motor.safe_position": "Posição de inclinação segura",
+    "tilt_motor.safe_position_helper": "A inclinação move-se para aqui antes do deslocamento (100 = totalmente aberto)",
+    "tilt_motor.max_allowed_position": "Posição máxima permitida de inclinação (opcional)",
+    "tilt_motor.max_allowed_helper": "A inclinação só é permitida quando a posição do estore está neste valor ou abaixo (0 = fechado, 100 = aberto)",
+    "timing.attribute_header": "Atributo",
+    "timing.travel_attribute_header": "Atributo",
+    "timing.tilt_attribute_header": "Atributo",
+    "timing.value_header": "Valor",
+    "timing.not_set": "Não definido",
+    "timing.travel_time_close": "Tempo de deslocamento (fechar)",
+    "timing.travel_time_open": "Tempo de deslocamento (abrir)",
+    "timing.travel_startup_delay": "Atraso de arranque do deslocamento",
+    "timing.tilt_time_close": "Tempo de inclinação (fechar)",
+    "timing.tilt_time_open": "Tempo de inclinação (abrir)",
+    "timing.tilt_startup_delay": "Atraso de arranque da inclinação",
+    "timing.min_movement_time": "Tempo mínimo de movimento",
+    "timing.endpoint_runon_time": "Tempo de sobrecurso nos extremos",
+    "position.label": "Posição Atual",
+    "position.helper": "Mova o estore para um extremo conhecido e defina a posição.",
+    "position.unknown": "Desconhecida",
+    "position.open": "Totalmente aberto",
+    "position.closed": "Totalmente fechado",
+    "position.closed_tilt_open": "Totalmente fechado, inclinação aberta",
+    "position.closed_tilt_closed": "Totalmente fechado, inclinação fechada",
+    "calibration.label": "Calibração de Temporização",
+    "calibration.attribute_label": "Atributo",
+    "calibration.start": "Iniciar",
+    "calibration.active": "Calibração Ativa",
+    "calibration.step": "Passo {step}",
+    "calibration.cancel": "Cancelar",
+    "calibration.finish": "Concluir",
+    "calibration.set_position_first": "Defina a posição para iniciar a calibração.",
+    "controls.cover_label": "Estore",
+    "controls.tilt_label": "Inclinação",
+    "controls.open": "Abrir",
+    "controls.stop": "Parar",
+    "controls.close": "Fechar",
+    "controls.tilt_open": "Inclinar abrir",
+    "controls.tilt_stop": "Inclinar parar",
+    "controls.tilt_close": "Inclinar fechar",
+    "hints.sequential.travel_time_close": "Comece com o estore totalmente aberto. Clique em Concluir quando o estore estiver totalmente fechado, antes de as lâminas começarem a inclinar.",
+    "hints.sequential.travel_time_open": "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.sequential.tilt_time_close": "Comece com o estore fechado mas as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.sequential.tilt_time_open": "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem abertas.",
+    "hints.dual_motor.travel_time_close": "Comece com o estore aberto e as lâminas na posição segura. Clique em Concluir quando o estore estiver totalmente fechado.",
+    "hints.dual_motor.travel_time_open": "Comece com o estore fechado e as lâminas na posição segura. Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.dual_motor.tilt_time_close": "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.dual_motor.tilt_time_open": "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
+    "hints.inline.travel_time_close": "Comece com o estore e as lâminas totalmente abertos. Clique em Concluir quando ambos estiverem totalmente fechados.",
+    "hints.inline.travel_time_open": "Comece com o estore e as lâminas totalmente fechados. Clique em Concluir quando ambos estiverem totalmente abertos.",
+    "hints.inline.tilt_time_close": "Comece com as lâminas totalmente abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.inline.tilt_time_open": "Comece com as lâminas totalmente fechadas. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
+    "hints.none.travel_time_close": "Clique em Concluir quando o estore estiver totalmente fechado.",
+    "hints.none.travel_time_open": "Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.min_movement_time": "Clique em Concluir assim que notar o estore a mover-se.",
+  },
+  pl: {
+    "header": "Konfiguracja rolet sterowanych czasowo",
+    "loading": "Ładowanie...",
+    "saving": "Zapisywanie...",
+    "confirm_cancel_calibration": "Kalibracja jest w toku. Anulować ją i kontynuować?",
+    "create_new": "+ Utwórz nową encję rolety",
+    "yaml_warning": "Ta encja używa konfiguracji YAML i nie może być konfigurowana z tej karty. Proszę przeprowadzić migrację do interfejsu użytkownika: Ustawienia > Urządzenia i usługi > Pomocniki > Utwórz pomocnik > Roleta sterowana czasowo.",
+    "tabs.device": "Urządzenie",
+    "tabs.calibration": "Kalibracja",
+    "control_mode.label": "Tryb sterowania",
+    "control_mode.wrapped": "Opakuj istniejącą encję rolety",
+    "control_mode.switch": "Przełącznik (zatrzaskowy)",
+    "control_mode.pulse": "Impuls (chwilowy)",
+    "control_mode.toggle": "Przełączanie (ten sam przycisk)",
+    "control_mode.pulse_time": "Czas impulsu",
+    "entities.cover_entity": "Encja rolety",
+    "entities.switch_entities": "Encje przełączników",
+    "entities.open_switch": "Przełącznik otwierania",
+    "entities.close_switch": "Przełącznik zamykania",
+    "entities.stop_switch": "Przełącznik zatrzymania",
+    "tilt.label": "Nachylenie",
+    "tilt.none": "Nieobsługiwane",
+    "tilt.sequential": "Najpierw zamyka, potem nachyla",
+    "tilt.dual_motor": "Osobny silnik nachylenia",
+    "tilt.inline": "Nachylenie w trakcie ruchu",
+    "tilt_motor.label": "Silnik nachylenia",
+    "tilt_motor.open_switch": "Przełącznik otwierania nachylenia",
+    "tilt_motor.close_switch": "Przełącznik zamykania nachylenia",
+    "tilt_motor.stop_switch": "Przełącznik zatrzymania nachylenia",
+    "tilt_motor.safe_position": "Bezpieczna pozycja nachylenia",
+    "tilt_motor.safe_position_helper": "Nachylenie przesuwa się tu przed ruchem (100 = w pełni otwarte)",
+    "tilt_motor.max_allowed_position": "Maks. dozwolona pozycja nachylenia (opcjonalna)",
+    "tilt_motor.max_allowed_helper": "Nachylenie dozwolone tylko gdy pozycja rolety wynosi tyle lub mniej (0 = zamknięta, 100 = otwarta)",
+    "timing.attribute_header": "Atrybut",
+    "timing.travel_attribute_header": "Atrybut",
+    "timing.tilt_attribute_header": "Atrybut",
+    "timing.value_header": "Wartość",
+    "timing.not_set": "Nieustawione",
+    "timing.travel_time_close": "Czas ruchu (zamykanie)",
+    "timing.travel_time_open": "Czas ruchu (otwieranie)",
+    "timing.travel_startup_delay": "Opóźnienie startu ruchu",
+    "timing.tilt_time_close": "Czas nachylenia (zamykanie)",
+    "timing.tilt_time_open": "Czas nachylenia (otwieranie)",
+    "timing.tilt_startup_delay": "Opóźnienie startu nachylenia",
+    "timing.min_movement_time": "Minimalny czas ruchu",
+    "timing.endpoint_runon_time": "Czas dobiegu na krańcach",
+    "position.label": "Aktualna pozycja",
+    "position.helper": "Przesuń roletę do znanego krańca, a następnie ustaw pozycję.",
+    "position.unknown": "Nieznana",
+    "position.open": "W pełni otwarta",
+    "position.closed": "W pełni zamknięta",
+    "position.closed_tilt_open": "W pełni zamknięta, nachylenie otwarte",
+    "position.closed_tilt_closed": "W pełni zamknięta, nachylenie zamknięte",
+    "calibration.label": "Kalibracja czasowa",
+    "calibration.attribute_label": "Atrybut",
+    "calibration.start": "Rozpocznij",
+    "calibration.active": "Kalibracja aktywna",
+    "calibration.step": "Krok {step}",
+    "calibration.cancel": "Anuluj",
+    "calibration.finish": "Zakończ",
+    "calibration.set_position_first": "Ustaw pozycję, aby rozpocząć kalibrację.",
+    "controls.cover_label": "Roleta",
+    "controls.tilt_label": "Nachylenie",
+    "controls.open": "Otwórz",
+    "controls.stop": "Zatrzymaj",
+    "controls.close": "Zamknij",
+    "controls.tilt_open": "Otwórz nachylenie",
+    "controls.tilt_stop": "Zatrzymaj nachylenie",
+    "controls.tilt_close": "Zamknij nachylenie",
+    "hints.sequential.travel_time_close": "Zacznij z roletą w pełni otwartą. Kliknij Zakończ, gdy roleta jest w pełni zamknięta, zanim listwy zaczną się nachylać.",
+    "hints.sequential.travel_time_open": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.sequential.tilt_time_close": "Zacznij z zamkniętą roletą, ale otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.sequential.tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są otwarte.",
+    "hints.dual_motor.travel_time_close": "Zacznij z otwartą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni zamknięta.",
+    "hints.dual_motor.travel_time_open": "Zacznij z zamkniętą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.dual_motor.tilt_time_close": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.dual_motor.tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
+    "hints.inline.travel_time_close": "Zacznij z roletą i listwami w pełni otwartymi. Kliknij Zakończ, gdy obie są w pełni zamknięte.",
+    "hints.inline.travel_time_open": "Zacznij z roletą i listwami w pełni zamkniętymi. Kliknij Zakończ, gdy obie są w pełni otwarte.",
+    "hints.inline.tilt_time_close": "Zacznij z listwami w pełni otwartymi. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.inline.tilt_time_open": "Zacznij z listwami w pełni zamkniętymi. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
+    "hints.none.travel_time_close": "Kliknij Zakończ, gdy roleta jest w pełni zamknięta.",
+    "hints.none.travel_time_open": "Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.min_movement_time": "Kliknij Zakończ, gdy tylko zauważysz ruch rolety.",
+  },
+};
+
 // Timing attributes shown in calibration dropdown and timing table.
 // Keys are config attribute names; values are translation keys.
 const TIMING_ATTRIBUTES = [
@@ -149,44 +323,20 @@ class CoverTimeBasedCard extends LitElement {
     this._activeTab = "device";
     this._knownPosition = "unknown";
     this._helpersLoaded = false;
-    this._translations = null;
-    this._translationsLoaded = false;
   }
 
   // --- Translation support ---
 
   _t(key, replacements) {
-    let str;
-    if (this._translations) {
-      const fullKey = `component.${DOMAIN}.card.${key}`;
-      str = this._translations[fullKey];
-    }
-    if (!str) str = EN[key] || key;
+    const lang = this.hass?.language || "en";
+    const strings = TRANSLATIONS[lang] || EN;
+    let str = strings[key] || EN[key] || key;
     if (replacements) {
       for (const [k, v] of Object.entries(replacements)) {
         str = str.replace(`{${k}}`, v);
       }
     }
     return str;
-  }
-
-  async _loadTranslations() {
-    if (this._translationsLoaded || !this.hass) return;
-    this._translationsLoaded = true;
-    try {
-      const result = await this.hass.callWS({
-        type: "frontend/get_translations",
-        language: this.hass.language,
-        category: "card",
-        integration: DOMAIN,
-      });
-      if (result?.resources) {
-        this._translations = result.resources;
-        this.requestUpdate();
-      }
-    } catch (_) {
-      // Fallback to EN defaults — card remains fully functional
-    }
   }
 
   // --- Lifecycle ---
@@ -254,13 +404,9 @@ class CoverTimeBasedCard extends LitElement {
 
     // Load entity list from full registry (includes config_entry_id)
     this._loadEntityList();
-    this._loadTranslations();
   }
 
   updated(changedProperties) {
-    if (changedProperties.has("hass") && this.hass && !this._translationsLoaded) {
-      this._loadTranslations();
-    }
   }
 
   async _loadEntityList() {
