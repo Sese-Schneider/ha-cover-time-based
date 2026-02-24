@@ -1233,7 +1233,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         self.tilt_calc.start_travel(restore_target)
         self._tilt_restore_active = True
-        self._last_command = None
         self.start_auto_updater()
 
     # -----------------------------------------------------------------------

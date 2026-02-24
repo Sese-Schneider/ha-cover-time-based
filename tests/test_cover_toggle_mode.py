@@ -617,3 +617,82 @@ class TestToggleHandleCommandSetsLastCommand:
             # pulse completion (background)
             _ha("turn_off", "switch.close"),
         ]
+
+
+# ===================================================================
+# Tilt restore: shared motor stop uses _last_command
+# ===================================================================
+
+
+class TestToggleTiltRestoreStop:
+    """Verify tilt restore completion sends a stop pulse in toggle mode.
+
+    For inline tilt with a shared motor, _start_tilt_restore dispatches
+    _async_handle_command(OPEN/CLOSE) which sets _last_command. When the
+    restore finishes, auto_stop_if_necessary calls _send_stop which needs
+    _last_command to know which relay to re-pulse.
+    """
+
+    @pytest.mark.asyncio
+    async def test_tilt_restore_stop_sends_pulse(self):
+        """After tilt restore via shared motor, stop must re-pulse the relay."""
+        tilt_strategy = MagicMock()
+        tilt_strategy.uses_tilt_motor = False
+        tilt_strategy.restores_tilt = True
+        tilt_strategy.snap_trackers_to_physical = MagicMock()
+
+        cover = ToggleModeCover(
+            device_id="test_toggle_restore",
+            name="Test Toggle Restore",
+            tilt_strategy=tilt_strategy,
+            travel_time_close=30,
+            travel_time_open=30,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            travel_startup_delay=None,
+            tilt_startup_delay=None,
+            endpoint_runon_time=None,
+            min_movement_time=None,
+            open_switch_entity_id="switch.open",
+            close_switch_entity_id="switch.close",
+            stop_switch_entity_id=None,
+            pulse_time=1.0,
+        )
+        hass = MagicMock()
+        hass.services.async_call = AsyncMock()
+        created_tasks = []
+
+        def create_task(coro):
+            task = asyncio.ensure_future(coro)
+            created_tasks.append(task)
+            return task
+
+        hass.async_create_task = create_task
+        cover.hass = hass
+        cover._test_tasks = created_tasks
+
+        # Simulate: tilt restore in progress, motor going UP (open)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+        cover.tilt_calc.start_travel(50)
+        cover._tilt_restore_active = True
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            # Tilt restore reaches target
+            cover.tilt_calc.set_position(50)
+            await cover.auto_stop_if_necessary()
+            await _drain_tasks(cover)
+
+        assert cover._tilt_restore_active is False
+
+        # _send_stop should have re-pulsed the open switch
+        calls = _calls(cover.hass.services.async_call)
+        assert _ha("turn_on", "switch.open") in calls
+        await _cancel_tasks(cover)

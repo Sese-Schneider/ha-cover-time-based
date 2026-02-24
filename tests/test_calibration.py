@@ -256,11 +256,12 @@ class TestMotorOverheadCalibration:
             )
             # Simulate 8 stepped moves completed, then continuous phase
             cover._calibration.step_count = 8
-            # Continuous phase started 28s ago: 12s expected (0.2*60) + 16s overhead (8*2)
+            # expected_remaining = (1 - 8/10) * 60 = 12s
+            # Continuous phase started 28s ago: 12s expected + 16s overhead (8*2)
             cover._calibration.continuous_start = time_mod.monotonic() - 28.0
             result = await cover.stop_calibration()
 
-        # overhead = (28.0 - 0.2*60) / 8 = (28.0 - 12.0) / 8 = 2.0
+        # overhead = (28.0 - 12.0) / 8 = 2.0
         assert result["value"] == pytest.approx(2.0, abs=0.1)
 
     @pytest.mark.asyncio
@@ -278,6 +279,29 @@ class TestMotorOverheadCalibration:
             await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
         assert cover._calibration.automation_task is not None
         assert cover._calibration.step_duration == 0.5
+
+    @pytest.mark.asyncio
+    async def test_tilt_overhead_calculation(self, make_cover):
+        """Tilt overhead uses 3 steps, so expected_remaining = 0.7 * total_time."""
+        cover = make_cover(tilt_time_close=10.0, tilt_time_open=10.0)
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        import time as time_mod
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
+            # Simulate 3 stepped moves completed, then continuous phase
+            cover._calibration.step_count = 3
+            # expected_remaining = (1 - 3/10) * 10 = 7.0s
+            # Continuous phase started 10s ago: 7s expected + 3s overhead (3*1.0)
+            cover._calibration.continuous_start = time_mod.monotonic() - 10.0
+            result = await cover.stop_calibration()
+
+        # overhead = (10.0 - 7.0) / 3 = 1.0
+        assert result["value"] == pytest.approx(1.0, abs=0.1)
 
 
 class TestMinMovementTimeCalibration:
