@@ -875,48 +875,7 @@ class CoverTimeBasedCard extends LitElement {
             </strong>
             <span class="entity-id">${this._selectedEntity}</span>
           </div>
-          ${this._activeTab === "timing" && !this._hasTiltMotor() ? html`
-            <div class="cover-controls">
-              <ha-button title=${this._t("controls.open")} @click=${() => this._onCoverCommand("open_cover")}>
-                <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
-              </ha-button>
-              <ha-button title=${this._t("controls.stop")} @click=${() => this._onCoverCommand("stop_cover")}>
-                <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
-              </ha-button>
-              <ha-button title=${this._t("controls.close")} @click=${() => this._onCoverCommand("close_cover")}>
-                <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
-              </ha-button>
-            </div>
-          ` : ""}
         </div>
-        ${this._activeTab === "timing" && this._hasTiltMotor() ? html`
-          <div class="cover-controls-wrapper">
-            <div class="cover-controls">
-              <span class="controls-label">${this._t("controls.cover_label")}</span>
-              <ha-button title=${this._t("controls.open")} @click=${() => this._onCoverCommand("open_cover")}>
-                <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
-              </ha-button>
-              <ha-button title=${this._t("controls.stop")} @click=${() => this._onCoverCommand("stop_cover")}>
-                <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
-              </ha-button>
-              <ha-button title=${this._t("controls.close")} @click=${() => this._onCoverCommand("close_cover")}>
-                <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
-              </ha-button>
-            </div>
-            <div class="cover-controls">
-              <span class="controls-label">${this._t("controls.tilt_label")}</span>
-              <ha-button title=${this._t("controls.tilt_open")} @click=${() => this._onCoverCommand("tilt_open")}>
-                <ha-icon icon="mdi:arrow-top-right" style="--mdc-icon-size: 18px;"></ha-icon>
-              </ha-button>
-              <ha-button title=${this._t("controls.tilt_stop")} @click=${() => this._onCoverCommand("tilt_stop")}>
-                <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
-              </ha-button>
-              <ha-button title=${this._t("controls.tilt_close")} @click=${() => this._onCoverCommand("tilt_close")}>
-                <ha-icon icon="mdi:arrow-bottom-left" style="--mdc-icon-size: 18px;"></ha-icon>
-              </ha-button>
-            </div>
-          </div>
-        ` : ""}
       </div>
 
       <div class="tabs">
@@ -1228,6 +1187,46 @@ class CoverTimeBasedCard extends LitElement {
         <div class="helper-text">
           ${this._t("position.helper")}
         </div>
+        ${!this._hasTiltMotor() ? html`
+          <div class="cover-controls">
+            <ha-button title=${this._t("controls.open")} @click=${() => this._onCoverCommand("open_cover")}>
+              <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
+            </ha-button>
+            <ha-button title=${this._t("controls.stop")} @click=${() => this._onCoverCommand("stop_cover")}>
+              <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
+            </ha-button>
+            <ha-button title=${this._t("controls.close")} @click=${() => this._onCoverCommand("close_cover")}>
+              <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
+            </ha-button>
+          </div>
+        ` : html`
+          <div class="cover-controls-wrapper">
+            <div class="cover-controls">
+              <span class="controls-label">${this._t("controls.cover_label")}</span>
+              <ha-button title=${this._t("controls.open")} @click=${() => this._onCoverCommand("open_cover")}>
+                <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title=${this._t("controls.stop")} @click=${() => this._onCoverCommand("stop_cover")}>
+                <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title=${this._t("controls.close")} @click=${() => this._onCoverCommand("close_cover")}>
+                <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+            </div>
+            <div class="cover-controls">
+              <span class="controls-label">${this._t("controls.tilt_label")}</span>
+              <ha-button title=${this._t("controls.tilt_open")} @click=${() => this._onCoverCommand("tilt_open")}>
+                <ha-icon icon="mdi:arrow-top-right" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title=${this._t("controls.tilt_stop")} @click=${() => this._onCoverCommand("tilt_stop")}>
+                <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title=${this._t("controls.tilt_close")} @click=${() => this._onCoverCommand("tilt_close")}>
+                <ha-icon icon="mdi:arrow-bottom-left" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+            </div>
+          </div>
+        `}
         <div class="cal-form">
           <div class="cal-field">
             <select
@@ -1438,16 +1437,19 @@ class CoverTimeBasedCard extends LitElement {
       .cover-controls-wrapper {
         display: flex;
         flex-direction: column;
-        align-items: flex-end;
         gap: 4px;
-        padding: 4px 0;
+        margin: 8px 0;
+      }
+
+      .cover-controls-wrapper .cover-controls {
+        margin: 0;
       }
 
       .cover-controls {
         display: flex;
         align-items: center;
         gap: 4px;
-        flex-shrink: 0;
+        margin: 8px 0;
       }
 
       .controls-label {
