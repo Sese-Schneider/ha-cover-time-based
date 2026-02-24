@@ -15,8 +15,8 @@ from homeassistant.const import (
 )
 
 from custom_components.cover_time_based.cover import (
-    INPUT_MODE_SWITCH,
-    INPUT_MODE_TOGGLE,
+    CONTROL_MODE_SWITCH,
+    CONTROL_MODE_TOGGLE,
 )
 
 
@@ -30,7 +30,7 @@ class TestToggleCloseWhileMoving:
 
     @pytest.mark.asyncio
     async def test_close_while_closing_stops(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
 
         # Simulate that the cover is currently closing (position 100 = fully open)
         cover.travel_calc.set_position(100)
@@ -48,7 +48,7 @@ class TestToggleCloseWhileMoving:
 
     @pytest.mark.asyncio
     async def test_open_while_opening_stops(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
 
         # Simulate that the cover is currently opening (position 0 = fully closed)
         cover.travel_calc.set_position(0)
@@ -75,7 +75,7 @@ class TestToggleStopGuard:
 
     @pytest.mark.asyncio
     async def test_stop_when_idle_toggle_no_relay_command(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_stop_cover()
@@ -85,7 +85,7 @@ class TestToggleStopGuard:
 
     @pytest.mark.asyncio
     async def test_stop_when_idle_switch_sends_relay_command(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_SWITCH)
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH)
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_stop_cover()
@@ -104,7 +104,7 @@ class TestStopBeforeDirectionChange:
 
     @pytest.mark.asyncio
     async def test_close_while_opening_stops_first(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
 
         # Simulate that the cover is currently opening (position 0 = fully closed)
         cover.travel_calc.set_position(0)
@@ -124,7 +124,7 @@ class TestStopBeforeDirectionChange:
 
     @pytest.mark.asyncio
     async def test_open_while_closing_stops_first(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
 
         # Simulate that the cover is currently closing (position 100 = fully open)
         cover.travel_calc.set_position(100)

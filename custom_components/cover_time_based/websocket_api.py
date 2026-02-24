@@ -13,9 +13,8 @@ from homeassistant.helpers import entity_registry as er
 from .calibration import CALIBRATABLE_ATTRIBUTES
 from .cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
+    CONF_CONTROL_MODE,
     CONF_COVER_ENTITY_ID,
-    CONF_DEVICE_TYPE,
-    CONF_INPUT_MODE,
     CONF_MIN_MOVEMENT_TIME,
     CONF_MAX_TILT_ALLOWED_POSITION,
     CONF_OPEN_SWITCH_ENTITY_ID,
@@ -33,13 +32,12 @@ from .cover import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    CONTROL_MODE_PULSE,
+    CONTROL_MODE_SWITCH,
+    CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_WRAPPED,
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_PULSE_TIME,
-    DEVICE_TYPE_COVER,
-    DEVICE_TYPE_SWITCH,
-    INPUT_MODE_PULSE,
-    INPUT_MODE_SWITCH,
-    INPUT_MODE_TOGGLE,
 )
 
 from .const import DOMAIN
@@ -49,8 +47,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Map from WS field names to config entry option keys
 _FIELD_MAP = {
-    "device_type": CONF_DEVICE_TYPE,
-    "input_mode": CONF_INPUT_MODE,
+    "control_mode": CONF_CONTROL_MODE,
     "pulse_time": CONF_PULSE_TIME,
     "open_switch_entity_id": CONF_OPEN_SWITCH_ENTITY_ID,
     "close_switch_entity_id": CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -122,8 +119,7 @@ async def ws_get_config(
         msg["id"],
         {
             "entry_id": config_entry.entry_id,
-            "device_type": options.get(CONF_DEVICE_TYPE, DEVICE_TYPE_SWITCH),
-            "input_mode": options.get(CONF_INPUT_MODE, INPUT_MODE_SWITCH),
+            "control_mode": options.get(CONF_CONTROL_MODE, CONTROL_MODE_SWITCH),
             "pulse_time": options.get(CONF_PULSE_TIME, DEFAULT_PULSE_TIME),
             "open_switch_entity_id": options.get(CONF_OPEN_SWITCH_ENTITY_ID),
             "close_switch_entity_id": options.get(CONF_CLOSE_SWITCH_ENTITY_ID),
@@ -153,9 +149,13 @@ async def ws_get_config(
     {
         "type": "cover_time_based/update_config",
         vol.Required("entity_id"): str,
-        vol.Optional("device_type"): vol.In([DEVICE_TYPE_SWITCH, DEVICE_TYPE_COVER]),
-        vol.Optional("input_mode"): vol.In(
-            [INPUT_MODE_SWITCH, INPUT_MODE_PULSE, INPUT_MODE_TOGGLE]
+        vol.Optional("control_mode"): vol.In(
+            [
+                CONTROL_MODE_WRAPPED,
+                CONTROL_MODE_SWITCH,
+                CONTROL_MODE_PULSE,
+                CONTROL_MODE_TOGGLE,
+            ]
         ),
         vol.Optional("pulse_time"): vol.All(
             vol.Coerce(float), vol.Range(min=0.1, max=10)
@@ -236,6 +236,28 @@ async def ws_update_config(
                 new_options.pop(conf_key, None)
             else:
                 new_options[conf_key] = value
+
+    # Pulse mode requires stop switch entities
+    if new_options.get(CONF_CONTROL_MODE, CONTROL_MODE_SWITCH) == CONTROL_MODE_PULSE:
+        if not new_options.get(CONF_STOP_SWITCH_ENTITY_ID):
+            connection.send_error(
+                msg["id"],
+                "invalid_config",
+                "Pulse mode requires a stop switch entity",
+            )
+            return
+        if (
+            new_options.get(CONF_TILT_MODE) == "dual_motor"
+            and new_options.get(CONF_TILT_OPEN_SWITCH)
+            and new_options.get(CONF_TILT_CLOSE_SWITCH)
+            and not new_options.get(CONF_TILT_STOP_SWITCH)
+        ):
+            connection.send_error(
+                msg["id"],
+                "invalid_config",
+                "Pulse mode requires a tilt stop switch entity",
+            )
+            return
 
     hass.config_entries.async_update_entry(config_entry, options=new_options)
 

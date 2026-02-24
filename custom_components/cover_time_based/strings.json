@@ -93,24 +93,20 @@
       "device": "Device",
       "calibration": "Calibration"
     },
-    "device_type": {
-      "label": "Device Type",
-      "switch": "Control via switches",
-      "cover": "Wrap an existing cover entity"
+    "control_mode": {
+      "label": "Control Mode",
+      "wrapped": "Wrap an existing cover entity",
+      "switch": "Switch (latching)",
+      "pulse": "Pulse (momentary)",
+      "toggle": "Toggle (same button)",
+      "pulse_time": "Pulse time"
     },
     "entities": {
       "cover_entity": "Cover Entity",
       "switch_entities": "Switch Entities",
       "open_switch": "Open switch",
       "close_switch": "Close switch",
-      "stop_switch": "Stop switch (optional)"
-    },
-    "input_mode": {
-      "label": "Input Mode",
-      "switch": "Switch (latching)",
-      "pulse": "Pulse (momentary)",
-      "toggle": "Toggle (same button)",
-      "pulse_time": "Pulse time"
+      "stop_switch": "Stop switch"
     },
     "tilt": {
       "label": "Tilt Mode",
@@ -123,7 +119,7 @@
       "label": "Tilt Motor",
       "open_switch": "Tilt open switch",
       "close_switch": "Tilt close switch",
-      "stop_switch": "Tilt stop switch (optional)",
+      "stop_switch": "Tilt stop switch",
       "safe_position": "Safe tilt position",
       "safe_position_helper": "Tilt moves here before travel (100 = fully open)",
       "max_allowed_position": "Max tilt allowed position (optional)",

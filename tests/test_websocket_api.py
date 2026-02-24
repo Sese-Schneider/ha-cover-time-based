@@ -5,26 +5,27 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
+    CONF_CONTROL_MODE,
     CONF_COVER_ENTITY_ID,
-    CONF_DEVICE_TYPE,
-    CONF_INPUT_MODE,
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_STOP_SWITCH_ENTITY_ID,
+    CONF_TILT_CLOSE_SWITCH,
     CONF_TILT_MODE,
+    CONF_TILT_OPEN_SWITCH,
     CONF_TILT_STARTUP_DELAY,
+    CONF_TILT_STOP_SWITCH,
     CONF_TILT_TIME_CLOSE,
     CONF_TILT_TIME_OPEN,
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    CONTROL_MODE_PULSE,
+    CONTROL_MODE_SWITCH,
+    CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_WRAPPED,
     DEFAULT_PULSE_TIME,
-    DEVICE_TYPE_COVER,
-    DEVICE_TYPE_SWITCH,
-    INPUT_MODE_PULSE,
-    INPUT_MODE_SWITCH,
-    INPUT_MODE_TOGGLE,
 )
 from custom_components.cover_time_based.websocket_api import (
     _resolve_config_entry,
@@ -192,8 +193,7 @@ class TestWsGetConfig:
         result = conn.send_result.call_args[0][1]
 
         assert result["entry_id"] == ENTRY_ID
-        assert result["device_type"] == DEVICE_TYPE_SWITCH
-        assert result["input_mode"] == INPUT_MODE_SWITCH
+        assert result["control_mode"] == CONTROL_MODE_SWITCH
         assert result["pulse_time"] == DEFAULT_PULSE_TIME
         assert result["travel_time_close"] is None
         assert result["travel_time_open"] is None
@@ -212,8 +212,7 @@ class TestWsGetConfig:
     @pytest.mark.asyncio
     async def test_returns_stored_options(self):
         options = {
-            CONF_DEVICE_TYPE: DEVICE_TYPE_COVER,
-            CONF_INPUT_MODE: INPUT_MODE_PULSE,
+            CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
             CONF_PULSE_TIME: 2.5,
             CONF_COVER_ENTITY_ID: "cover.inner",
             CONF_TRAVEL_TIME_CLOSE: 45,
@@ -243,8 +242,7 @@ class TestWsGetConfig:
             )
 
         result = conn.send_result.call_args[0][1]
-        assert result["device_type"] == DEVICE_TYPE_COVER
-        assert result["input_mode"] == INPUT_MODE_PULSE
+        assert result["control_mode"] == CONTROL_MODE_WRAPPED
         assert result["pulse_time"] == 2.5
         assert result["cover_entity_id"] == "cover.inner"
         assert result["travel_time_close"] == 45
@@ -296,8 +294,7 @@ class TestDualMotorFieldRoundTrip:
         entry.entry_id = ENTRY_ID
         entry.domain = DOMAIN
         entry.options = {
-            "device_type": "switch",
-            "input_mode": "switch",
+            "control_mode": "switch",
             "tilt_mode": "dual_motor",
             "safe_tilt_position": 10,
             "max_tilt_allowed_position": 80,
@@ -399,7 +396,7 @@ class TestWsUpdateConfig:
     @pytest.mark.asyncio
     async def test_update_single_field(self):
         hass, config_entry, entity_reg = _make_hass(
-            options={CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH}
+            options={CONF_CONTROL_MODE: CONTROL_MODE_SWITCH}
         )
         conn = _make_connection()
 
@@ -414,14 +411,14 @@ class TestWsUpdateConfig:
                     "id": 1,
                     "type": "cover_time_based/update_config",
                     "entity_id": ENTITY_ID,
-                    "device_type": DEVICE_TYPE_COVER,
+                    "control_mode": CONTROL_MODE_WRAPPED,
                 },
             )
 
         conn.send_result.assert_called_once_with(1, {"success": True})
         call_kwargs = hass.config_entries.async_update_entry.call_args
         new_options = call_kwargs[1]["options"]
-        assert new_options[CONF_DEVICE_TYPE] == DEVICE_TYPE_COVER
+        assert new_options[CONF_CONTROL_MODE] == CONTROL_MODE_WRAPPED
 
     @pytest.mark.asyncio
     async def test_update_multiple_fields(self):
@@ -439,16 +436,14 @@ class TestWsUpdateConfig:
                     "id": 1,
                     "type": "cover_time_based/update_config",
                     "entity_id": ENTITY_ID,
-                    "device_type": DEVICE_TYPE_SWITCH,
-                    "input_mode": INPUT_MODE_TOGGLE,
+                    "control_mode": CONTROL_MODE_TOGGLE,
                     "open_switch_entity_id": "switch.up",
                     "close_switch_entity_id": "switch.down",
                 },
             )
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
-        assert new_options[CONF_DEVICE_TYPE] == DEVICE_TYPE_SWITCH
-        assert new_options[CONF_INPUT_MODE] == INPUT_MODE_TOGGLE
+        assert new_options[CONF_CONTROL_MODE] == CONTROL_MODE_TOGGLE
         assert new_options[CONF_OPEN_SWITCH_ENTITY_ID] == "switch.up"
         assert new_options[CONF_CLOSE_SWITCH_ENTITY_ID] == "switch.down"
 
@@ -481,7 +476,42 @@ class TestWsUpdateConfig:
     async def test_preserves_unmentioned_options(self):
         hass, _, entity_reg = _make_hass(
             options={
-                CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
+                CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                CONF_STOP_SWITCH_ENTITY_ID: "switch.stop",
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "control_mode": CONTROL_MODE_PULSE,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        # Original options preserved
+        assert new_options[CONF_OPEN_SWITCH_ENTITY_ID] == "switch.open"
+        assert new_options[CONF_CLOSE_SWITCH_ENTITY_ID] == "switch.close"
+        assert new_options[CONF_STOP_SWITCH_ENTITY_ID] == "switch.stop"
+        # New option added
+        assert new_options[CONF_CONTROL_MODE] == CONTROL_MODE_PULSE
+
+    @pytest.mark.asyncio
+    async def test_pulse_mode_requires_stop_switch(self):
+        """Pulse mode without a stop switch should be rejected."""
+        hass, _, entity_reg = _make_hass(
+            options={
                 CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                 CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
             }
@@ -499,17 +529,168 @@ class TestWsUpdateConfig:
                     "id": 1,
                     "type": "cover_time_based/update_config",
                     "entity_id": ENTITY_ID,
-                    "input_mode": INPUT_MODE_PULSE,
+                    "control_mode": CONTROL_MODE_PULSE,
                 },
             )
 
-        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
-        # Original options preserved
-        assert new_options[CONF_DEVICE_TYPE] == DEVICE_TYPE_SWITCH
-        assert new_options[CONF_OPEN_SWITCH_ENTITY_ID] == "switch.open"
-        assert new_options[CONF_CLOSE_SWITCH_ENTITY_ID] == "switch.close"
-        # New option added
-        assert new_options[CONF_INPUT_MODE] == INPUT_MODE_PULSE
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "invalid_config"
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_pulse_mode_accepted_with_stop_switch(self):
+        """Pulse mode with a stop switch should be accepted."""
+        hass, _, entity_reg = _make_hass(
+            options={
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                CONF_STOP_SWITCH_ENTITY_ID: "switch.stop",
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "control_mode": CONTROL_MODE_PULSE,
+                },
+            )
+
+        conn.send_result.assert_called_once()
+        hass.config_entries.async_update_entry.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_switch_mode_does_not_require_stop_switch(self):
+        """Switch mode without a stop switch should be accepted."""
+        hass, _, entity_reg = _make_hass(
+            options={
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "control_mode": CONTROL_MODE_SWITCH,
+                },
+            )
+
+        conn.send_result.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_toggle_mode_does_not_require_stop_switch(self):
+        """Toggle mode without a stop switch should be accepted."""
+        hass, _, entity_reg = _make_hass(
+            options={
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "control_mode": CONTROL_MODE_TOGGLE,
+                },
+            )
+
+        conn.send_result.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_pulse_mode_requires_tilt_stop_switch(self):
+        """Pulse mode with dual_motor tilt but no tilt stop switch should be rejected."""
+        hass, _, entity_reg = _make_hass(
+            options={
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                CONF_STOP_SWITCH_ENTITY_ID: "switch.stop",
+                CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
+                CONF_TILT_MODE: "dual_motor",
+                CONF_TILT_OPEN_SWITCH: "switch.tilt_open",
+                CONF_TILT_CLOSE_SWITCH: "switch.tilt_close",
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "invalid_config"
+        assert "tilt stop" in conn.send_error.call_args[0][2].lower()
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_pulse_mode_accepted_with_tilt_stop_switch(self):
+        """Pulse mode with dual_motor tilt and tilt stop switch should be accepted."""
+        hass, _, entity_reg = _make_hass(
+            options={
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                CONF_STOP_SWITCH_ENTITY_ID: "switch.stop",
+                CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
+                CONF_TILT_MODE: "dual_motor",
+                CONF_TILT_OPEN_SWITCH: "switch.tilt_open",
+                CONF_TILT_CLOSE_SWITCH: "switch.tilt_close",
+                CONF_TILT_STOP_SWITCH: "switch.tilt_stop",
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        conn.send_result.assert_called_once()
+        hass.config_entries.async_update_entry.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_error_when_entity_not_found(self):
@@ -528,7 +709,7 @@ class TestWsUpdateConfig:
                     "id": 1,
                     "type": "cover_time_based/update_config",
                     "entity_id": "cover.bad",
-                    "device_type": DEVICE_TYPE_COVER,
+                    "control_mode": CONTROL_MODE_WRAPPED,
                 },
             )
 
@@ -694,7 +875,7 @@ class TestWsUpdateConfigWrappedSelf:
                     "id": 1,
                     "type": "cover_time_based/update_config",
                     "entity_id": ENTITY_ID,
-                    "device_type": DEVICE_TYPE_SWITCH,
+                    "control_mode": CONTROL_MODE_SWITCH,
                 },
             )
 
@@ -1102,10 +1283,9 @@ class TestWsResolveEntity:
 
         entity = _create_cover_from_options(
             {
-                "device_type": "switch",
+                "control_mode": "switch",
                 "open_switch_entity_id": "switch.open",
                 "close_switch_entity_id": "switch.close",
-                "input_mode": "switch",
                 "travel_time_close": 30,
                 "travel_time_open": 30,
             },

@@ -70,19 +70,17 @@ CONF_TILT_STOP_SWITCH = "tilt_stop_switch"
 CONF_COVER_ENTITY_ID = "cover_entity_id"
 
 # ---------------------------------------------------------------------------
-# Input mode / device type constants
+# Control mode constants
 # ---------------------------------------------------------------------------
 
-CONF_INPUT_MODE = "input_mode"
+CONF_CONTROL_MODE = "control_mode"
+CONTROL_MODE_WRAPPED = "wrapped"
+CONTROL_MODE_SWITCH = "switch"
+CONTROL_MODE_PULSE = "pulse"
+CONTROL_MODE_TOGGLE = "toggle"
+
 CONF_PULSE_TIME = "pulse_time"
 DEFAULT_PULSE_TIME = 1.0
-INPUT_MODE_SWITCH = "switch"
-INPUT_MODE_PULSE = "pulse"
-INPUT_MODE_TOGGLE = "toggle"
-
-CONF_DEVICE_TYPE = "device_type"
-DEVICE_TYPE_SWITCH = "switch"
-DEVICE_TYPE_COVER = "cover"
 
 SERVICE_SET_KNOWN_POSITION = "set_known_position"
 SERVICE_SET_KNOWN_TILT_POSITION = "set_known_tilt_position"
@@ -221,10 +219,14 @@ def _get_value(key, device_config, defaults_config, schema_default=None):
     return schema_default
 
 
-def _resolve_input_mode(device_id, config, defaults):
-    """Resolve input mode from config, handling legacy is_button key."""
+def _resolve_control_mode(config, defaults, has_cover_entity):
+    """Resolve control mode from config, handling legacy keys."""
+    if has_cover_entity:
+        config.pop(CONF_IS_BUTTON, None)
+        return CONTROL_MODE_WRAPPED
+
     # Explicit input_mode takes precedence
-    explicit = config.pop(CONF_INPUT_MODE, None) or defaults.get(CONF_INPUT_MODE)
+    explicit = config.pop("input_mode", None) or defaults.get("input_mode")
     if explicit:
         config.pop(CONF_IS_BUTTON, None)
         return explicit
@@ -232,9 +234,9 @@ def _resolve_input_mode(device_id, config, defaults):
     # Legacy is_button → pulse mode
     is_button = config.pop(CONF_IS_BUTTON, False)
     if is_button:
-        return INPUT_MODE_PULSE
+        return CONTROL_MODE_PULSE
 
-    return INPUT_MODE_SWITCH
+    return CONTROL_MODE_SWITCH
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +273,7 @@ def _create_cover_from_options(options, device_id="", name=""):
     from .cover_pulse_mode import PulseModeCover
     from .cover_toggle_mode import ToggleModeCover
 
-    device_type = options.get(CONF_DEVICE_TYPE, DEVICE_TYPE_SWITCH)
+    control_mode = options.get(CONF_CONTROL_MODE, CONTROL_MODE_SWITCH)
 
     tilt_mode_str = options.get(CONF_TILT_MODE, "none")
     tilt_strategy = _resolve_tilt_strategy(
@@ -302,7 +304,7 @@ def _create_cover_from_options(options, device_id="", name=""):
         tilt_stop_switch=options.get(CONF_TILT_STOP_SWITCH),
     )
 
-    if device_type == DEVICE_TYPE_COVER:
+    if control_mode == CONTROL_MODE_WRAPPED:
         return WrappedCoverTimeBased(
             cover_entity_id=options.get(CONF_COVER_ENTITY_ID, ""),
             **common,
@@ -315,12 +317,11 @@ def _create_cover_from_options(options, device_id="", name=""):
         **common,
     )
 
-    input_mode = options.get(CONF_INPUT_MODE, INPUT_MODE_SWITCH)
     pulse_time = options.get(CONF_PULSE_TIME, DEFAULT_PULSE_TIME)
 
-    if input_mode == INPUT_MODE_PULSE:
+    if control_mode == CONTROL_MODE_PULSE:
         return PulseModeCover(pulse_time=pulse_time, **switch_args)
-    elif input_mode == INPUT_MODE_TOGGLE:
+    elif control_mode == CONTROL_MODE_TOGGLE:
         return ToggleModeCover(pulse_time=pulse_time, **switch_args)
     else:
         return SwitchModeCover(**switch_args)
@@ -350,15 +351,12 @@ def devices_from_config(domain_config):
         stop_switch = config.pop(CONF_STOP_SWITCH_ENTITY_ID, None)
         cover_entity_id = config.pop(CONF_COVER_ENTITY_ID, None)
 
-        # Input mode (handles is_button deprecation)
-        input_mode = _resolve_input_mode(device_id, config, defaults)
+        # Control mode (handles is_button deprecation)
+        control_mode = _resolve_control_mode(config, defaults, bool(cover_entity_id))
         pulse_time = _get_value(CONF_PULSE_TIME, config, defaults, DEFAULT_PULSE_TIME)
         config.pop(CONF_PULSE_TIME, None)
 
-        options[CONF_DEVICE_TYPE] = (
-            DEVICE_TYPE_COVER if cover_entity_id else DEVICE_TYPE_SWITCH
-        )
-        options[CONF_INPUT_MODE] = input_mode
+        options[CONF_CONTROL_MODE] = control_mode
         options[CONF_PULSE_TIME] = pulse_time
 
         if open_switch:

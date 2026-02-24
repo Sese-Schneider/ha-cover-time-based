@@ -7,9 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
+    CONF_CONTROL_MODE,
     CONF_COVER_ENTITY_ID,
-    CONF_DEVICE_TYPE,
-    CONF_INPUT_MODE,
     CONF_MAX_TILT_ALLOWED_POSITION,
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
@@ -27,10 +26,9 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    CONTROL_MODE_SWITCH,
+    CONTROL_MODE_WRAPPED,
     DEFAULT_PULSE_TIME,
-    DEVICE_TYPE_COVER,
-    DEVICE_TYPE_SWITCH,
-    INPUT_MODE_SWITCH,
     _create_cover_from_options,
 )
 
@@ -64,7 +62,7 @@ def make_cover(make_hass):
     covers = []
 
     def _make(
-        input_mode=INPUT_MODE_SWITCH,
+        control_mode=CONTROL_MODE_SWITCH,
         cover_entity_id=None,
         open_switch="switch.open",
         close_switch="switch.close",
@@ -87,18 +85,17 @@ def make_cover(make_hass):
     ):
         if cover_entity_id is not None:
             options = {
-                CONF_DEVICE_TYPE: DEVICE_TYPE_COVER,
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
                 CONF_COVER_ENTITY_ID: cover_entity_id,
                 CONF_TRAVEL_TIME_CLOSE: travel_time_close,
                 CONF_TRAVEL_TIME_OPEN: travel_time_open,
             }
         else:
             options = {
-                CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
+                CONF_CONTROL_MODE: control_mode,
                 CONF_OPEN_SWITCH_ENTITY_ID: open_switch,
                 CONF_CLOSE_SWITCH_ENTITY_ID: close_switch,
                 CONF_STOP_SWITCH_ENTITY_ID: stop_switch,
-                CONF_INPUT_MODE: input_mode,
                 CONF_PULSE_TIME: pulse_time,
                 CONF_TRAVEL_TIME_CLOSE: travel_time_close,
                 CONF_TRAVEL_TIME_OPEN: travel_time_open,

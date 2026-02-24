@@ -27,19 +27,17 @@ const EN = {
   "yaml_warning": "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings \u2192 Devices & Services \u2192 Helpers \u2192 Create Helper \u2192 Cover Time Based.",
   "tabs.device": "Device",
   "tabs.calibration": "Calibration",
-  "device_type.label": "Device Type",
-  "device_type.switch": "Control via switches",
-  "device_type.cover": "Wrap an existing cover entity",
+  "control_mode.label": "Control Mode",
+  "control_mode.wrapped": "Wrap an existing cover entity",
+  "control_mode.switch": "Switch (latching)",
+  "control_mode.pulse": "Pulse (momentary)",
+  "control_mode.toggle": "Toggle (same button)",
+  "control_mode.pulse_time": "Pulse time",
   "entities.cover_entity": "Cover Entity",
   "entities.switch_entities": "Switch Entities",
   "entities.open_switch": "Open switch",
   "entities.close_switch": "Close switch",
-  "entities.stop_switch": "Stop switch (optional)",
-  "input_mode.label": "Input Mode",
-  "input_mode.switch": "Switch (latching)",
-  "input_mode.pulse": "Pulse (momentary)",
-  "input_mode.toggle": "Toggle (same button)",
-  "input_mode.pulse_time": "Pulse time",
+  "entities.stop_switch": "Stop switch",
   "tilt.label": "Tilt Mode",
   "tilt.none": "Not supported",
   "tilt.sequential": "Closes then tilts",
@@ -48,7 +46,7 @@ const EN = {
   "tilt_motor.label": "Tilt Motor",
   "tilt_motor.open_switch": "Tilt open switch",
   "tilt_motor.close_switch": "Tilt close switch",
-  "tilt_motor.stop_switch": "Tilt stop switch (optional)",
+  "tilt_motor.stop_switch": "Tilt stop switch",
   "tilt_motor.safe_position": "Safe tilt position",
   "tilt_motor.safe_position_helper": "Tilt moves here before travel (100 = fully open)",
   "tilt_motor.max_allowed_position": "Max tilt allowed position (optional)",
@@ -385,8 +383,19 @@ class CoverTimeBasedCard extends LitElement {
 
   _hasRequiredEntities(c) {
     if (!c) return false;
-    if (c.device_type === "cover") return !!c.cover_entity_id;
-    return !!c.open_switch_entity_id && !!c.close_switch_entity_id;
+    if (c.control_mode === "wrapped") {
+      if (!c.cover_entity_id) return false;
+    } else if (c.control_mode === "pulse") {
+      if (!c.open_switch_entity_id || !c.close_switch_entity_id || !c.stop_switch_entity_id) return false;
+    } else {
+      if (!c.open_switch_entity_id || !c.close_switch_entity_id) return false;
+    }
+    // Dual motor tilt requires tilt entities to be complete
+    if (c.tilt_mode === "dual_motor" && c.control_mode !== "wrapped") {
+      if (!c.tilt_open_switch || !c.tilt_close_switch) return false;
+      if (c.control_mode === "pulse" && !c.tilt_stop_switch) return false;
+    }
+    return true;
   }
 
   // --- Event handlers ---
@@ -400,12 +409,22 @@ class CoverTimeBasedCard extends LitElement {
     }
   }
 
-  _onDeviceTypeChange(e) {
-    this._updateLocal({ device_type: e.target.value });
-  }
-
-  _onInputModeChange(e) {
-    this._updateLocal({ input_mode: e.target.value });
+  _onControlModeChange(e) {
+    const mode = e.target.value;
+    const updates = { control_mode: mode };
+    // Clear irrelevant entities when switching modes
+    if (mode === "wrapped") {
+      updates.open_switch_entity_id = null;
+      updates.close_switch_entity_id = null;
+      updates.stop_switch_entity_id = null;
+    } else {
+      updates.cover_entity_id = null;
+    }
+    if (mode !== "pulse") {
+      updates.stop_switch_entity_id = null;
+      updates.tilt_stop_switch = null;
+    }
+    this._updateLocal(updates);
   }
 
   _onPulseTimeChange(e) {
@@ -531,7 +550,9 @@ class CoverTimeBasedCard extends LitElement {
   _hasTiltMotor() {
     const c = this._config;
     if (!c || c.tilt_mode !== "dual_motor") return false;
-    if (c.device_type === "cover") return true;
+    if (c.control_mode === "wrapped") return true;
+    if (c.control_mode === "pulse")
+      return !!(c.tilt_open_switch && c.tilt_close_switch && c.tilt_stop_switch);
     return !!(c.tilt_open_switch && c.tilt_close_switch);
   }
 
@@ -760,8 +781,8 @@ class CoverTimeBasedCard extends LitElement {
       ${this._activeTab === "device"
         ? html`
             <fieldset ?disabled=${disabled}>
-              ${this._renderDeviceType(c)} ${this._renderInputEntities(c)}
-              ${this._renderInputMode(c)} ${this._renderTiltSupport(c)}
+              ${this._renderControlMode(c)} ${this._renderInputEntities(c)}
+              ${this._renderTiltSupport(c)}
               ${this._renderTiltMotorSection(c)}
             </fieldset>
           `
@@ -777,24 +798,49 @@ class CoverTimeBasedCard extends LitElement {
     `;
   }
 
-  _renderDeviceType(c) {
+  _renderControlMode(c) {
+    const mode = c.control_mode || "switch";
+    const showPulseTime = mode === "pulse" || mode === "toggle";
+
     return html`
       <div class="section">
-        <div class="field-label">${this._t("device_type.label")}</div>
-        <select class="ha-select" @change=${this._onDeviceTypeChange}>
-          <option value="switch" ?selected=${c.device_type === "switch"}>
-            ${this._t("device_type.switch")}
+        <div class="field-label">${this._t("control_mode.label")}</div>
+        <select class="ha-select" @change=${this._onControlModeChange}>
+          <option value="wrapped" ?selected=${mode === "wrapped"}>
+            ${this._t("control_mode.wrapped")}
           </option>
-          <option value="cover" ?selected=${c.device_type === "cover"}>
-            ${this._t("device_type.cover")}
+          <option value="switch" ?selected=${mode === "switch"}>
+            ${this._t("control_mode.switch")}
+          </option>
+          <option value="pulse" ?selected=${mode === "pulse"}>
+            ${this._t("control_mode.pulse")}
+          </option>
+          <option value="toggle" ?selected=${mode === "toggle"}>
+            ${this._t("control_mode.toggle")}
           </option>
         </select>
+        ${showPulseTime
+          ? html`
+              <div class="inline-field">
+                <ha-textfield
+                  type="number"
+                  min="0.1"
+                  max="10"
+                  step="0.1"
+                  suffix="s"
+                  label=${this._t("control_mode.pulse_time")}
+                  .value=${String(c.pulse_time || 1.0)}
+                  @change=${this._onPulseTimeChange}
+                ></ha-textfield>
+              </div>
+            `
+          : ""}
       </div>
     `;
   }
 
   _renderInputEntities(c) {
-    if (c.device_type === "cover") {
+    if (c.control_mode === "wrapped") {
       return html`
         <div class="section">
           <ha-entity-picker
@@ -829,6 +875,7 @@ class CoverTimeBasedCard extends LitElement {
             @value-changed=${(e) =>
               this._onSwitchEntityChange("close_switch_entity_id", e)}
           ></ha-entity-picker>
+          ${c.control_mode === "pulse" ? html`
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.stop_switch_entity_id || ""}
@@ -837,52 +884,14 @@ class CoverTimeBasedCard extends LitElement {
             @value-changed=${(e) =>
               this._onSwitchEntityChange("stop_switch_entity_id", e)}
           ></ha-entity-picker>
+          ` : ""}
         </div>
       </div>
     `;
   }
 
-  _renderInputMode(c) {
-    if (c.device_type === "cover") return "";
-    const showPulseTime =
-      c.input_mode === "pulse" || c.input_mode === "toggle";
-
-    return html`
-      <div class="section">
-        <div class="field-label">${this._t("input_mode.label")}</div>
-        <select class="ha-select" @change=${this._onInputModeChange}>
-          <option value="switch" ?selected=${c.input_mode === "switch"}>
-            ${this._t("input_mode.switch")}
-          </option>
-          <option value="pulse" ?selected=${c.input_mode === "pulse"}>
-            ${this._t("input_mode.pulse")}
-          </option>
-          <option value="toggle" ?selected=${c.input_mode === "toggle"}>
-            ${this._t("input_mode.toggle")}
-          </option>
-        </select>
-        ${showPulseTime
-          ? html`
-              <div class="inline-field">
-                <ha-textfield
-                  type="number"
-                  min="0.1"
-                  max="10"
-                  step="0.1"
-                  suffix="s"
-                  label=${this._t("input_mode.pulse_time")}
-                  .value=${String(c.pulse_time || 1.0)}
-                  @change=${this._onPulseTimeChange}
-                ></ha-textfield>
-              </div>
-            `
-          : ""}
-      </div>
-    `;
-  }
-
   _renderTiltSupport(c) {
-    if (c.device_type === "cover" && c.cover_entity_id) {
+    if (c.control_mode === "wrapped" && c.cover_entity_id) {
       const stateObj = this.hass?.states?.[c.cover_entity_id];
       const features = stateObj?.attributes?.supported_features || 0;
       // CoverEntityFeature: OPEN_TILT=16, CLOSE_TILT=32
@@ -917,7 +926,7 @@ class CoverTimeBasedCard extends LitElement {
     return html`
       <div class="section">
         <div class="field-label">${this._t("tilt_motor.label")}</div>
-        ${c.device_type !== "cover" ? html`
+        ${c.control_mode !== "wrapped" ? html`
         <div class="entity-grid">
           <ha-entity-picker
             .hass=${this.hass}
@@ -935,6 +944,7 @@ class CoverTimeBasedCard extends LitElement {
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_close_switch", e)}
           ></ha-entity-picker>
+          ${c.control_mode === "pulse" ? html`
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.tilt_stop_switch || ""}
@@ -943,6 +953,7 @@ class CoverTimeBasedCard extends LitElement {
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_stop_switch", e)}
           ></ha-entity-picker>
+          ` : ""}
         </div>
         ` : ""}
         <div class="dual-motor-config">

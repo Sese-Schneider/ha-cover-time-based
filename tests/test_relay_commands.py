@@ -17,9 +17,9 @@ from homeassistant.const import (
 )
 
 from custom_components.cover_time_based.cover import (
-    INPUT_MODE_PULSE,
-    INPUT_MODE_SWITCH,
-    INPUT_MODE_TOGGLE,
+    CONTROL_MODE_PULSE,
+    CONTROL_MODE_SWITCH,
+    CONTROL_MODE_TOGGLE,
 )
 
 
@@ -60,7 +60,7 @@ class TestSwitchModeClose:
 
     @pytest.mark.asyncio
     async def test_close_turns_off_open_and_on_close(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_SWITCH)
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH)
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
@@ -71,7 +71,7 @@ class TestSwitchModeClose:
 
     @pytest.mark.asyncio
     async def test_close_with_stop_switch_turns_it_off(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_SWITCH, stop_switch="switch.stop")
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
@@ -87,7 +87,7 @@ class TestSwitchModeOpen:
 
     @pytest.mark.asyncio
     async def test_open_turns_off_close_and_on_open(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_SWITCH)
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH)
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
 
@@ -98,7 +98,7 @@ class TestSwitchModeOpen:
 
     @pytest.mark.asyncio
     async def test_open_with_stop_switch_turns_it_off(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_SWITCH, stop_switch="switch.stop")
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
 
@@ -114,7 +114,7 @@ class TestSwitchModeStop:
 
     @pytest.mark.asyncio
     async def test_stop_turns_off_both_switches(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_SWITCH)
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH)
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_STOP_COVER)
 
@@ -125,7 +125,7 @@ class TestSwitchModeStop:
 
     @pytest.mark.asyncio
     async def test_stop_with_stop_switch_turns_it_on(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_SWITCH, stop_switch="switch.stop")
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_STOP_COVER)
 
@@ -146,27 +146,7 @@ class TestPulseModeClose:
 
     @pytest.mark.asyncio
     async def test_close_pulses_close_switch(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_PULSE)
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch(
-                "custom_components.cover_time_based.cover_pulse_mode.sleep",
-                new_callable=AsyncMock,
-            ),
-        ):
-            await cover._async_handle_command(SERVICE_CLOSE_COVER)
-            await _drain_tasks(cover)
-
-        assert _calls(cover.hass.services.async_call) == [
-            _ha("turn_off", "switch.open"),
-            _ha("turn_on", "switch.close"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.close"),
-        ]
-
-    @pytest.mark.asyncio
-    async def test_close_with_stop_switch(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_PULSE, stop_switch="switch.stop")
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         with (
             patch.object(cover, "async_write_ha_state"),
             patch(
@@ -191,7 +171,7 @@ class TestPulseModeOpen:
 
     @pytest.mark.asyncio
     async def test_open_pulses_open_switch(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_PULSE)
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         with (
             patch.object(cover, "async_write_ha_state"),
             patch(
@@ -205,6 +185,7 @@ class TestPulseModeOpen:
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_on", "switch.open"),
+            _ha("turn_off", "switch.stop"),
             # pulse completion (background)
             _ha("turn_off", "switch.open"),
         ]
@@ -214,19 +195,8 @@ class TestPulseModeStop:
     """STOP command in pulse mode."""
 
     @pytest.mark.asyncio
-    async def test_stop_without_stop_switch(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_PULSE)
-        with patch.object(cover, "async_write_ha_state"):
-            await cover._async_handle_command(SERVICE_STOP_COVER)
-
-        assert _calls(cover.hass.services.async_call) == [
-            _ha("turn_off", "switch.close"),
-            _ha("turn_off", "switch.open"),
-        ]
-
-    @pytest.mark.asyncio
     async def test_stop_with_stop_switch_pulses_it(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_PULSE, stop_switch="switch.stop")
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         with (
             patch.object(cover, "async_write_ha_state"),
             patch(
@@ -256,7 +226,7 @@ class TestToggleModeClose:
 
     @pytest.mark.asyncio
     async def test_close_pulses_close_switch(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         with (
             patch.object(cover, "async_write_ha_state"),
             patch(
@@ -280,7 +250,7 @@ class TestToggleModeOpen:
 
     @pytest.mark.asyncio
     async def test_open_pulses_open_switch(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         with (
             patch.object(cover, "async_write_ha_state"),
             patch(
@@ -304,7 +274,7 @@ class TestToggleModeStop:
 
     @pytest.mark.asyncio
     async def test_stop_after_close_pulses_close_switch(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover._last_command = SERVICE_CLOSE_COVER
         with (
             patch.object(cover, "async_write_ha_state"),
@@ -324,7 +294,7 @@ class TestToggleModeStop:
 
     @pytest.mark.asyncio
     async def test_stop_after_open_pulses_open_switch(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover._last_command = SERVICE_OPEN_COVER
         with (
             patch.object(cover, "async_write_ha_state"),
@@ -344,7 +314,7 @@ class TestToggleModeStop:
 
     @pytest.mark.asyncio
     async def test_stop_with_no_last_command_does_nothing(self, make_cover):
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover._last_command = None
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_STOP_COVER)

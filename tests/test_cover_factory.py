@@ -5,11 +5,10 @@ from unittest.mock import MagicMock, patch
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
+    CONF_CONTROL_MODE,
     CONF_COVER_ENTITY_ID,
     CONF_DEFAULTS,
-    CONF_DEVICE_TYPE,
     CONF_DEVICES,
-    CONF_INPUT_MODE,
     CONF_IS_BUTTON,
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
@@ -26,11 +25,10 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVEL_TIME_OPEN,
     CONF_TILT_TIME_CLOSE,
     CONF_TILT_TIME_OPEN,
-    DEVICE_TYPE_COVER,
-    DEVICE_TYPE_SWITCH,
-    INPUT_MODE_PULSE,
-    INPUT_MODE_SWITCH,
-    INPUT_MODE_TOGGLE,
+    CONTROL_MODE_PULSE,
+    CONTROL_MODE_SWITCH,
+    CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_WRAPPED,
     _create_cover_from_options,
     _resolve_tilt_strategy,
     devices_from_config,
@@ -57,10 +55,9 @@ class TestCreateCoverFromOptions:
     def test_creates_switch_mode_cover(self):
         cover = _create_cover_from_options(
             {
-                CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
+                CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
                 CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                 CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                CONF_INPUT_MODE: INPUT_MODE_SWITCH,
             },
             device_id="test",
             name="Test",
@@ -70,10 +67,9 @@ class TestCreateCoverFromOptions:
     def test_creates_pulse_mode_cover(self):
         cover = _create_cover_from_options(
             {
-                CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
+                CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
                 CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                 CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                CONF_INPUT_MODE: INPUT_MODE_PULSE,
                 CONF_PULSE_TIME: 0.5,
             },
             device_id="test",
@@ -84,10 +80,9 @@ class TestCreateCoverFromOptions:
     def test_creates_toggle_mode_cover(self):
         cover = _create_cover_from_options(
             {
-                CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
+                CONF_CONTROL_MODE: CONTROL_MODE_TOGGLE,
                 CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                 CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                CONF_INPUT_MODE: INPUT_MODE_TOGGLE,
                 CONF_PULSE_TIME: 0.5,
             },
             device_id="test",
@@ -98,7 +93,7 @@ class TestCreateCoverFromOptions:
     def test_creates_wrapped_cover(self):
         cover = _create_cover_from_options(
             {
-                CONF_DEVICE_TYPE: DEVICE_TYPE_COVER,
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
                 CONF_COVER_ENTITY_ID: "cover.inner",
             },
             device_id="test",
@@ -107,10 +102,9 @@ class TestCreateCoverFromOptions:
         assert isinstance(cover, WrappedCoverTimeBased)
 
     def test_defaults_to_switch_mode(self):
-        """When input_mode is not specified, defaults to switch."""
+        """When control_mode is not specified, defaults to switch."""
         cover = _create_cover_from_options(
             {
-                CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
                 CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                 CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
             },
@@ -122,7 +116,7 @@ class TestCreateCoverFromOptions:
     def test_passes_common_params(self):
         cover = _create_cover_from_options(
             {
-                CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
+                CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
                 CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                 CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
                 CONF_TRAVEL_TIME_CLOSE: 25.0,
@@ -140,18 +134,6 @@ class TestCreateCoverFromOptions:
         assert cover._tilting_time_close == 5.0
         assert cover._tilting_time_open == 4.0
         assert cover._min_movement_time == 0.5
-
-    def test_defaults_to_switch_device_type(self):
-        """When device_type is not specified, defaults to switch."""
-        cover = _create_cover_from_options(
-            {
-                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
-                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-            },
-            device_id="test",
-            name="Test",
-        )
-        assert isinstance(cover, SwitchModeCover)
 
 
 # ===================================================================
@@ -200,7 +182,7 @@ class TestDevicesFromConfig:
                     "name": "Kitchen",
                     CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                     CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                    CONF_INPUT_MODE: INPUT_MODE_PULSE,
+                    "input_mode": "pulse",
                 },
             },
         }
@@ -215,7 +197,7 @@ class TestDevicesFromConfig:
                     "name": "Kitchen",
                     CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                     CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                    CONF_INPUT_MODE: INPUT_MODE_TOGGLE,
+                    "input_mode": "toggle",
                 },
             },
         }
@@ -287,7 +269,7 @@ class TestDevicesFromConfig:
                     CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                     CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
                     CONF_IS_BUTTON: True,
-                    CONF_INPUT_MODE: INPUT_MODE_TOGGLE,
+                    "input_mode": "toggle",
                 },
             },
         }
@@ -341,7 +323,7 @@ class TestDevicesFromConfig:
                     "name": "Test",
                     CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                     CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                    CONF_INPUT_MODE: INPUT_MODE_PULSE,
+                    "input_mode": "pulse",
                 },
             },
         }
@@ -414,10 +396,9 @@ class TestAsyncSetupEntry:
         config_entry.entry_id = "test_entry"
         config_entry.title = "My Cover"
         config_entry.options = {
-            CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
+            CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
             CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
             CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-            CONF_INPUT_MODE: INPUT_MODE_SWITCH,
         }
 
         platform = MagicMock()

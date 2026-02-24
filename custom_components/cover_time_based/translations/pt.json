@@ -93,24 +93,20 @@
       "device": "Dispositivo",
       "calibration": "Calibração"
     },
-    "device_type": {
-      "label": "Tipo de Dispositivo",
-      "switch": "Controlar através de interruptores",
-      "cover": "Encapsular uma entidade de estore existente"
+    "control_mode": {
+      "label": "Modo de Controlo",
+      "wrapped": "Encapsular uma entidade de estore existente",
+      "switch": "Interruptor (travamento)",
+      "pulse": "Pulso (momentâneo)",
+      "toggle": "Alternar (mesmo botão)",
+      "pulse_time": "Duração do pulso"
     },
     "entities": {
       "cover_entity": "Entidade de Estore",
       "switch_entities": "Entidades de Interruptor",
       "open_switch": "Interruptor de abrir",
       "close_switch": "Interruptor de fechar",
-      "stop_switch": "Interruptor de parar (opcional)"
-    },
-    "input_mode": {
-      "label": "Modo de Entrada",
-      "switch": "Interruptor (travamento)",
-      "pulse": "Pulso (momentâneo)",
-      "toggle": "Alternar (mesmo botão)",
-      "pulse_time": "Duração do pulso"
+      "stop_switch": "Interruptor de parar"
     },
     "endpoint_runon": {
       "label": "Tempo de Sobrecurso nos Extremos",
@@ -127,7 +123,7 @@
       "label": "Motor de Inclinação",
       "open_switch": "Interruptor de abrir inclinação",
       "close_switch": "Interruptor de fechar inclinação",
-      "stop_switch": "Interruptor de parar inclinação (opcional)",
+      "stop_switch": "Interruptor de parar inclinação",
       "safe_position": "Posição de inclinação segura",
       "safe_position_helper": "A inclinação move-se para aqui antes do deslocamento (100 = totalmente aberto)",
       "max_allowed_position": "Posição máxima permitida de inclinação (opcional)",

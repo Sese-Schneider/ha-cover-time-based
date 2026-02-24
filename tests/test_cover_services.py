@@ -9,14 +9,12 @@ from custom_components.cover_time_based.helpers import resolve_entity
 from custom_components.cover_time_based.cover import (
     _register_services,
     _create_cover_from_options,
-    CONF_DEVICE_TYPE,
+    CONF_CONTROL_MODE,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_CLOSE_SWITCH_ENTITY_ID,
-    CONF_INPUT_MODE,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
-    DEVICE_TYPE_SWITCH,
-    INPUT_MODE_SWITCH,
+    CONTROL_MODE_SWITCH,
     SERVICE_START_CALIBRATION,
     SERVICE_STOP_CALIBRATION,
 )
@@ -69,10 +67,9 @@ class TestResolveEntity:
         """Valid CoverTimeBased entity is returned."""
         entity = _create_cover_from_options(
             {
-                CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
+                CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
                 CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                 CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                CONF_INPUT_MODE: INPUT_MODE_SWITCH,
                 CONF_TRAVEL_TIME_CLOSE: 30,
                 CONF_TRAVEL_TIME_OPEN: 30,
             },

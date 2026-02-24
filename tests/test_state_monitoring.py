@@ -16,7 +16,10 @@ from unittest.mock import MagicMock, patch
 
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
-from custom_components.cover_time_based.cover import INPUT_MODE_PULSE, INPUT_MODE_TOGGLE
+from custom_components.cover_time_based.cover import (
+    CONTROL_MODE_PULSE,
+    CONTROL_MODE_TOGGLE,
+)
 
 
 def _make_state_event(entity_id, old_state, new_state):
@@ -45,7 +48,7 @@ class TestPulseModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_open_pulse_triggers_open(self, make_cover):
         """ON->OFF transition on open switch triggers async_open_cover."""
-        cover = make_cover(input_mode=INPUT_MODE_PULSE)
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -56,7 +59,7 @@ class TestPulseModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_close_pulse_triggers_close(self, make_cover):
         """ON->OFF transition on close switch triggers async_close_cover."""
-        cover = make_cover(input_mode=INPUT_MODE_PULSE)
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         cover.travel_calc.set_position(100)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -67,7 +70,7 @@ class TestPulseModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_stop_pulse_stops_tracker(self, make_cover):
         """ON->OFF transition on stop switch stops the tracker."""
-        cover = make_cover(input_mode=INPUT_MODE_PULSE, stop_switch="switch.stop")
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER
@@ -85,7 +88,7 @@ class TestPulseModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_off_to_on_ignored(self, make_cover):
         """OFF->ON transitions should be ignored in pulse mode."""
-        cover = make_cover(input_mode=INPUT_MODE_PULSE)
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         cover.travel_calc.set_position(50)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -97,7 +100,7 @@ class TestPulseModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_unknown_entity_ignored(self, make_cover):
         """Transitions on unknown entities should be ignored."""
-        cover = make_cover(input_mode=INPUT_MODE_PULSE)
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         cover.travel_calc.set_position(50)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -236,7 +239,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_on_to_off_triggers_open(self, make_cover):
         """ON->OFF on open switch starts opening."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -251,7 +254,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_on_to_off_triggers_close(self, make_cover):
         """ON->OFF on close switch starts closing."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(100)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -266,7 +269,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_off_to_on_triggers_open(self, make_cover):
         """OFF->ON on open switch starts opening (latching switch)."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -281,7 +284,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_off_to_on_triggers_close(self, make_cover):
         """OFF->ON on close switch starts closing (latching switch)."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(100)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -296,7 +299,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_on_to_off_while_opening_stops(self, make_cover):
         """ON->OFF on open switch while opening should stop."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
         cover._last_command = SERVICE_OPEN_COVER
@@ -313,7 +316,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_off_to_on_while_opening_stops(self, make_cover):
         """OFF->ON on open switch while opening should stop (latching switch)."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
         cover._last_command = SERVICE_OPEN_COVER
@@ -330,7 +333,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_on_to_off_while_closing_stops(self, make_cover):
         """ON->OFF on close switch while closing should stop."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER
@@ -347,7 +350,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_off_to_on_while_closing_stops(self, make_cover):
         """OFF->ON on close switch while closing should stop (latching switch)."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER
@@ -364,7 +367,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_momentary_debounce(self, make_cover):
         """Momentary switch (OFF->ON->OFF) should only trigger once due to debounce."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -390,7 +393,7 @@ class TestToggleModeExternalStateChange:
         """Latching switch: click 1 starts, click 2 stops (transitions > pulse_time apart)."""
         import time as time_module
 
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -416,7 +419,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_external_close_while_opening_stops(self, make_cover):
         """External close toggle while opening should stop, not reverse."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
         cover._last_command = SERVICE_OPEN_COVER
@@ -434,7 +437,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_external_open_while_closing_stops(self, make_cover):
         """External open toggle while closing should stop, not reverse."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER
@@ -452,7 +455,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_ha_ui_close_while_opening_reverses(self, make_cover):
         """HA UI close while opening should reverse direction (not just stop)."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
         cover._last_command = SERVICE_OPEN_COVER
@@ -466,7 +469,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_ha_ui_open_while_closing_reverses(self, make_cover):
         """HA UI open while closing should reverse direction (not just stop)."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER
@@ -480,7 +483,7 @@ class TestToggleModeExternalStateChange:
     @pytest.mark.asyncio
     async def test_unknown_entity_ignored(self, make_cover):
         """Transitions on unknown entities should be ignored."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -617,7 +620,7 @@ class TestToggleE2EThroughStateListener:
 
         Simulates a latching toggle switch that stays in each state.
         """
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -648,7 +651,7 @@ class TestToggleE2EThroughStateListener:
     @pytest.mark.asyncio
     async def test_latching_open_then_stop_reversed_initial(self, make_cover):
         """Latching switch: click 1 (OFF->ON) starts, click 2 (ON->OFF) stops."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -677,7 +680,7 @@ class TestToggleE2EThroughStateListener:
     @pytest.mark.asyncio
     async def test_momentary_open_click_starts(self, make_cover):
         """Momentary switch: OFF->ON->OFF starts tracker, second transition debounced."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -699,7 +702,7 @@ class TestToggleE2EThroughStateListener:
     @pytest.mark.asyncio
     async def test_momentary_open_then_stop(self, make_cover):
         """Momentary switch: click 1 starts, click 2 stops."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -737,7 +740,7 @@ class TestToggleE2EThroughStateListener:
     @pytest.mark.asyncio
     async def test_no_echo_filtering_for_external_clicks(self, make_cover):
         """External clicks should NOT be echo-filtered (no pending echoes)."""
-        cover = make_cover(input_mode=INPUT_MODE_TOGGLE)
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         # Verify no pending echoes
@@ -767,7 +770,8 @@ class TestExternalTiltPulseMode:
 
     def _make_tilt_cover(self, make_cover):
         return make_cover(
-            input_mode=INPUT_MODE_PULSE,
+            control_mode=CONTROL_MODE_PULSE,
+            stop_switch="switch.stop",
             tilt_time_close=5.0,
             tilt_time_open=5.0,
             tilt_mode="dual_motor",
@@ -866,7 +870,7 @@ class TestExternalTiltSwitchMode:
     """
 
     def _make_tilt_cover(self, make_cover):
-        # input_mode defaults to INPUT_MODE_SWITCH in make_cover
+        # control_mode defaults to CONTROL_MODE_SWITCH in make_cover
         return make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -988,7 +992,7 @@ class TestExternalTiltToggleMode:
 
     def _make_tilt_cover(self, make_cover):
         return make_cover(
-            input_mode=INPUT_MODE_TOGGLE,
+            control_mode=CONTROL_MODE_TOGGLE,
             tilt_time_close=5.0,
             tilt_time_open=5.0,
             tilt_mode="dual_motor",

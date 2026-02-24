@@ -34,20 +34,17 @@ class TestBasicProperties:
     def test_name_falls_back_to_device_id(self, make_cover):
         from custom_components.cover_time_based.cover import (
             _create_cover_from_options,
-            CONF_DEVICE_TYPE,
+            CONF_CONTROL_MODE,
             CONF_OPEN_SWITCH_ENTITY_ID,
             CONF_CLOSE_SWITCH_ENTITY_ID,
-            CONF_INPUT_MODE,
-            DEVICE_TYPE_SWITCH,
-            INPUT_MODE_SWITCH,
+            CONTROL_MODE_SWITCH,
         )
 
         cover = _create_cover_from_options(
             {
-                CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
+                CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
                 CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                 CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                CONF_INPUT_MODE: INPUT_MODE_SWITCH,
             },
             device_id="my_device",
             name="",
@@ -1047,6 +1044,53 @@ class TestUnconfiguredEntity:
         cover._travel_time_close = None
         cover._travel_time_open = None
         assert cover.available is False
+
+    def test_pulse_mode_without_stop_switch_not_available(self, make_cover):
+        """Pulse mode cover without stop switch is not available."""
+        from custom_components.cover_time_based.cover import CONTROL_MODE_PULSE
+
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch=None)
+        assert cover.available is False
+        assert "stop switch" in cover._get_missing_configuration()
+
+    def test_pulse_mode_with_stop_switch_available(self, make_cover):
+        """Pulse mode cover with stop switch is available."""
+        from custom_components.cover_time_based.cover import CONTROL_MODE_PULSE
+
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
+        assert cover.available is True
+
+    def test_pulse_mode_tilt_without_tilt_stop_not_available(self, make_cover):
+        """Pulse mode with dual_motor tilt but no tilt stop switch is not available."""
+        from custom_components.cover_time_based.cover import CONTROL_MODE_PULSE
+
+        cover = make_cover(
+            control_mode=CONTROL_MODE_PULSE,
+            stop_switch="switch.stop",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        assert cover.available is False
+        assert "tilt stop switch" in cover._get_missing_configuration()
+
+    def test_pulse_mode_tilt_with_tilt_stop_available(self, make_cover):
+        """Pulse mode with dual_motor tilt and tilt stop switch is available."""
+        from custom_components.cover_time_based.cover import CONTROL_MODE_PULSE
+
+        cover = make_cover(
+            control_mode=CONTROL_MODE_PULSE,
+            stop_switch="switch.stop",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+        )
+        assert cover.available is True
 
     @pytest.mark.asyncio
     async def test_require_configured_raises(self, make_cover):

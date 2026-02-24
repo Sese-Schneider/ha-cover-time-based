@@ -93,24 +93,20 @@
       "device": "Urządzenie",
       "calibration": "Kalibracja"
     },
-    "device_type": {
-      "label": "Typ urządzenia",
-      "switch": "Sterowanie przez przełączniki",
-      "cover": "Opakuj istniejącą encję rolety"
+    "control_mode": {
+      "label": "Tryb sterowania",
+      "wrapped": "Opakuj istniejącą encję rolety",
+      "switch": "Przełącznik (zatrzaskowy)",
+      "pulse": "Impuls (chwilowy)",
+      "toggle": "Przełączanie (ten sam przycisk)",
+      "pulse_time": "Czas impulsu"
     },
     "entities": {
       "cover_entity": "Encja rolety",
       "switch_entities": "Encje przełączników",
       "open_switch": "Przełącznik otwierania",
       "close_switch": "Przełącznik zamykania",
-      "stop_switch": "Przełącznik zatrzymania (opcjonalny)"
-    },
-    "input_mode": {
-      "label": "Tryb wejścia",
-      "switch": "Przełącznik (zatrzaskowy)",
-      "pulse": "Impuls (chwilowy)",
-      "toggle": "Przełączanie (ten sam przycisk)",
-      "pulse_time": "Czas impulsu"
+      "stop_switch": "Przełącznik zatrzymania"
     },
     "endpoint_runon": {
       "label": "Czas dobiegu na krańcach",
@@ -127,7 +123,7 @@
       "label": "Silnik nachylenia",
       "open_switch": "Przełącznik otwierania nachylenia",
       "close_switch": "Przełącznik zamykania nachylenia",
-      "stop_switch": "Przełącznik zatrzymania nachylenia (opcjonalny)",
+      "stop_switch": "Przełącznik zatrzymania nachylenia",
       "safe_position": "Bezpieczna pozycja nachylenia",
       "safe_position_helper": "Nachylenie przesuwa się tu przed ruchem (100 = w pełni otwarte)",
       "max_allowed_position": "Maks. dozwolona pozycja nachylenia (opcjonalna)",

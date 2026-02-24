@@ -22,6 +22,15 @@ class PulseModeCover(SwitchCoverTimeBased):
         super().__init__(**kwargs)
         self._pulse_time = pulse_time
 
+    def _get_missing_configuration(self) -> list[str]:
+        """Return list of missing configuration items."""
+        missing = super()._get_missing_configuration()
+        if not self._stop_switch_entity_id:
+            missing.append("stop switch")
+        if self._has_tilt_motor() and not self._tilt_stop_switch_id:
+            missing.append("tilt stop switch")
+        return missing
+
     async def _complete_pulse(self, entity_id):
         """Complete a relay pulse by turning OFF after pulse_time."""
         try:
