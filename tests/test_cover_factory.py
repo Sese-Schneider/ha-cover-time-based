@@ -454,6 +454,11 @@ class TestResolveTiltStrategy:
         assert result._safe_tilt_position == 10
         assert result._max_tilt_allowed_position == 80
 
+    def test_dual_motor_safe_tilt_position_zero(self):
+        result = _resolve_tilt_strategy("dual_motor", 2.0, 2.0, safe_tilt_position=0)
+        assert isinstance(result, DualMotorTilt)
+        assert result._safe_tilt_position == 0
+
     def test_inline(self):
         result = _resolve_tilt_strategy("inline", 2.0, 2.0)
         assert isinstance(result, InlineTilt)

@@ -779,6 +779,45 @@ class TestWsUpdateConfig:
 
 
 # ---------------------------------------------------------------------------
+# ws_update_config — timing field validation
+# ---------------------------------------------------------------------------
+
+
+class TestTimingFieldValidation:
+    """Verify that travel/tilt time fields reject 0 (min 0.1) while delay fields allow it."""
+
+    @pytest.mark.parametrize(
+        "field",
+        ["travel_time_close", "travel_time_open", "tilt_time_close", "tilt_time_open"],
+    )
+    def test_zero_rejected_for_travel_tilt_times(self, field):
+        """travel_time_* and tilt_time_* require >= 0.1."""
+        import voluptuous as vol
+
+        validator = vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))
+        with pytest.raises(vol.Invalid):
+            validator(0)
+        # 0.1 must be accepted
+        assert validator(0.1) == pytest.approx(0.1)
+
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "travel_startup_delay",
+            "tilt_startup_delay",
+            "endpoint_runon_time",
+            "min_movement_time",
+        ],
+    )
+    def test_zero_accepted_for_delay_fields(self, field):
+        """Delay and auxiliary timing fields allow 0."""
+        import voluptuous as vol
+
+        validator = vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
+        assert validator(0) == pytest.approx(0)
+
+
+# ---------------------------------------------------------------------------
 # ws_update_config — wrap-self rejection
 # ---------------------------------------------------------------------------
 
