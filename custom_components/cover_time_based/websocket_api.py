@@ -168,16 +168,16 @@ async def ws_get_config(
             ["none", "sequential", "dual_motor", "inline"]
         ),
         vol.Optional("travel_time_close"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
+            None, vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))
         ),
         vol.Optional("travel_time_open"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
+            None, vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))
         ),
         vol.Optional("tilt_time_close"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
+            None, vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))
         ),
         vol.Optional("tilt_time_open"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
+            None, vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))
         ),
         vol.Optional("travel_startup_delay"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
