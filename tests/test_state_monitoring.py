@@ -1080,3 +1080,118 @@ class TestExternalTiltToggleMode:
                 assert cover.tilt_calc.is_traveling()
             finally:
                 cover._triggered_externally = False
+
+
+# ===================================================================
+# Same-state (attribute-only) transitions
+# ===================================================================
+
+
+class TestSameStateTransitionsIgnored:
+    """Attribute-only state changes (e.g. position updates) should not
+    trigger external state handling."""
+
+    @pytest.mark.asyncio
+    async def test_wrapped_closing_to_closing_ignored(self, make_cover):
+        """Wrapped cover 'closing → closing' should not call async_close_cover."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(100)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_close_cover") as mock_close,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "closing", "closing")
+            )
+            mock_close.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_wrapped_opening_to_opening_ignored(self, make_cover):
+        """Wrapped cover 'opening → opening' should not call async_open_cover."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(0)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_open_cover") as mock_open,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "opening", "opening")
+            )
+            mock_open.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_switch_on_to_on_ignored(self, make_cover):
+        """Switch 'on → on' attribute update should not trigger external handling."""
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_handle_external_state_change") as mock_handler,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "on", "on")
+            )
+            mock_handler.assert_not_called()
+
+
+# ===================================================================
+# Calibration suppresses external state handling
+# ===================================================================
+
+
+class TestCalibrationSuppressesExternalState:
+    """During calibration, external state changes must not trigger
+    movement lifecycle — calibration drives the motors directly."""
+
+    @pytest.mark.asyncio
+    async def test_wrapped_state_change_ignored_during_calibration(self, make_cover):
+        """Wrapped cover state changes should be skipped while calibrating."""
+        from custom_components.cover_time_based.calibration import CalibrationState
+
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover._calibration = CalibrationState(attribute="travel_time_close", timeout=60)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_close_cover") as mock_close,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "open", "closing")
+            )
+            mock_close.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_switch_state_change_ignored_during_calibration(self, make_cover):
+        """Switch state changes should be skipped while calibrating."""
+        from custom_components.cover_time_based.calibration import CalibrationState
+
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover._calibration = CalibrationState(attribute="travel_time_open", timeout=60)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_handle_external_state_change") as mock_handler,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "on", "off")
+            )
+            mock_handler.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_state_change_works_after_calibration_ends(self, make_cover):
+        """After calibration is cleared, external state changes work again."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(100)
+        cover._calibration = None  # No calibration active
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "open", "closing")
+            )
+
+        assert cover._last_command == SERVICE_CLOSE_COVER

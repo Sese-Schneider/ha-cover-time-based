@@ -1418,6 +1418,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
             return
 
+        # Skip attribute-only updates (same state string, only attributes changed)
+        if old_val == new_val:
+            return
+
+        # Skip external state handling during calibration — calibration drives
+        # the motors directly and must not be interfered with.
+        if self._calibration is not None:
+            self._log("_async_switch_state_changed :: calibration active, skipping")
+            return
+
         # Tilt switches: pulse-mode (ON→OFF = command complete)
         if entity_id in (
             self._tilt_open_switch_id,
