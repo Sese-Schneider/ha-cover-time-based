@@ -18,6 +18,7 @@ from custom_components.cover_time_based.cover import (
     CONF_TILTING_TIME_DOWN,
     CONF_TILTING_TIME_UP,
     CONF_TRAVEL_DELAY_AT_END,
+    CONF_TRAVEL_MOVES_WITH_TILT,
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
@@ -466,3 +467,57 @@ class TestResolveTiltStrategy:
     def test_unknown_mode_defaults_to_sequential(self):
         result = _resolve_tilt_strategy("unknown_value", 2.0, 2.0)
         assert isinstance(result, SequentialTilt)
+
+
+# ===================================================================
+# Legacy travel_moves_with_tilt → inline migration
+# ===================================================================
+
+
+class TestLegacyTravelMovesWithTiltMigration:
+    """Test that legacy YAML travel_moves_with_tilt=true migrates to inline tilt mode.
+
+    Covers cover.py line 352.
+    """
+
+    def test_travel_moves_with_tilt_migrates_to_inline(self):
+        """When travel_moves_with_tilt is true and tilt_mode is not set
+        (defaults to 'none'), devices_from_config should produce a cover
+        with an InlineTilt strategy."""
+        config = {
+            CONF_DEFAULTS: {},
+            CONF_DEVICES: {
+                "blind1": {
+                    "name": "Legacy Inline",
+                    CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                    CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                    CONF_TRAVEL_MOVES_WITH_TILT: True,
+                    CONF_TILT_TIME_CLOSE: 2.0,
+                    CONF_TILT_TIME_OPEN: 2.0,
+                },
+            },
+        }
+        devices = devices_from_config(config)
+        assert len(devices) == 1
+        cover = devices[0]
+        assert isinstance(cover._tilt_strategy, InlineTilt)
+
+    def test_travel_moves_with_tilt_false_stays_none(self):
+        """When travel_moves_with_tilt is false, tilt_mode stays 'none'
+        and no tilt strategy is created (even with tilt times set)."""
+        config = {
+            CONF_DEFAULTS: {},
+            CONF_DEVICES: {
+                "blind1": {
+                    "name": "No Migration",
+                    CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                    CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                    CONF_TRAVEL_MOVES_WITH_TILT: False,
+                    CONF_TILT_TIME_CLOSE: 2.0,
+                    CONF_TILT_TIME_OPEN: 2.0,
+                },
+            },
+        }
+        devices = devices_from_config(config)
+        cover = devices[0]
+        assert cover._tilt_strategy is None

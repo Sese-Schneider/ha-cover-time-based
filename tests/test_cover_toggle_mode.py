@@ -696,3 +696,160 @@ class TestToggleTiltRestoreStop:
         calls = _calls(cover.hass.services.async_call)
         assert _ha("turn_on", "switch.open") in calls
         await _cancel_tasks(cover)
+
+
+# ===================================================================
+# Stop with tilt restore active + dual motor → _send_tilt_stop called
+# ===================================================================
+
+
+class TestToggleStopSendsTiltStopOnTiltRestore:
+    """Verify async_stop_cover calls _send_tilt_stop when tilt_restore was active
+    and cover has a dual motor tilt (i.e. _has_tilt_motor() returns True).
+
+    Covers cover_toggle_mode.py line 109.
+    """
+
+    @pytest.mark.asyncio
+    async def test_stop_with_tilt_restore_calls_send_tilt_stop(self):
+        """When tilt restore was active and dual motor tilt is configured,
+        async_stop_cover must call both _send_stop and _send_tilt_stop."""
+        tilt_strategy = MagicMock()
+        tilt_strategy.uses_tilt_motor = True
+        tilt_strategy.restores_tilt = True
+        tilt_strategy.snap_trackers_to_physical = MagicMock()
+
+        cover = ToggleModeCover(
+            device_id="test_toggle_tilt_stop",
+            name="Test Toggle Tilt Stop",
+            tilt_strategy=tilt_strategy,
+            travel_time_close=30,
+            travel_time_open=30,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            travel_startup_delay=None,
+            tilt_startup_delay=None,
+            endpoint_runon_time=None,
+            min_movement_time=None,
+            open_switch_entity_id="switch.open",
+            close_switch_entity_id="switch.close",
+            stop_switch_entity_id=None,
+            pulse_time=1.0,
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+        )
+        hass = MagicMock()
+        hass.services.async_call = AsyncMock()
+        hass.states.get = MagicMock(return_value=None)
+        created_tasks = []
+
+        def create_task(coro):
+            task = asyncio.ensure_future(coro)
+            created_tasks.append(task)
+            return task
+
+        hass.async_create_task = create_task
+        cover.hass = hass
+        cover._test_tasks = created_tasks
+
+        # Set up: cover traveling + tilt restore active
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        cover.travel_calc.start_travel(100)
+        cover._tilt_restore_active = True
+        cover._last_command = SERVICE_OPEN_COVER
+        cover._last_tilt_direction = "open"
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await cover.async_stop_cover()
+            await _drain_tasks(cover)
+
+        # Verify _send_stop re-pulsed the open switch (main motor stop)
+        calls = _calls(cover.hass.services.async_call)
+        assert _ha("turn_on", "switch.open") in calls
+
+        # Verify _send_tilt_stop also pulsed the tilt open switch
+        assert _ha("turn_on", "switch.tilt_open") in calls
+        await _cancel_tasks(cover)
+
+
+# ===================================================================
+# External tilt close toggle while tilt is traveling → stops cover
+# ===================================================================
+
+
+class TestToggleExternalTiltCloseWhileTraveling:
+    """Verify _handle_external_tilt_state_change with the tilt close switch
+    while tilt_calc is traveling triggers async_stop_cover.
+
+    Covers cover_toggle_mode.py lines 177-180.
+    """
+
+    @pytest.mark.asyncio
+    async def test_external_tilt_close_while_traveling_stops(self):
+        """When tilt is traveling and an external tilt close toggle fires,
+        the cover should stop."""
+        tilt_strategy = MagicMock()
+        tilt_strategy.uses_tilt_motor = True
+        tilt_strategy.restores_tilt = True
+        tilt_strategy.snap_trackers_to_physical = MagicMock()
+
+        cover = ToggleModeCover(
+            device_id="test_toggle_ext_tilt",
+            name="Test Toggle Ext Tilt",
+            tilt_strategy=tilt_strategy,
+            travel_time_close=30,
+            travel_time_open=30,
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            travel_startup_delay=None,
+            tilt_startup_delay=None,
+            endpoint_runon_time=None,
+            min_movement_time=None,
+            open_switch_entity_id="switch.open",
+            close_switch_entity_id="switch.close",
+            stop_switch_entity_id=None,
+            pulse_time=1.0,
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+        )
+        hass = MagicMock()
+        hass.services.async_call = AsyncMock()
+        hass.states.get = MagicMock(return_value=None)
+        created_tasks = []
+
+        def create_task(coro):
+            task = asyncio.ensure_future(coro)
+            created_tasks.append(task)
+            return task
+
+        hass.async_create_task = create_task
+        cover.hass = hass
+        cover._test_tasks = created_tasks
+
+        # Set up: tilt is traveling (tilting closed)
+        cover.tilt_calc.set_position(50)
+        cover.tilt_calc.start_travel(0)
+        assert cover.tilt_calc.is_traveling()
+
+        # Simulate external trigger for tilt close switch
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_close", "on", "off"
+                )
+        finally:
+            cover._triggered_externally = False
+
+        # Tilt should have stopped traveling
+        assert not cover.tilt_calc.is_traveling()
+        await _cancel_tasks(cover)

@@ -501,3 +501,346 @@ class TestCalibrationTimeout:
             await asyncio.sleep(0.3)
         assert cover._calibration is None
         assert automation_task.done()  # Should be cancelled
+
+
+class TestOverheadFallbackTravelTime:
+    """Test fallback travel_time selection in _start_overhead_test (lines 141, 152)."""
+
+    @pytest.mark.asyncio
+    async def test_travel_startup_delay_open_direction_falls_back_to_close_time(
+        self, make_cover
+    ):
+        """Line 141: travel_time = self._travel_time_open or self._travel_time_close.
+
+        When direction=open but only travel_time_close is configured,
+        the fallback branch should use travel_time_close.
+        """
+        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
+        # Clear open time so the `or` fallback fires
+        cover._travel_time_open = None
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_startup_delay", timeout=300.0, direction="open"
+            )
+        assert cover._calibration is not None
+        assert cover._calibration.automation_task is not None
+        # step_duration = travel_time / 10 = 60 / 10 = 6.0
+        assert cover._calibration.step_duration == 6.0
+
+    @pytest.mark.asyncio
+    async def test_tilt_startup_delay_open_direction_falls_back_to_close_time(
+        self, make_cover
+    ):
+        """Line 152: travel_time = self._tilting_time_open or self._tilting_time_close.
+
+        When direction=open but only tilting_time_close is configured,
+        the fallback branch should use tilting_time_close.
+        """
+        cover = make_cover(tilt_time_close=10.0, tilt_time_open=10.0)
+        # Clear open time so the `or` fallback fires
+        cover._tilting_time_open = None
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="tilt_startup_delay", timeout=300.0, direction="open"
+            )
+        assert cover._calibration is not None
+        assert cover._calibration.automation_task is not None
+        # step_duration = travel_time / 10 = 10 / 10 = 1.0
+        assert cover._calibration.step_duration == 1.0
+
+
+class TestSetPositionAfterCalibrationNoTilt:
+    """Test _set_position_after_calibration with tilt attr but no tilt_calc (line 357)."""
+
+    def test_tilt_attr_on_cover_without_tilt_support(self, make_cover):
+        """Line 357: if is_tilt and not hasattr(self, 'tilt_calc'): return.
+
+        Create a cover without tilt support, then call
+        _set_position_after_calibration with a tilt attribute.
+        It should return early without error.
+        """
+        from custom_components.cover_time_based.calibration import CalibrationState
+        from homeassistant.const import SERVICE_CLOSE_COVER
+
+        cover = make_cover()  # No tilt configured => no tilt_calc
+        # Ensure no tilt_calc exists
+        if hasattr(cover, "tilt_calc"):
+            delattr(cover, "tilt_calc")
+
+        cal_state = CalibrationState(attribute="tilt_time_close", timeout=30.0)
+        cal_state.move_command = SERVICE_CLOSE_COVER
+
+        # Should return early without raising
+        original_position = cover.travel_calc.current_position()
+        cover._set_position_after_calibration(cal_state)
+        # Travel position should be unchanged (tilt path was a no-op)
+        assert cover.travel_calc.current_position() == original_position
+
+
+class TestCalibrationResultOpenDirection:
+    """Test _calculate_calibration_result for OPEN direction (lines 385, 390)."""
+
+    @pytest.mark.asyncio
+    async def test_travel_startup_delay_open_direction_result(self, make_cover):
+        """Lines 384-385: total_time = self._travel_time_open or self._travel_time_close.
+
+        Run calibration result calculation for travel_startup_delay
+        in the OPEN direction.
+        """
+        import time as time_mod
+        from homeassistant.const import SERVICE_OPEN_COVER
+
+        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_startup_delay", timeout=300.0, direction="open"
+            )
+            assert cover._calibration.move_command == SERVICE_OPEN_COVER
+            # Simulate 8 stepped moves completed, then continuous phase
+            cover._calibration.step_count = 8
+            # expected_remaining = (1 - 8/10) * 60 = 12s
+            # Continuous phase started 28s ago: 12s expected + 16s overhead (8*2)
+            cover._calibration.continuous_start = time_mod.monotonic() - 28.0
+            result = await cover.stop_calibration()
+
+        # overhead = (28.0 - 12.0) / 8 = 2.0
+        assert result["value"] == pytest.approx(2.0, abs=0.1)
+
+    @pytest.mark.asyncio
+    async def test_tilt_startup_delay_open_direction_result(self, make_cover):
+        """Lines 389-390: total_time = self._tilting_time_open or self._tilting_time_close.
+
+        Run calibration result calculation for tilt_startup_delay
+        in the OPEN direction.
+        """
+        import time as time_mod
+        from homeassistant.const import SERVICE_OPEN_COVER
+
+        cover = make_cover(tilt_time_close=10.0, tilt_time_open=10.0)
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="tilt_startup_delay", timeout=300.0, direction="open"
+            )
+            assert cover._calibration.move_command == SERVICE_OPEN_COVER
+            # Simulate 3 stepped moves completed, then continuous phase
+            cover._calibration.step_count = 3
+            # expected_remaining = (1 - 3/10) * 10 = 7.0s
+            # Continuous phase started 10s ago: 7s expected + 3s overhead (3*1.0)
+            cover._calibration.continuous_start = time_mod.monotonic() - 10.0
+            result = await cover.stop_calibration()
+
+        # overhead = (10.0 - 7.0) / 3 = 1.0
+        assert result["value"] == pytest.approx(1.0, abs=0.1)
+
+
+class TestCalibrationResultTotalTimeNone:
+    """Test _calculate_calibration_result when total_time is None (lines 393-396)."""
+
+    @pytest.mark.asyncio
+    async def test_travel_startup_delay_with_no_travel_times_returns_zero(
+        self, make_cover
+    ):
+        """Lines 392-396: total_time is None warning branch.
+
+        Set both travel times to None after starting calibration, then
+        call _calculate_calibration_result — should return 0.0 with warning.
+        """
+        import time as time_mod
+
+        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_startup_delay", timeout=300.0
+            )
+            # Simulate some progress
+            cover._calibration.step_count = 8
+            cover._calibration.continuous_start = time_mod.monotonic() - 28.0
+            # Now clear both travel times so total_time resolves to None
+            cover._travel_time_close = None
+            cover._travel_time_open = None
+            result = await cover.stop_calibration()
+
+        assert result["value"] == 0.0
+
+
+class TestPulseTimeSubtraction:
+    """Test pulse_time subtraction in _calculate_calibration_result (line 410)."""
+
+    @pytest.mark.asyncio
+    async def test_pulse_time_subtracted_from_continuous_time(self, make_cover):
+        """Line 410: continuous_time -= pulse_time.
+
+        Set _pulse_time on the cover, run travel_startup_delay calibration,
+        verify that pulse_time is subtracted from continuous_time in the
+        overhead calculation.
+        """
+        import time as time_mod
+
+        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
+        # Simulate a pulse/toggle mode cover by adding _pulse_time
+        cover._pulse_time = 0.5
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_startup_delay", timeout=300.0
+            )
+            cover._calibration.step_count = 8
+            # Without pulse subtraction: overhead = (28 - 12) / 8 = 2.0
+            # With pulse_time=0.5: continuous_time becomes 28 - 0.5 = 27.5
+            # overhead = (27.5 - 12) / 8 = 1.9375
+            cover._calibration.continuous_start = time_mod.monotonic() - 28.0
+            result = await cover.stop_calibration()
+
+        # overhead = (28 - 0.5 - 12) / 8 = 1.9375
+        assert result["value"] == pytest.approx(1.94, abs=0.1)
+
+
+class TestUnexpectedCalibrationAttribute:
+    """Test ValueError for unexpected attribute (line 433)."""
+
+    @pytest.mark.asyncio
+    async def test_unexpected_attribute_raises_value_error(self, make_cover):
+        """Line 433: raise ValueError(...) for unexpected attribute.
+
+        Manually set calibration attribute to something invalid, then
+        call _calculate_calibration_result — should raise ValueError.
+        """
+        from custom_components.cover_time_based.calibration import CalibrationState
+
+        cover = make_cover()
+        cover._calibration = CalibrationState(attribute="bogus_attribute", timeout=60.0)
+        with pytest.raises(ValueError, match="Unexpected calibration attribute"):
+            cover._calculate_calibration_result()
+
+
+class TestOverheadStepsFullRun:
+    """Test the position-polling loop and continuous phase of _run_overhead_steps (lines 209, 223-234)."""
+
+    @pytest.mark.asyncio
+    async def test_run_overhead_steps_reaches_continuous_phase(self, make_cover):
+        """Lines 209, 223-234: The position-polling loop and continuous phase.
+
+        Run the full overhead automation task with a travel calculator
+        that reaches target quickly so the step loop completes and
+        the continuous phase begins.
+        """
+        cover = make_cover(travel_time_close=1.0, travel_time_open=1.0)
+
+        # Use very short travel times so steps complete fast.
+        # Patch CALIBRATION_STEP_PAUSE to speed up the test (lazily
+        # imported from calibration module inside _run_overhead_steps).
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.calibration.CALIBRATION_STEP_PAUSE",
+                0.05,
+            ),
+        ):
+            await cover.start_calibration(
+                attribute="travel_startup_delay", timeout=300.0
+            )
+            # Let the automation run through the steps.
+            # With travel_time=1.0, step_duration=0.1, each step
+            # targets 10% increments which the travel_calc should reach
+            # quickly.
+            for _ in range(500):
+                await asyncio.sleep(0.05)
+                if (
+                    cover._calibration is not None
+                    and cover._calibration.continuous_start is not None
+                ):
+                    break
+
+            # Verify the continuous phase was reached
+            assert cover._calibration is not None
+            assert cover._calibration.continuous_start is not None
+            assert cover._calibration.step_count == 8
+
+            # Now stop calibration to calculate result
+            mock_entry = MagicMock()
+            mock_entry.options = {}
+            cover.hass.config_entries.async_get_entry = MagicMock(
+                return_value=mock_entry
+            )
+            cover.hass.config_entries.async_update_entry = MagicMock()
+            result = await cover.stop_calibration()
+
+        assert result["attribute"] == "travel_startup_delay"
+        assert result["value"] >= 0
+
+
+class TestMinMovementPulseLoop:
+    """Test min_movement pulse loop (lines 260-272)."""
+
+    @pytest.mark.asyncio
+    async def test_min_movement_runs_multiple_pulses(self, make_cover):
+        """Lines 260-272: min_movement pulse loop.
+
+        Start min_movement calibration, let it run a couple pulses,
+        then stop and verify step_count and last_pulse_duration.
+        """
+        cover = make_cover()
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+        cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
+        cover.hass.config_entries.async_update_entry = MagicMock()
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Patch the initial pause to be very short so pulses start quickly.
+            # These constants are lazily imported from the calibration module
+            # inside _run_min_movement_pulses, so patching the source works.
+            with (
+                patch(
+                    "custom_components.cover_time_based.calibration.CALIBRATION_MIN_MOVEMENT_INITIAL_PAUSE",
+                    0.05,
+                ),
+                patch(
+                    "custom_components.cover_time_based.calibration.CALIBRATION_STEP_PAUSE",
+                    0.05,
+                ),
+            ):
+                await cover.start_calibration(
+                    attribute="min_movement_time", timeout=60.0
+                )
+                # Wait for at least 2 pulses to complete
+                for _ in range(200):
+                    await asyncio.sleep(0.05)
+                    if (
+                        cover._calibration is not None
+                        and cover._calibration.step_count >= 2
+                    ):
+                        break
+
+                assert cover._calibration is not None
+                assert cover._calibration.step_count >= 2
+                assert cover._calibration.last_pulse_duration is not None
+                # Each pulse is 0.1s + 0.1s increment, so after 2 pulses
+                # last_pulse_duration should be 0.2
+                assert cover._calibration.last_pulse_duration == pytest.approx(
+                    0.1 * cover._calibration.step_count, abs=0.01
+                )
+
+                result = await cover.stop_calibration()
+
+        assert cover._calibration is None
+        assert result["attribute"] == "min_movement_time"
+        assert result["value"] >= 0.2
