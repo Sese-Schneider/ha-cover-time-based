@@ -22,6 +22,7 @@ const EN = {
   "header": "Cover Time Based Configuration",
   "loading": "Loading...",
   "saving": "Saving...",
+  "save_failed": "Save failed — value reverted",
   "confirm_cancel_calibration": "A calibration is running. Cancel it and continue?",
   "create_new": "+ Create new cover entity",
   "yaml_warning": "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings \u2192 Devices & Services \u2192 Helpers \u2192 Create Helper \u2192 Cover Time Based.",
@@ -110,6 +111,7 @@ const TRANSLATIONS = {
     "header": "Configuração de Estore Baseado em Tempo",
     "loading": "A carregar...",
     "saving": "A guardar...",
+    "save_failed": "Falha ao guardar — valor revertido",
     "confirm_cancel_calibration": "Existe uma calibração em curso. Cancelar e continuar?",
     "create_new": "+ Criar nova entidade de estore",
     "yaml_warning": "Esta entidade utiliza configuração YAML e não pode ser configurada a partir deste cartão. Por favor, migre para a interface gráfica: Definições > Dispositivos e Serviços > Auxiliares > Criar Auxiliar > Estore Baseado em Tempo.",
@@ -195,6 +197,7 @@ const TRANSLATIONS = {
     "header": "Konfiguracja rolet sterowanych czasowo",
     "loading": "Ładowanie...",
     "saving": "Zapisywanie...",
+    "save_failed": "Zapis nie powiódł się — wartość przywrócona",
     "confirm_cancel_calibration": "Kalibracja jest w toku. Anulować ją i kontynuować?",
     "create_new": "+ Utwórz nową encję rolety",
     "yaml_warning": "Ta encja używa konfiguracji YAML i nie może być konfigurowana z tej karty. Proszę przeprowadzić migrację do interfejsu użytkownika: Ustawienia > Urządzenia i usługi > Pomocniki > Utwórz pomocnik > Roleta sterowana czasowo.",
@@ -311,6 +314,7 @@ class CoverTimeBasedCard extends LitElement {
       _activeTab: { type: String },
       _knownPosition: { type: String },
       _loadError: { type: String },
+      _saveError: { type: Boolean },
     };
   }
 
@@ -320,6 +324,7 @@ class CoverTimeBasedCard extends LitElement {
     this._config = null;
     this._loading = false;
     this._saving = false;
+    this._saveError = false;
     this._activeTab = "device";
     this._knownPosition = "unknown";
     this._helpersLoaded = false;
@@ -477,6 +482,7 @@ class CoverTimeBasedCard extends LitElement {
   async _autoSave() {
     if (!this._selectedEntity || !this.hass || !this._config) return;
     this._saving = true;
+    this._saveError = false;
     try {
       const { entry_id, ...fields } = this._config;
       await this.hass.callWS({
@@ -486,6 +492,9 @@ class CoverTimeBasedCard extends LitElement {
       });
     } catch (err) {
       console.error("Failed to save config:", err);
+      this._saveError = true;
+      await this._loadConfig();
+      setTimeout(() => { this._saveError = false; }, 3000);
     }
     this._saving = false;
   }
@@ -642,7 +651,6 @@ class CoverTimeBasedCard extends LitElement {
 
   async _onStartCalibration() {
     const attrSelect = this.shadowRoot.querySelector("#cal-attribute");
-    const savedPosition = this._knownPosition;
 
     const data = {
       entity_id: this._selectedEntity,
@@ -650,11 +658,10 @@ class CoverTimeBasedCard extends LitElement {
       timeout: 300,
     };
 
-    if (savedPosition === "open") {
-      data.direction = "close";
-    } else if (savedPosition === "closed" || savedPosition === "closed_tilt_open" || savedPosition === "closed_tilt_closed") {
-      data.direction = "open";
-    }
+    // Don't send an explicit direction — the server derives the correct
+    // direction from the attribute name (e.g. travel_time_close → close,
+    // tilt_time_open → open).  The position-based guess here was redundant
+    // for travel and actively wrong for tilt from closed_tilt_open.
 
     this._calibratingAttribute = attrSelect.value;
     this._calibratingOverride = undefined;
@@ -941,6 +948,9 @@ class CoverTimeBasedCard extends LitElement {
       ${this._saving
         ? html`<div class="save-bar"><span class="saving-indicator">${this._t("saving")}</span></div>`
         : ""}
+      ${this._saveError
+        ? html`<div class="save-bar"><span class="save-error">${this._t("save_failed")}</span></div>`
+        : ""}
     `;
   }
 
@@ -1138,7 +1148,7 @@ class CoverTimeBasedCard extends LitElement {
     `;
   }
 
-  _renderTimingRow([labelKey, key, value]) {
+  _renderTimingRow([labelKey, key, value, min = 0]) {
     return html`
       <tr>
         <td>${this._t(labelKey)}</td>
@@ -1149,7 +1159,7 @@ class CoverTimeBasedCard extends LitElement {
             .value=${value != null ? String(value) : ""}
             placeholder=${this._t("timing.not_set")}
             step="0.1"
-            min="0"
+            min="${min}"
             max="600"
             @change=${(e) => {
               const v = e.target.value.trim();
@@ -1165,16 +1175,16 @@ class CoverTimeBasedCard extends LitElement {
     const hasTiltTimes = c.tilt_mode === "sequential" || c.tilt_mode === "dual_motor" || c.tilt_mode === "inline";
 
     const travelRows = [
-      ["timing.travel_time_close", "travel_time_close", c.travel_time_close],
-      ["timing.travel_time_open", "travel_time_open", c.travel_time_open],
+      ["timing.travel_time_close", "travel_time_close", c.travel_time_close, 0.1],
+      ["timing.travel_time_open", "travel_time_open", c.travel_time_open, 0.1],
       ["timing.travel_startup_delay", "travel_startup_delay", c.travel_startup_delay],
       ["timing.min_movement_time", "min_movement_time", c.min_movement_time],
       ["timing.endpoint_runon_time", "endpoint_runon_time", c.endpoint_runon_time],
     ];
 
     const tiltRows = [
-      ["timing.tilt_time_close", "tilt_time_close", c.tilt_time_close],
-      ["timing.tilt_time_open", "tilt_time_open", c.tilt_time_open],
+      ["timing.tilt_time_close", "tilt_time_close", c.tilt_time_close, 0.1],
+      ["timing.tilt_time_open", "tilt_time_open", c.tilt_time_open, 0.1],
       ["timing.tilt_startup_delay", "tilt_startup_delay", c.tilt_startup_delay],
     ];
 
@@ -1723,6 +1733,12 @@ class CoverTimeBasedCard extends LitElement {
       .saving-indicator {
         font-size: 12px;
         color: var(--secondary-text-color);
+        font-style: italic;
+      }
+
+      .save-error {
+        font-size: 12px;
+        color: var(--error-color, #db4437);
         font-style: italic;
       }
 
