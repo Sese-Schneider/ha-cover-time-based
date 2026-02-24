@@ -80,6 +80,16 @@ async def _drain_tasks(cover):
     cover._test_tasks.clear()
 
 
+async def _cancel_tasks(cover):
+    """Cancel all pending background tasks (for tests that don't drain)."""
+    for task in cover._test_tasks:
+        if not task.done():
+            task.cancel()
+    if cover._test_tasks:
+        await asyncio.gather(*cover._test_tasks, return_exceptions=True)
+    cover._test_tasks.clear()
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -339,6 +349,7 @@ class TestToggleDirectionChange:
             await cover.async_open_cover()
 
         mock_stop.assert_awaited_once()
+        await _cancel_tasks(cover)
 
 
 # ===================================================================
@@ -374,8 +385,16 @@ class TestToggleStopWithTilt:
         )
         hass = MagicMock()
         hass.services.async_call = AsyncMock()
-        hass.async_create_task = lambda coro: asyncio.ensure_future(coro)
+        created_tasks = []
+
+        def create_task(coro):
+            task = asyncio.ensure_future(coro)
+            created_tasks.append(task)
+            return task
+
+        hass.async_create_task = create_task
         cover.hass = hass
+        cover._test_tasks = created_tasks
 
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -387,6 +406,7 @@ class TestToggleStopWithTilt:
         tilt_strategy.snap_trackers_to_physical.assert_called_once_with(
             cover.travel_calc, cover.tilt_calc
         )
+        await _cancel_tasks(cover)
 
 
 # ===================================================================
@@ -525,6 +545,7 @@ class TestToggleHandleCommandSetsLastCommand:
             await cover._async_handle_command(SERVICE_OPEN_COVER)
 
         assert cover._last_command == SERVICE_OPEN_COVER
+        await _cancel_tasks(cover)
 
     @pytest.mark.asyncio
     async def test_handle_close_sets_last_command(self):
@@ -541,6 +562,7 @@ class TestToggleHandleCommandSetsLastCommand:
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
         assert cover._last_command == SERVICE_CLOSE_COVER
+        await _cancel_tasks(cover)
 
     @pytest.mark.asyncio
     async def test_calibration_pattern_open_then_stop(self):

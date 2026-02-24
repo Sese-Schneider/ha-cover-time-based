@@ -72,6 +72,16 @@ async def _drain_tasks(cover):
     cover._test_tasks.clear()
 
 
+async def _cancel_tasks(cover):
+    """Cancel all pending background tasks (for tests that don't drain)."""
+    for task in cover._test_tasks:
+        if not task.done():
+            task.cancel()
+    if cover._test_tasks:
+        await asyncio.gather(*cover._test_tasks, return_exceptions=True)
+    cover._test_tasks.clear()
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -141,6 +151,7 @@ class TestPulseModeSendOpen:
             _ha("turn_off", "switch.close"),
             _ha("turn_on", "switch.open"),
         ]
+        await _cancel_tasks(cover)
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +246,7 @@ class TestPulseModeSendStop:
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.stop"),
         ]
+        await _cancel_tasks(cover)
 
 
 # ---------------------------------------------------------------------------
