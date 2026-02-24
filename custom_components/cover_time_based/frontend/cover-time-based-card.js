@@ -335,8 +335,8 @@ class CoverTimeBasedCard extends LitElement {
       const { entry_id, ...fields } = this._config;
       await this.hass.callWS({
         type: "cover_time_based/update_config",
-        entity_id: this._selectedEntity,
         ...fields,
+        entity_id: this._selectedEntity,
       });
     } catch (err) {
       console.error("Failed to save config:", err);

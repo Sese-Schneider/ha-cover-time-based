@@ -483,6 +483,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
                 self._cancel_startup_delay_task()
                 await self._async_handle_command(SERVICE_STOP_COVER)
+                if (
+                    self._tilt_strategy is not None
+                    and self._tilt_strategy.uses_tilt_motor
+                ):
+                    await self._send_tilt_stop()
             else:
                 self._log(
                     "_async_move_tilt_to_endpoint :: startup delay already active, not restarting"
@@ -492,6 +497,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         relay_was_on = self._cancel_delay_task()
         if relay_was_on:
             await self._async_handle_command(SERVICE_STOP_COVER)
+            if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
+                await self._send_tilt_stop()
 
         self._stop_travel_if_traveling()
 
@@ -529,7 +536,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
         self._last_command = command
-        await self._async_handle_command(command)
+        if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
+            if closing:
+                await self._send_tilt_close()
+            else:
+                await self._send_tilt_open()
+        else:
+            await self._async_handle_command(command)
         self._begin_movement(
             target,
             travel_target,
@@ -651,6 +664,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self.travel_calc.stop()
             self.stop_auto_updater()
             await self._async_handle_command(SERVICE_STOP_COVER)
+            if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
+                await self._send_tilt_stop()
             current = self.tilt_calc.current_position()
             if target == current:
                 return
@@ -658,6 +673,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         relay_was_on = self._cancel_delay_task()
         if relay_was_on:
             await self._async_handle_command(SERVICE_STOP_COVER)
+            if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
+                await self._send_tilt_stop()
 
         if not is_direction_change:
             self._stop_travel_if_traveling()
@@ -683,7 +700,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         self._last_command = command
 
-        await self._async_handle_command(command)
+        if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
+            if closing:
+                await self._send_tilt_close()
+            else:
+                await self._send_tilt_open()
+        else:
+            await self._async_handle_command(command)
         self._begin_movement(
             target,
             travel_target,
@@ -1142,6 +1165,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         target = self._pending_travel_target
         command = self._pending_travel_command
+        assert target is not None and command is not None
         self._pending_travel_target = None
         self._pending_travel_command = None
 
@@ -1256,8 +1280,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # -----------------------------------------------------------------------
 
     def _has_tilt_motor(self) -> bool:
-        """Return True if tilt motor switches are configured."""
-        return bool(self._tilt_open_switch_id and self._tilt_close_switch_id)
+        """Return True if a dedicated tilt motor is configured (dual_motor mode)."""
+        return (
+            self._tilt_strategy is not None
+            and self._tilt_strategy.uses_tilt_motor
+            and bool(self._tilt_open_switch_id and self._tilt_close_switch_id)
+        )
 
     async def _send_tilt_open(self) -> None:
         """Send open to the tilt motor (bypasses position tracker)."""

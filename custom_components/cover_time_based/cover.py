@@ -345,6 +345,12 @@ def devices_from_config(domain_config):
             options[key] = _get_value(key, config, defaults, schema_default)
             config.pop(key, None)
 
+        # Legacy travel_moves_with_tilt → inline tilt mode
+        travel_moves = _get_value(CONF_TRAVEL_MOVES_WITH_TILT, config, defaults, False)
+        config.pop(CONF_TRAVEL_MOVES_WITH_TILT, None)
+        if travel_moves and options.get(CONF_TILT_MODE) == "none":
+            options[CONF_TILT_MODE] = "inline"
+
         # Entity IDs
         open_switch = config.pop(CONF_OPEN_SWITCH_ENTITY_ID, None)
         close_switch = config.pop(CONF_CLOSE_SWITCH_ENTITY_ID, None)

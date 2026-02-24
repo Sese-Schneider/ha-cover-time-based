@@ -1320,6 +1320,149 @@ class TestDualMotorTiltPreStep:
 
 
 # ===================================================================
+# Dual motor: tilt-only commands use tilt motor, not main motor
+# ===================================================================
+
+
+class TestDualMotorTiltOnlyCommands:
+    """Tilt-only commands should use tilt motor relays in dual_motor mode."""
+
+    def _make_cover(self, make_cover):
+        return make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+
+    @pytest.mark.asyncio
+    async def test_close_tilt_uses_tilt_motor(self, make_cover):
+        """async_close_cover_tilt should activate tilt_close switch, not main close."""
+        cover = self._make_cover(make_cover)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover_tilt()
+
+        calls = cover.hass.services.async_call.call_args_list
+        # Tilt close switch should be turned on
+        tilt_close = [
+            c
+            for c in calls
+            if c[0][1] == "turn_on" and c[0][2].get("entity_id") == "switch.tilt_close"
+        ]
+        assert len(tilt_close) == 1
+
+        # Main motor should NOT be activated
+        main_motor = [
+            c
+            for c in calls
+            if c[0][1] == "turn_on"
+            and c[0][2].get("entity_id") in ("switch.open", "switch.close")
+        ]
+        assert len(main_motor) == 0
+
+    @pytest.mark.asyncio
+    async def test_open_tilt_uses_tilt_motor(self, make_cover):
+        """async_open_cover_tilt should activate tilt_open switch, not main open."""
+        cover = self._make_cover(make_cover)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover_tilt()
+
+        calls = cover.hass.services.async_call.call_args_list
+        tilt_open = [
+            c
+            for c in calls
+            if c[0][1] == "turn_on" and c[0][2].get("entity_id") == "switch.tilt_open"
+        ]
+        assert len(tilt_open) == 1
+
+        main_motor = [
+            c
+            for c in calls
+            if c[0][1] == "turn_on"
+            and c[0][2].get("entity_id") in ("switch.open", "switch.close")
+        ]
+        assert len(main_motor) == 0
+
+    @pytest.mark.asyncio
+    async def test_set_tilt_position_uses_tilt_motor(self, make_cover):
+        """set_tilt_position should use tilt motor, not main motor."""
+        cover = self._make_cover(make_cover)
+        cover.tilt_calc.set_position(80)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(30)
+
+        calls = cover.hass.services.async_call.call_args_list
+        # Tilt close switch should be turned on (80 → 30 = closing)
+        tilt_close = [
+            c
+            for c in calls
+            if c[0][1] == "turn_on" and c[0][2].get("entity_id") == "switch.tilt_close"
+        ]
+        assert len(tilt_close) == 1
+
+        main_motor = [
+            c
+            for c in calls
+            if c[0][1] == "turn_on"
+            and c[0][2].get("entity_id") in ("switch.open", "switch.close")
+        ]
+        assert len(main_motor) == 0
+
+    @pytest.mark.asyncio
+    async def test_set_tilt_position_open_direction(self, make_cover):
+        """set_tilt_position opening should use tilt_open switch."""
+        cover = self._make_cover(make_cover)
+        cover.tilt_calc.set_position(20)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(70)
+
+        calls = cover.hass.services.async_call.call_args_list
+        tilt_open = [
+            c
+            for c in calls
+            if c[0][1] == "turn_on" and c[0][2].get("entity_id") == "switch.tilt_open"
+        ]
+        assert len(tilt_open) == 1
+
+        main_motor = [
+            c
+            for c in calls
+            if c[0][1] == "turn_on"
+            and c[0][2].get("entity_id") in ("switch.open", "switch.close")
+        ]
+        assert len(main_motor) == 0
+
+    @pytest.mark.asyncio
+    async def test_sequential_tilt_uses_main_motor(self, make_cover):
+        """Sequential mode should still use main motor for tilt commands."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential",
+        )
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover_tilt()
+
+        calls = cover.hass.services.async_call.call_args_list
+        # Main close switch should be turned on (shared motor)
+        main_close = [
+            c
+            for c in calls
+            if c[0][1] == "turn_on" and c[0][2].get("entity_id") == "switch.close"
+        ]
+        assert len(main_close) == 1
+
+
+# ===================================================================
 # Wrapped cover + dual_motor: tilt via cover entity services
 # ===================================================================
 
