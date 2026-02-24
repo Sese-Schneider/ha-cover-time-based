@@ -1,9 +1,12 @@
 """Calibration mixin for time-based cover entities."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time
 from asyncio import sleep
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
@@ -13,11 +16,35 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .calibration import CalibrationState
 
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+    from .travel_calculator import TravelCalculator
+
 _LOGGER = logging.getLogger(__name__)
 
 
 class CalibrationMixin:
     """Mixin providing calibration functionality for CoverTimeBased."""
+
+    if TYPE_CHECKING:
+        hass: HomeAssistant
+        _calibration: CalibrationState | None
+        _tilt_strategy: Any
+        _travel_time_close: float | None
+        _travel_time_open: float | None
+        _tilting_time_close: float | None
+        _tilting_time_open: float | None
+        current_cover_position: int | None
+        current_cover_tilt_position: int | None
+        travel_calc: TravelCalculator
+        tilt_calc: TravelCalculator
+
+        async def _async_handle_command(
+            self, command: str, *args: Any
+        ) -> None: ...
+        async def _send_stop(self) -> None: ...
+        def async_write_ha_state(self) -> None: ...
 
     async def start_calibration(self, **kwargs):
         """Start a calibration test for the given attribute."""
@@ -124,6 +151,7 @@ class CalibrationMixin:
                 travel_time = self._tilting_time_close or self._tilting_time_open
             num_steps = CALIBRATION_TILT_OVERHEAD_STEPS
 
+        assert travel_time is not None
         _LOGGER.debug(
             "overhead test: position=%s, direction=%s, travel_time=%.2f",
             position,
@@ -150,6 +178,7 @@ class CalibrationMixin:
         from .calibration import CALIBRATION_STEP_PAUSE
 
         move_command = self._calibration.move_command
+        assert move_command is not None
 
         try:
             # Phase 1: Stepped moves
@@ -189,6 +218,7 @@ class CalibrationMixin:
     async def _run_min_movement_pulses(self):
         """Send increasingly longer pulses until user sees movement."""
         assert self._calibration is not None
+        assert self._calibration.move_command is not None
         from .calibration import (
             CALIBRATION_MIN_MOVEMENT_START,
             CALIBRATION_MIN_MOVEMENT_INCREMENT,
@@ -196,6 +226,7 @@ class CalibrationMixin:
             CALIBRATION_STEP_PAUSE,
         )
 
+        move_command = self._calibration.move_command
         pulse_duration = CALIBRATION_MIN_MOVEMENT_START
 
         try:
@@ -211,7 +242,7 @@ class CalibrationMixin:
                 self._calibration.step_count += 1
 
                 step_start = time.monotonic()
-                await self._async_handle_command(self._calibration.move_command)
+                await self._async_handle_command(move_command)
                 elapsed = time.monotonic() - step_start
                 await sleep(max(0, pulse_duration - elapsed))
                 await self._send_stop()
