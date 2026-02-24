@@ -375,22 +375,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Set the cover to a known position (0=closed, 100=open)."""
         position = kwargs[ATTR_POSITION]
         self._handle_stop()
-        await self._async_handle_command(SERVICE_STOP_COVER)
         self.travel_calc.set_position(position)
         if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
-        self._last_command = None
+        self.async_write_ha_state()
 
     async def set_known_tilt_position(self, **kwargs):
         """Set the tilt to a known position (0=closed, 100=open)."""
         if not self._has_tilt_support():
             return
         position = kwargs[ATTR_TILT_POSITION]
-        await self._async_handle_command(SERVICE_STOP_COVER)
         self.tilt_calc.set_position(position)
-        self._last_command = None
+        self.async_write_ha_state()
 
     # -----------------------------------------------------------------------
     # Movement orchestration
@@ -1242,13 +1240,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def _async_handle_command(self, command, *args):
         cmd = command
         if command == SERVICE_CLOSE_COVER:
-            cmd = "DOWN"
+            cmd = "CLOSE"
             self._state = False
             self._last_command = command
             if not self._triggered_externally:
                 await self._send_close()
         elif command == SERVICE_OPEN_COVER:
-            cmd = "UP"
+            cmd = "OPEN"
             self._state = True
             self._last_command = command
             if not self._triggered_externally:

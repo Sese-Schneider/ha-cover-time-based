@@ -365,7 +365,7 @@ class CalibrationMixin:
                 )
                 return 0.0
             continuous_time = time.monotonic() - continuous_start
-            # Each step covers 1/10 of travel; remaining fraction depends on step count
+            # Each step covers 1/10 of travel; remaining depends on step count
             expected_remaining = (1.0 - step_count / 10.0) * total_time
             overhead = (continuous_time - expected_remaining) / step_count
             _LOGGER.debug(
