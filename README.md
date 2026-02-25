@@ -229,6 +229,44 @@ Stop an active calibration test and save the result.
 | entity_id | The cover entity                              |
 | cancel    | If `true`, discard the results without saving |
 
+## Debugging
+
+If something isn't working as expected, you can enable debug logging to see detailed information about what the integration is doing.
+
+### Via Developer Tools
+
+1. Go to **Developer Tools → Actions**.
+2. Search for **Logger: Set level** and select it.
+3. Switch to YAML mode and enter:
+
+```yaml
+action: logger.set_level
+data:
+  custom_components.cover_time_based: debug
+```
+
+4. Click **Perform action**.
+5. Reproduce the issue — debug messages will appear in the Home Assistant log.
+
+To turn off debug logging, repeat the steps above but change `debug` to `info`.
+
+### Via YAML
+
+Add the following to your `configuration.yaml`:
+
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.cover_time_based: debug
+```
+
+Restart Home Assistant to apply.
+
+## Reporting Issues
+
+If you encounter a bug or have a feature request, please open an issue on [GitHub](https://github.com/clintongormley/ha-cover-time-based/issues). Include debug logs if possible — they help diagnose problems much faster.
+
 ## YAML configuration (deprecated)
 
 > **Note:** YAML configuration is deprecated and will be removed in a future version. Please use the UI method described above instead. Existing YAML configurations will continue to work, and a deprecation notice will appear in your Home Assistant repairs panel.
