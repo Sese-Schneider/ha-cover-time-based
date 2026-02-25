@@ -255,6 +255,7 @@ class TestToggleCloseWhileClosing:
 
         # Same-direction re-issues close (base class behavior, no special stop)
         assert cover._last_command == SERVICE_CLOSE_COVER
+        await _cancel_tasks(cover)
 
 
 class TestToggleOpenWhileOpening:
@@ -271,6 +272,7 @@ class TestToggleOpenWhileOpening:
 
         # Same-direction re-issues open (base class behavior, no special stop)
         assert cover._last_command == SERVICE_OPEN_COVER
+        await _cancel_tasks(cover)
 
 
 # ===================================================================
