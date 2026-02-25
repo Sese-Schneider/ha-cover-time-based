@@ -675,13 +675,12 @@ class TestSwitchStateChanged:
             "new_state": new,
         }
 
-        with patch.object(
-            cover, "_handle_external_state_change", new_callable=AsyncMock
-        ) as mock_handler:
+        with patch.object(cover, "async_write_ha_state"):
             await cover._async_switch_state_changed(event)
 
-        # Should have set _triggered_externally and called handler
-        mock_handler.assert_awaited_once_with("switch.open", "on", "off")
+        # _handle_stop() was called and position was cleared
+        assert cover.travel_calc.current_position() is None
+        assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
     async def test_triggered_externally_reset_after_handler(self, make_cover):
@@ -698,8 +697,11 @@ class TestSwitchStateChanged:
             "new_state": new,
         }
 
-        with patch.object(
-            cover, "_handle_external_state_change", new_callable=AsyncMock
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ),
         ):
             await cover._async_switch_state_changed(event)
 

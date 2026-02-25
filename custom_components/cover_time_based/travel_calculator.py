@@ -73,6 +73,13 @@ class TravelCalculator:
         if position == self._travel_to_position:
             self._position_confirmed = True
 
+    def clear_position(self) -> None:
+        """Clear position to unknown (e.g. after external movement)."""
+        self._last_known_position = None
+        self._travel_to_position = None
+        self._position_confirmed = False
+        self.travel_direction = TravelStatus.STOPPED
+
     def stop(self) -> None:
         """Stop traveling."""
         stop_position = self.current_position()

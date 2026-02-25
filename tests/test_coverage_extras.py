@@ -1116,16 +1116,15 @@ class TestTiltSendMarkSwitchPending:
 class TestExternalTiltSwitchStateChange:
     """Test external tilt switch state changes via _async_switch_state_changed.
 
-    SwitchModeCover overrides _handle_external_tilt_state_change:
-    - new_val=="on" on open switch => async_open_cover_tilt()
-    - new_val=="on" on close switch => async_close_cover_tilt()
-    - new_val=="on" on stop switch => async_stop_cover()
-    - new_val=="off" on open/close switch => async_stop_cover()
+    With the new behavior, external tilt switch state changes call
+    _handle_stop() and tilt_calc.clear_position(), making tilt position
+    Unknown. The mode-specific _handle_external_tilt_state_change is
+    no longer called.
     """
 
     @pytest.mark.asyncio
-    async def test_tilt_open_switch_triggers_open_cover_tilt(self, make_cover):
-        """Lines 1437-1444: tilt open switch OFF→ON dispatches to handler."""
+    async def test_tilt_open_switch_clears_tilt_position(self, make_cover):
+        """Tilt open switch OFF->ON clears tilt position."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -1145,18 +1144,17 @@ class TestExternalTiltSwitchStateChange:
         }
 
         with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
-                cover,
-                "_handle_external_tilt_state_change",
-                new_callable=AsyncMock,
-            ) as mock_handler:
-                await cover._async_switch_state_changed(event)
+            await cover._async_switch_state_changed(event)
 
-        mock_handler.assert_awaited_once_with("switch.tilt_open", "off", "on")
+        # Tilt position should be cleared (Unknown)
+        assert cover.tilt_calc.current_position() is None
+        assert not cover.tilt_calc.is_traveling()
+        # Main travel position should be unaffected
+        assert cover.travel_calc.current_position() == 50
 
     @pytest.mark.asyncio
-    async def test_tilt_close_switch_dispatches_to_handler(self, make_cover):
-        """Lines 1437-1444: tilt close switch OFF→ON dispatches to handler."""
+    async def test_tilt_close_switch_clears_tilt_position(self, make_cover):
+        """Tilt close switch OFF->ON clears tilt position."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -1176,18 +1174,14 @@ class TestExternalTiltSwitchStateChange:
         }
 
         with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
-                cover,
-                "_handle_external_tilt_state_change",
-                new_callable=AsyncMock,
-            ) as mock_handler:
-                await cover._async_switch_state_changed(event)
+            await cover._async_switch_state_changed(event)
 
-        mock_handler.assert_awaited_once_with("switch.tilt_close", "off", "on")
+        assert cover.tilt_calc.current_position() is None
+        assert not cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_tilt_stop_switch_dispatches_to_handler(self, make_cover):
-        """Lines 1437-1444: tilt stop switch OFF→ON dispatches to handler."""
+    async def test_tilt_stop_switch_clears_tilt_position(self, make_cover):
+        """Tilt stop switch OFF->ON clears tilt position."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -1207,20 +1201,14 @@ class TestExternalTiltSwitchStateChange:
         }
 
         with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
-                cover,
-                "_handle_external_tilt_state_change",
-                new_callable=AsyncMock,
-            ) as mock_handler:
-                await cover._async_switch_state_changed(event)
+            await cover._async_switch_state_changed(event)
 
-        mock_handler.assert_awaited_once_with("switch.tilt_stop", "off", "on")
+        assert cover.tilt_calc.current_position() is None
+        assert not cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_triggered_externally_flag_set_during_tilt_switch_handling(
-        self, make_cover
-    ):
-        """Lines 1437, 1443: _triggered_externally is True during handling, False after."""
+    async def test_tilt_switch_stops_active_travel(self, make_cover):
+        """External tilt switch change stops any active travel via _handle_stop."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -1231,11 +1219,8 @@ class TestExternalTiltSwitchStateChange:
         )
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(50)
-
-        captured_flag = []
-
-        async def capture_flag(entity_id, old_val, new_val):
-            captured_flag.append(cover._triggered_externally)
+        # Start tilt traveling
+        cover.tilt_calc.start_travel_up()
 
         event = MagicMock()
         event.data = {
@@ -1245,21 +1230,15 @@ class TestExternalTiltSwitchStateChange:
         }
 
         with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
-                cover,
-                "_handle_external_tilt_state_change",
-                side_effect=capture_flag,
-            ):
-                await cover._async_switch_state_changed(event)
+            await cover._async_switch_state_changed(event)
 
-        # During the handler, _triggered_externally should have been True
-        assert captured_flag == [True]
-        # After the handler, _triggered_externally should be reset to False
-        assert cover._triggered_externally is False
+        # _handle_stop was called, then tilt_calc.clear_position
+        assert cover.tilt_calc.current_position() is None
+        assert not cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_triggered_externally_reset_even_on_exception(self, make_cover):
-        """Line 1442-1443: _triggered_externally is reset in finally block on exception."""
+    async def test_main_switch_clears_travel_not_tilt(self, make_cover):
+        """Main switch state change clears travel position, not tilt position."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -1269,23 +1248,22 @@ class TestExternalTiltSwitchStateChange:
             tilt_stop_switch="switch.tilt_stop",
         )
         cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(50)
+        cover.tilt_calc.set_position(75)
 
         event = MagicMock()
         event.data = {
-            "entity_id": "switch.tilt_open",
+            "entity_id": "switch.open",
             "old_state": MagicMock(state="off"),
             "new_state": MagicMock(state="on"),
         }
 
         with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
-                cover,
-                "_handle_external_tilt_state_change",
-                side_effect=RuntimeError("test error"),
-            ):
-                with pytest.raises(RuntimeError, match="test error"):
-                    await cover._async_switch_state_changed(event)
+            await cover._async_switch_state_changed(event)
 
-        # _triggered_externally must be False even after exception
-        assert cover._triggered_externally is False
+        # Travel position should be cleared
+        assert cover.travel_calc.current_position() is None
+        assert not cover.travel_calc.is_traveling()
+        # Tilt position should be unaffected (not cleared by _handle_stop
+        # since tilt wasn't traveling, and clear_position only called on tilt
+        # for tilt switches)
+        assert cover.tilt_calc.current_position() == 75

@@ -1428,27 +1428,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("_async_switch_state_changed :: calibration active, skipping")
             return
 
-        # Tilt switches: pulse-mode (ON→OFF = command complete)
+        # External state change — stop tracking and clear position.
+        # We don't know when the physical button was pressed or how long
+        # the cover will move, so position becomes Unknown.
+        self._handle_stop()
+
         if entity_id in (
             self._tilt_open_switch_id,
             self._tilt_close_switch_id,
             self._tilt_stop_switch_id,
         ):
-            self._triggered_externally = True
-            try:
-                await self._handle_external_tilt_state_change(
-                    entity_id, old_val, new_val
-                )
-            finally:
-                self._triggered_externally = False
-            return
+            if self._has_tilt_support():
+                self.tilt_calc.clear_position()
+        else:
+            self.travel_calc.clear_position()
 
-        # External state change detected — handle per mode
-        self._triggered_externally = True
-        try:
-            await self._handle_external_state_change(entity_id, old_val, new_val)
-        finally:
-            self._triggered_externally = False
+        self.async_write_ha_state()
 
     # -----------------------------------------------------------------------
     # External state change handlers

@@ -9,8 +9,6 @@ External state changes only start tracking movement — they never auto-stop,
 since we can't reliably know when the motor stopped from switch state alone.
 """
 
-import time as time_module
-
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -610,76 +608,43 @@ class TestWrappedCoverExternalStateChange:
 class TestToggleE2EThroughStateListener:
     """End-to-end tests for toggle mode through the full state listener pipeline.
 
-    These simulate exactly what HA does: firing state_changed events on the
-    switch entities and processing them through _async_switch_state_changed.
+    With the new behavior, external state changes (via _async_switch_state_changed)
+    call _handle_stop() and travel_calc.clear_position(), making position Unknown.
+    The mode-specific _handle_external_state_change is no longer called.
     """
 
     @pytest.mark.asyncio
-    async def test_latching_open_then_stop(self, make_cover):
-        """Latching switch: click 1 (ON->OFF) starts, click 2 (OFF->ON) stops.
-
-        Simulates a latching toggle switch that stays in each state.
-        """
+    async def test_latching_open_clears_position(self, make_cover):
+        """Latching switch: click (ON->OFF) clears travel position."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
-            # Click 1: ON->OFF (switch was ON, user toggles to OFF)
             await cover._async_switch_state_changed(
                 _make_state_event("switch.open", "on", "off")
             )
 
-        assert cover._last_command == SERVICE_OPEN_COVER
-        assert cover.is_opening
-        assert not cover._triggered_externally  # reset in finally
-
-        # Simulate time passing beyond debounce window
-        cover._last_external_toggle_time["switch.open"] = (
-            time_module.monotonic() - cover._pulse_time - 0.5 - 0.1
-        )
-
-        with patch.object(cover, "async_write_ha_state"):
-            # Click 2: OFF->ON (switch was OFF, user toggles to ON)
-            await cover._async_switch_state_changed(
-                _make_state_event("switch.open", "off", "on")
-            )
-
-        assert cover._last_command is None
-        assert not cover.is_opening
+        # Position should be cleared (Unknown)
+        assert cover.travel_calc.current_position() is None
         assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_latching_open_then_stop_reversed_initial(self, make_cover):
-        """Latching switch: click 1 (OFF->ON) starts, click 2 (ON->OFF) stops."""
+    async def test_latching_open_reversed_initial_clears_position(self, make_cover):
+        """Latching switch: click (OFF->ON) clears travel position."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
-            # Click 1: OFF->ON (switch was OFF, user toggles to ON)
             await cover._async_switch_state_changed(
                 _make_state_event("switch.open", "off", "on")
             )
 
-        assert cover._last_command == SERVICE_OPEN_COVER
-        assert cover.is_opening
-
-        # Simulate time passing
-        cover._last_external_toggle_time["switch.open"] = (
-            time_module.monotonic() - cover._pulse_time - 0.5 - 0.1
-        )
-
-        with patch.object(cover, "async_write_ha_state"):
-            # Click 2: ON->OFF (switch was ON, user toggles to OFF)
-            await cover._async_switch_state_changed(
-                _make_state_event("switch.open", "on", "off")
-            )
-
-        assert cover._last_command is None
-        assert not cover.is_opening
+        assert cover.travel_calc.current_position() is None
+        assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_momentary_open_click_starts(self, make_cover):
-        """Momentary switch: OFF->ON->OFF starts tracker, second transition debounced."""
+    async def test_momentary_both_transitions_clear_position(self, make_cover):
+        """Momentary switch: OFF->ON clears position, ON->OFF also clears position."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
@@ -688,53 +653,35 @@ class TestToggleE2EThroughStateListener:
             await cover._async_switch_state_changed(
                 _make_state_event("switch.open", "off", "on")
             )
-            assert cover._last_command == SERVICE_OPEN_COVER
-            assert cover.is_opening
+            assert cover.travel_calc.current_position() is None
 
-            # Momentary auto-reset: ON->OFF (within pulse_time, debounced)
+            # Momentary auto-reset: ON->OFF — position stays None
             await cover._async_switch_state_changed(
                 _make_state_event("switch.open", "on", "off")
             )
-            # Tracker should STILL be running (debounced)
-            assert cover._last_command == SERVICE_OPEN_COVER
-            assert cover.is_opening
+            assert cover.travel_calc.current_position() is None
 
     @pytest.mark.asyncio
-    async def test_momentary_open_then_stop(self, make_cover):
-        """Momentary switch: click 1 starts, click 2 stops."""
+    async def test_second_click_keeps_position_none(self, make_cover):
+        """Second external click also clears position (stays None)."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
-            # Click 1: OFF->ON (starts tracker)
+            # Click 1: OFF->ON clears position
             await cover._async_switch_state_changed(
                 _make_state_event("switch.open", "off", "on")
             )
-            # Click 1: ON->OFF (debounced)
-            await cover._async_switch_state_changed(
-                _make_state_event("switch.open", "on", "off")
-            )
 
-        assert cover._last_command == SERVICE_OPEN_COVER
-        assert cover.is_opening
-
-        # Simulate time passing beyond debounce window
-        cover._last_external_toggle_time["switch.open"] = (
-            time_module.monotonic() - cover._pulse_time - 0.5 - 0.1
-        )
+        assert cover.travel_calc.current_position() is None
 
         with patch.object(cover, "async_write_ha_state"):
-            # Click 2: OFF->ON (stops tracker)
-            await cover._async_switch_state_changed(
-                _make_state_event("switch.open", "off", "on")
-            )
-            # Click 2: ON->OFF (debounced)
+            # Click 2: ON->OFF — position stays None
             await cover._async_switch_state_changed(
                 _make_state_event("switch.open", "on", "off")
             )
 
-        assert cover._last_command is None
-        assert not cover.is_opening
+        assert cover.travel_calc.current_position() is None
         assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
@@ -751,8 +698,8 @@ class TestToggleE2EThroughStateListener:
                 _make_state_event("switch.open", "on", "off")
             )
 
-        # Handler should have been called (not filtered)
-        assert cover._last_command == SERVICE_OPEN_COVER
+        # Handler should have cleared position (not echo-filtered)
+        assert cover.travel_calc.current_position() is None
 
 
 # ===================================================================
@@ -1194,4 +1141,6 @@ class TestCalibrationSuppressesExternalState:
                 _make_state_event("cover.inner", "open", "closing")
             )
 
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        # Position should be cleared (external state change clears position)
+        assert cover.travel_calc.current_position() is None
+        assert not cover.travel_calc.is_traveling()
