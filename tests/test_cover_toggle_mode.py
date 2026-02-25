@@ -128,6 +128,7 @@ class TestToggleModeSendOpen:
 
     @pytest.mark.asyncio
     async def test_open_with_stop_switch(self):
+        """Stop switch is not valid in toggle mode; it must be ignored."""
         cover = _make_toggle_cover(stop_switch="switch.stop")
         with patch(
             "custom_components.cover_time_based.cover_toggle_mode.sleep",
@@ -139,7 +140,6 @@ class TestToggleModeSendOpen:
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_on", "switch.open"),
-            _ha("turn_off", "switch.stop"),
             # pulse completion (background)
             _ha("turn_off", "switch.open"),
         ]
@@ -170,6 +170,7 @@ class TestToggleModeSendClose:
 
     @pytest.mark.asyncio
     async def test_close_with_stop_switch(self):
+        """Stop switch is not valid in toggle mode; it must be ignored."""
         cover = _make_toggle_cover(stop_switch="switch.stop")
         with patch(
             "custom_components.cover_time_based.cover_toggle_mode.sleep",
@@ -181,7 +182,6 @@ class TestToggleModeSendClose:
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.close"),
-            _ha("turn_off", "switch.stop"),
             # pulse completion (background)
             _ha("turn_off", "switch.close"),
         ]

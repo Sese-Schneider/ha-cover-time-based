@@ -77,13 +77,13 @@ class TestSwitchModeSendOpen:
 
     @pytest.mark.asyncio
     async def test_open_with_stop_switch(self):
+        """Stop switch is not valid in switch mode; it must be ignored."""
         cover = _make_switch_cover(stop_switch="switch.stop")
         await cover._send_open()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_on", "switch.open"),
-            _ha("turn_off", "switch.stop"),
         ]
 
 
@@ -105,13 +105,13 @@ class TestSwitchModeSendClose:
 
     @pytest.mark.asyncio
     async def test_close_with_stop_switch(self):
+        """Stop switch is not valid in switch mode; it must be ignored."""
         cover = _make_switch_cover(stop_switch="switch.stop")
         await cover._send_close()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.close"),
-            _ha("turn_off", "switch.stop"),
         ]
 
 
@@ -133,11 +133,11 @@ class TestSwitchModeSendStop:
 
     @pytest.mark.asyncio
     async def test_stop_with_stop_switch(self):
+        """Stop switch is not valid in switch mode; it must be ignored."""
         cover = _make_switch_cover(stop_switch="switch.stop")
         await cover._send_stop()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_off", "switch.open"),
-            _ha("turn_on", "switch.stop"),
         ]

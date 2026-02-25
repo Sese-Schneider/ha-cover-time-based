@@ -70,7 +70,8 @@ class TestSwitchModeClose:
         ]
 
     @pytest.mark.asyncio
-    async def test_close_with_stop_switch_turns_it_off(self, make_cover):
+    async def test_close_with_stop_switch_ignores_it(self, make_cover):
+        """Stop switch is not valid in switch mode; it must be ignored."""
         cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
@@ -78,7 +79,6 @@ class TestSwitchModeClose:
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.close"),
-            _ha("turn_off", "switch.stop"),
         ]
 
 
@@ -97,7 +97,8 @@ class TestSwitchModeOpen:
         ]
 
     @pytest.mark.asyncio
-    async def test_open_with_stop_switch_turns_it_off(self, make_cover):
+    async def test_open_with_stop_switch_ignores_it(self, make_cover):
+        """Stop switch is not valid in switch mode; it must be ignored."""
         cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
@@ -105,7 +106,6 @@ class TestSwitchModeOpen:
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_on", "switch.open"),
-            _ha("turn_off", "switch.stop"),
         ]
 
 
@@ -124,7 +124,8 @@ class TestSwitchModeStop:
         ]
 
     @pytest.mark.asyncio
-    async def test_stop_with_stop_switch_turns_it_on(self, make_cover):
+    async def test_stop_with_stop_switch_ignores_it(self, make_cover):
+        """Stop switch is not valid in switch mode; it must be ignored."""
         cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_STOP_COVER)
@@ -132,7 +133,6 @@ class TestSwitchModeStop:
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_off", "switch.open"),
-            _ha("turn_on", "switch.stop"),
         ]
 
 
@@ -756,27 +756,30 @@ class TestSwitchModePendingSwitchOpen:
         ]
 
     @pytest.mark.asyncio
-    async def test_open_marks_stop_switch_pending_when_on(self, make_cover):
+    async def test_open_ignores_stop_switch_even_when_on(self, make_cover):
+        """Stop switch is not valid in switch mode; it must be ignored even when ON."""
         cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
         _mock_switch_on(cover.hass, "switch.stop")
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
 
-        # stop switch was ON -> line 85 hit
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_on", "switch.open"),
-            _ha("turn_off", "switch.stop"),
         ]
 
     @pytest.mark.asyncio
-    async def test_open_marks_both_pending_when_both_on(self, make_cover):
+    async def test_open_marks_close_pending_ignores_stop_when_both_on(self, make_cover):
+        """When both close and stop switches are ON, only close is marked pending."""
         cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
         _mock_switch_on(cover.hass, "switch.close", "switch.stop")
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
 
-        # Both lines 81 and 85 hit
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_off", "switch.close"),
+            _ha("turn_on", "switch.open"),
+        ]
 
 
 class TestSwitchModePendingSwitchClose:
@@ -796,17 +799,16 @@ class TestSwitchModePendingSwitchClose:
         ]
 
     @pytest.mark.asyncio
-    async def test_close_marks_stop_switch_pending_when_on(self, make_cover):
+    async def test_close_ignores_stop_switch_even_when_on(self, make_cover):
+        """Stop switch is not valid in switch mode; it must be ignored even when ON."""
         cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
         _mock_switch_on(cover.hass, "switch.stop")
         with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
-        # stop switch was ON -> line 112 hit
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.close"),
-            _ha("turn_off", "switch.stop"),
         ]
 
 
@@ -879,7 +881,8 @@ class TestToggleModePendingSwitchOpen:
         ]
 
     @pytest.mark.asyncio
-    async def test_open_marks_stop_switch_pending_when_on(self, make_cover):
+    async def test_open_ignores_stop_switch_even_when_on(self, make_cover):
+        """Stop switch is not valid in toggle mode; it must be ignored even when ON."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE, stop_switch="switch.stop")
         _mock_switch_on(cover.hass, "switch.stop")
         with (
@@ -892,11 +895,15 @@ class TestToggleModePendingSwitchOpen:
             await cover._async_handle_command(SERVICE_OPEN_COVER)
             await _drain_tasks(cover)
 
-        # stop switch was ON -> line 195 hit
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_off", "switch.close"),
+            _ha("turn_on", "switch.open"),
+            _ha("turn_off", "switch.open"),
+        ]
 
 
 class TestToggleModePendingSwitchClose:
-    """Toggle _send_close marks pending when open/stop switches are already ON."""
+    """Toggle _send_close marks pending when open switch is already ON."""
 
     @pytest.mark.asyncio
     async def test_close_marks_open_switch_pending_when_on(self, make_cover):
@@ -920,7 +927,8 @@ class TestToggleModePendingSwitchClose:
         ]
 
     @pytest.mark.asyncio
-    async def test_close_marks_stop_switch_pending_when_on(self, make_cover):
+    async def test_close_ignores_stop_switch_even_when_on(self, make_cover):
+        """Stop switch is not valid in toggle mode; it must be ignored even when ON."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE, stop_switch="switch.stop")
         _mock_switch_on(cover.hass, "switch.stop")
         with (
@@ -933,7 +941,11 @@ class TestToggleModePendingSwitchClose:
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
             await _drain_tasks(cover)
 
-        # stop switch was ON -> line 224 hit
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_off", "switch.open"),
+            _ha("turn_on", "switch.close"),
+            _ha("turn_off", "switch.close"),
+        ]
 
 
 # ===================================================================
@@ -1031,3 +1043,188 @@ class TestToggleModePendingTiltClose:
 
         # line 313: _last_tilt_direction = "close"
         assert cover._last_tilt_direction == "close"
+
+
+# ===================================================================
+# Switch mode: stop switch must NEVER be referenced
+# ===================================================================
+
+
+class TestSwitchModeIgnoresStopSwitch:
+    """Switch mode must never call services on a stop switch, even when configured."""
+
+    @pytest.mark.asyncio
+    async def test_open_with_stop_switch_never_references_it(self, make_cover):
+        """OPEN in switch mode must not call any service on the stop switch."""
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_handle_command(SERVICE_OPEN_COVER)
+
+        for c in _calls(cover.hass.services.async_call):
+            assert c != _ha("turn_off", "switch.stop"), (
+                "switch mode _send_open must not turn off stop switch"
+            )
+            assert c != _ha("turn_on", "switch.stop"), (
+                "switch mode _send_open must not turn on stop switch"
+            )
+
+    @pytest.mark.asyncio
+    async def test_close_with_stop_switch_never_references_it(self, make_cover):
+        """CLOSE in switch mode must not call any service on the stop switch."""
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_handle_command(SERVICE_CLOSE_COVER)
+
+        for c in _calls(cover.hass.services.async_call):
+            assert c != _ha("turn_off", "switch.stop"), (
+                "switch mode _send_close must not turn off stop switch"
+            )
+            assert c != _ha("turn_on", "switch.stop"), (
+                "switch mode _send_close must not turn on stop switch"
+            )
+
+    @pytest.mark.asyncio
+    async def test_stop_with_stop_switch_never_references_it(self, make_cover):
+        """STOP in switch mode must not call any service on the stop switch."""
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_handle_command(SERVICE_STOP_COVER)
+
+        for c in _calls(cover.hass.services.async_call):
+            assert c != _ha("turn_off", "switch.stop"), (
+                "switch mode _send_stop must not turn off stop switch"
+            )
+            assert c != _ha("turn_on", "switch.stop"), (
+                "switch mode _send_stop must not turn on stop switch"
+            )
+
+    @pytest.mark.asyncio
+    async def test_open_exact_calls_with_stop_switch_configured(self, make_cover):
+        """OPEN in switch mode with stop switch: only open/close switches used."""
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_handle_command(SERVICE_OPEN_COVER)
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_off", "switch.close"),
+            _ha("turn_on", "switch.open"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_close_exact_calls_with_stop_switch_configured(self, make_cover):
+        """CLOSE in switch mode with stop switch: only open/close switches used."""
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_handle_command(SERVICE_CLOSE_COVER)
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_off", "switch.open"),
+            _ha("turn_on", "switch.close"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_stop_exact_calls_with_stop_switch_configured(self, make_cover):
+        """STOP in switch mode with stop switch: only open/close switches used."""
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, stop_switch="switch.stop")
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_handle_command(SERVICE_STOP_COVER)
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_off", "switch.close"),
+            _ha("turn_off", "switch.open"),
+        ]
+
+
+# ===================================================================
+# Toggle mode: stop switch must NEVER be referenced
+# ===================================================================
+
+
+class TestToggleModeIgnoresStopSwitch:
+    """Toggle mode must never call services on a stop switch, even when configured."""
+
+    @pytest.mark.asyncio
+    async def test_open_with_stop_switch_never_references_it(self, make_cover):
+        """OPEN in toggle mode must not call any service on the stop switch."""
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE, stop_switch="switch.stop")
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await cover._async_handle_command(SERVICE_OPEN_COVER)
+            await _drain_tasks(cover)
+
+        for c in _calls(cover.hass.services.async_call):
+            assert c != _ha("turn_off", "switch.stop"), (
+                "toggle mode _send_open must not turn off stop switch"
+            )
+            assert c != _ha("turn_on", "switch.stop"), (
+                "toggle mode _send_open must not turn on stop switch"
+            )
+
+    @pytest.mark.asyncio
+    async def test_close_with_stop_switch_never_references_it(self, make_cover):
+        """CLOSE in toggle mode must not call any service on the stop switch."""
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE, stop_switch="switch.stop")
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await cover._async_handle_command(SERVICE_CLOSE_COVER)
+            await _drain_tasks(cover)
+
+        for c in _calls(cover.hass.services.async_call):
+            assert c != _ha("turn_off", "switch.stop"), (
+                "toggle mode _send_close must not turn off stop switch"
+            )
+            assert c != _ha("turn_on", "switch.stop"), (
+                "toggle mode _send_close must not turn on stop switch"
+            )
+
+    @pytest.mark.asyncio
+    async def test_open_exact_calls_with_stop_switch_configured(self, make_cover):
+        """OPEN in toggle mode with stop switch: only open/close switches used."""
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE, stop_switch="switch.stop")
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await cover._async_handle_command(SERVICE_OPEN_COVER)
+            await _drain_tasks(cover)
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_off", "switch.close"),
+            _ha("turn_on", "switch.open"),
+            # pulse completion (background)
+            _ha("turn_off", "switch.open"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_close_exact_calls_with_stop_switch_configured(self, make_cover):
+        """CLOSE in toggle mode with stop switch: only open/close switches used."""
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE, stop_switch="switch.stop")
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await cover._async_handle_command(SERVICE_CLOSE_COVER)
+            await _drain_tasks(cover)
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_off", "switch.open"),
+            _ha("turn_on", "switch.close"),
+            # pulse completion (background)
+            _ha("turn_off", "switch.close"),
+        ]

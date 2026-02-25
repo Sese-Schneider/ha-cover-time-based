@@ -80,9 +80,6 @@ class SwitchModeCover(SwitchCoverTimeBased):
         if self._switch_is_on(self._close_switch_entity_id):
             self._mark_switch_pending(self._close_switch_entity_id, 1)
         self._mark_switch_pending(self._open_switch_entity_id, 1)
-        if self._stop_switch_entity_id is not None:
-            if self._switch_is_on(self._stop_switch_entity_id):
-                self._mark_switch_pending(self._stop_switch_entity_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -95,21 +92,11 @@ class SwitchModeCover(SwitchCoverTimeBased):
             {"entity_id": self._open_switch_entity_id},
             False,
         )
-        if self._stop_switch_entity_id is not None:
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._stop_switch_entity_id},
-                False,
-            )
 
     async def _send_close(self) -> None:
         if self._switch_is_on(self._open_switch_entity_id):
             self._mark_switch_pending(self._open_switch_entity_id, 1)
         self._mark_switch_pending(self._close_switch_entity_id, 1)
-        if self._stop_switch_entity_id is not None:
-            if self._switch_is_on(self._stop_switch_entity_id):
-                self._mark_switch_pending(self._stop_switch_entity_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -122,21 +109,12 @@ class SwitchModeCover(SwitchCoverTimeBased):
             {"entity_id": self._close_switch_entity_id},
             False,
         )
-        if self._stop_switch_entity_id is not None:
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._stop_switch_entity_id},
-                False,
-            )
 
     async def _send_stop(self) -> None:
         if self._switch_is_on(self._close_switch_entity_id):
             self._mark_switch_pending(self._close_switch_entity_id, 1)
         if self._switch_is_on(self._open_switch_entity_id):
             self._mark_switch_pending(self._open_switch_entity_id, 1)
-        if self._stop_switch_entity_id is not None:
-            self._mark_switch_pending(self._stop_switch_entity_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -149,10 +127,3 @@ class SwitchModeCover(SwitchCoverTimeBased):
             {"entity_id": self._open_switch_entity_id},
             False,
         )
-        if self._stop_switch_entity_id is not None:
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_on",
-                {"entity_id": self._stop_switch_entity_id},
-                False,
-            )
