@@ -136,7 +136,7 @@ The **Calibration** tab is used to synchronise the position tracker with the pos
 
 ### Current Position
 
-Use the buttons in the blue header bar to move the cover (and slats, if tilting is enabled) into a known position and then change the **Current Position** dropdown from `Unknown` to that position. The position must be specified in order to access the calibration tests further down the page.
+Use the open/stop/close buttons to move the cover (and slats, if tilting is enabled) into a known position and then change the **Current Position** dropdown from `Unknown` to that position. The position must be specified in order to access the calibration tests further down the page.
 
 ### Timing Calibration
 
