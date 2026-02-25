@@ -237,28 +237,6 @@ async def ws_update_config(
             else:
                 new_options[conf_key] = value
 
-    # Pulse mode requires stop switch entities
-    if new_options.get(CONF_CONTROL_MODE, CONTROL_MODE_SWITCH) == CONTROL_MODE_PULSE:
-        if not new_options.get(CONF_STOP_SWITCH_ENTITY_ID):
-            connection.send_error(
-                msg["id"],
-                "invalid_config",
-                "Pulse mode requires a stop switch entity",
-            )
-            return
-        if (
-            new_options.get(CONF_TILT_MODE) == "dual_motor"
-            and new_options.get(CONF_TILT_OPEN_SWITCH)
-            and new_options.get(CONF_TILT_CLOSE_SWITCH)
-            and not new_options.get(CONF_TILT_STOP_SWITCH)
-        ):
-            connection.send_error(
-                msg["id"],
-                "invalid_config",
-                "Pulse mode requires a tilt stop switch entity",
-            )
-            return
-
     hass.config_entries.async_update_entry(config_entry, options=new_options)
 
     connection.send_result(msg["id"], {"success": True})

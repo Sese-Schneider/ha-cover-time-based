@@ -508,36 +508,6 @@ class TestWsUpdateConfig:
         assert new_options[CONF_CONTROL_MODE] == CONTROL_MODE_PULSE
 
     @pytest.mark.asyncio
-    async def test_pulse_mode_requires_stop_switch(self):
-        """Pulse mode without a stop switch should be rejected."""
-        hass, _, entity_reg = _make_hass(
-            options={
-                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
-                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-            }
-        )
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_update_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/update_config",
-                    "entity_id": ENTITY_ID,
-                    "control_mode": CONTROL_MODE_PULSE,
-                },
-            )
-
-        conn.send_error.assert_called_once()
-        assert conn.send_error.call_args[0][1] == "invalid_config"
-        hass.config_entries.async_update_entry.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_pulse_mode_accepted_with_stop_switch(self):
         """Pulse mode with a stop switch should be accepted."""
         hass, _, entity_reg = _make_hass(
@@ -622,41 +592,6 @@ class TestWsUpdateConfig:
             )
 
         conn.send_result.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_pulse_mode_requires_tilt_stop_switch(self):
-        """Pulse mode with dual_motor tilt but no tilt stop switch should be rejected."""
-        hass, _, entity_reg = _make_hass(
-            options={
-                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
-                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                CONF_STOP_SWITCH_ENTITY_ID: "switch.stop",
-                CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
-                CONF_TILT_MODE: "dual_motor",
-                CONF_TILT_OPEN_SWITCH: "switch.tilt_open",
-                CONF_TILT_CLOSE_SWITCH: "switch.tilt_close",
-            }
-        )
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_update_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/update_config",
-                    "entity_id": ENTITY_ID,
-                },
-            )
-
-        conn.send_error.assert_called_once()
-        assert conn.send_error.call_args[0][1] == "invalid_config"
-        assert "tilt stop" in conn.send_error.call_args[0][2].lower()
-        hass.config_entries.async_update_entry.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_pulse_mode_accepted_with_tilt_stop_switch(self):
