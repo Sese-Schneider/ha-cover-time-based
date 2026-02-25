@@ -39,15 +39,17 @@ class TestCloseFromOpen:
         cover.hass.services.async_call.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_close_when_already_closed_does_nothing(self, make_cover):
+    async def test_close_when_already_closed_sends_resync(self, make_cover):
         cover = make_cover()
         cover.travel_calc.set_position(0)  # fully closed
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
+        # Resync: command still sent even though tracker says we're at endpoint
         assert not cover.travel_calc.is_traveling()
-        cover.hass.services.async_call.assert_not_awaited()
+        cover.hass.services.async_call.assert_awaited()
+        assert cover._last_command == SERVICE_CLOSE_COVER
 
 
 class TestOpenFromClosed:
@@ -66,15 +68,17 @@ class TestOpenFromClosed:
         cover.hass.services.async_call.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_open_when_already_open_does_nothing(self, make_cover):
+    async def test_open_when_already_open_sends_resync(self, make_cover):
         cover = make_cover()
         cover.travel_calc.set_position(100)  # fully open
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()
 
+        # Resync: command still sent even though tracker says we're at endpoint
         assert not cover.travel_calc.is_traveling()
-        cover.hass.services.async_call.assert_not_awaited()
+        cover.hass.services.async_call.assert_awaited()
+        assert cover._last_command == SERVICE_OPEN_COVER
 
 
 class TestCloseStopsOppositeDirection:

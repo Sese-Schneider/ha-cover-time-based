@@ -431,6 +431,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         current = self.travel_calc.current_position()
         if current is not None and current == target:
+            # Resync: send command + endpoint run-on even though tracker
+            # says we're already there. Physical cover may need resyncing.
+            self._cancel_delay_task()
+            self._last_command = command
+            await self._async_handle_command(command)
+            if self._endpoint_runon_time is not None and self._endpoint_runon_time > 0:
+                self._delay_task = self.hass.async_create_task(
+                    self._delayed_stop(self._endpoint_runon_time)
+                )
+            else:
+                await self._async_handle_command(SERVICE_STOP_COVER)
             return
 
         relay_was_on = self._cancel_delay_task()
