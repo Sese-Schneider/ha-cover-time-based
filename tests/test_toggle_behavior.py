@@ -26,43 +26,35 @@ from custom_components.cover_time_based.cover import (
 
 
 class TestToggleCloseWhileMoving:
-    """Issuing close while already closing should stop (toggle behaviour)."""
+    """Same-direction commands re-issue (no special stop override)."""
 
     @pytest.mark.asyncio
-    async def test_close_while_closing_stops(self, make_cover):
+    async def test_close_while_closing_reissues(self, make_cover):
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
 
         # Simulate that the cover is currently closing (position 100 = fully open)
         cover.travel_calc.set_position(100)
         cover.travel_calc.start_travel_down()
 
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "async_stop_cover", new_callable=AsyncMock
-            ) as mock_stop,
-        ):
+        with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        mock_stop.assert_awaited_once()
+        # Same-direction re-issues close command (base class behavior)
+        assert cover._last_command == SERVICE_CLOSE_COVER
 
     @pytest.mark.asyncio
-    async def test_open_while_opening_stops(self, make_cover):
+    async def test_open_while_opening_reissues(self, make_cover):
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
 
         # Simulate that the cover is currently opening (position 0 = fully closed)
         cover.travel_calc.set_position(0)
         cover.travel_calc.start_travel_up()
 
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "async_stop_cover", new_callable=AsyncMock
-            ) as mock_stop,
-        ):
+        with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()
 
-        mock_stop.assert_awaited_once()
+        # Same-direction re-issues open command (base class behavior)
+        assert cover._last_command == SERVICE_OPEN_COVER
 
 
 # ===================================================================

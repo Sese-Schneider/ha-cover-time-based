@@ -243,42 +243,34 @@ class TestToggleModeSendStop:
 
 class TestToggleCloseWhileClosing:
     @pytest.mark.asyncio
-    async def test_close_while_closing_stops(self):
+    async def test_close_while_closing_reissues(self):
         cover = _make_toggle_cover()
 
         # Simulate currently closing (position 100 = fully open)
         cover.travel_calc.set_position(100)
         cover.travel_calc.start_travel_down()
 
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "async_stop_cover", new_callable=AsyncMock
-            ) as mock_stop,
-        ):
+        with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        mock_stop.assert_awaited_once()
+        # Same-direction re-issues close (base class behavior, no special stop)
+        assert cover._last_command == SERVICE_CLOSE_COVER
 
 
 class TestToggleOpenWhileOpening:
     @pytest.mark.asyncio
-    async def test_open_while_opening_stops(self):
+    async def test_open_while_opening_reissues(self):
         cover = _make_toggle_cover()
 
         # Simulate currently opening (position 0 = fully closed)
         cover.travel_calc.set_position(0)
         cover.travel_calc.start_travel_up()
 
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "async_stop_cover", new_callable=AsyncMock
-            ) as mock_stop,
-        ):
+        with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()
 
-        mock_stop.assert_awaited_once()
+        # Same-direction re-issues open (base class behavior, no special stop)
+        assert cover._last_command == SERVICE_OPEN_COVER
 
 
 # ===================================================================

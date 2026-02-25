@@ -46,44 +46,6 @@ class ToggleModeCover(SwitchCoverTimeBased):
         except asyncio.CancelledError:
             pass
 
-    # --- Public HA service overrides ---
-
-    async def async_close_cover(self, **kwargs):
-        """Close the cover; if already closing, treat as stop.
-
-        For external triggers: any movement (opening OR closing) -> stop.
-        The physical motor already stopped when the user pressed the button.
-        For HA UI: same direction -> stop, opposite direction -> reverse (base class).
-        """
-        if self.is_closing:
-            await self.async_stop_cover()
-            return
-        if self._triggered_externally and self.is_opening:
-            self._log(
-                "async_close_cover :: external close while opening, treating as stop"
-            )
-            await self.async_stop_cover()
-            return
-        await super().async_close_cover(**kwargs)
-
-    async def async_open_cover(self, **kwargs):
-        """Open the cover; if already opening, treat as stop.
-
-        For external triggers: any movement (opening OR closing) -> stop.
-        The physical motor already stopped when the user pressed the button.
-        For HA UI: same direction -> stop, opposite direction -> reverse (base class).
-        """
-        if self.is_opening:
-            await self.async_stop_cover()
-            return
-        if self._triggered_externally and self.is_closing:
-            self._log(
-                "async_open_cover :: external open while closing, treating as stop"
-            )
-            await self.async_stop_cover()
-            return
-        await super().async_open_cover(**kwargs)
-
     async def async_stop_cover(self, **kwargs):
         """Stop the cover, only sending relay command if it was active."""
         was_active = (

@@ -293,8 +293,8 @@ class TestToggleModeExternalStateChange:
         assert cover._last_command == SERVICE_CLOSE_COVER
 
     @pytest.mark.asyncio
-    async def test_off_to_on_while_opening_stops(self, make_cover):
-        """OFF->ON on open switch while opening should stop."""
+    async def test_off_to_on_while_opening_reissues(self, make_cover):
+        """OFF->ON on open switch while opening re-issues open (no special stop)."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
@@ -307,11 +307,11 @@ class TestToggleModeExternalStateChange:
             finally:
                 cover._triggered_externally = False
 
-        assert cover._last_command is None
+        assert cover._last_command == SERVICE_OPEN_COVER
 
     @pytest.mark.asyncio
-    async def test_off_to_on_while_closing_stops(self, make_cover):
-        """OFF->ON on close switch while closing should stop."""
+    async def test_off_to_on_while_closing_reissues(self, make_cover):
+        """OFF->ON on close switch while closing re-issues close (no special stop)."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -324,7 +324,7 @@ class TestToggleModeExternalStateChange:
             finally:
                 cover._triggered_externally = False
 
-        assert cover._last_command is None
+        assert cover._last_command == SERVICE_CLOSE_COVER
 
     @pytest.mark.asyncio
     async def test_debounce_ignores_rapid_second_pulse(self, make_cover):
@@ -348,8 +348,8 @@ class TestToggleModeExternalStateChange:
                 cover._triggered_externally = False
 
     @pytest.mark.asyncio
-    async def test_full_cycle_start_then_stop(self, make_cover):
-        """Click 1 (OFF->ON) starts, click 2 (OFF->ON after debounce) stops."""
+    async def test_full_cycle_same_direction_reissues(self, make_cover):
+        """Click 1 starts, click 2 (same direction after debounce) re-issues open."""
         import time as time_module
 
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
@@ -368,16 +368,15 @@ class TestToggleModeExternalStateChange:
                     time_module.monotonic() - cover._pulse_time - 0.5 - 0.1
                 )
 
-                # Click 2: OFF->ON stops (is_opening -> async_stop_cover)
+                # Click 2: same direction re-issues open (no special stop)
                 await cover._handle_external_state_change("switch.open", "off", "on")
-                assert cover._last_command is None
-                assert not cover.is_opening
+                assert cover._last_command == SERVICE_OPEN_COVER
             finally:
                 cover._triggered_externally = False
 
     @pytest.mark.asyncio
-    async def test_external_close_while_opening_stops(self, make_cover):
-        """External close toggle while opening should stop, not reverse."""
+    async def test_external_close_while_opening_reverses(self, make_cover):
+        """External close toggle while opening reverses direction."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
@@ -390,12 +389,11 @@ class TestToggleModeExternalStateChange:
             finally:
                 cover._triggered_externally = False
 
-        assert cover._last_command is None
-        assert not cover.travel_calc.is_traveling()
+        assert cover._last_command == SERVICE_CLOSE_COVER
 
     @pytest.mark.asyncio
-    async def test_external_open_while_closing_stops(self, make_cover):
-        """External open toggle while closing should stop, not reverse."""
+    async def test_external_open_while_closing_reverses(self, make_cover):
+        """External open toggle while closing reverses direction."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -408,8 +406,7 @@ class TestToggleModeExternalStateChange:
             finally:
                 cover._triggered_externally = False
 
-        assert cover._last_command is None
-        assert not cover.travel_calc.is_traveling()
+        assert cover._last_command == SERVICE_OPEN_COVER
 
     @pytest.mark.asyncio
     async def test_ha_ui_close_while_opening_reverses(self, make_cover):
