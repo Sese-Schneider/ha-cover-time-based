@@ -309,7 +309,8 @@ class TestMotorOverheadCalibration:
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
         assert cover._calibration.automation_task is not None
-        assert cover._calibration.step_duration == 0.5
+        # tilt: 3 steps, total_divisions=5, step_pct=20, step_duration=5.0*20/100=1.0
+        assert cover._calibration.step_duration == 1.0
 
     @pytest.mark.asyncio
     async def test_tilt_zeros_startup_delay(self, make_cover):
@@ -545,8 +546,8 @@ class TestOverheadFallbackTravelTime:
             )
         assert cover._calibration is not None
         assert cover._calibration.automation_task is not None
-        # step_duration = travel_time / 10 = 10 / 10 = 1.0
-        assert cover._calibration.step_duration == 1.0
+        # tilt: 3 steps, total_divisions=5, step_pct=20, step_duration=10.0*20/100=2.0
+        assert cover._calibration.step_duration == 2.0
 
 
 class TestSetPositionAfterCalibrationNoTilt:

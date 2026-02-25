@@ -165,15 +165,17 @@ class CalibrationMixin:
             travel_time,
         )
 
-        step_duration = travel_time / 10
+        total_divisions = num_steps + 2
+        step_pct = 100 // total_divisions
+        step_duration = travel_time * step_pct / 100
         self._calibration.step_duration = step_duration
         self._calibration.move_command = move_command
 
         self._calibration.automation_task = self.hass.async_create_task(
-            self._run_overhead_steps(step_duration, num_steps, is_tilt)
+            self._run_overhead_steps(step_duration, num_steps, step_pct, is_tilt)
         )
 
-    async def _run_overhead_steps(self, _step_duration, num_steps, is_tilt):
+    async def _run_overhead_steps(self, _step_duration, num_steps, step_pct, is_tilt):
         """Execute stepped moves then one continuous move for overhead test.
 
         Phase 1: num_steps stepped moves using the travel calculator's
@@ -193,7 +195,7 @@ class CalibrationMixin:
         try:
             # Phase 1: Stepped moves using travel calculator timing
             for i in range(num_steps):
-                pct = (i + 1) * 10
+                pct = (i + 1) * step_pct
                 target = (100 - pct) if closing else pct
                 _LOGGER.debug(
                     "overhead step %d/%d: target=%d%%",
