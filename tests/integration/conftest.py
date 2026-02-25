@@ -68,7 +68,11 @@ def base_options():
 
 @pytest.fixture
 async def setup_cover(hass: HomeAssistant, setup_input_booleans, base_options):
-    """Create and load a cover_time_based config entry, return the entry."""
+    """Create and load a cover_time_based config entry.
+
+    Yields the entry, then unloads it on teardown to cancel all timers
+    and listeners (auto_updater_hook, state change listeners, etc.).
+    """
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=2,
@@ -83,4 +87,7 @@ async def setup_cover(hass: HomeAssistant, setup_input_booleans, base_options):
     state = hass.states.get("cover.test_cover")
     assert state is not None, "Cover entity was not created"
 
-    return entry
+    yield entry
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()

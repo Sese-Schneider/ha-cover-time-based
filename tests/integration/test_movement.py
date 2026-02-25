@@ -202,3 +202,6 @@ async def test_endpoint_resync(
 
     assert hass.states.get("input_boolean.close_switch").state == "off"
     assert cover.current_cover_position == 0
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()

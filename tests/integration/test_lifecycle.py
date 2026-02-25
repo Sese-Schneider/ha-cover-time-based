@@ -55,6 +55,9 @@ async def test_config_creates_correct_entity(hass: HomeAssistant, setup_input_bo
     # Should support tilt (since tilt_mode is configured with times)
     assert features & CoverEntityFeature.SET_TILT_POSITION
 
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
 
 async def test_position_restored_on_restart(hass: HomeAssistant, setup_input_booleans):
     """Position is restored after config entry unload and reload."""
@@ -90,3 +93,6 @@ async def test_position_restored_on_restart(hass: HomeAssistant, setup_input_boo
     # Get the newly created entity
     cover = _get_cover_entity(hass)
     assert cover.current_cover_position == 50
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()

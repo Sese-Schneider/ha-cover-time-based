@@ -110,6 +110,9 @@ async def test_sequential_tilt_moves_before_travel(
         # Position should be at 100%
         assert cover.current_cover_position == 100
 
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
 
 async def test_sequential_tilt_rejected_when_not_at_endpoint(
     hass: HomeAssistant, setup_input_booleans
@@ -154,3 +157,6 @@ async def test_sequential_tilt_rejected_when_not_at_endpoint(
 
     # Tilt should not have changed from 50%
     assert cover.current_cover_tilt_position == 50
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()

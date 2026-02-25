@@ -94,6 +94,9 @@ async def test_toggle_stop_before_reverse(hass: HomeAssistant, setup_input_boole
         # Cover should now be closing (stop + reverse happened)
         assert cover.is_closing
 
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
 
 async def test_pulse_mode_relay_pulsing(hass: HomeAssistant, setup_input_booleans):
     """Pulse mode: open switch pulses on then off after pulse_time."""
@@ -153,3 +156,6 @@ async def test_pulse_mode_relay_pulsing(hass: HomeAssistant, setup_input_boolean
         assert hass.states.get("input_boolean.stop_switch").state == "off"
         assert not cover.is_opening
         assert not cover.is_closing
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
