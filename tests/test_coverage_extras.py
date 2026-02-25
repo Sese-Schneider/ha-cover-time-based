@@ -803,6 +803,64 @@ class TestTiltRestoreTargetDualMotorEndpoint:
         assert cover._tilt_restore_target == 0
 
 
+class TestNoTiltRestoreOutsideAllowedZone:
+    """Tilt should not restore when target position is outside allowed tilt zone."""
+
+    @pytest.mark.asyncio
+    async def test_no_restore_when_above_max_tilt_allowed(self, make_cover):
+        """Moving to position 50 with max_tilt_allowed=0 should not restore tilt."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+            safe_tilt_position=100,
+            max_tilt_allowed_position=0,
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._plan_tilt_for_travel(
+                target=50,
+                command=SERVICE_OPEN_COVER,
+                current_pos=0,
+                current_tilt=50,
+            )
+
+        # Restore target should be safe position (100), not current tilt (50)
+        assert cover._tilt_restore_target == 100
+
+    @pytest.mark.asyncio
+    async def test_restore_when_within_allowed_zone(self, make_cover):
+        """Moving to position within allowed zone should restore tilt normally."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+            safe_tilt_position=100,
+            max_tilt_allowed_position=50,
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._plan_tilt_for_travel(
+                target=30,
+                command=SERVICE_OPEN_COVER,
+                current_pos=0,
+                current_tilt=50,
+            )
+
+        # Restore target should be current tilt (50) since target is within allowed zone
+        assert cover._tilt_restore_target == 50
+
+
 # ===================================================================
 # cover_base.py line 843: base _are_entities_configured returns True
 # ===================================================================

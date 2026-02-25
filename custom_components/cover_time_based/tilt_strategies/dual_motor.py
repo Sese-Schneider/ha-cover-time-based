@@ -65,6 +65,12 @@ class DualMotorTilt(TiltStrategy):
         steps.append(TiltTo(target_tilt))
         return steps
 
+    def allows_tilt_at_position(self, position: int) -> bool:
+        """Tilt is only allowed at or below max_tilt_allowed_position."""
+        if self._max_tilt_allowed_position is None:
+            return True
+        return position <= self._max_tilt_allowed_position
+
     def snap_trackers_to_physical(
         self,
         travel_calc: TravelCalculator,

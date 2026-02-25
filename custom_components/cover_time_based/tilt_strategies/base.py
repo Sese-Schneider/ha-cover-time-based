@@ -72,6 +72,10 @@ class TiltStrategy(ABC):
     ) -> list[TiltTo | TravelTo]:
         """Plan steps to move tilt to target_tilt."""
 
+    def allows_tilt_at_position(self, position: int) -> bool:
+        """Whether tilt is allowed at the given cover position."""
+        return True
+
     @abstractmethod
     def snap_trackers_to_physical(
         self,

@@ -333,6 +333,32 @@ class TestDualMotorSnapTrackers:
         assert tilt.current_position() is None  # unchanged
 
 
+class TestDualMotorAllowsTiltAtPosition:
+    def test_allowed_when_no_boundary(self):
+        strategy = DualMotorTilt(max_tilt_allowed_position=None)
+        assert strategy.allows_tilt_at_position(50) is True
+
+    def test_allowed_at_boundary(self):
+        strategy = DualMotorTilt(max_tilt_allowed_position=20)
+        assert strategy.allows_tilt_at_position(20) is True
+
+    def test_allowed_below_boundary(self):
+        strategy = DualMotorTilt(max_tilt_allowed_position=20)
+        assert strategy.allows_tilt_at_position(0) is True
+
+    def test_not_allowed_above_boundary(self):
+        strategy = DualMotorTilt(max_tilt_allowed_position=20)
+        assert strategy.allows_tilt_at_position(50) is False
+
+    def test_not_allowed_with_zero_boundary(self):
+        strategy = DualMotorTilt(max_tilt_allowed_position=0)
+        assert strategy.allows_tilt_at_position(50) is False
+
+    def test_allowed_at_zero_with_zero_boundary(self):
+        strategy = DualMotorTilt(max_tilt_allowed_position=0)
+        assert strategy.allows_tilt_at_position(0) is True
+
+
 # ===================================================================
 # InlineTilt
 # ===================================================================

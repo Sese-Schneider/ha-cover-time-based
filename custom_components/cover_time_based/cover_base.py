@@ -747,7 +747,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             and self._tilt_strategy.uses_tilt_motor
             and current_tilt != tilt_target
         ):
-            restore = target if target in (0, 100) else current_tilt
+            if target in (0, 100):
+                restore = target
+            elif self._tilt_strategy.allows_tilt_at_position(target):
+                restore = current_tilt
+            else:
+                restore = tilt_target  # stay at safe position
             await self._start_tilt_pre_step(tilt_target, target, command, restore)
             return tilt_target, pre_step_delay, True
 
