@@ -1596,10 +1596,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def _handle_external_tilt_state_change(self, entity_id, old_val, new_val):
         """Handle external state change on tilt switches (dual_motor).
 
-        Tilt switches use pulse-mode behavior: a complete ON→OFF pulse
-        represents a command. We react on the OFF transition (pulse complete).
+        Tilt switches use pulse-mode behavior. The ON signal (rising edge)
+        is the button press. The OFF transition is just button release.
         """
-        if old_val != "on" or new_val != "off":
+        if new_val != "on":
             return
 
         if entity_id == self._tilt_open_switch_id:

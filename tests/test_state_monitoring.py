@@ -45,29 +45,29 @@ class TestPulseModeExternalStateChange:
 
     @pytest.mark.asyncio
     async def test_open_pulse_triggers_open(self, make_cover):
-        """ON->OFF transition on open switch triggers async_open_cover."""
+        """OFF->ON (rising edge) on open switch triggers async_open_cover."""
         cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
-            await cover._handle_external_state_change("switch.open", "on", "off")
+            await cover._handle_external_state_change("switch.open", "off", "on")
 
         assert cover._last_command == SERVICE_OPEN_COVER
 
     @pytest.mark.asyncio
     async def test_close_pulse_triggers_close(self, make_cover):
-        """ON->OFF transition on close switch triggers async_close_cover."""
+        """OFF->ON (rising edge) on close switch triggers async_close_cover."""
         cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         cover.travel_calc.set_position(100)
 
         with patch.object(cover, "async_write_ha_state"):
-            await cover._handle_external_state_change("switch.close", "on", "off")
+            await cover._handle_external_state_change("switch.close", "off", "on")
 
         assert cover._last_command == SERVICE_CLOSE_COVER
 
     @pytest.mark.asyncio
     async def test_stop_pulse_stops_tracker(self, make_cover):
-        """ON->OFF transition on stop switch stops the tracker."""
+        """OFF->ON (rising edge) on stop switch stops the tracker."""
         cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -76,7 +76,7 @@ class TestPulseModeExternalStateChange:
         with patch.object(cover, "async_write_ha_state"):
             cover._triggered_externally = True
             try:
-                await cover._handle_external_state_change("switch.stop", "on", "off")
+                await cover._handle_external_state_change("switch.stop", "off", "on")
             finally:
                 cover._triggered_externally = False
 
@@ -84,13 +84,13 @@ class TestPulseModeExternalStateChange:
         assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_off_to_on_ignored(self, make_cover):
-        """OFF->ON transitions should be ignored in pulse mode."""
+    async def test_on_to_off_ignored(self, make_cover):
+        """ON->OFF (falling edge / button release) should be ignored in pulse mode."""
         cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         cover.travel_calc.set_position(50)
 
         with patch.object(cover, "async_write_ha_state"):
-            await cover._handle_external_state_change("switch.open", "off", "on")
+            await cover._handle_external_state_change("switch.open", "on", "off")
 
         # No movement should have started
         assert not cover.travel_calc.is_traveling()
@@ -686,8 +686,8 @@ class TestToggleE2EThroughStateListener:
 class TestExternalTiltPulseMode:
     """Test _handle_external_tilt_state_change in pulse mode (base class).
 
-    Pulse mode: ON→OFF = command complete (pulse finished).
-    Only reacts to ON→OFF transitions; OFF→ON is ignored.
+    Pulse mode: OFF→ON = button press (rising edge).
+    Only reacts to OFF→ON transitions; ON→OFF (release) is ignored.
     """
 
     def _make_tilt_cover(self, make_cover):
@@ -703,8 +703,8 @@ class TestExternalTiltPulseMode:
         )
 
     @pytest.mark.asyncio
-    async def test_tilt_open_pulse_on_to_off(self, make_cover):
-        """ON→OFF on tilt open switch triggers async_open_cover_tilt."""
+    async def test_tilt_open_pulse_off_to_on(self, make_cover):
+        """OFF→ON (rising edge) on tilt open switch triggers async_open_cover_tilt."""
         cover = self._make_tilt_cover(make_cover)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -713,7 +713,7 @@ class TestExternalTiltPulseMode:
             cover._triggered_externally = True
             try:
                 await cover._handle_external_tilt_state_change(
-                    "switch.tilt_open", "on", "off"
+                    "switch.tilt_open", "off", "on"
                 )
             finally:
                 cover._triggered_externally = False
@@ -721,8 +721,8 @@ class TestExternalTiltPulseMode:
         assert cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_tilt_close_pulse_on_to_off(self, make_cover):
-        """ON→OFF on tilt close switch triggers async_close_cover_tilt."""
+    async def test_tilt_close_pulse_off_to_on(self, make_cover):
+        """OFF→ON (rising edge) on tilt close switch triggers async_close_cover_tilt."""
         cover = self._make_tilt_cover(make_cover)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(100)
@@ -731,7 +731,7 @@ class TestExternalTiltPulseMode:
             cover._triggered_externally = True
             try:
                 await cover._handle_external_tilt_state_change(
-                    "switch.tilt_close", "on", "off"
+                    "switch.tilt_close", "off", "on"
                 )
             finally:
                 cover._triggered_externally = False
@@ -739,8 +739,8 @@ class TestExternalTiltPulseMode:
         assert cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_tilt_stop_pulse_on_to_off(self, make_cover):
-        """ON→OFF on tilt stop switch triggers async_stop_cover."""
+    async def test_tilt_stop_pulse_off_to_on(self, make_cover):
+        """OFF→ON (rising edge) on tilt stop switch triggers async_stop_cover."""
         cover = self._make_tilt_cover(make_cover)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(50)
@@ -751,7 +751,7 @@ class TestExternalTiltPulseMode:
             cover._triggered_externally = True
             try:
                 await cover._handle_external_tilt_state_change(
-                    "switch.tilt_stop", "on", "off"
+                    "switch.tilt_stop", "off", "on"
                 )
             finally:
                 cover._triggered_externally = False
@@ -760,8 +760,8 @@ class TestExternalTiltPulseMode:
         assert not cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_tilt_non_pulse_ignored(self, make_cover):
-        """OFF→ON transitions on tilt switches are ignored in pulse mode."""
+    async def test_tilt_on_to_off_ignored(self, make_cover):
+        """ON→OFF (falling edge / release) on tilt switches is ignored in pulse mode."""
         cover = self._make_tilt_cover(make_cover)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(0)
@@ -770,7 +770,7 @@ class TestExternalTiltPulseMode:
             cover._triggered_externally = True
             try:
                 await cover._handle_external_tilt_state_change(
-                    "switch.tilt_open", "off", "on"
+                    "switch.tilt_open", "on", "off"
                 )
             finally:
                 cover._triggered_externally = False
