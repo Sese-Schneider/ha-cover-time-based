@@ -32,7 +32,12 @@ def stub_frontend(hass: HomeAssistant):
 
 @pytest.fixture
 async def setup_input_booleans(hass: HomeAssistant):
-    """Create input_boolean entities to act as mock switches."""
+    """Create input_boolean entities to act as mock switches.
+
+    Also sets up the homeassistant component (turn_on/turn_off services)
+    which the cover uses to control relays.
+    """
+    assert await async_setup_component(hass, "homeassistant", {})
     assert await async_setup_component(
         hass,
         "input_boolean",
