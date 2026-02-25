@@ -10,7 +10,7 @@ since we can't reliably know when the motor stopped from switch state alone.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
@@ -608,81 +608,51 @@ class TestWrappedCoverExternalStateChange:
 class TestToggleE2EThroughStateListener:
     """End-to-end tests for toggle mode through the full state listener pipeline.
 
-    With the new behavior, external state changes (via _async_switch_state_changed)
-    call _handle_stop() and travel_calc.clear_position(), making position Unknown.
-    The mode-specific _handle_external_state_change is no longer called.
+    External state changes delegate to _handle_external_state_change with
+    _triggered_externally=True. The toggle mode handler starts position
+    tracking (not clearing).
     """
 
     @pytest.mark.asyncio
-    async def test_latching_open_clears_position(self, make_cover):
-        """Latching switch: click (ON->OFF) clears travel position."""
+    async def test_latching_open_delegates_to_handler(self, make_cover):
+        """Latching switch: click (ON->OFF) delegates to external handler."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
-        with patch.object(cover, "async_write_ha_state"):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
             await cover._async_switch_state_changed(
                 _make_state_event("switch.open", "on", "off")
             )
 
-        # Position should be cleared (Unknown)
-        assert cover.travel_calc.current_position() is None
-        assert not cover.travel_calc.is_traveling()
+        handler.assert_awaited_once_with("switch.open", "on", "off")
 
     @pytest.mark.asyncio
-    async def test_latching_open_reversed_initial_clears_position(self, make_cover):
-        """Latching switch: click (OFF->ON) clears travel position."""
+    async def test_triggered_externally_during_handler(self, make_cover):
+        """_triggered_externally is True during handler, False after."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
-        cover.travel_calc.set_position(0)
+        captured_flag = None
 
-        with patch.object(cover, "async_write_ha_state"):
+        async def capture_flag(*_args):
+            nonlocal captured_flag
+            captured_flag = cover._triggered_externally
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", side_effect=capture_flag
+            ),
+        ):
             await cover._async_switch_state_changed(
                 _make_state_event("switch.open", "off", "on")
             )
 
-        assert cover.travel_calc.current_position() is None
-        assert not cover.travel_calc.is_traveling()
-
-    @pytest.mark.asyncio
-    async def test_momentary_both_transitions_clear_position(self, make_cover):
-        """Momentary switch: OFF->ON clears position, ON->OFF also clears position."""
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
-        cover.travel_calc.set_position(0)
-
-        with patch.object(cover, "async_write_ha_state"):
-            # Momentary press: OFF->ON
-            await cover._async_switch_state_changed(
-                _make_state_event("switch.open", "off", "on")
-            )
-            assert cover.travel_calc.current_position() is None
-
-            # Momentary auto-reset: ON->OFF — position stays None
-            await cover._async_switch_state_changed(
-                _make_state_event("switch.open", "on", "off")
-            )
-            assert cover.travel_calc.current_position() is None
-
-    @pytest.mark.asyncio
-    async def test_second_click_keeps_position_none(self, make_cover):
-        """Second external click also clears position (stays None)."""
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
-        cover.travel_calc.set_position(0)
-
-        with patch.object(cover, "async_write_ha_state"):
-            # Click 1: OFF->ON clears position
-            await cover._async_switch_state_changed(
-                _make_state_event("switch.open", "off", "on")
-            )
-
-        assert cover.travel_calc.current_position() is None
-
-        with patch.object(cover, "async_write_ha_state"):
-            # Click 2: ON->OFF — position stays None
-            await cover._async_switch_state_changed(
-                _make_state_event("switch.open", "on", "off")
-            )
-
-        assert cover.travel_calc.current_position() is None
-        assert not cover.travel_calc.is_traveling()
+        assert captured_flag is True
+        assert cover._triggered_externally is False
 
     @pytest.mark.asyncio
     async def test_no_echo_filtering_for_external_clicks(self, make_cover):
@@ -693,13 +663,18 @@ class TestToggleE2EThroughStateListener:
         # Verify no pending echoes
         assert cover._pending_switch.get("switch.open", 0) == 0
 
-        with patch.object(cover, "async_write_ha_state"):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
             await cover._async_switch_state_changed(
                 _make_state_event("switch.open", "on", "off")
             )
 
-        # Handler should have cleared position (not echo-filtered)
-        assert cover.travel_calc.current_position() is None
+        # Handler called (not echo-filtered)
+        handler.assert_awaited_once()
 
 
 # ===================================================================
@@ -1136,11 +1111,15 @@ class TestCalibrationSuppressesExternalState:
         cover.travel_calc.set_position(100)
         cover._calibration = None  # No calibration active
 
-        with patch.object(cover, "async_write_ha_state"):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
             await cover._async_switch_state_changed(
                 _make_state_event("cover.inner", "open", "closing")
             )
 
-        # Position should be cleared (external state change clears position)
-        assert cover.travel_calc.current_position() is None
-        assert not cover.travel_calc.is_traveling()
+        # Handler should be called (not suppressed by calibration)
+        handler.assert_awaited_once_with("cover.inner", "open", "closing")

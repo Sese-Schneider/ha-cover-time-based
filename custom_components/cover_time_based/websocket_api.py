@@ -324,35 +324,30 @@ async def ws_raw_command(
         connection.send_error(msg["id"], "not_found", "Entity not found")
         return
 
+    command = msg["command"]
+
+    # Validate tilt motor for tilt commands early
+    if command.startswith("tilt_") and not entity._has_tilt_motor():
+        connection.send_error(msg["id"], "not_supported", "Tilt motor not configured")
+        return
+
     try:
-        command = msg["command"]
-        if command == "open":
-            await entity._send_open()
-        elif command == "close":
-            await entity._send_close()
-        elif command == "stop":
-            await entity._send_stop()
-        elif command == "tilt_open":
-            if not entity._has_tilt_motor():
-                connection.send_error(
-                    msg["id"], "not_supported", "Tilt motor not configured"
-                )
-                return
-            await entity._send_tilt_open()
-        elif command == "tilt_close":
-            if not entity._has_tilt_motor():
-                connection.send_error(
-                    msg["id"], "not_supported", "Tilt motor not configured"
-                )
-                return
-            await entity._send_tilt_close()
-        elif command == "tilt_stop":
-            if not entity._has_tilt_motor():
-                connection.send_error(
-                    msg["id"], "not_supported", "Tilt motor not configured"
-                )
-                return
-            await entity._send_tilt_stop()
+        # Stop active lifecycle tracking (calibration manages its own state)
+        if entity._calibration is None:
+            entity._cancel_startup_delay_task()
+            entity._cancel_delay_task()
+            entity._handle_stop()
+
+        await entity._raw_direction_command(command)
+
+        # Clear tracked position (outside of calibration)
+        if entity._calibration is None:
+            if command.startswith("tilt_"):
+                if entity._has_tilt_support():
+                    entity.tilt_calc.clear_position()
+            else:
+                entity.travel_calc.clear_position()
+            entity.async_write_ha_state()
     except Exception as exc:  # noqa: BLE001
         connection.send_error(msg["id"], "failed", str(exc))
         return

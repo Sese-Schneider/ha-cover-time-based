@@ -46,12 +46,15 @@ from .tilt_strategies.planning import (
     calculate_pre_step_delay,
     extract_coupled_tilt,
     extract_coupled_travel,
+    has_travel_pre_step,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
+    """Time-based cover with position tracking."""
+
     def __init__(
         self,
         device_id,
@@ -100,8 +103,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._tilt_restore_active: bool = False
         self._pending_travel_target: int | None = None
         self._pending_travel_command: str | None = None
+        self._pending_tilt_target: int | None = None
+        self._pending_tilt_command: str | None = None
         self._triggered_externally = False
         self._self_initiated_movement = True
+        self._state = True
         self._pending_switch = {}
         self._pending_switch_timers = {}
         self._state_listener_unsubs = []
@@ -329,7 +335,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._require_configured()
         self._log("async_stop_cover")
         tilt_restore_was_active = self._tilt_restore_active
-        tilt_pre_step_was_active = self._pending_travel_target is not None
+        tilt_pre_step_was_active = (
+            self._pending_travel_target is not None
+            or self._pending_tilt_target is not None
+        )
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
         self._handle_stop()
@@ -428,11 +437,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if relay_was_on:
             await self._async_handle_command(SERVICE_STOP_COVER)
 
-        # Distance assumes full travel when position is unknown
-        default_pos = 100 if closing else 0
-        travel_distance = abs(
-            target - (current if current is not None else default_pos)
-        )
+        if current is None:
+            # Position unknown — assume opposite endpoint so full travel occurs
+            current = 100 if closing else 0
+            self.travel_calc.update_position(current)
+
+        travel_distance = abs(target - current)
         travel_time = self._require_travel_time(closing)
         movement_time = (travel_distance / 100.0) * travel_time
 
@@ -445,15 +455,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         self._last_command = command
 
-        current_pos = self.travel_calc.current_position()
-        current_tilt = (
-            self.tilt_calc.current_position() if self._tilt_strategy else None
-        )
-        tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
-            target, command, current_pos, current_tilt
-        )
-        if started:
-            return
+        tilt_target = None
+        pre_step_delay = 0.0
+        if not self._triggered_externally:
+            # Only plan tilt for self-initiated movements — external movements
+            # can't control relay sequencing (the relay is already on).
+            current_tilt = (
+                self.tilt_calc.current_position() if self._tilt_strategy else None
+            )
+            tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
+                target, command, current, current_tilt
+            )
+            if started:
+                return
 
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
@@ -504,19 +518,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if current_tilt is not None and current_tilt == target:
             return
 
-        default_pos = 100 if closing else 0
-        tilt_distance = abs(
-            target - (current_tilt if current_tilt is not None else default_pos)
-        )
+        if current_tilt is None:
+            current_tilt = 100 if closing else 0
+            self.tilt_calc.update_position(current_tilt)
+
+        tilt_distance = abs(target - current_tilt)
         tilt_time = self._tilting_time_close if closing else self._tilting_time_open
         movement_time = (tilt_distance / 100.0) * tilt_time
 
         travel_target = None
         pre_step_delay = 0.0
+        needs_travel_pre_step = False
         if self._tilt_strategy is not None:
             current_pos = self.travel_calc.current_position()
-            current_tilt = self.tilt_calc.current_position()
-            if current_pos is not None and current_tilt is not None:
+            if current_pos is not None:
                 steps = self._tilt_strategy.plan_move_tilt(
                     target, current_pos, current_tilt
                 )
@@ -524,14 +539,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 pre_step_delay = calculate_pre_step_delay(
                     steps, self._tilt_strategy, self.tilt_calc, self.travel_calc
                 )
+                if self._tilt_strategy.uses_tilt_motor and has_travel_pre_step(steps):
+                    needs_travel_pre_step = True
 
         self._log(
-            "_async_move_tilt_to_endpoint :: target=%d, tilt_distance=%f%%, movement_time=%fs, travel_pos=%s",
+            "_async_move_tilt_to_endpoint :: target=%d, tilt_distance=%f%%,"
+            " movement_time=%fs, travel_pos=%s, travel_pre_step=%s",
             target,
             tilt_distance,
             movement_time,
             travel_target if travel_target is not None else "N/A",
+            needs_travel_pre_step,
         )
+
+        if needs_travel_pre_step and travel_target is not None:
+            await self._start_travel_pre_step(travel_target, target, command)
+            return
 
         self._last_command = command
         if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
@@ -567,6 +590,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             closing = target <= 50
             command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
             current = 100 if closing else 0
+            self.travel_calc.update_position(current)
         elif target < current:
             command = SERVICE_CLOSE_COVER
         elif target > current:
@@ -640,6 +664,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             closing = target <= 50
             command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
             current = 100 if closing else 0
+            self.tilt_calc.update_position(current)
         elif target < current:
             command = SERVICE_CLOSE_COVER
         elif target > current:
@@ -682,6 +707,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         travel_target = None
         pre_step_delay = 0.0
+        needs_travel_pre_step = False
         if self._tilt_strategy is not None:
             current_pos = self.travel_calc.current_position()
             if current is not None and current_pos is not None:
@@ -690,10 +716,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 pre_step_delay = calculate_pre_step_delay(
                     steps, self._tilt_strategy, self.tilt_calc, self.travel_calc
                 )
+                if self._tilt_strategy.uses_tilt_motor and has_travel_pre_step(steps):
+                    needs_travel_pre_step = True
 
         if self._is_movement_too_short(
             movement_time, target, current, "set_tilt_position"
         ):
+            return
+
+        if needs_travel_pre_step and travel_target is not None:
+            await self._start_travel_pre_step(travel_target, target, command)
             return
 
         self._last_command = command
@@ -954,7 +986,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
 
     @callback
-    def auto_updater_hook(self, now):
+    def auto_updater_hook(self, _now):
         """Call for the autoupdater."""
         self.async_schedule_update_ha_state()
         if self.position_reached():
@@ -1023,6 +1055,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 await self._start_pending_travel()
                 return
 
+            if self._pending_tilt_target is not None:
+                # Travel pre-step complete — start tilt phase
+                self._log("auto_stop_if_necessary :: travel pre-step complete")
+                await self._start_pending_tilt()
+                return
+
             if self._tilt_strategy is not None:
                 self._tilt_strategy.snap_trackers_to_physical(
                     self.travel_calc, self.tilt_calc
@@ -1037,10 +1075,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             if (
                 self._endpoint_runon_time is not None
                 and self._endpoint_runon_time > 0
-                and (current_travel == 0 or current_travel == 100)
+                and current_travel in (0, 100)
             ):
                 self._log(
-                    "auto_stop_if_necessary :: at endpoint (position=%d), delaying relay stop by %fs",
+                    "auto_stop_if_necessary :: at endpoint (position=%d),"
+                    " delaying relay stop by %fs",
                     current_travel,
                     self._endpoint_runon_time,
                 )
@@ -1074,20 +1113,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         the next travel completes.
         """
         was_restoring = self._tilt_restore_active
-        was_pre_stepping = self._pending_travel_target is not None
+        was_pre_stepping = (
+            self._pending_travel_target is not None
+            or self._pending_tilt_target is not None
+        )
 
         # Always clear multi-phase state
         self._tilt_restore_target = None
         self._tilt_restore_active = False
         self._pending_travel_target = None
         self._pending_travel_command = None
+        self._pending_tilt_target = None
+        self._pending_tilt_command = None
 
         if not was_restoring and not was_pre_stepping:
             return
 
         self._log(
             "_abandon_active_lifecycle :: abandoning %s",
-            "tilt restore" if was_restoring else "tilt pre-step",
+            "tilt restore" if was_restoring else "pre-step",
         )
 
         self._cancel_startup_delay_task()
@@ -1117,6 +1161,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._tilt_restore_active = False
         self._pending_travel_target = None
         self._pending_travel_command = None
+        self._pending_tilt_target = None
+        self._pending_tilt_command = None
 
         if self.travel_calc.is_traveling():
             self._log("_handle_stop :: button stops cover movement")
@@ -1192,6 +1238,74 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._travel_startup_delay,
         )
 
+    async def _start_travel_pre_step(self, travel_target, tilt_target, tilt_command):
+        """Move cover to allowed position before tilt (dual_motor).
+
+        Sends the travel motor command and starts travel_calc. When travel
+        reaches target, auto_stop_if_necessary will call _start_pending_tilt
+        to begin the actual tilt movement.
+        """
+        current_pos = self.travel_calc.current_position()
+        self._log(
+            "_start_travel_pre_step :: travel %s→%d, pending tilt→%d (%s)",
+            current_pos,
+            travel_target,
+            tilt_target,
+            tilt_command,
+        )
+        self._pending_tilt_target = tilt_target
+        self._pending_tilt_command = tilt_command
+
+        closing = travel_target < current_pos
+        command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
+        self._last_command = command
+        await self._async_handle_command(command)
+
+        self._begin_movement(
+            travel_target,
+            None,
+            self.travel_calc,
+            None,
+            self._travel_startup_delay,
+        )
+
+    async def _start_pending_tilt(self):
+        """Start tilt after travel pre-step completes (dual_motor).
+
+        Called by auto_stop_if_necessary when travel_calc reaches the
+        allowed position. Stops the travel motor, sends the tilt command,
+        and starts tracking with tilt_calc.
+        """
+        target = self._pending_tilt_target
+        command = self._pending_tilt_command
+        assert target is not None and command is not None
+        self._pending_tilt_target = None
+        self._pending_tilt_command = None
+
+        self._log(
+            "_start_pending_tilt :: starting tilt to %d (%s)",
+            target,
+            command,
+        )
+
+        # Stop travel motor
+        await self._async_handle_command(SERVICE_STOP_COVER)
+
+        # Send tilt command and start tracking
+        closing_tilt = command == SERVICE_CLOSE_COVER
+        if closing_tilt:
+            await self._send_tilt_close()
+        else:
+            await self._send_tilt_open()
+        self._last_command = command
+        self._begin_movement(
+            target,
+            None,
+            self.tilt_calc,
+            None,
+            self._tilt_startup_delay,
+        )
+
     async def _start_tilt_restore(self):
         """Restore tilt to its pre-movement position.
 
@@ -1242,7 +1356,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # Relay command dispatch
     # -----------------------------------------------------------------------
 
-    async def _async_handle_command(self, command, *args):
+    async def _async_handle_command(self, command, *_args):
         cmd = command
         if command == SERVICE_CLOSE_COVER:
             cmd = "CLOSE"
@@ -1276,6 +1390,29 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     @abstractmethod
     async def _send_stop(self) -> None:
         """Send the stop command to the underlying device."""
+
+    async def _raw_direction_command(self, command: str) -> None:
+        """Execute a raw direction command (for calibration screen buttons).
+
+        Sets _last_command / _last_tilt_direction and sends relay commands.
+        Override in subclasses that need stop-before-direction-change
+        (e.g. toggle mode where opposite-direction = stop, not reverse).
+        """
+        if command == "open":
+            self._last_command = SERVICE_OPEN_COVER
+            await self._send_open()
+        elif command == "close":
+            self._last_command = SERVICE_CLOSE_COVER
+            await self._send_close()
+        elif command == "stop":
+            await self._send_stop()
+            self._last_command = None
+        elif command == "tilt_open":
+            await self._send_tilt_open()
+        elif command == "tilt_close":
+            await self._send_tilt_close()
+        elif command == "tilt_stop":
+            await self._send_tilt_stop()
 
     # -----------------------------------------------------------------------
     # Tilt motor relay commands (dual_motor only)
@@ -1433,22 +1570,24 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("_async_switch_state_changed :: calibration active, skipping")
             return
 
-        # External state change — stop tracking and clear position.
-        # We don't know when the physical button was pressed or how long
-        # the cover will move, so position becomes Unknown.
-        self._handle_stop()
-
-        if entity_id in (
+        # External state change (physical button / remote / HA button).
+        # Delegate to mode-specific handlers which start/stop position
+        # tracking normally via async_open_cover / async_close_cover etc.
+        is_tilt = entity_id in (
             self._tilt_open_switch_id,
             self._tilt_close_switch_id,
             self._tilt_stop_switch_id,
-        ):
-            if self._has_tilt_support():
-                self.tilt_calc.clear_position()
-        else:
-            self.travel_calc.clear_position()
-
-        self.async_write_ha_state()
+        )
+        self._triggered_externally = True
+        try:
+            if is_tilt:
+                await self._handle_external_tilt_state_change(
+                    entity_id, old_val, new_val
+                )
+            else:
+                await self._handle_external_state_change(entity_id, old_val, new_val)
+        finally:
+            self._triggered_externally = False
 
     # -----------------------------------------------------------------------
     # External state change handlers

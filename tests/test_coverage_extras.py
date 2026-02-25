@@ -1172,17 +1172,16 @@ class TestTiltSendMarkSwitchPending:
 
 
 class TestExternalTiltSwitchStateChange:
-    """Test external tilt switch state changes via _async_switch_state_changed.
+    """Test external tilt/main switch state changes via _async_switch_state_changed.
 
-    With the new behavior, external tilt switch state changes call
-    _handle_stop() and tilt_calc.clear_position(), making tilt position
-    Unknown. The mode-specific _handle_external_tilt_state_change is
-    no longer called.
+    External state changes delegate to the mode-specific handlers
+    (_handle_external_tilt_state_change / _handle_external_state_change)
+    with _triggered_externally=True. Position is tracked, not cleared.
     """
 
     @pytest.mark.asyncio
-    async def test_tilt_open_switch_clears_tilt_position(self, make_cover):
-        """Tilt open switch OFF->ON clears tilt position."""
+    async def test_tilt_switch_delegates_to_tilt_handler(self, make_cover):
+        """Tilt switch state change delegates to _handle_external_tilt_state_change."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -1191,8 +1190,6 @@ class TestExternalTiltSwitchStateChange:
             tilt_close_switch="switch.tilt_close",
             tilt_stop_switch="switch.tilt_stop",
         )
-        cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(50)
 
         event = MagicMock()
         event.data = {
@@ -1201,18 +1198,19 @@ class TestExternalTiltSwitchStateChange:
             "new_state": MagicMock(state="on"),
         }
 
-        with patch.object(cover, "async_write_ha_state"):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_tilt_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
             await cover._async_switch_state_changed(event)
 
-        # Tilt position should be cleared (Unknown)
-        assert cover.tilt_calc.current_position() is None
-        assert not cover.tilt_calc.is_traveling()
-        # Main travel position should be unaffected
-        assert cover.travel_calc.current_position() == 50
+        handler.assert_awaited_once_with("switch.tilt_open", "off", "on")
 
     @pytest.mark.asyncio
-    async def test_tilt_close_switch_clears_tilt_position(self, make_cover):
-        """Tilt close switch OFF->ON clears tilt position."""
+    async def test_main_switch_delegates_to_main_handler(self, make_cover):
+        """Main switch state change delegates to _handle_external_state_change."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -1221,92 +1219,6 @@ class TestExternalTiltSwitchStateChange:
             tilt_close_switch="switch.tilt_close",
             tilt_stop_switch="switch.tilt_stop",
         )
-        cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(50)
-
-        event = MagicMock()
-        event.data = {
-            "entity_id": "switch.tilt_close",
-            "old_state": MagicMock(state="off"),
-            "new_state": MagicMock(state="on"),
-        }
-
-        with patch.object(cover, "async_write_ha_state"):
-            await cover._async_switch_state_changed(event)
-
-        assert cover.tilt_calc.current_position() is None
-        assert not cover.tilt_calc.is_traveling()
-
-    @pytest.mark.asyncio
-    async def test_tilt_stop_switch_clears_tilt_position(self, make_cover):
-        """Tilt stop switch OFF->ON clears tilt position."""
-        cover = make_cover(
-            tilt_time_close=5.0,
-            tilt_time_open=5.0,
-            tilt_mode="dual_motor",
-            tilt_open_switch="switch.tilt_open",
-            tilt_close_switch="switch.tilt_close",
-            tilt_stop_switch="switch.tilt_stop",
-        )
-        cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(50)
-
-        event = MagicMock()
-        event.data = {
-            "entity_id": "switch.tilt_stop",
-            "old_state": MagicMock(state="off"),
-            "new_state": MagicMock(state="on"),
-        }
-
-        with patch.object(cover, "async_write_ha_state"):
-            await cover._async_switch_state_changed(event)
-
-        assert cover.tilt_calc.current_position() is None
-        assert not cover.tilt_calc.is_traveling()
-
-    @pytest.mark.asyncio
-    async def test_tilt_switch_stops_active_travel(self, make_cover):
-        """External tilt switch change stops any active travel via _handle_stop."""
-        cover = make_cover(
-            tilt_time_close=5.0,
-            tilt_time_open=5.0,
-            tilt_mode="dual_motor",
-            tilt_open_switch="switch.tilt_open",
-            tilt_close_switch="switch.tilt_close",
-            tilt_stop_switch="switch.tilt_stop",
-        )
-        cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(50)
-        # Start tilt traveling
-        cover.tilt_calc.start_travel_up()
-
-        event = MagicMock()
-        event.data = {
-            "entity_id": "switch.tilt_open",
-            "old_state": MagicMock(state="off"),
-            "new_state": MagicMock(state="on"),
-        }
-
-        with patch.object(cover, "async_write_ha_state"):
-            await cover._async_switch_state_changed(event)
-
-        # _handle_stop was called, then tilt_calc.clear_position
-        assert cover.tilt_calc.current_position() is None
-        assert not cover.tilt_calc.is_traveling()
-
-    @pytest.mark.asyncio
-    async def test_main_switch_clears_travel_not_tilt(self, make_cover):
-        """Main switch state change clears travel position, not tilt position."""
-        cover = make_cover(
-            tilt_time_close=5.0,
-            tilt_time_open=5.0,
-            tilt_mode="dual_motor",
-            tilt_open_switch="switch.tilt_open",
-            tilt_close_switch="switch.tilt_close",
-            tilt_stop_switch="switch.tilt_stop",
-        )
-        cover.travel_calc.set_position(50)
-        cover.tilt_calc.set_position(75)
 
         event = MagicMock()
         event.data = {
@@ -1315,13 +1227,47 @@ class TestExternalTiltSwitchStateChange:
             "new_state": MagicMock(state="on"),
         }
 
-        with patch.object(cover, "async_write_ha_state"):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
             await cover._async_switch_state_changed(event)
 
-        # Travel position should be cleared
-        assert cover.travel_calc.current_position() is None
-        assert not cover.travel_calc.is_traveling()
-        # Tilt position should be unaffected (not cleared by _handle_stop
-        # since tilt wasn't traveling, and clear_position only called on tilt
-        # for tilt switches)
-        assert cover.tilt_calc.current_position() == 75
+        handler.assert_awaited_once_with("switch.open", "off", "on")
+
+    @pytest.mark.asyncio
+    async def test_triggered_externally_set_during_handler(self, make_cover):
+        """_triggered_externally is True during handler execution."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+        )
+        captured_flag = None
+
+        async def capture_flag(*_args):
+            nonlocal captured_flag
+            captured_flag = cover._triggered_externally
+
+        event = MagicMock()
+        event.data = {
+            "entity_id": "switch.tilt_open",
+            "old_state": MagicMock(state="off"),
+            "new_state": MagicMock(state="on"),
+        }
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_tilt_state_change", side_effect=capture_flag
+            ),
+        ):
+            await cover._async_switch_state_changed(event)
+
+        assert captured_flag is True
+        assert cover._triggered_externally is False

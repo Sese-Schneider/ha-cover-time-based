@@ -9,6 +9,9 @@ from custom_components.cover_time_based.tilt_strategies import (
     TiltTo,
     TravelTo,
 )
+from custom_components.cover_time_based.tilt_strategies.planning import (
+    has_travel_pre_step,
+)
 
 
 # ===================================================================
@@ -499,3 +502,27 @@ class TestInlineSnapTrackers:
         tilt.set_position(30)
         strategy.snap_trackers_to_physical(travel, tilt)
         assert tilt.current_position() == 30
+
+
+# ===================================================================
+# has_travel_pre_step helper
+# ===================================================================
+
+
+class TestHasTravelPreStep:
+    """Test the has_travel_pre_step planning helper."""
+
+    def test_travel_then_tilt(self):
+        assert has_travel_pre_step([TravelTo(0), TiltTo(50)]) is True
+
+    def test_tilt_then_travel(self):
+        assert has_travel_pre_step([TiltTo(100), TravelTo(50)]) is False
+
+    def test_single_tilt(self):
+        assert has_travel_pre_step([TiltTo(50)]) is False
+
+    def test_single_travel(self):
+        assert has_travel_pre_step([TravelTo(50)]) is False
+
+    def test_empty(self):
+        assert has_travel_pre_step([]) is False

@@ -35,6 +35,19 @@ def extract_coupled_travel(steps: list[TiltTo | TravelTo]) -> int | None:
     return None
 
 
+def has_travel_pre_step(steps: list[TiltTo | TravelTo]) -> bool:
+    """Return True if the plan requires a TravelTo before a TiltTo.
+
+    This pattern occurs when a dual-motor tilt move requires the cover
+    to travel to an allowed position first.
+    """
+    return (
+        len(steps) >= 2
+        and isinstance(steps[0], TravelTo)
+        and isinstance(steps[1], TiltTo)
+    )
+
+
 def calculate_pre_step_delay(steps, tilt_strategy, tilt_calc, travel_calc) -> float:
     """Calculate delay before the primary calculator should start tracking.
 

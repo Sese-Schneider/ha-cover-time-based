@@ -718,6 +718,7 @@ class CoverTimeBasedCard extends LitElement {
       tilt_close: "tilt_close",
       tilt_stop: "tilt_stop",
     };
+    this._knownPosition = "unknown";
     try {
       await this.hass.callWS({
         type: `${DOMAIN}/raw_command`,

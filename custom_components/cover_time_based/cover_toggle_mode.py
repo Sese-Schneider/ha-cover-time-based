@@ -164,7 +164,8 @@ class ToggleModeCover(SwitchCoverTimeBased):
         if entity_id == self._tilt_open_switch_id:
             if self.tilt_calc.is_traveling():
                 self._log(
-                    "_handle_external_tilt_state_change :: tilt open toggle while traveling, stopping"
+                    "_handle_external_tilt_state_change ::"
+                    " tilt open toggle while traveling, stopping"
                 )
                 await self.async_stop_cover()
             else:
@@ -175,7 +176,8 @@ class ToggleModeCover(SwitchCoverTimeBased):
         elif entity_id == self._tilt_close_switch_id:
             if self.tilt_calc.is_traveling():
                 self._log(
-                    "_handle_external_tilt_state_change :: tilt close toggle while traveling, stopping"
+                    "_handle_external_tilt_state_change ::"
+                    " tilt close toggle while traveling, stopping"
                 )
                 await self.async_stop_cover()
             else:
@@ -183,6 +185,25 @@ class ToggleModeCover(SwitchCoverTimeBased):
                     "_handle_external_tilt_state_change :: external tilt close toggle detected"
                 )
                 await self.async_close_cover_tilt()
+
+    # --- Raw direction commands (calibration screen) ---
+
+    async def _raw_direction_command(self, command: str) -> None:
+        """In toggle mode, opposite-direction = stop, not reverse.
+
+        To change direction: stop first, wait for pulse, then send new direction.
+        """
+        if command in ("open", "close"):
+            opposite = SERVICE_CLOSE_COVER if command == "open" else SERVICE_OPEN_COVER
+            if self._last_command == opposite:
+                await self._send_stop()
+                await sleep(self._pulse_time)
+        elif command in ("tilt_open", "tilt_close"):
+            opposite_dir = "close" if command == "tilt_open" else "open"
+            if self._last_tilt_direction == opposite_dir:
+                await self._send_tilt_stop()
+                await sleep(self._pulse_time)
+        await super()._raw_direction_command(command)
 
     # --- Internal relay commands ---
 

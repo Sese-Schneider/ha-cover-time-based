@@ -675,12 +675,16 @@ class TestSwitchStateChanged:
             "new_state": new,
         }
 
-        with patch.object(cover, "async_write_ha_state"):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
             await cover._async_switch_state_changed(event)
 
-        # _handle_stop() was called and position was cleared
-        assert cover.travel_calc.current_position() is None
-        assert not cover.travel_calc.is_traveling()
+        # Delegates to mode-specific handler (position tracking, not clearing)
+        handler.assert_awaited_once_with("switch.open", "on", "off")
 
     @pytest.mark.asyncio
     async def test_triggered_externally_reset_after_handler(self, make_cover):
@@ -1150,28 +1154,29 @@ class TestSetPositionFromUnknown:
 
     @pytest.mark.asyncio
     async def test_set_position_closing_from_unknown(self, make_cover):
-        """target <= 50 assumes cover is at 100 and closes."""
+        """target <= 50 assumes cover is at 100 and starts closing."""
         cover = make_cover()
         assert cover.travel_calc.current_position() is None
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_set_cover_position(position=30)
 
-        # TravelCalculator snaps immediately when position is None,
-        # so the close command was sent and position is now at target
-        assert cover.travel_calc.current_position() == 30
+        # Calculator is set to assumed position (100) and traveling toward 30
+        assert cover.travel_calc.is_closing()
+        assert cover.travel_calc._travel_to_position == 30
         assert cover._last_command == SERVICE_CLOSE_COVER
 
     @pytest.mark.asyncio
     async def test_set_position_opening_from_unknown(self, make_cover):
-        """target > 50 assumes cover is at 0 and opens."""
+        """target > 50 assumes cover is at 0 and starts opening."""
         cover = make_cover()
         assert cover.travel_calc.current_position() is None
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_set_cover_position(position=70)
 
-        assert cover.travel_calc.current_position() == 70
+        assert cover.travel_calc.is_opening()
+        assert cover.travel_calc._travel_to_position == 70
         assert cover._last_command == SERVICE_OPEN_COVER
 
 
@@ -1180,15 +1185,16 @@ class TestSetTiltFromUnknown:
 
     @pytest.mark.asyncio
     async def test_set_tilt_closing_from_unknown(self, make_cover):
-        """target <= 50 assumes tilt is at 100 and closes."""
+        """target <= 50 assumes tilt is at 100 and starts closing."""
         cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         assert cover.tilt_calc.current_position() is None
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_set_cover_tilt_position(tilt_position=30)
 
-        # TravelCalculator snaps immediately when position is None
-        assert cover.tilt_calc.current_position() == 30
+        # Calculator is set to assumed position (100) and traveling toward 30
+        assert cover.tilt_calc.is_closing()
+        assert cover.tilt_calc._travel_to_position == 30
         assert cover._last_command == SERVICE_CLOSE_COVER
 
 

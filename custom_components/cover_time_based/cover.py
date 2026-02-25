@@ -383,7 +383,7 @@ def devices_from_config(domain_config):
 # ---------------------------------------------------------------------------
 
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+async def async_setup_platform(hass, config, async_add_entities, _discovery_info=None):
     """Set up the cover platform."""
     _LOGGER.warning(
         "Configuration of Cover Time Based via YAML is deprecated and "
@@ -405,7 +405,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:

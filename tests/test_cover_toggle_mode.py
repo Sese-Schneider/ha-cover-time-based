@@ -620,6 +620,168 @@ class TestToggleHandleCommandSetsLastCommand:
 
 
 # ===================================================================
+# _raw_direction_command: stop-before-reverse for calibration buttons
+# ===================================================================
+
+
+class TestToggleRawDirectionCommand:
+    """Test _raw_direction_command override in toggle mode.
+
+    In toggle mode, opposite-direction = stop (not reverse). The override
+    must send stop + wait pulse_time before sending the new direction.
+    """
+
+    @pytest.mark.asyncio
+    async def test_open_sets_last_command(self):
+        cover = _make_toggle_cover()
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._raw_direction_command("open")
+            await _drain_tasks(cover)
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_close_sets_last_command(self):
+        cover = _make_toggle_cover()
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._raw_direction_command("close")
+            await _drain_tasks(cover)
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_stop_clears_last_command(self):
+        cover = _make_toggle_cover()
+        cover._last_command = SERVICE_OPEN_COVER
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._raw_direction_command("stop")
+            await _drain_tasks(cover)
+        assert cover._last_command is None
+
+    @pytest.mark.asyncio
+    async def test_direction_change_sends_stop_first(self):
+        """Close while _last_command=OPEN → stop pulse, wait, then close."""
+        cover = _make_toggle_cover()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        sleep_mock = AsyncMock()
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            sleep_mock,
+        ):
+            await cover._raw_direction_command("close")
+            await _drain_tasks(cover)
+
+        # Sleep called with pulse_time (includes stop-before-reverse + pulse completions)
+        sleep_mock.assert_any_await(cover._pulse_time)
+
+        calls = _calls(cover.hass.services.async_call)
+        # First: stop pulse on open switch (re-pulse same direction to stop)
+        assert calls[0] == _ha("turn_on", "switch.open")
+        # Then: close switch turned on (new direction)
+        assert _ha("turn_on", "switch.close") in calls
+
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_reverse_direction_open_while_closing(self):
+        """Open while _last_command=CLOSE → stop pulse, wait, then open."""
+        cover = _make_toggle_cover()
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        sleep_mock = AsyncMock()
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            sleep_mock,
+        ):
+            await cover._raw_direction_command("open")
+            await _drain_tasks(cover)
+
+        sleep_mock.assert_any_await(cover._pulse_time)
+
+        calls = _calls(cover.hass.services.async_call)
+        # First: stop pulse on close switch
+        assert calls[0] == _ha("turn_on", "switch.close")
+        # New direction: open switch turned on
+        assert _ha("turn_on", "switch.open") in calls
+
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_same_direction_no_extra_stop(self):
+        """Open while _last_command=OPEN → no stop-before-reverse needed."""
+        cover = _make_toggle_cover()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        sleep_mock = AsyncMock()
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            sleep_mock,
+        ):
+            await cover._raw_direction_command("open")
+            await _drain_tasks(cover)
+
+        calls = _calls(cover.hass.services.async_call)
+        # First relay call should be _send_open (not a stop pulse)
+        # _send_open turns off close switch first, then turns on open switch
+        assert calls[0] == _ha("turn_off", "switch.close")
+
+    @pytest.mark.asyncio
+    async def test_no_last_command_no_stop(self):
+        """Open with _last_command=None → no stop needed."""
+        cover = _make_toggle_cover()
+        assert cover._last_command is None
+
+        sleep_mock = AsyncMock()
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            sleep_mock,
+        ):
+            await cover._raw_direction_command("open")
+            await _drain_tasks(cover)
+
+        calls = _calls(cover.hass.services.async_call)
+        # First relay call is _send_open (turn_off close, then turn_on open)
+        assert calls[0] == _ha("turn_off", "switch.close")
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_tilt_direction_change_sends_tilt_stop_first(self):
+        """tilt_close while _last_tilt_direction=open → tilt stop, wait, then tilt close."""
+        cover = _make_toggle_cover(
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        cover._last_tilt_direction = "open"
+
+        sleep_mock = AsyncMock()
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            sleep_mock,
+        ):
+            await cover._raw_direction_command("tilt_close")
+            await _drain_tasks(cover)
+
+        # Sleep called for tilt stop-before-reverse + pulse completions
+        sleep_mock.assert_any_await(cover._pulse_time)
+
+        calls = _calls(cover.hass.services.async_call)
+        # First: tilt stop pulse on tilt_open switch
+        assert calls[0] == _ha("turn_on", "switch.tilt_open")
+        # New direction: tilt_close switch turned on
+        assert _ha("turn_on", "switch.tilt_close") in calls
+
+        assert cover._last_tilt_direction == "close"
+
+
+# ===================================================================
 # Tilt restore: shared motor stop uses _last_command
 # ===================================================================
 

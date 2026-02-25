@@ -40,7 +40,7 @@ class CalibrationMixin:
         travel_calc: TravelCalculator
         tilt_calc: TravelCalculator
 
-        async def _async_handle_command(self, command: str, *args: Any) -> None: ...
+        async def _async_handle_command(self, _command: str, *_args: Any) -> None: ...
         async def _send_stop(self) -> None: ...
         def async_write_ha_state(self) -> None: ...
 
@@ -173,7 +173,7 @@ class CalibrationMixin:
             self._run_overhead_steps(step_duration, num_steps, is_tilt)
         )
 
-    async def _run_overhead_steps(self, step_duration, num_steps, is_tilt):
+    async def _run_overhead_steps(self, _step_duration, num_steps, is_tilt):
         """Execute stepped moves then one continuous move for overhead test.
 
         Phase 1: num_steps stepped moves using the travel calculator's
