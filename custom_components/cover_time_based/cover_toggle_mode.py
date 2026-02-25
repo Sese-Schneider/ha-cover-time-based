@@ -116,16 +116,15 @@ class ToggleModeCover(SwitchCoverTimeBased):
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle external state change in toggle mode.
 
-        In toggle mode, each switch transition toggles the motor.
-        We react to both OFF->ON and ON->OFF (unlike pulse mode which
-        only reacts to ON->OFF), since the user's switch may be latching
-        (alternates ON/OFF on each click).
+        Only the rising edge (OFF→ON) is interesting — this is the button
+        press. The ON→OFF transition is just the relay releasing and is ignored.
 
         A debounce prevents double-triggering for momentary switches that
-        produce OFF->ON->OFF per click. The debounce window is pulse_time + 0.5s
-        to account for switches that stay ON for approximately pulse_time before
-        auto-resetting.
+        produce OFF->ON->OFF per click.
         """
+        if new_val != "on":
+            return
+
         now = time.monotonic()
         last = self._last_external_toggle_time.get(entity_id, 0)
         debounce_window = self._pulse_time + 0.5
@@ -147,9 +146,12 @@ class ToggleModeCover(SwitchCoverTimeBased):
     async def _handle_external_tilt_state_change(self, entity_id, old_val, new_val):
         """Handle external tilt state change in toggle mode.
 
-        Same debounce and toggle logic as the main cover handler.
+        Only reacts on rising edge (OFF→ON). Same debounce as travel handler.
         If tilt is already moving, treat any toggle as stop.
         """
+        if new_val != "on":
+            return
+
         now = time.monotonic()
         last = self._last_external_toggle_time.get(entity_id, 0)
         debounce_window = self._pulse_time + 0.5

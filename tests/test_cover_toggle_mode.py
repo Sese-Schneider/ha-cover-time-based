@@ -1007,7 +1007,7 @@ class TestToggleExternalTiltCloseWhileTraveling:
         try:
             with patch.object(cover, "async_write_ha_state"):
                 await cover._handle_external_tilt_state_change(
-                    "switch.tilt_close", "on", "off"
+                    "switch.tilt_close", "off", "on"
                 )
         finally:
             cover._triggered_externally = False

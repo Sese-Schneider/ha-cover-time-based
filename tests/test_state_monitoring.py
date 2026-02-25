@@ -226,17 +226,15 @@ class TestSwitchModeExternalStateChange:
 class TestToggleModeExternalStateChange:
     """Test external state changes in toggle mode.
 
-    Toggle mode reacts to BOTH OFF->ON and ON->OFF transitions,
-    unlike pulse mode which only reacts to ON->OFF. This handles
-    latching switches that alternate between ON/OFF on each click.
+    Toggle mode reacts only to OFF->ON (rising edge). ON->OFF (falling
+    edge / relay release) is ignored.
 
-    A debounce (using pulse_time) prevents double-triggering for
-    momentary switches that produce OFF->ON->OFF in rapid succession.
+    A debounce (using pulse_time) prevents double-triggering.
     """
 
     @pytest.mark.asyncio
-    async def test_on_to_off_triggers_open(self, make_cover):
-        """ON->OFF on open switch starts opening."""
+    async def test_on_to_off_ignored_open(self, make_cover):
+        """ON->OFF on open switch is ignored (falling edge)."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
@@ -247,11 +245,11 @@ class TestToggleModeExternalStateChange:
             finally:
                 cover._triggered_externally = False
 
-        assert cover._last_command == SERVICE_OPEN_COVER
+        assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_on_to_off_triggers_close(self, make_cover):
-        """ON->OFF on close switch starts closing."""
+    async def test_on_to_off_ignored_close(self, make_cover):
+        """ON->OFF on close switch is ignored (falling edge)."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(100)
 
@@ -262,11 +260,11 @@ class TestToggleModeExternalStateChange:
             finally:
                 cover._triggered_externally = False
 
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
     async def test_off_to_on_triggers_open(self, make_cover):
-        """OFF->ON on open switch starts opening (latching switch)."""
+        """OFF->ON on open switch starts opening (rising edge)."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
@@ -281,7 +279,7 @@ class TestToggleModeExternalStateChange:
 
     @pytest.mark.asyncio
     async def test_off_to_on_triggers_close(self, make_cover):
-        """OFF->ON on close switch starts closing (latching switch)."""
+        """OFF->ON on close switch starts closing (rising edge)."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(100)
 
@@ -295,25 +293,8 @@ class TestToggleModeExternalStateChange:
         assert cover._last_command == SERVICE_CLOSE_COVER
 
     @pytest.mark.asyncio
-    async def test_on_to_off_while_opening_stops(self, make_cover):
-        """ON->OFF on open switch while opening should stop."""
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
-        cover.travel_calc.set_position(50)
-        cover.travel_calc.start_travel_up()
-        cover._last_command = SERVICE_OPEN_COVER
-
-        with patch.object(cover, "async_write_ha_state"):
-            cover._triggered_externally = True
-            try:
-                await cover._handle_external_state_change("switch.open", "on", "off")
-            finally:
-                cover._triggered_externally = False
-
-        assert cover._last_command is None
-
-    @pytest.mark.asyncio
     async def test_off_to_on_while_opening_stops(self, make_cover):
-        """OFF->ON on open switch while opening should stop (latching switch)."""
+        """OFF->ON on open switch while opening should stop."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
@@ -329,25 +310,8 @@ class TestToggleModeExternalStateChange:
         assert cover._last_command is None
 
     @pytest.mark.asyncio
-    async def test_on_to_off_while_closing_stops(self, make_cover):
-        """ON->OFF on close switch while closing should stop."""
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
-        cover.travel_calc.set_position(50)
-        cover.travel_calc.start_travel_down()
-        cover._last_command = SERVICE_CLOSE_COVER
-
-        with patch.object(cover, "async_write_ha_state"):
-            cover._triggered_externally = True
-            try:
-                await cover._handle_external_state_change("switch.close", "on", "off")
-            finally:
-                cover._triggered_externally = False
-
-        assert cover._last_command is None
-
-    @pytest.mark.asyncio
     async def test_off_to_on_while_closing_stops(self, make_cover):
-        """OFF->ON on close switch while closing should stop (latching switch)."""
+        """OFF->ON on close switch while closing should stop."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -363,32 +327,29 @@ class TestToggleModeExternalStateChange:
         assert cover._last_command is None
 
     @pytest.mark.asyncio
-    async def test_momentary_debounce(self, make_cover):
-        """Momentary switch (OFF->ON->OFF) should only trigger once due to debounce."""
+    async def test_debounce_ignores_rapid_second_pulse(self, make_cover):
+        """Second OFF->ON within debounce window is ignored."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
             cover._triggered_externally = True
             try:
-                # First transition: OFF->ON — starts tracker
+                # First rising edge starts tracker
                 await cover._handle_external_state_change("switch.open", "off", "on")
                 assert cover._last_command == SERVICE_OPEN_COVER
                 assert cover.is_opening
 
-                # Second transition: ON->OFF within pulse_time — debounced
-                # (Without debounce, this would call async_open_cover,
-                # see is_opening=True, and stop the tracker)
-                await cover._handle_external_state_change("switch.open", "on", "off")
-                # Tracker should still be running (debounced)
+                # Second rising edge within debounce window — ignored
+                await cover._handle_external_state_change("switch.open", "off", "on")
                 assert cover._last_command == SERVICE_OPEN_COVER
                 assert cover.is_opening
             finally:
                 cover._triggered_externally = False
 
     @pytest.mark.asyncio
-    async def test_latching_full_cycle(self, make_cover):
-        """Latching switch: click 1 starts, click 2 stops (transitions > pulse_time apart)."""
+    async def test_full_cycle_start_then_stop(self, make_cover):
+        """Click 1 (OFF->ON) starts, click 2 (OFF->ON after debounce) stops."""
         import time as time_module
 
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
@@ -397,12 +358,12 @@ class TestToggleModeExternalStateChange:
         with patch.object(cover, "async_write_ha_state"):
             cover._triggered_externally = True
             try:
-                # Click 1: ON->OFF starts opening
-                await cover._handle_external_state_change("switch.open", "on", "off")
+                # Click 1: OFF->ON starts opening
+                await cover._handle_external_state_change("switch.open", "off", "on")
                 assert cover._last_command == SERVICE_OPEN_COVER
                 assert cover.is_opening
 
-                # Simulate time passing (beyond debounce window = pulse_time + 0.5)
+                # Simulate time passing (beyond debounce window)
                 cover._last_external_toggle_time["switch.open"] = (
                     time_module.monotonic() - cover._pulse_time - 0.5 - 0.1
                 )
@@ -953,7 +914,7 @@ class TestExternalTiltToggleMode:
             cover._triggered_externally = True
             try:
                 await cover._handle_external_tilt_state_change(
-                    "switch.tilt_open", "on", "off"
+                    "switch.tilt_open", "off", "on"
                 )
             finally:
                 cover._triggered_externally = False
