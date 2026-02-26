@@ -167,6 +167,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def async_will_remove_from_hass(self):
         """Clean up when entity is removed."""
+        self.stop_auto_updater()
         for unsub in self._state_listener_unsubs:
             unsub()
         self._state_listener_unsubs.clear()

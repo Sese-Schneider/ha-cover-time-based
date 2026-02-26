@@ -37,6 +37,13 @@ async def setup_input_booleans(hass: HomeAssistant):
     Also sets up the homeassistant component (turn_on/turn_off services)
     which the cover uses to control relays.
     """
+    # Clear any pre-loaded state so async_setup_component actually runs
+    # async_setup and registers services (homeassistant.turn_on/turn_off).
+    # Without this, some test environments mark the component as loaded
+    # without running async_setup, causing ServiceNotFound errors.
+    if "homeassistant" in hass.config.components:
+        hass.config.components.remove("homeassistant")
+    hass.data.setdefault("setup_tasks", {}).pop("homeassistant", None)
     assert await async_setup_component(hass, "homeassistant", {})
     assert await async_setup_component(
         hass,
