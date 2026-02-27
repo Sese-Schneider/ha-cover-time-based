@@ -35,6 +35,7 @@ class CalibrationState:
     timeout: float
     started_at: float = field(default_factory=time.monotonic)
     step_count: int = 0
+    final_step: bool = False
     step_duration: float | None = None
     last_pulse_duration: float | None = None
     continuous_start: float | None = None

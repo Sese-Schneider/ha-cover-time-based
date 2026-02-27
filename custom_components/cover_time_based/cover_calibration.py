@@ -197,6 +197,10 @@ class CalibrationMixin:
             for i in range(num_steps):
                 pct = (i + 1) * step_pct
                 target = (100 - pct) if closing else pct
+
+                self._calibration.step_count = i + 1
+                self.async_write_ha_state()
+
                 _LOGGER.debug(
                     "overhead step %d/%d: target=%d%%",
                     i + 1,
@@ -215,8 +219,6 @@ class CalibrationMixin:
 
                 # Force position — motor fell short due to startup delay
                 calc.set_position(target)
-                self._calibration.step_count += 1
-                self.async_write_ha_state()
 
                 if i < num_steps - 1:
                     await sleep(CALIBRATION_STEP_PAUSE)
@@ -228,6 +230,8 @@ class CalibrationMixin:
             _LOGGER.debug(
                 "overhead test: starting continuous phase for remaining distance"
             )
+            self._calibration.final_step = True
+            self.async_write_ha_state()
             self._calibration.continuous_start = time.monotonic()
             await self._async_handle_command(move_command)
 

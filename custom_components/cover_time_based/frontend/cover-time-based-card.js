@@ -77,6 +77,7 @@ const EN = {
   "calibration.start": "Start",
   "calibration.active": "Calibration Active",
   "calibration.step": "Step {step}",
+  "calibration.final_step": "Final step",
   "calibration.cancel": "Cancel",
   "calibration.finish": "Finish",
   "calibration.set_position_first": "Set position to start calibration.",
@@ -166,6 +167,7 @@ const TRANSLATIONS = {
     "calibration.start": "Iniciar",
     "calibration.active": "Calibração Ativa",
     "calibration.step": "Passo {step}",
+    "calibration.final_step": "Passo final",
     "calibration.cancel": "Cancelar",
     "calibration.finish": "Concluir",
     "calibration.set_position_first": "Defina a posição para iniciar a calibração.",
@@ -252,6 +254,7 @@ const TRANSLATIONS = {
     "calibration.start": "Rozpocznij",
     "calibration.active": "Kalibracja aktywna",
     "calibration.step": "Krok {step}",
+    "calibration.final_step": "Krok końcowy",
     "calibration.cancel": "Anuluj",
     "calibration.finish": "Zakończ",
     "calibration.set_position_first": "Ustaw pozycję, aby rozpocząć kalibrację.",
@@ -1310,21 +1313,25 @@ class CoverTimeBasedCard extends LitElement {
             <ha-icon icon="mdi:tune" style="--mdc-icon-size: 20px;"></ha-icon>
             ${this._t("calibration.active")}
           </div>
-          <div class="cal-form">
-            <div class="cal-status">
-              <strong>${calLabel}</strong>
-              ${attrs.calibration_step
+          <div class="cal-active-body">
+            <strong>${calLabel}</strong>
+            ${attrs.calibration_final_step
+              ? html`<span class="cal-step"
+                  >${this._t("calibration.final_step")}</span
+                >`
+              : attrs.calibration_step
                 ? html`<span class="cal-step"
                     >${this._t("calibration.step", { step: attrs.calibration_step })}</span
                   >`
                 : ""}
+            <div class="cal-active-buttons">
+              <ha-button @click=${() => this._onStopCalibration(true)}
+                >${this._t("calibration.cancel")}</ha-button
+              >
+              <ha-button unelevated @click=${() => this._onStopCalibration(false)}
+                >${this._t("calibration.finish")}</ha-button
+              >
             </div>
-            <ha-button @click=${() => this._onStopCalibration(true)}
-              >${this._t("calibration.cancel")}</ha-button
-            >
-            <ha-button unelevated @click=${() => this._onStopCalibration(false)}
-              >${this._t("calibration.finish")}</ha-button
-            >
           </div>
         </div>
       `;
@@ -1689,13 +1696,18 @@ class CoverTimeBasedCard extends LitElement {
         min-width: 100px;
       }
 
-      .cal-status {
+      .cal-active-body {
         display: flex;
-        align-items: center;
-        gap: 12px;
-        flex: 1;
-        padding: 8px 0;
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 0 0;
         font-size: var(--paper-font-body1_-_font-size, 14px);
+      }
+
+      .cal-active-buttons {
+        display: flex;
+        gap: 8px;
+        padding-top: 4px;
       }
 
       .cal-step {
