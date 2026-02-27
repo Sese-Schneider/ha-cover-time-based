@@ -1,0 +1,1804 @@
+/**
+ * Cover Time Based Configuration Card
+ *
+ * A Lovelace card for configuring and calibrating cover_time_based entities.
+ * Uses HA built-in elements (ha-entity-picker, ha-textfield, ha-checkbox,
+ * ha-button) for consistent look and feel.
+ *
+ * All user-visible strings are translatable. Translations are embedded below.
+ */
+
+import {
+  LitElement,
+  html,
+  css,
+} from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
+
+const DOMAIN = "cover_time_based";
+
+// Embedded translations — keys are flattened dotted paths.
+// English is the default; other languages override specific keys.
+const EN = {
+  "header": "Cover Time Based Configuration",
+  "loading": "Loading...",
+  "saving": "Saving...",
+  "save_failed": "Save failed — value reverted",
+  "confirm_cancel_calibration": "A calibration is running. Cancel it and continue?",
+  "create_new": "+ Create new cover entity",
+  "yaml_warning": "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings \u2192 Devices & Services \u2192 Helpers \u2192 Create Helper \u2192 Cover Time Based.",
+  "tabs.device": "Device",
+  "tabs.calibration": "Calibration",
+  "control_mode.label": "Control Mode",
+  "control_mode.wrapped": "Wrap an existing cover entity",
+  "control_mode.switch": "Switch (latching)",
+  "control_mode.pulse": "Pulse (momentary)",
+  "control_mode.toggle": "Toggle (same button)",
+  "control_mode.pulse_time": "Pulse time",
+  "entities.cover_entity": "Cover Entity",
+  "entities.switch_entities": "Switch Entities",
+  "entities.open_switch": "Open switch",
+  "entities.close_switch": "Close switch",
+  "entities.stop_switch": "Stop switch",
+  "tilt.label": "Tilt Mode",
+  "tilt.none": "Not supported",
+  "tilt.sequential": "Closes then tilts",
+  "tilt.dual_motor": "Separate tilt motor",
+  "tilt.inline": "Tilts inline with travel",
+  "tilt_motor.label": "Tilt Motor",
+  "tilt_motor.open_switch": "Tilt open switch",
+  "tilt_motor.close_switch": "Tilt close switch",
+  "tilt_motor.stop_switch": "Tilt stop switch",
+  "tilt_motor.safe_position": "Safe tilt position",
+  "tilt_motor.safe_position_helper": "Tilt moves here before travel (100 = fully open)",
+  "tilt_motor.max_allowed_position": "Max tilt allowed position (optional)",
+  "tilt_motor.max_allowed_helper": "Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)",
+  "timing.attribute_header": "Attribute",
+  "timing.travel_attribute_header": "Travel Attribute",
+  "timing.tilt_attribute_header": "Tilt Attribute",
+  "timing.value_header": "Value",
+  "timing.not_set": "Not set",
+  "timing.travel_time_close": "Travel time (close)",
+  "timing.travel_time_open": "Travel time (open)",
+  "timing.travel_startup_delay": "Travel startup delay",
+  "timing.tilt_time_close": "Tilt time (close)",
+  "timing.tilt_time_open": "Tilt time (open)",
+  "timing.tilt_startup_delay": "Tilt startup delay",
+  "timing.min_movement_time": "Minimum movement time",
+  "timing.endpoint_runon_time": "Endpoint run-on time",
+  "position.label": "Current Position",
+  "position.helper": "Move cover to a known endpoint, then set position.",
+  "position.unknown": "Unknown",
+  "position.open": "Fully open",
+  "position.closed": "Fully closed",
+  "position.closed_tilt_open": "Fully closed, tilt open",
+  "position.closed_tilt_closed": "Fully closed, tilt closed",
+  "calibration.label": "Timing Calibration",
+  "calibration.attribute_label": "Attribute",
+  "calibration.start": "Start",
+  "calibration.active": "Calibration Active",
+  "calibration.step": "Step {step}",
+  "calibration.final_step": "Final step",
+  "calibration.cancel": "Cancel",
+  "calibration.finish": "Finish",
+  "calibration.set_position_first": "Set position to start calibration.",
+  "controls.cover_label": "Cover",
+  "controls.tilt_label": "Tilt",
+  "controls.open": "Open",
+  "controls.stop": "Stop",
+  "controls.close": "Close",
+  "controls.tilt_open": "Tilt open",
+  "controls.tilt_stop": "Tilt stop",
+  "controls.tilt_close": "Tilt close",
+  "hints.sequential.travel_time_close": "Start with cover fully open. Click Finish when the cover is fully closed, before the slats start tilting.",
+  "hints.sequential.travel_time_open": "Start with cover closed and slats open. Click Finish when the cover is fully open.",
+  "hints.sequential.tilt_time_close": "Start with cover closed but slats open. Click Finish when the slats are fully closed.",
+  "hints.sequential.tilt_time_open": "Start with cover and slats closed. Click Finish when the slats are open.",
+  "hints.dual_motor.travel_time_close": "Start with cover open and slats in safe position. Click Finish when the cover is fully closed.",
+  "hints.dual_motor.travel_time_open": "Start with cover closed and slats in safe position. Click Finish when the cover is fully open.",
+  "hints.dual_motor.tilt_time_close": "Start with cover closed and slats open. Click Finish when the slats are fully closed.",
+  "hints.dual_motor.tilt_time_open": "Start with both cover and slats closed. Click Finish when the slats are fully open.",
+  "hints.inline.travel_time_close": "Start with both cover and slats fully open. Click Finish when both are fully closed.",
+  "hints.inline.travel_time_open": "Start with both cover and slats fully closed. Click Finish when both are fully open.",
+  "hints.inline.tilt_time_close": "Start with slats fully open. Click Finish when the slats are fully closed.",
+  "hints.inline.tilt_time_open": "Start with slats fully closed. Click Finish when the slats are fully open.",
+  "hints.none.travel_time_close": "Click Finish when the cover is fully closed.",
+  "hints.none.travel_time_open": "Click Finish when the cover is fully open.",
+  "hints.min_movement_time": "Click Finish as soon as you notice the cover moving.",
+};
+
+const TRANSLATIONS = {
+  en: EN,
+  pt: {
+    "header": "Configuração de Estore Baseado em Tempo",
+    "loading": "A carregar...",
+    "saving": "A guardar...",
+    "save_failed": "Falha ao guardar — valor revertido",
+    "confirm_cancel_calibration": "Existe uma calibração em curso. Cancelar e continuar?",
+    "create_new": "+ Criar nova entidade de estore",
+    "yaml_warning": "Esta entidade utiliza configuração YAML e não pode ser configurada a partir deste cartão. Por favor, migre para a interface gráfica: Definições > Dispositivos e Serviços > Auxiliares > Criar Auxiliar > Estore Baseado em Tempo.",
+    "tabs.device": "Dispositivo",
+    "tabs.calibration": "Calibração",
+    "control_mode.label": "Modo de Controlo",
+    "control_mode.wrapped": "Encapsular uma entidade de estore existente",
+    "control_mode.switch": "Interruptor (travamento)",
+    "control_mode.pulse": "Pulso (momentâneo)",
+    "control_mode.toggle": "Alternar (mesmo botão)",
+    "control_mode.pulse_time": "Duração do pulso",
+    "entities.cover_entity": "Entidade de Estore",
+    "entities.switch_entities": "Entidades de Interruptor",
+    "entities.open_switch": "Interruptor de abrir",
+    "entities.close_switch": "Interruptor de fechar",
+    "entities.stop_switch": "Interruptor de parar",
+    "tilt.label": "Inclinação",
+    "tilt.none": "Não suportado",
+    "tilt.sequential": "Fecha e depois inclina",
+    "tilt.dual_motor": "Motor de inclinação separado",
+    "tilt.inline": "Inclina durante o deslocamento",
+    "tilt_motor.label": "Motor de Inclinação",
+    "tilt_motor.open_switch": "Interruptor de abrir inclinação",
+    "tilt_motor.close_switch": "Interruptor de fechar inclinação",
+    "tilt_motor.stop_switch": "Interruptor de parar inclinação",
+    "tilt_motor.safe_position": "Posição de inclinação segura",
+    "tilt_motor.safe_position_helper": "A inclinação move-se para aqui antes do deslocamento (100 = totalmente aberto)",
+    "tilt_motor.max_allowed_position": "Posição máxima permitida de inclinação (opcional)",
+    "tilt_motor.max_allowed_helper": "A inclinação só é permitida quando a posição do estore está neste valor ou abaixo (0 = fechado, 100 = aberto)",
+    "timing.attribute_header": "Atributo",
+    "timing.travel_attribute_header": "Atributo",
+    "timing.tilt_attribute_header": "Atributo",
+    "timing.value_header": "Valor",
+    "timing.not_set": "Não definido",
+    "timing.travel_time_close": "Tempo de deslocamento (fechar)",
+    "timing.travel_time_open": "Tempo de deslocamento (abrir)",
+    "timing.travel_startup_delay": "Atraso de arranque do deslocamento",
+    "timing.tilt_time_close": "Tempo de inclinação (fechar)",
+    "timing.tilt_time_open": "Tempo de inclinação (abrir)",
+    "timing.tilt_startup_delay": "Atraso de arranque da inclinação",
+    "timing.min_movement_time": "Tempo mínimo de movimento",
+    "timing.endpoint_runon_time": "Tempo de sobrecurso nos extremos",
+    "position.label": "Posição Atual",
+    "position.helper": "Mova o estore para um extremo conhecido e defina a posição.",
+    "position.unknown": "Desconhecida",
+    "position.open": "Totalmente aberto",
+    "position.closed": "Totalmente fechado",
+    "position.closed_tilt_open": "Totalmente fechado, inclinação aberta",
+    "position.closed_tilt_closed": "Totalmente fechado, inclinação fechada",
+    "calibration.label": "Calibração de Temporização",
+    "calibration.attribute_label": "Atributo",
+    "calibration.start": "Iniciar",
+    "calibration.active": "Calibração Ativa",
+    "calibration.step": "Passo {step}",
+    "calibration.final_step": "Passo final",
+    "calibration.cancel": "Cancelar",
+    "calibration.finish": "Concluir",
+    "calibration.set_position_first": "Defina a posição para iniciar a calibração.",
+    "controls.cover_label": "Estore",
+    "controls.tilt_label": "Inclinação",
+    "controls.open": "Abrir",
+    "controls.stop": "Parar",
+    "controls.close": "Fechar",
+    "controls.tilt_open": "Inclinar abrir",
+    "controls.tilt_stop": "Inclinar parar",
+    "controls.tilt_close": "Inclinar fechar",
+    "hints.sequential.travel_time_close": "Comece com o estore totalmente aberto. Clique em Concluir quando o estore estiver totalmente fechado, antes de as lâminas começarem a inclinar.",
+    "hints.sequential.travel_time_open": "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.sequential.tilt_time_close": "Comece com o estore fechado mas as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.sequential.tilt_time_open": "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem abertas.",
+    "hints.dual_motor.travel_time_close": "Comece com o estore aberto e as lâminas na posição segura. Clique em Concluir quando o estore estiver totalmente fechado.",
+    "hints.dual_motor.travel_time_open": "Comece com o estore fechado e as lâminas na posição segura. Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.dual_motor.tilt_time_close": "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.dual_motor.tilt_time_open": "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
+    "hints.inline.travel_time_close": "Comece com o estore e as lâminas totalmente abertos. Clique em Concluir quando ambos estiverem totalmente fechados.",
+    "hints.inline.travel_time_open": "Comece com o estore e as lâminas totalmente fechados. Clique em Concluir quando ambos estiverem totalmente abertos.",
+    "hints.inline.tilt_time_close": "Comece com as lâminas totalmente abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.inline.tilt_time_open": "Comece com as lâminas totalmente fechadas. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
+    "hints.none.travel_time_close": "Clique em Concluir quando o estore estiver totalmente fechado.",
+    "hints.none.travel_time_open": "Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.min_movement_time": "Clique em Concluir assim que notar o estore a mover-se.",
+  },
+  pl: {
+    "header": "Konfiguracja rolet sterowanych czasowo",
+    "loading": "Ładowanie...",
+    "saving": "Zapisywanie...",
+    "save_failed": "Zapis nie powiódł się — wartość przywrócona",
+    "confirm_cancel_calibration": "Kalibracja jest w toku. Anulować ją i kontynuować?",
+    "create_new": "+ Utwórz nową encję rolety",
+    "yaml_warning": "Ta encja używa konfiguracji YAML i nie może być konfigurowana z tej karty. Proszę przeprowadzić migrację do interfejsu użytkownika: Ustawienia > Urządzenia i usługi > Pomocniki > Utwórz pomocnik > Roleta sterowana czasowo.",
+    "tabs.device": "Urządzenie",
+    "tabs.calibration": "Kalibracja",
+    "control_mode.label": "Tryb sterowania",
+    "control_mode.wrapped": "Opakuj istniejącą encję rolety",
+    "control_mode.switch": "Przełącznik (zatrzaskowy)",
+    "control_mode.pulse": "Impuls (chwilowy)",
+    "control_mode.toggle": "Przełączanie (ten sam przycisk)",
+    "control_mode.pulse_time": "Czas impulsu",
+    "entities.cover_entity": "Encja rolety",
+    "entities.switch_entities": "Encje przełączników",
+    "entities.open_switch": "Przełącznik otwierania",
+    "entities.close_switch": "Przełącznik zamykania",
+    "entities.stop_switch": "Przełącznik zatrzymania",
+    "tilt.label": "Nachylenie",
+    "tilt.none": "Nieobsługiwane",
+    "tilt.sequential": "Najpierw zamyka, potem nachyla",
+    "tilt.dual_motor": "Osobny silnik nachylenia",
+    "tilt.inline": "Nachylenie w trakcie ruchu",
+    "tilt_motor.label": "Silnik nachylenia",
+    "tilt_motor.open_switch": "Przełącznik otwierania nachylenia",
+    "tilt_motor.close_switch": "Przełącznik zamykania nachylenia",
+    "tilt_motor.stop_switch": "Przełącznik zatrzymania nachylenia",
+    "tilt_motor.safe_position": "Bezpieczna pozycja nachylenia",
+    "tilt_motor.safe_position_helper": "Nachylenie przesuwa się tu przed ruchem (100 = w pełni otwarte)",
+    "tilt_motor.max_allowed_position": "Maks. dozwolona pozycja nachylenia (opcjonalna)",
+    "tilt_motor.max_allowed_helper": "Nachylenie dozwolone tylko gdy pozycja rolety wynosi tyle lub mniej (0 = zamknięta, 100 = otwarta)",
+    "timing.attribute_header": "Atrybut",
+    "timing.travel_attribute_header": "Atrybut",
+    "timing.tilt_attribute_header": "Atrybut",
+    "timing.value_header": "Wartość",
+    "timing.not_set": "Nieustawione",
+    "timing.travel_time_close": "Czas ruchu (zamykanie)",
+    "timing.travel_time_open": "Czas ruchu (otwieranie)",
+    "timing.travel_startup_delay": "Opóźnienie startu ruchu",
+    "timing.tilt_time_close": "Czas nachylenia (zamykanie)",
+    "timing.tilt_time_open": "Czas nachylenia (otwieranie)",
+    "timing.tilt_startup_delay": "Opóźnienie startu nachylenia",
+    "timing.min_movement_time": "Minimalny czas ruchu",
+    "timing.endpoint_runon_time": "Czas dobiegu na krańcach",
+    "position.label": "Aktualna pozycja",
+    "position.helper": "Przesuń roletę do znanego krańca, a następnie ustaw pozycję.",
+    "position.unknown": "Nieznana",
+    "position.open": "W pełni otwarta",
+    "position.closed": "W pełni zamknięta",
+    "position.closed_tilt_open": "W pełni zamknięta, nachylenie otwarte",
+    "position.closed_tilt_closed": "W pełni zamknięta, nachylenie zamknięte",
+    "calibration.label": "Kalibracja czasowa",
+    "calibration.attribute_label": "Atrybut",
+    "calibration.start": "Rozpocznij",
+    "calibration.active": "Kalibracja aktywna",
+    "calibration.step": "Krok {step}",
+    "calibration.final_step": "Krok końcowy",
+    "calibration.cancel": "Anuluj",
+    "calibration.finish": "Zakończ",
+    "calibration.set_position_first": "Ustaw pozycję, aby rozpocząć kalibrację.",
+    "controls.cover_label": "Roleta",
+    "controls.tilt_label": "Nachylenie",
+    "controls.open": "Otwórz",
+    "controls.stop": "Zatrzymaj",
+    "controls.close": "Zamknij",
+    "controls.tilt_open": "Otwórz nachylenie",
+    "controls.tilt_stop": "Zatrzymaj nachylenie",
+    "controls.tilt_close": "Zamknij nachylenie",
+    "hints.sequential.travel_time_close": "Zacznij z roletą w pełni otwartą. Kliknij Zakończ, gdy roleta jest w pełni zamknięta, zanim listwy zaczną się nachylać.",
+    "hints.sequential.travel_time_open": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.sequential.tilt_time_close": "Zacznij z zamkniętą roletą, ale otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.sequential.tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są otwarte.",
+    "hints.dual_motor.travel_time_close": "Zacznij z otwartą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni zamknięta.",
+    "hints.dual_motor.travel_time_open": "Zacznij z zamkniętą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.dual_motor.tilt_time_close": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.dual_motor.tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
+    "hints.inline.travel_time_close": "Zacznij z roletą i listwami w pełni otwartymi. Kliknij Zakończ, gdy obie są w pełni zamknięte.",
+    "hints.inline.travel_time_open": "Zacznij z roletą i listwami w pełni zamkniętymi. Kliknij Zakończ, gdy obie są w pełni otwarte.",
+    "hints.inline.tilt_time_close": "Zacznij z listwami w pełni otwartymi. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.inline.tilt_time_open": "Zacznij z listwami w pełni zamkniętymi. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
+    "hints.none.travel_time_close": "Kliknij Zakończ, gdy roleta jest w pełni zamknięta.",
+    "hints.none.travel_time_open": "Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.min_movement_time": "Kliknij Zakończ, gdy tylko zauważysz ruch rolety.",
+  },
+};
+
+// Timing attributes shown in calibration dropdown and timing table.
+// Keys are config attribute names; values are translation keys.
+const TIMING_ATTRIBUTES = [
+  ["travel_time_close", "timing.travel_time_close"],
+  ["travel_time_open", "timing.travel_time_open"],
+  ["travel_startup_delay", "timing.travel_startup_delay"],
+  ["tilt_time_close", "timing.tilt_time_close"],
+  ["tilt_time_open", "timing.tilt_time_open"],
+  ["tilt_startup_delay", "timing.tilt_startup_delay"],
+  ["min_movement_time", "timing.min_movement_time"],
+];
+
+const ATTRIBUTE_TO_CONFIG = {
+  travel_time_close: "travel_time_close",
+  travel_time_open: "travel_time_open",
+  tilt_time_close: "tilt_time_close",
+  tilt_time_open: "tilt_time_open",
+  travel_startup_delay: "travel_startup_delay",
+  tilt_startup_delay: "tilt_startup_delay",
+  min_movement_time: "min_movement_time",
+};
+
+class CoverTimeBasedCard extends LitElement {
+  static get properties() {
+    return {
+      hass: { type: Object },
+      _selectedEntity: { type: String },
+      _config: { type: Object },
+      _loading: { type: Boolean },
+      _saving: { type: Boolean },
+      _activeTab: { type: String },
+      _knownPosition: { type: String },
+      _loadError: { type: String },
+      _saveError: { type: Boolean },
+    };
+  }
+
+  constructor() {
+    super();
+    this._selectedEntity = "";
+    this._config = null;
+    this._loading = false;
+    this._saving = false;
+    this._saveError = false;
+    this._activeTab = "device";
+    this._knownPosition = "unknown";
+    this._helpersLoaded = false;
+  }
+
+  // --- Translation support ---
+
+  _t(key, replacements) {
+    const lang = this.hass?.language || "en";
+    const strings = TRANSLATIONS[lang] || EN;
+    let str = strings[key] || EN[key] || key;
+    if (replacements) {
+      for (const [k, v] of Object.entries(replacements)) {
+        str = str.replace(`{${k}}`, v);
+      }
+    }
+    return str;
+  }
+
+  // --- Lifecycle ---
+
+  _getScrollParent() {
+    let el = this;
+    while (el) {
+      el = el.parentElement || el.getRootNode()?.host;
+      if (el && el.scrollTop > 0) return el;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+
+  async performUpdate() {
+    const scroller = this._getScrollParent();
+    const scrollTop = scroller?.scrollTop ?? 0;
+    await super.performUpdate();
+    if (scroller) scroller.scrollTop = scrollTop;
+  }
+
+  async connectedCallback() {
+    super.connectedCallback();
+    if (!this._helpersLoaded) {
+      this._helpersLoaded = true;
+
+      // ha-entity-picker is lazy-loaded and may only live in a scoped
+      // registry.  Force HA to load the module by triggering the config
+      // editor of a card that uses it (same pattern as Mushroom cards).
+      if (!customElements.get("ha-entity-picker")) {
+        try {
+          const helpers = await window.loadCardHelpers();
+          // Create an entities card instance so we can access its class
+          const c = await helpers.createCardElement({
+            type: "entities",
+            entities: [],
+          });
+          // The static getConfigElement() imports the editor module,
+          // which in turn imports ha-entity-picker and registers it.
+          if (c?.constructor?.getConfigElement) {
+            await c.constructor.getConfigElement();
+          }
+        } catch (_) {
+          // best-effort
+        }
+      }
+
+      // Wait for the element to be defined (with timeout).
+      if (!customElements.get("ha-entity-picker")) {
+        try {
+          await Promise.race([
+            customElements.whenDefined("ha-entity-picker"),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("timeout")), 10000)
+            ),
+          ]);
+        } catch (_) {
+          console.warn(
+            "[cover-time-based-card] ha-entity-picker not available"
+          );
+        }
+      }
+
+      this.requestUpdate();
+    }
+
+    // Load entity list from full registry (includes config_entry_id)
+    this._loadEntityList();
+  }
+
+  updated(changedProperties) {
+  }
+
+  async _loadEntityList() {
+    if (!this.hass) return;
+    try {
+      const entries = await this.hass.callWS({
+        type: "config/entity_registry/list",
+      });
+      this._configEntryEntities = entries
+        .filter((e) => e.platform === "cover_time_based" && e.config_entry_id)
+        .map((e) => e.entity_id);
+      this.requestUpdate();
+    } catch (err) {
+      console.error("Failed to load entity registry:", err);
+      this._configEntryEntities = [];
+    }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
+    if (this._isCalibrating()) {
+      this._onStopCalibration(true);
+    }
+  }
+
+  setConfig(_config) {
+    // No user-configurable options
+  }
+
+  getCardSize() {
+    return 8;
+  }
+
+  getGridOptions() {
+    return { columns: "full", min_columns: 6, min_rows: 4 };
+  }
+
+  // --- Data fetching ---
+
+  async _loadConfig() {
+    if (!this._selectedEntity || !this.hass) return;
+    this._loading = true;
+    this._loadError = null;
+    try {
+      this._config = await this.hass.callWS({
+        type: "cover_time_based/get_config",
+        entity_id: this._selectedEntity,
+      });
+    } catch (err) {
+      console.error("Failed to load config:", err);
+      this._config = null;
+      this._loadError = this._t("yaml_warning");
+    }
+    this._loading = false;
+  }
+
+  _updateLocal(updates) {
+    this._config = { ...this._config, ...updates };
+    this._scheduleAutoSave();
+  }
+
+  _scheduleAutoSave() {
+    if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
+    this._autoSaveTimer = setTimeout(() => this._autoSave(), 500);
+  }
+
+  async _autoSave() {
+    if (!this._selectedEntity || !this.hass || !this._config) return;
+    this._saving = true;
+    this._saveError = false;
+    try {
+      const { entry_id, ...fields } = this._config;
+      await this.hass.callWS({
+        type: "cover_time_based/update_config",
+        ...fields,
+        entity_id: this._selectedEntity,
+      });
+    } catch (err) {
+      console.error("Failed to save config:", err);
+      this._saveError = true;
+      await this._loadConfig();
+      setTimeout(() => { this._saveError = false; }, 3000);
+    }
+    this._saving = false;
+  }
+
+  // --- Entity helpers ---
+
+  _getEntityState() {
+    if (!this._selectedEntity || !this.hass) return null;
+    return this.hass.states[this._selectedEntity];
+  }
+
+  _isCalibrating() {
+    if (this._calibratingOverride === false) return false;
+    if (this._calibratingOverride === true) return true;
+    const state = this._getEntityState();
+    return state?.attributes?.calibration_active === true;
+  }
+
+  _getCalibrationHint() {
+    const select = this.shadowRoot?.querySelector("#cal-attribute");
+    const attr = select?.value;
+    const pos = this._knownPosition;
+    const c = this._config;
+    const tiltMode = c?.tilt_mode || "none";
+
+    // Startup delay uses the same hint as the corresponding direction
+    let effectiveAttr = attr;
+    if (attr === "travel_startup_delay") {
+      effectiveAttr = pos === "open" ? "travel_time_close" : "travel_time_open";
+    } else if (attr === "tilt_startup_delay") {
+      effectiveAttr = (pos === "closed_tilt_open" || pos === "open")
+        ? "tilt_time_close" : "tilt_time_open";
+    }
+
+    if (attr === "min_movement_time") {
+      return this._t("hints.min_movement_time");
+    }
+
+    return this._t(`hints.${tiltMode}.${effectiveAttr}`);
+  }
+
+  _hasRequiredEntities(c) {
+    if (!c) return false;
+    if (c.control_mode === "wrapped") {
+      if (!c.cover_entity_id) return false;
+    } else if (c.control_mode === "pulse") {
+      if (!c.open_switch_entity_id || !c.close_switch_entity_id || !c.stop_switch_entity_id) return false;
+    } else {
+      if (!c.open_switch_entity_id || !c.close_switch_entity_id) return false;
+    }
+    // Dual motor tilt requires tilt entities to be complete
+    if (c.tilt_mode === "dual_motor" && c.control_mode !== "wrapped") {
+      if (!c.tilt_open_switch || !c.tilt_close_switch) return false;
+      if (c.control_mode === "pulse" && !c.tilt_stop_switch) return false;
+    }
+    return true;
+  }
+
+  // --- Event handlers ---
+
+  _onEntityChange(e) {
+    const newValue = e.detail?.value || e.target?.value || "";
+    this._selectedEntity = newValue;
+    this._config = null;
+    if (this._selectedEntity) {
+      this._loadConfig();
+    }
+  }
+
+  _onControlModeChange(e) {
+    const mode = e.target.value;
+    const updates = { control_mode: mode };
+    // Clear irrelevant entities when switching modes
+    if (mode === "wrapped") {
+      updates.open_switch_entity_id = null;
+      updates.close_switch_entity_id = null;
+      updates.stop_switch_entity_id = null;
+    } else {
+      updates.cover_entity_id = null;
+    }
+    if (mode !== "pulse") {
+      updates.stop_switch_entity_id = null;
+      updates.tilt_stop_switch = null;
+    }
+    this._updateLocal(updates);
+  }
+
+  _onPulseTimeChange(e) {
+    const val = parseFloat(e.target.value);
+    if (!isNaN(val) && val >= 0.1) {
+      this._updateLocal({ pulse_time: val });
+    }
+  }
+
+  _onSwitchEntityChange(field, e) {
+    const value = e.detail?.value || e.target?.value || null;
+    this._updateLocal({ [field]: value || null });
+  }
+
+  _filterNonTimeBased = (stateObj) => {
+    const entry = this.hass.entities[stateObj.entity_id];
+    return !entry || entry.platform !== DOMAIN;
+  };
+
+  _onCoverEntityChange(e) {
+    const value = e.detail?.value || e.target?.value || null;
+    this._updateLocal({ cover_entity_id: value || null });
+  }
+
+  _onTiltModeChange(e) {
+    const mode = e.target.value;
+    if (mode === "none") {
+      this._updateLocal({
+        tilt_time_close: null,
+        tilt_time_open: null,
+        tilt_startup_delay: null,
+        tilt_mode: "none",
+        // Clear dual-motor fields
+        safe_tilt_position: null,
+        max_tilt_allowed_position: null,
+        tilt_open_switch: null,
+        tilt_close_switch: null,
+        tilt_stop_switch: null,
+      });
+    } else {
+      const updates = { tilt_mode: mode };
+      if (mode === "sequential") {
+        // Clear dual-motor fields when switching to sequential
+        updates.safe_tilt_position = null;
+        updates.max_tilt_allowed_position = null;
+        updates.tilt_open_switch = null;
+        updates.tilt_close_switch = null;
+        updates.tilt_stop_switch = null;
+      } else if (mode === "dual_motor") {
+        // Default safe_tilt_position to 100 (fully open)
+        if (this._config.safe_tilt_position == null) {
+          updates.safe_tilt_position = 100;
+        }
+        // Default max_tilt_allowed_position to 0 (fully closed)
+        if (this._config.max_tilt_allowed_position == null) {
+          updates.max_tilt_allowed_position = 0;
+        }
+      } else if (mode === "inline") {
+        // Clear dual-motor fields when switching to inline
+        updates.safe_tilt_position = null;
+        updates.max_tilt_allowed_position = null;
+        updates.tilt_open_switch = null;
+        updates.tilt_close_switch = null;
+        updates.tilt_stop_switch = null;
+      }
+      this._updateLocal(updates);
+    }
+  }
+
+  async _onStartCalibration() {
+    const attrSelect = this.shadowRoot.querySelector("#cal-attribute");
+
+    const data = {
+      entity_id: this._selectedEntity,
+      attribute: attrSelect.value,
+      timeout: 300,
+    };
+
+    // Don't send an explicit direction — the server derives the correct
+    // direction from the attribute name (e.g. travel_time_close → close,
+    // tilt_time_open → open).  The position-based guess here was redundant
+    // for travel and actively wrong for tilt from closed_tilt_open.
+
+    this._calibratingAttribute = attrSelect.value;
+    this._calibratingOverride = undefined;
+
+    try {
+      await this.hass.callWS({
+        type: `${DOMAIN}/start_calibration`,
+        ...data,
+      });
+      this._knownPosition = "unknown";
+      this._calibratingOverride = true;
+      this.requestUpdate();
+    } catch (err) {
+      console.error("Start calibration failed:", err);
+      const msg = err?.message || String(err);
+      alert(`Calibration failed: ${msg}`);
+    }
+  }
+
+  async _onStopCalibration(cancel = false) {
+    this._knownPosition = "unknown";
+    this._calibratingOverride = false;
+    this.requestUpdate();
+    try {
+      const result = await this.hass.callWS({
+        type: "cover_time_based/stop_calibration",
+        entity_id: this._selectedEntity,
+        cancel,
+      });
+      if (!cancel && result?.attribute) {
+        const configKey = ATTRIBUTE_TO_CONFIG[result.attribute];
+        if (configKey) this._updateLocal({ [configKey]: result.value });
+      }
+    } catch (err) {
+      console.error("Stop calibration failed:", err);
+    }
+  }
+
+  _hasTiltMotor() {
+    const c = this._config;
+    if (!c || c.tilt_mode !== "dual_motor") return false;
+    if (c.control_mode === "wrapped") return true;
+    if (c.control_mode === "pulse")
+      return !!(c.tilt_open_switch && c.tilt_close_switch && c.tilt_stop_switch);
+    return !!(c.tilt_open_switch && c.tilt_close_switch);
+  }
+
+  async _onCoverCommand(command) {
+    const cmdMap = {
+      open_cover: "open",
+      close_cover: "close",
+      stop_cover: "stop",
+      tilt_open: "tilt_open",
+      tilt_close: "tilt_close",
+      tilt_stop: "tilt_stop",
+    };
+    this._knownPosition = "unknown";
+    try {
+      await this.hass.callWS({
+        type: `${DOMAIN}/raw_command`,
+        entity_id: this._selectedEntity,
+        command: cmdMap[command],
+      });
+    } catch (err) {
+      console.error(`Cover ${command} failed:`, err);
+    }
+  }
+
+  async _onPositionPresetChange(value) {
+    this._knownPosition = value;
+    if (value === "unknown") return;
+
+    const tiltMode = this._config?.tilt_mode || "none";
+    const hasTilt = tiltMode !== "none";
+
+    // Determine position and tilt values from preset
+    let position, tiltPosition;
+    switch (value) {
+      case "open":
+        position = 100; // HA convention: 100 = fully open
+        tiltPosition = hasTilt ? 100 : null;
+        break;
+      case "closed":
+        // Position+tilt both closed
+        position = 0;
+        tiltPosition = hasTilt ? 0 : null;
+        break;
+      case "closed_tilt_open":
+        position = 0;
+        tiltPosition = 100;
+        break;
+      case "closed_tilt_closed":
+        position = 0;
+        tiltPosition = 0;
+        break;
+    }
+
+    try {
+      await this.hass.callService(DOMAIN, "set_known_position", {
+        entity_id: this._selectedEntity,
+        position,
+      });
+      if (tiltPosition != null) {
+        await this.hass.callService(DOMAIN, "set_known_tilt_position", {
+          entity_id: this._selectedEntity,
+          tilt_position: tiltPosition,
+        });
+      }
+      this.updateComplete.then(() => {
+        const select = this.shadowRoot.querySelector("#cal-attribute");
+        if (select) {
+          const firstEnabled = [...select.options].find((o) => !o.disabled);
+          if (firstEnabled) select.value = firstEnabled.value;
+        }
+        this.requestUpdate();
+      });
+    } catch (err) {
+      console.error("Reset position failed:", err);
+    }
+  }
+
+  _onCreateNew() {
+    // Navigate to helpers/add with domain param — HA auto-opens the config flow
+    window.history.pushState(
+      null,
+      "",
+      `/config/helpers/add?domain=${DOMAIN}`
+    );
+    window.dispatchEvent(new Event("location-changed"));
+  }
+
+  // --- Rendering ---
+
+  render() {
+    if (!this.hass) return html``;
+    return html`
+      <ha-card>
+        <div class="card-header">${this._t("header")}</div>
+        <div class="card-content">
+          ${this._renderEntityPicker()}
+          ${this._selectedEntity && this._config
+            ? this._renderConfigSections()
+            : ""}
+          ${this._loadError
+            ? html`<div class="yaml-warning">${this._loadError}</div>`
+            : ""}
+          ${this._loading
+            ? html`<div class="loading">
+                <ha-icon icon="mdi:loading" class="spin"></ha-icon> ${this._t("loading")}
+              </div>`
+            : ""}
+        </div>
+      </ha-card>
+    `;
+  }
+
+  _renderEntityPicker() {
+    return html`
+      <div class="section">
+        <ha-entity-picker
+          .hass=${this.hass}
+          .value=${this._selectedEntity}
+          .includeEntities=${this._configEntryEntities || []}
+          label=""
+          @value-changed=${(e) => {
+            const newEntity = e.detail?.value || "";
+            if (newEntity === this._selectedEntity) return;
+            if (this._isCalibrating()) {
+              if (!confirm(this._t("confirm_cancel_calibration"))) {
+                const current = this._selectedEntity;
+                const picker = e.target;
+                picker.value = current;
+                requestAnimationFrame(() => {
+                  picker.value = current;
+                });
+                this.requestUpdate();
+                return;
+              }
+              if (this._isCalibrating()) {
+                this._onStopCalibration(true);
+              }
+            }
+            this._selectedEntity = newEntity;
+            this._config = null;
+            this._loadError = null;
+            this._knownPosition = "unknown";
+            this._calibratingOverride = undefined;
+            this._activeTab = "device";
+            if (this._selectedEntity) this._loadConfig();
+          }}
+        ></ha-entity-picker>
+        <a class="create-new-link" href="#" @click=${(e) => {
+          e.preventDefault();
+          this._onCreateNew();
+        }}>${this._t("create_new")}</a>
+      </div>
+    `;
+  }
+
+  _renderConfigSections() {
+    const c = this._config;
+    const calibrating = this._isCalibrating();
+    const disabled = this._saving || calibrating;
+
+    return html`
+      <div class="entity-info">
+        <div class="entity-info-row">
+          <div>
+            <strong>
+              ${this._getEntityState()?.attributes?.friendly_name ||
+              this._selectedEntity}
+            </strong>
+            <span class="entity-id">${this._selectedEntity}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button
+          class="tab ${this._activeTab === "device" ? "active" : ""}"
+          @click=${() => { this._activeTab = "device"; }}
+        >${this._t("tabs.device")}</button>
+        <button
+          class="tab ${this._activeTab === "timing" ? "active" : ""}"
+          ?disabled=${!this._hasRequiredEntities(c)}
+          @click=${() => { this._activeTab = "timing"; }}
+        >${this._t("tabs.calibration")}</button>
+      </div>
+
+      ${this._activeTab === "device"
+        ? html`
+            <fieldset ?disabled=${disabled}>
+              ${this._renderControlMode(c)} ${this._renderInputEntities(c)}
+              ${this._renderTiltSupport(c)}
+              ${this._renderTiltMotorSection(c)}
+            </fieldset>
+          `
+        : html`
+            ${calibrating ? "" : this._renderPositionReset()}
+            ${this._renderCalibration(calibrating)}
+            ${this._renderTimingTable(c)}
+          `}
+
+      ${this._saving
+        ? html`<div class="save-bar"><span class="saving-indicator">${this._t("saving")}</span></div>`
+        : ""}
+      ${this._saveError
+        ? html`<div class="save-bar"><span class="save-error">${this._t("save_failed")}</span></div>`
+        : ""}
+    `;
+  }
+
+  _renderControlMode(c) {
+    const mode = c.control_mode || "switch";
+    const showPulseTime = mode === "pulse" || mode === "toggle";
+
+    return html`
+      <div class="section">
+        <div class="field-label">${this._t("control_mode.label")}</div>
+        <select class="ha-select" @change=${this._onControlModeChange}>
+          <option value="wrapped" ?selected=${mode === "wrapped"}>
+            ${this._t("control_mode.wrapped")}
+          </option>
+          <option value="switch" ?selected=${mode === "switch"}>
+            ${this._t("control_mode.switch")}
+          </option>
+          <option value="pulse" ?selected=${mode === "pulse"}>
+            ${this._t("control_mode.pulse")}
+          </option>
+          <option value="toggle" ?selected=${mode === "toggle"}>
+            ${this._t("control_mode.toggle")}
+          </option>
+        </select>
+        ${showPulseTime
+          ? html`
+              <div class="inline-field">
+                <ha-textfield
+                  type="number"
+                  min="0.1"
+                  max="10"
+                  step="0.1"
+                  suffix="s"
+                  label=${this._t("control_mode.pulse_time")}
+                  .value=${String(c.pulse_time || 1.0)}
+                  @change=${this._onPulseTimeChange}
+                ></ha-textfield>
+              </div>
+            `
+          : ""}
+      </div>
+    `;
+  }
+
+  _renderInputEntities(c) {
+    if (c.control_mode === "wrapped") {
+      return html`
+        <div class="section">
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${c.cover_entity_id || ""}
+            .includeDomains=${["cover"]}
+            .entityFilter=${this._filterNonTimeBased}
+            label=${this._t("entities.cover_entity")}
+            @value-changed=${this._onCoverEntityChange}
+          ></ha-entity-picker>
+        </div>
+      `;
+    }
+
+    return html`
+      <div class="section">
+        <div class="field-label">${this._t("entities.switch_entities")}</div>
+        <div class="entity-grid">
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${c.open_switch_entity_id || ""}
+            .includeDomains=${["switch"]}
+            label=${this._t("entities.open_switch")}
+            @value-changed=${(e) =>
+              this._onSwitchEntityChange("open_switch_entity_id", e)}
+          ></ha-entity-picker>
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${c.close_switch_entity_id || ""}
+            .includeDomains=${["switch"]}
+            label=${this._t("entities.close_switch")}
+            @value-changed=${(e) =>
+              this._onSwitchEntityChange("close_switch_entity_id", e)}
+          ></ha-entity-picker>
+          ${c.control_mode === "pulse" ? html`
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${c.stop_switch_entity_id || ""}
+            .includeDomains=${["switch"]}
+            label=${this._t("entities.stop_switch")}
+            @value-changed=${(e) =>
+              this._onSwitchEntityChange("stop_switch_entity_id", e)}
+          ></ha-entity-picker>
+          ` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  _renderTiltSupport(c) {
+    if (c.control_mode === "wrapped" && c.cover_entity_id) {
+      const stateObj = this.hass?.states?.[c.cover_entity_id];
+      const features = stateObj?.attributes?.supported_features || 0;
+      // CoverEntityFeature: OPEN_TILT=16, CLOSE_TILT=32
+      if (!(features & (16 | 32))) return "";
+    }
+    const tiltMode = c.tilt_mode || "none";
+
+    return html`
+      <div class="section">
+        <div class="field-label">${this._t("tilt.label")}</div>
+        <select class="ha-select" @change=${this._onTiltModeChange}>
+          <option value="none" ?selected=${tiltMode === "none"}>
+            ${this._t("tilt.none")}
+          </option>
+          <option value="sequential" ?selected=${tiltMode === "sequential"}>
+            ${this._t("tilt.sequential")}
+          </option>
+<option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
+            ${this._t("tilt.dual_motor")}
+          </option>
+          <option value="inline" ?selected=${tiltMode === "inline"}>
+            ${this._t("tilt.inline")}
+          </option>
+        </select>
+      </div>
+    `;
+  }
+
+  _renderTiltMotorSection(c) {
+    if (c.tilt_mode !== "dual_motor") return "";
+
+    return html`
+      <div class="section">
+        <div class="field-label">${this._t("tilt_motor.label")}</div>
+        ${c.control_mode !== "wrapped" ? html`
+        <div class="entity-grid">
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${c.tilt_open_switch || ""}
+            .includeDomains=${["switch"]}
+            label=${this._t("tilt_motor.open_switch")}
+            @value-changed=${(e) =>
+              this._onSwitchEntityChange("tilt_open_switch", e)}
+          ></ha-entity-picker>
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${c.tilt_close_switch || ""}
+            .includeDomains=${["switch"]}
+            label=${this._t("tilt_motor.close_switch")}
+            @value-changed=${(e) =>
+              this._onSwitchEntityChange("tilt_close_switch", e)}
+          ></ha-entity-picker>
+          ${c.control_mode === "pulse" ? html`
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${c.tilt_stop_switch || ""}
+            .includeDomains=${["switch"]}
+            label=${this._t("tilt_motor.stop_switch")}
+            @value-changed=${(e) =>
+              this._onSwitchEntityChange("tilt_stop_switch", e)}
+          ></ha-entity-picker>
+          ` : ""}
+        </div>
+        ` : ""}
+        <div class="dual-motor-config">
+          <ha-textfield
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            label=${this._t("tilt_motor.safe_position")}
+            helper=${this._t("tilt_motor.safe_position_helper")}
+            .value=${String(c.safe_tilt_position ?? 100)}
+            @change=${(e) => {
+              const v = parseInt(e.target.value);
+              if (!isNaN(v) && v >= 0 && v <= 100) {
+                this._updateLocal({ safe_tilt_position: v });
+              }
+            }}
+          ></ha-textfield>
+          <ha-textfield
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            label=${this._t("tilt_motor.max_allowed_position")}
+            helper=${this._t("tilt_motor.max_allowed_helper")}
+            .value=${c.max_tilt_allowed_position != null ? String(c.max_tilt_allowed_position) : ""}
+            @change=${(e) => {
+              const v = e.target.value.trim();
+              this._updateLocal({
+                max_tilt_allowed_position: v === "" ? null : parseInt(v),
+              });
+            }}
+          ></ha-textfield>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderTimingRow([labelKey, key, value, min = 0]) {
+    return html`
+      <tr>
+        <td>${this._t(labelKey)}</td>
+        <td class="value-cell">
+          <input
+            type="number"
+            class="timing-input"
+            .value=${value != null ? String(value) : ""}
+            placeholder=${this._t("timing.not_set")}
+            step="0.1"
+            min="${min}"
+            max="600"
+            @change=${(e) => {
+              const v = e.target.value.trim();
+              this._updateLocal({ [key]: v === "" ? null : parseFloat(v) });
+            }}
+          /><span class="unit">s</span>
+        </td>
+      </tr>
+    `;
+  }
+
+  _renderTimingTable(c) {
+    const hasTiltTimes = c.tilt_mode === "sequential" || c.tilt_mode === "dual_motor" || c.tilt_mode === "inline";
+
+    const travelRows = [
+      ["timing.travel_time_close", "travel_time_close", c.travel_time_close, 0.1],
+      ["timing.travel_time_open", "travel_time_open", c.travel_time_open, 0.1],
+      ["timing.travel_startup_delay", "travel_startup_delay", c.travel_startup_delay],
+      ["timing.min_movement_time", "min_movement_time", c.min_movement_time],
+      ["timing.endpoint_runon_time", "endpoint_runon_time", c.endpoint_runon_time],
+    ];
+
+    const tiltRows = [
+      ["timing.tilt_time_close", "tilt_time_close", c.tilt_time_close, 0.1],
+      ["timing.tilt_time_open", "tilt_time_open", c.tilt_time_open, 0.1],
+      ["timing.tilt_startup_delay", "tilt_startup_delay", c.tilt_startup_delay],
+    ];
+
+    return html`
+      <div class="section">
+        <table class="timing-table">
+          <thead>
+            <tr>
+              <th>${this._t("timing.travel_attribute_header")}</th>
+              <th>${this._t("timing.value_header")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${travelRows.map((row) => this._renderTimingRow(row))}
+          </tbody>
+        </table>
+        ${hasTiltTimes ? html`
+        <table class="timing-table" style="margin-top: 8px;">
+          <thead>
+            <tr>
+              <th>${this._t("timing.tilt_attribute_header")}</th>
+              <th>${this._t("timing.value_header")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tiltRows.map((row) => this._renderTimingRow(row))}
+          </tbody>
+        </table>
+        ` : ""}
+      </div>
+    `;
+  }
+
+  _renderPositionReset() {
+    const tiltMode = this._config?.tilt_mode || "none";
+    const hasIndependentTilt = tiltMode === "sequential" || tiltMode === "dual_motor" || tiltMode === "inline";
+
+    return html`
+      <div class="section">
+        <div class="field-label">${this._t("position.label")}</div>
+        <div class="helper-text">
+          ${this._t("position.helper")}
+        </div>
+        ${!this._hasTiltMotor() ? html`
+          <div class="cover-controls">
+            <ha-button title=${this._t("controls.open")} @click=${() => this._onCoverCommand("open_cover")}>
+              <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
+            </ha-button>
+            <ha-button title=${this._t("controls.stop")} @click=${() => this._onCoverCommand("stop_cover")}>
+              <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
+            </ha-button>
+            <ha-button title=${this._t("controls.close")} @click=${() => this._onCoverCommand("close_cover")}>
+              <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
+            </ha-button>
+          </div>
+        ` : html`
+          <div class="cover-controls-wrapper">
+            <div class="cover-controls">
+              <span class="controls-label">${this._t("controls.cover_label")}</span>
+              <ha-button title=${this._t("controls.open")} @click=${() => this._onCoverCommand("open_cover")}>
+                <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title=${this._t("controls.stop")} @click=${() => this._onCoverCommand("stop_cover")}>
+                <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title=${this._t("controls.close")} @click=${() => this._onCoverCommand("close_cover")}>
+                <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+            </div>
+            <div class="cover-controls">
+              <span class="controls-label">${this._t("controls.tilt_label")}</span>
+              <ha-button title=${this._t("controls.tilt_open")} @click=${() => this._onCoverCommand("tilt_open")}>
+                <ha-icon icon="mdi:arrow-top-right" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title=${this._t("controls.tilt_stop")} @click=${() => this._onCoverCommand("tilt_stop")}>
+                <ha-icon icon="mdi:stop" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+              <ha-button title=${this._t("controls.tilt_close")} @click=${() => this._onCoverCommand("tilt_close")}>
+                <ha-icon icon="mdi:arrow-bottom-left" style="--mdc-icon-size: 18px;"></ha-icon>
+              </ha-button>
+            </div>
+          </div>
+        `}
+        <div class="cal-form">
+          <div class="cal-field">
+            <select
+              class="ha-select"
+              id="position-select"
+              @change=${(e) => this._onPositionPresetChange(e.target.value)}
+            >
+              <option value="unknown" ?selected=${this._knownPosition === "unknown"}>${this._t("position.unknown")}</option>
+              <option value="open" ?selected=${this._knownPosition === "open"}>${this._t("position.open")}</option>
+              ${hasIndependentTilt
+                ? html`
+                    <option value="closed_tilt_open" ?selected=${this._knownPosition === "closed_tilt_open"}>${this._t("position.closed_tilt_open")}</option>
+                    <option value="closed_tilt_closed" ?selected=${this._knownPosition === "closed_tilt_closed"}>${this._t("position.closed_tilt_closed")}</option>
+                  `
+                : html`
+                    <option value="closed" ?selected=${this._knownPosition === "closed"}>${this._t("position.closed")}</option>
+                  `}
+            </select>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderCalibration(calibrating) {
+    const state = this._getEntityState();
+    const attrs = state?.attributes || {};
+    const tiltMode = this._config?.tilt_mode || "none";
+    const hasTiltCalibration = tiltMode === "sequential" || tiltMode === "dual_motor" || tiltMode === "inline";
+
+    const availableAttributes = TIMING_ATTRIBUTES.filter(
+      ([key]) => {
+        if (!hasTiltCalibration && key.startsWith("tilt_")) return false;
+        return true;
+      }
+    );
+
+    const c = this._config;
+    const hasTravel = c?.travel_time_close || c?.travel_time_open;
+    const hasTilt = c?.tilt_time_close || c?.tilt_time_open;
+
+    const disabledKeys = new Set();
+    if (this._knownPosition === "unknown") {
+      availableAttributes.forEach(([key]) => disabledKeys.add(key));
+    } else if (this._knownPosition === "open") {
+      disabledKeys.add("travel_time_open");
+      disabledKeys.add("tilt_time_open");
+      if (hasTiltCalibration) {
+        // Tilt only changes when cover is closed — can't test from open
+        disabledKeys.add("tilt_time_close");
+        disabledKeys.add("tilt_startup_delay");
+      }
+    } else if (this._knownPosition === "closed") {
+      // Position closed (tilt matches)
+      disabledKeys.add("travel_time_close");
+      disabledKeys.add("tilt_time_close");
+    } else if (this._knownPosition === "closed_tilt_open") {
+      disabledKeys.add("travel_time_close");
+      disabledKeys.add("tilt_time_open");
+    } else if (this._knownPosition === "closed_tilt_closed") {
+      disabledKeys.add("travel_time_close");
+      disabledKeys.add("tilt_time_close");
+      // Tilt must open before travel can move
+      disabledKeys.add("travel_time_open");
+      disabledKeys.add("travel_startup_delay");
+      disabledKeys.add("min_movement_time");
+    }
+
+    // Startup delay requires the corresponding time to be calibrated first
+    if (!hasTravel) disabledKeys.add("travel_startup_delay");
+    if (!hasTilt) disabledKeys.add("tilt_startup_delay");
+    if (!hasTravel) disabledKeys.add("min_movement_time");
+
+    if (calibrating) {
+      const calAttr = attrs.calibration_attribute || this._calibratingAttribute;
+      const calLabel = this._t(`timing.${calAttr}`);
+      return html`
+        <div class="section calibration-active">
+          <div class="field-label cal-label">
+            <ha-icon icon="mdi:tune" style="--mdc-icon-size: 20px;"></ha-icon>
+            ${this._t("calibration.active")}
+          </div>
+          <div class="cal-active-body">
+            <strong>${calLabel}</strong>
+            ${attrs.calibration_final_step
+              ? html`<span class="cal-step"
+                  >${this._t("calibration.final_step")}</span
+                >`
+              : attrs.calibration_step
+                ? html`<span class="cal-step"
+                    >${this._t("calibration.step", { step: attrs.calibration_step })}</span
+                  >`
+                : ""}
+            <div class="cal-active-buttons">
+              <ha-button @click=${() => this._onStopCalibration(true)}
+                >${this._t("calibration.cancel")}</ha-button
+              >
+              <ha-button unelevated @click=${() => this._onStopCalibration(false)}
+                >${this._t("calibration.finish")}</ha-button
+              >
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return html`
+      <div class="section">
+        <div class="field-label">${this._t("calibration.label")}</div>
+        <div class="cal-form">
+          <div class="cal-field">
+            <label class="sub-label" for="cal-attribute">${this._t("calibration.attribute_label")}</label>
+            <select class="ha-select" id="cal-attribute"
+              @change=${() => this.requestUpdate()}
+            >
+              ${availableAttributes.map(
+                ([key, labelKey]) =>
+                  html`<option value=${key} ?disabled=${disabledKeys.has(key)}>${this._t(labelKey)}</option>`
+              )}
+            </select>
+          </div>
+          <ha-button unelevated ?disabled=${this._knownPosition === "unknown"} @click=${this._onStartCalibration}
+            >${this._t("calibration.start")}</ha-button
+          >
+        </div>
+        ${this._knownPosition === "unknown"
+          ? html`<div class="helper-text" style="margin-top: 8px;">
+              ${this._t("calibration.set_position_first")}
+            </div>`
+          : html`<div class="helper-text" style="margin-top: 8px;">
+              ${this._getCalibrationHint()}
+            </div>`}
+      </div>
+    `;
+  }
+
+  // --- Styles ---
+
+  static get styles() {
+    return css`
+      :host {
+        display: block;
+      }
+
+      .card-header {
+        font-size: 24px;
+        font-weight: 400;
+        padding: 24px 16px 16px;
+        line-height: 32px;
+        color: var(--ha-card-header-color, --primary-text-color);
+      }
+
+      .card-content {
+        padding: 0 16px 16px;
+      }
+
+      .section {
+        margin-bottom: 16px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--divider-color, #e0e0e0);
+      }
+
+      .section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+      }
+
+      .field-label {
+        font-weight: 500;
+        font-size: var(--paper-font-body1_-_font-size, 14px);
+        margin-bottom: 8px;
+        color: var(--primary-text-color);
+      }
+
+      .helper-text {
+        font-size: 12px;
+        color: var(--secondary-text-color, #727272);
+        margin: -4px 0 8px;
+      }
+
+      .sub-label {
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        margin-bottom: 4px;
+        display: block;
+      }
+
+      /* Entity info banner */
+      .entity-info {
+        margin-bottom: 16px;
+        padding: 12px 16px;
+        background: var(--primary-color);
+        color: var(--text-primary-color, #fff);
+        border-radius: 8px;
+      }
+
+      .entity-info-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .entity-id {
+        display: block;
+        font-size: 0.85em;
+        opacity: 0.8;
+        font-family: var(--code-font-family, monospace);
+      }
+
+      .cover-controls-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin: 8px 0;
+      }
+
+      .cover-controls-wrapper .cover-controls {
+        margin: 0;
+      }
+
+      .cover-controls {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin: 8px 0;
+      }
+
+      .controls-label {
+        font-size: 11px;
+        color: inherit;
+        opacity: 0.8;
+        white-space: nowrap;
+        min-width: 36px;
+        text-align: right;
+      }
+
+      /* Tabs */
+      .tabs {
+        display: flex;
+        border-bottom: 2px solid var(--divider-color, #e0e0e0);
+        margin-bottom: 16px;
+      }
+
+      .tab {
+        flex: 1;
+        padding: 10px 16px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: var(--paper-font-body1_-_font-size, 14px);
+        font-weight: 500;
+        color: var(--secondary-text-color);
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: color 0.2s, border-color 0.2s;
+        font-family: inherit;
+      }
+
+      .tab:hover {
+        color: var(--primary-text-color);
+      }
+
+      .tab.active {
+        color: var(--primary-color);
+        border-bottom-color: var(--primary-color);
+      }
+
+      .tab:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+
+      /* Radio groups */
+      .radio-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .radio-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        font-size: var(--paper-font-body1_-_font-size, 14px);
+        color: var(--primary-text-color);
+      }
+
+      .radio-group.indent {
+        margin-left: 28px;
+        margin-top: 8px;
+      }
+
+      /* Tilt toggle */
+      .tilt-toggle {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        font-size: var(--paper-font-body1_-_font-size, 14px);
+        color: var(--primary-text-color);
+        font-weight: 500;
+      }
+
+      /* Entity grid */
+      .entity-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      /* Dual motor config */
+      .dual-motor-config {
+        display: flex;
+        gap: 16px;
+        margin-top: 12px;
+      }
+
+      .dual-motor-config ha-textfield {
+        flex: 1;
+      }
+
+      .inline-field {
+        margin-top: 8px;
+      }
+
+      ha-textfield {
+        --mdc-text-field-fill-color: transparent;
+      }
+
+      ha-entity-picker {
+        display: block;
+      }
+
+      .create-new-link {
+        display: inline-block;
+        margin-top: 8px;
+        font-size: 13px;
+        color: var(--primary-color);
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .create-new-link:hover {
+        text-decoration: underline;
+      }
+
+      /* Fieldset for disabling during calibration */
+      fieldset {
+        border: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      fieldset:disabled {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+
+      /* Timing table */
+      .timing-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: var(--paper-font-body1_-_font-size, 14px);
+      }
+
+      .timing-table th:first-child,
+      .timing-table td:first-child {
+        width: 65%;
+      }
+
+      .timing-table th:last-child,
+      .timing-table td:last-child {
+        width: 35%;
+      }
+
+      .timing-table th {
+        text-align: left;
+        padding: 8px 12px;
+        border-bottom: 2px solid var(--divider-color);
+        color: var(--secondary-text-color);
+        font-weight: 500;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .timing-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--divider-color);
+        color: var(--primary-text-color);
+      }
+
+      .value-cell {
+        font-family: var(--code-font-family, monospace);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .timing-input {
+        width: 80px;
+        padding: 4px 8px;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 4px;
+        font-family: var(--code-font-family, monospace);
+        font-size: inherit;
+        color: var(--primary-text-color);
+        background: var(--card-background-color, #fff);
+        text-align: right;
+      }
+
+      .timing-input::placeholder {
+        color: var(--secondary-text-color);
+        font-style: italic;
+        font-family: inherit;
+      }
+
+      .unit {
+        color: var(--secondary-text-color);
+        margin-left: 2px;
+      }
+
+      /* Native select for calibration dropdowns */
+      .ha-select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--divider-color);
+        border-radius: 4px;
+        background: var(--card-background-color, var(--ha-card-background));
+        color: var(--primary-text-color);
+        font-size: var(--paper-font-body1_-_font-size, 14px);
+        font-family: var(--paper-font-body1_-_font-family, inherit);
+        cursor: pointer;
+        box-sizing: border-box;
+      }
+
+      .ha-select:focus {
+        outline: none;
+        border-color: var(--primary-color);
+      }
+
+      /* Calibration */
+      .cal-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: flex-end;
+      }
+
+      .cal-field {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 140px;
+      }
+
+      .cal-field-narrow {
+        flex: 0;
+        min-width: 100px;
+      }
+
+      .cal-active-body {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 0 0;
+        font-size: var(--paper-font-body1_-_font-size, 14px);
+      }
+
+      .cal-active-buttons {
+        display: flex;
+        gap: 8px;
+        padding-top: 4px;
+      }
+
+      .cal-step {
+        opacity: 0.9;
+        font-size: 0.9em;
+      }
+
+      .calibration-active {
+        background: var(--warning-color, #ff9800);
+        color: var(--text-primary-color, #fff);
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 0;
+        border-bottom: none;
+      }
+
+      .cal-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-primary-color, #fff);
+      }
+
+      .button-row {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      /* Save indicator */
+      .save-bar {
+        display: flex;
+        justify-content: flex-end;
+        padding: 8px 0;
+      }
+
+      .saving-indicator {
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        font-style: italic;
+      }
+
+      .save-error {
+        font-size: 12px;
+        color: var(--error-color, #db4437);
+        font-style: italic;
+      }
+
+      .loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 24px;
+        color: var(--secondary-text-color);
+      }
+
+      .yaml-warning {
+        padding: 16px;
+        margin: 8px 0;
+        background: var(--warning-color, #ff9800);
+        color: var(--text-primary-color, #fff);
+        border-radius: 8px;
+        font-size: 14px;
+        line-height: 1.4;
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .spin {
+        animation: spin 1s linear infinite;
+      }
+    `;
+  }
+}
+
+customElements.define("cover-time-based-card", CoverTimeBasedCard);
+
+// Register with Lovelace card picker
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "cover-time-based-card",
+  name: "Cover Time Based Configuration",
+  description:
+    "Configure device type, input entities, timing, and run calibration tests for cover_time_based entities.",
+});
