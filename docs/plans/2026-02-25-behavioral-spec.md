@@ -302,15 +302,22 @@ Before sending a command, the integration marks the affected switch(es) as
   close_switch=1 (if on), open_switch=1.
 - **Pulse/Toggle mode:** Each pulse = 2 transitions (ON then OFF after pulse_time).
   `_send_open` marks open_switch=2.
+- **Wrapped mode:** Each command = 1 transition normally. Direction changes = 2
+  transitions (e.g. `closing→open→opening`), because the inner cover stops before
+  starting the new direction.
 - Safety timeout: After 5 seconds, pending counters are cleared automatically
   (in case a transition never arrives).
 
-### 5.3 What Gets Filtered
+### 5.3 Event Processing Order
 
-- Attribute-only updates (same state string) are always skipped
-- State changes during active calibration are always skipped
-- Everything else goes through the counter check, then to mode-specific external
-  state change handlers
+`_async_switch_state_changed` processes events in this order:
+
+1. **Attribute-only updates** (same state string) → skip immediately. Must run
+   before echo filtering so that position updates on a moving wrapped cover
+   (e.g. `closing→closing`) don't consume pending echo counts.
+2. **Echo filtering** → if pending counter > 0, decrement and skip.
+3. **Calibration guard** → skip during active calibration.
+4. **External state change handlers** → delegate to mode-specific handler.
 
 ---
 

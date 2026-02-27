@@ -305,7 +305,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._calibration is not None:
             attr["calibration_active"] = True
             attr["calibration_attribute"] = self._calibration.attribute
-            if self._calibration.step_count > 0:
+            if self._calibration.final_step:
+                attr["calibration_final_step"] = True
+            elif self._calibration.step_count > 0:
                 attr["calibration_step"] = self._calibration.step_count
         return attr
 
@@ -1557,6 +1559,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._pending_switch.get(entity_id, 0),
         )
 
+        # Skip attribute-only updates (same state string, only attributes
+        # changed).  Must run before echo filtering so that position updates
+        # on a moving wrapped cover don't consume pending echo counts.
+        if old_val == new_val:
+            return
+
         # Echo filtering: if this switch has pending echoes, decrement and skip
         if self._pending_switch.get(entity_id, 0) > 0:
             self._pending_switch[entity_id] -= 1
@@ -1570,10 +1578,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 "_async_switch_state_changed :: echo filtered, remaining=%s",
                 self._pending_switch.get(entity_id, 0),
             )
-            return
-
-        # Skip attribute-only updates (same state string, only attributes changed)
-        if old_val == new_val:
             return
 
         # Skip external state handling during calibration — calibration drives

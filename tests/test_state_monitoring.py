@@ -1081,3 +1081,280 @@ class TestCalibrationSuppressesExternalState:
 
         # Handler should be called (not suppressed by calibration)
         handler.assert_awaited_once_with("cover.inner", "open", "closing")
+
+
+# ===================================================================
+# Raw direction change: echo filtering for all control modes
+# (Verifies that _raw_direction_command properly marks pending echoes
+# so that state changes from direction reversal don't trigger external
+# state handling or position tracking.)
+# ===================================================================
+
+
+def _mock_entity_states(cover, initial_states):
+    """Set up hass.states.get to return mock states from a mutable dict.
+
+    Returns the mutable state dict so tests can update states between steps.
+    """
+    states = dict(initial_states)
+
+    def _get(entity_id):
+        s = MagicMock()
+        s.state = states.get(entity_id, "off")
+        return s
+
+    cover.hass.states.get = _get
+    return states
+
+
+async def _drain_bg_tasks(cover):
+    """Wait for all background tasks (pulse completions etc.) to finish."""
+    for task in cover.hass._test_tasks:
+        if not task.done():
+            try:
+                await task
+            except Exception:
+                pass
+
+
+class TestRawDirectionChangeEchoFiltering:
+    """Raw direction change via calibration buttons must not trigger
+    position tracking.
+
+    When using the calibration screen's manual open/close/stop buttons,
+    _raw_direction_command sends relay commands and marks expected echoes.
+    All resulting state change events must be echo-filtered so that
+    _handle_external_state_change is never called.
+
+    Bug fixed: wrapped covers produced 2 state transitions on direction
+    change (e.g. closing->open->opening) but only marked 1 pending echo.
+    """
+
+    @pytest.mark.asyncio
+    async def test_wrapped_close_then_open(self, make_cover):
+        """Wrapped: close->open direction change filters both transitions."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        states = _mock_entity_states(cover, {"cover.inner": "open"})
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Raw close: inner cover transitions open -> closing (1 echo)
+            await cover._raw_direction_command("close")
+            states["cover.inner"] = "closing"
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "open", "closing")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            # Raw open (direction change): closing->open, then open->opening
+            await cover._raw_direction_command("open")
+
+            states["cover.inner"] = "open"
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "closing", "open")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            states["cover.inner"] = "opening"
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "open", "opening")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_wrapped_direction_change_with_attribute_updates(self, make_cover):
+        """Attribute-only updates during echo window must not consume echo counts.
+
+        Wrapped covers emit opening->opening position updates while moving.
+        If these arrive between the raw command and the actual direction change
+        transitions, they must not decrement the pending echo counter.
+        """
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        states = _mock_entity_states(cover, {"cover.inner": "open"})
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Raw open
+            await cover._raw_direction_command("open")
+            states["cover.inner"] = "opening"
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "open", "opening")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            # Raw close (direction change) while inner cover is opening
+            await cover._raw_direction_command("close")
+
+            # Attribute-only update arrives (position update from inner cover)
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "opening", "opening")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            # Actual transitions: opening->open (stop), open->closing (start)
+            states["cover.inner"] = "open"
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "opening", "open")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            states["cover.inner"] = "closing"
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "open", "closing")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_wrapped_open_then_close(self, make_cover):
+        """Wrapped: open->close direction change filters both transitions."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        states = _mock_entity_states(cover, {"cover.inner": "open"})
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Raw open: inner cover transitions open -> opening (1 echo)
+            await cover._raw_direction_command("open")
+            states["cover.inner"] = "opening"
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "open", "opening")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            # Raw close (direction change): opening->open, then open->closing
+            await cover._raw_direction_command("close")
+
+            states["cover.inner"] = "open"
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "opening", "open")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            states["cover.inner"] = "closing"
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "open", "closing")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_switch_mode(self, make_cover):
+        """Switch mode: close->open direction change filters all relay echoes."""
+        cover = make_cover()
+        cover.travel_calc.set_position(50)
+        states = _mock_entity_states(
+            cover, {"switch.open": "off", "switch.close": "off"}
+        )
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Raw close: turn_on(close_switch) -> 1 echo
+            await cover._raw_direction_command("close")
+            states["switch.close"] = "on"
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.close", "off", "on")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            # Raw open (direction change): turn_off(close) + turn_on(open)
+            await cover._raw_direction_command("open")
+            states["switch.close"] = "off"
+            states["switch.open"] = "on"
+
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.close", "on", "off")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "off", "on")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_toggle_mode(self, make_cover):
+        """Toggle mode: close->open direction change (stop + open) filters all echoes."""
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover.travel_calc.set_position(50)
+        _mock_entity_states(cover, {"switch.open": "off", "switch.close": "off"})
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_toggle_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            # Raw close: pulse on close switch -> 2 echoes (ON + OFF)
+            await cover._raw_direction_command("close")
+            await _drain_bg_tasks(cover)
+
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.close", "off", "on")
+            )
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.close", "on", "off")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            # Raw open (direction change): stop-pulse on close + open-pulse on open
+            await cover._raw_direction_command("open")
+            await _drain_bg_tasks(cover)
+
+            # Stop pulse echoes on close switch
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.close", "off", "on")
+            )
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.close", "on", "off")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            # Open pulse echoes on open switch
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "off", "on")
+            )
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "on", "off")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_pulse_mode(self, make_cover):
+        """Pulse mode: close->open direction change filters all pulse echoes."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop"
+        )
+        cover.travel_calc.set_position(50)
+        _mock_entity_states(
+            cover,
+            {"switch.open": "off", "switch.close": "off", "switch.stop": "off"},
+        )
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_pulse_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            # Raw close: pulse on close switch -> 2 echoes (ON + OFF)
+            await cover._raw_direction_command("close")
+            await _drain_bg_tasks(cover)
+
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.close", "off", "on")
+            )
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.close", "on", "off")
+            )
+            assert not cover.travel_calc.is_traveling()
+
+            # Raw open (direction change): pulse on open switch -> 2 echoes
+            await cover._raw_direction_command("open")
+            await _drain_bg_tasks(cover)
+
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "off", "on")
+            )
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "on", "off")
+            )
+            assert not cover.travel_calc.is_traveling()

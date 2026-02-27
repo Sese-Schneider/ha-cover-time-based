@@ -60,13 +60,21 @@ class WrappedCoverTimeBased(CoverTimeBased):
             await self.async_stop_cover()
 
     async def _send_open(self) -> None:
-        self._mark_switch_pending(self._cover_entity_id, 1)
+        # If the wrapped cover is currently closing, the open command produces
+        # two state transitions (closing→open, then open→opening).
+        state = self.hass.states.get(self._cover_entity_id)
+        expected = 2 if state and state.state == _CLOSING else 1
+        self._mark_switch_pending(self._cover_entity_id, expected)
         await self.hass.services.async_call(
             "cover", "open_cover", {"entity_id": self._cover_entity_id}, False
         )
 
     async def _send_close(self) -> None:
-        self._mark_switch_pending(self._cover_entity_id, 1)
+        # If the wrapped cover is currently opening, the close command produces
+        # two state transitions (opening→open, then open→closing).
+        state = self.hass.states.get(self._cover_entity_id)
+        expected = 2 if state and state.state == _OPENING else 1
+        self._mark_switch_pending(self._cover_entity_id, expected)
         await self.hass.services.async_call(
             "cover", "close_cover", {"entity_id": self._cover_entity_id}, False
         )
