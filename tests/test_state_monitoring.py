@@ -1319,9 +1319,7 @@ class TestRawDirectionChangeEchoFiltering:
     @pytest.mark.asyncio
     async def test_pulse_mode(self, make_cover):
         """Pulse mode: close->open direction change filters all pulse echoes."""
-        cover = make_cover(
-            control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop"
-        )
+        cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
         cover.travel_calc.set_position(50)
         _mock_entity_states(
             cover,
