@@ -8,3 +8,4 @@ __pycache__/
 
 *.iml
 .coverage
+docs/plans/
