@@ -1,4 +1,21 @@
 {
+  "config": {
+    "step": {
+      "user": {
+        "title": "Adicionar um estore baseado em tempo",
+        "description": "Escolha um nome para o seu estore. Depois de o criar, adicione o cartão **Cover Time Based** a um painel para configurar todas as definições.",
+        "data": {
+          "name": "Nome"
+        }
+      }
+    }
+  },
+  "issues": {
+    "deprecated_yaml": {
+      "title": "A configuração YAML está obsoleta",
+      "description": "A configuração do Cover Time Based usando YAML está obsoleta e será removida numa versão futura.\n\nPor favor, remova a configuração YAML e recrie os seus estores usando a interface: **Definições > Dispositivos e Serviços > Auxiliares > Criar Auxiliar > Cover Time Based**."
+    }
+  },
   "services": {
     "set_known_position": {
       "name": "Definir a posição do estore",
@@ -9,8 +26,8 @@
           "description": "Esta entidade guarda o identificador do estore."
         },
         "position": {
-            "name": "Posição",
-            "description": "A posição tem de ser definida de 0 até 100."
+          "name": "Posição",
+          "description": "A posição tem de ser definida de 0 até 100."
         }
       }
     },
@@ -19,12 +36,48 @@
       "description": "Selecionar a posição de rotação.",
       "fields": {
         "entity_id": {
-          "name": "Indentificador",
+          "name": "Identificador",
           "description": "O identificador define a posição."
         },
         "position": {
-            "name": "Posição",
-            "description": "A rotação deve ser definida com um valor , entre 0 e 100."
+          "name": "Posição",
+          "description": "A rotação deve ser definida com um valor, entre 0 e 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Iniciar calibração",
+      "description": "Inicia um teste de calibração para medir um parâmetro de temporização. O estore começará a mover-se — chame stop_calibration quando o ponto final desejado for atingido.",
+      "fields": {
+        "entity_id": {
+          "name": "Identificador",
+          "description": "O estore a calibrar"
+        },
+        "attribute": {
+          "name": "Atributo",
+          "description": "O parâmetro de temporização a calibrar"
+        },
+        "timeout": {
+          "name": "Tempo limite",
+          "description": "Tempo limite de segurança em segundos — o motor para automaticamente se stop_calibration não for chamado"
+        },
+        "direction": {
+          "name": "Direção",
+          "description": "Direção do movimento durante o teste. Se não definido, deteta automaticamente com base na posição atual"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Parar calibração",
+      "description": "Para um teste de calibração ativo. Calcula o resultado e guarda-o na configuração, a menos que seja cancelado.",
+      "fields": {
+        "entity_id": {
+          "name": "Identificador",
+          "description": "O estore em calibração"
+        },
+        "cancel": {
+          "name": "Cancelar",
+          "description": "Se verdadeiro, descarta os resultados do teste sem guardar"
         }
       }
     }

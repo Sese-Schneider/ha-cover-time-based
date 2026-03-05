@@ -1,12 +1,93 @@
 set_known_position:
+  target:
+    entity:
+      domain: cover
+      integration: cover_time_based
   fields:
-    entity_id:
-      example: cover.blinds
     position:
+      required: true
       example: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+
 set_known_tilt_position:
+  target:
+    entity:
+      domain: cover
+      integration: cover_time_based
+  fields:
+    tilt_position:
+      required: true
+      example: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+
+start_calibration:
   fields:
     entity_id:
-      example: cover.blinds
-    position:
-      example: 50
+      required: true
+      selector:
+        entity:
+          domain: cover
+          integration: cover_time_based
+    attribute:
+      required: true
+      example: travel_time_close
+      selector:
+        select:
+          options:
+            - label: "Travel time (close)"
+              value: travel_time_close
+            - label: "Travel time (open)"
+              value: travel_time_open
+            - label: "Travel startup delay"
+              value: travel_startup_delay
+            - label: "Tilt time (close)"
+              value: tilt_time_close
+            - label: "Tilt time (open)"
+              value: tilt_time_open
+            - label: "Tilt startup delay"
+              value: tilt_startup_delay
+            - label: "Minimum movement time"
+              value: min_movement_time
+    timeout:
+      required: true
+      example: 120
+      default: 120
+      selector:
+        number:
+          min: 1
+          max: 600
+          step: 1
+          unit_of_measurement: "s"
+    direction:
+      required: false
+      selector:
+        select:
+          options:
+            - label: "Open"
+              value: open
+            - label: "Close"
+              value: close
+
+stop_calibration:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: cover
+          integration: cover_time_based
+    cancel:
+      required: false
+      default: false
+      selector:
+        boolean:

@@ -1,4 +1,21 @@
 {
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a time-based cover",
+        "description": "Choose a name for your cover. After creating it, add the **Cover Time Based** card to a dashboard to configure all settings.",
+        "data": {
+          "name": "Name"
+        }
+      }
+    }
+  },
+  "issues": {
+    "deprecated_yaml": {
+      "title": "YAML configuration is deprecated",
+      "description": "Configuring Cover Time Based using YAML is deprecated and will be removed in a future version.\n\nPlease remove the YAML configuration and recreate your covers using the UI: **Settings > Devices & Services > Helpers > Create Helper > Cover Time Based**."
+    }
+  },
   "services": {
     "set_known_position": {
       "name": "Set cover position",
@@ -9,8 +26,8 @@
           "description": "The entity ID of the cover to set the position for."
         },
         "position": {
-            "name": "Position",
-            "description": "The position of the cover, between 0 and 100."
+          "name": "Position",
+          "description": "The position of the cover, between 0 and 100."
         }
       }
     },
@@ -23,8 +40,44 @@
           "description": "The entity ID of the cover to set the tilt position for."
         },
         "position": {
-            "name": "Position",
-            "description": "The tilt position of the cover, between 0 and 100."
+          "name": "Position",
+          "description": "The tilt position of the cover, between 0 and 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Start calibration",
+      "description": "Start a calibration test to measure a timing parameter. The cover will begin moving — call stop_calibration when the desired endpoint is reached.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity ID",
+          "description": "The cover to calibrate"
+        },
+        "attribute": {
+          "name": "Attribute",
+          "description": "The timing parameter to calibrate"
+        },
+        "timeout": {
+          "name": "Timeout",
+          "description": "Safety timeout in seconds — motor will auto-stop if stop_calibration is not called"
+        },
+        "direction": {
+          "name": "Direction",
+          "description": "Direction to move during the test. If not set, auto-detects based on current position"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Stop calibration",
+      "description": "Stop an active calibration test. Calculates the result and saves it to the configuration unless cancelled.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity ID",
+          "description": "The cover being calibrated"
+        },
+        "cancel": {
+          "name": "Cancel",
+          "description": "If true, discard the test results without saving"
         }
       }
     }

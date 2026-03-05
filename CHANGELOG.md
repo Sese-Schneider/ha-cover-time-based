@@ -1,3 +1,43 @@
+## Unreleased
+
+### Features
+
+- **UI-first configuration:** Config flow creates covers via UI; all settings managed through a Lovelace card and WebSocket API
+- **Control mode:** Single `control_mode` setting replaces separate `device_type`/`input_mode` — choose from wrapped, switch, pulse, or toggle
+- **External state monitoring:** Detects physical switch presses and keeps the position tracker in sync with actual motor state. Supports all control modes for both cover and tilt switches
+- **Separate tilt motor (dual_motor) mode:** Support for covers with a dedicated tilt motor, with configurable safe tilt position and max tilt allowed position
+- **Inline tilt mode:** Support for covers where the tilt mechanism is part of the main travel range (e.g. Venetian blinds), with configurable tilt range within the overall travel
+- **Calibration system:** Measure timing parameters interactively — start calibration, let the motor run, stop when done. Supports all travel and tilt timing attributes with overhead compensation
+- **Background pulse completion:** Pulse and toggle mode commands return immediately while the relay pulse completes in the background
+- **Tilt switch monitoring:** Monitors tilt switch entities for external changes in all modes (pulse, switch, toggle)
+- **Lovelace configuration card:** Full settings UI with entity pickers, timing fields, tilt strategy selection, and calibration controls
+- **Toggle mode improvements:** Debounce for momentary switches, cross-direction external toggles treated as stop, HA UI direction changes still reverse
+
+### Improvements
+
+- Replaced external `xknx` TravelCalculator dependency with a local HA-convention copy (no external dependencies)
+- Card translations embedded directly in JS with `_t()` helper and `hass.language` locale lookup (English, Portuguese, Polish)
+- Refactored codebase: extracted calibration mixin, tilt strategies package, shared constants, entity resolution helpers
+- Updated calibration hint descriptions for all tilt modes (inline, sequential, dual_motor)
+- Frontend defaults safe_tilt_position=100 and max_tilt_allowed_position=0 for new dual_motor configs
+- Cleaned up diagnostic logging in toggle mode
+- Improved test coverage from 66% to 97% (528 tests)
+
+### Bug Fixes
+
+- Fixed calibration direction override for tilt attributes — server now derives direction from attribute name instead of card sending position-based guess
+- Fixed calibration overhead calculation for tilt (3 steps vs 8 travel steps)
+- Fixed toggle mode tilt restore clearing `_last_command` prematurely, breaking stop pulse
+- Fixed dual_motor tilt commands using wrong service calls
+- Fixed `safe_tilt_position=0` being coerced to default 100
+- Fixed zero travel/tilt times accepted by WebSocket API schema
+- Fixed `_last_command` not set during toggle mode calibration
+- Fixed pulse mode stop switch not stopping the position tracker
+- Fixed toggle mode external state handler only reacting to ON→OFF (now handles both transitions)
+- Fixed switch mode tilt handler using pulse-mode behavior (now uses latching: ON=start, OFF=stop)
+- Fixed tilt switch echo filtering (pending=2 for direction switches to handle ON+OFF transitions)
+- Fixed wrapped cover handler not tracking direction changes (opening→closing)
+
 ## 3.0.0 (2025-12-10)
 
 ### Features
