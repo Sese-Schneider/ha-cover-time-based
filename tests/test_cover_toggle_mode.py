@@ -345,6 +345,48 @@ class TestToggleDirectionChange:
         mock_stop.assert_awaited_once()
         await _cancel_tasks(cover)
 
+    @pytest.mark.asyncio
+    async def test_close_while_opening_waits_direction_change_delay(self):
+        """Direction change must wait between stop and new direction."""
+        cover = _make_toggle_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock),
+            patch(
+                "custom_components.cover_time_based.cover_base.sleep",
+                new_callable=AsyncMock,
+            ) as mock_sleep,
+        ):
+            await cover.async_close_cover()
+
+        mock_sleep.assert_awaited_once_with(1.0)
+        await _cancel_tasks(cover)
+
+    @pytest.mark.asyncio
+    async def test_open_while_closing_waits_direction_change_delay(self):
+        """Direction change must wait between stop and new direction."""
+        cover = _make_toggle_cover()
+        cover.travel_calc.set_position(100)
+        cover.travel_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock),
+            patch(
+                "custom_components.cover_time_based.cover_base.sleep",
+                new_callable=AsyncMock,
+            ) as mock_sleep,
+        ):
+            await cover.async_open_cover()
+
+        mock_sleep.assert_awaited_once_with(1.0)
+        await _cancel_tasks(cover)
+
 
 # ===================================================================
 # Stop with tilt: snap_trackers_to_physical
