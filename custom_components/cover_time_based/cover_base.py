@@ -322,6 +322,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self.is_opening:
             self._log("async_close_cover :: currently opening, stopping first")
             await self.async_stop_cover()
+            await self._direction_change_delay()
         await self._async_move_to_endpoint(target=0)
 
     async def async_open_cover(self, **kwargs):
@@ -331,7 +332,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self.is_closing:
             self._log("async_open_cover :: currently closing, stopping first")
             await self.async_stop_cover()
+            await self._direction_change_delay()
         await self._async_move_to_endpoint(target=100)
+
+    async def _direction_change_delay(self):
+        """Pause between stop and direction change to let the motor settle.
+
+        Toggle mode overrides this with pulse_time (the relay pulse duration).
+        """
+        await sleep(1.0)
 
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
@@ -627,6 +636,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             if self._has_tilt_support() and self.tilt_calc.is_traveling():
                 self.tilt_calc.stop()
             await self._async_handle_command(SERVICE_STOP_COVER)
+            await self._direction_change_delay()
             current = self.travel_calc.current_position()
             if target == current:
                 return
