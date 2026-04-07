@@ -13,6 +13,9 @@ _OPENING = "opening"
 _CLOSING = "closing"
 _MOVING_STATES = {_OPENING, _CLOSING}
 
+# Cover states that indicate the cover has explicitly stopped
+_STOPPED_STATES = {"open", "closed"}
+
 
 class WrappedCoverTimeBased(CoverTimeBased):
     """A cover that delegates open/close/stop to an underlying cover entity."""
@@ -54,8 +57,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
         elif new_val == _CLOSING:
             self._log("_handle_external_state_change :: wrapped cover closing")
             await self.async_close_cover()
-        elif old_val in _MOVING_STATES:
-            # Was moving, now stopped
+        elif old_val in _MOVING_STATES and new_val in _STOPPED_STATES:
+            # Was moving, now explicitly stopped (not unknown/unavailable)
             self._log("_handle_external_state_change :: wrapped cover stopped")
             await self.async_stop_cover()
 
