@@ -1306,15 +1306,31 @@ class CoverTimeBasedCard extends LitElement {
       disabledKeys.add("travel_time_close");
       disabledKeys.add("tilt_time_close");
     } else if (this._knownPosition === "closed_tilt_open") {
+      // tilt=100, cover closed. For sequential_close this is the "rest" state
+      // (slats at implicit-during-travel value), so travel_time_open and
+      // tilt_time_close are measurable. For sequential_open this is the
+      // "articulated" extreme (slats pushed open past cover-closed), so only
+      // tilt_time_close (restore slats to rest via motor up) is measurable.
       disabledKeys.add("travel_time_close");
       disabledKeys.add("tilt_time_open");
+      if (tiltMode === "sequential_open") {
+        disabledKeys.add("travel_time_open");
+        disabledKeys.add("travel_startup_delay");
+        disabledKeys.add("min_movement_time");
+      }
     } else if (this._knownPosition === "closed_tilt_closed") {
+      // tilt=0, cover closed. For sequential_close this is the "articulated"
+      // extreme — only tilt_time_open (restore slats) is measurable. For
+      // sequential_open this is the "rest" state (slats at implicit), so
+      // travel_time_open and tilt_time_open (articulate further down) are
+      // measurable.
       disabledKeys.add("travel_time_close");
       disabledKeys.add("tilt_time_close");
-      // Tilt must open before travel can move
-      disabledKeys.add("travel_time_open");
-      disabledKeys.add("travel_startup_delay");
-      disabledKeys.add("min_movement_time");
+      if (tiltMode !== "sequential_open") {
+        disabledKeys.add("travel_time_open");
+        disabledKeys.add("travel_startup_delay");
+        disabledKeys.add("min_movement_time");
+      }
     }
 
     // Startup delay requires the corresponding time to be calibrated first
