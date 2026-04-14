@@ -761,6 +761,37 @@ class TestTiltModeSchemaValidation:
             )
 
 
+class TestSequentialButtonBehaviorSchemaValidation:
+    """Verify update_config schema validates sequential_button_behavior values."""
+
+    @pytest.mark.parametrize("value", ["never", "on_repeat", "one_press"])
+    def test_valid_values_accepted(self, value):
+        schema = ws_update_config._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": ENTITY_ID,
+                "sequential_button_behavior": value,
+            }
+        )
+        assert result["sequential_button_behavior"] == value
+
+    def test_invalid_value_rejected(self):
+        import voluptuous as vol
+
+        schema = ws_update_config._ws_schema
+        with pytest.raises(vol.Invalid):
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "sequential_button_behavior": "bogus",
+                }
+            )
+
+
 # ---------------------------------------------------------------------------
 # ws_update_config — timing field validation
 # ---------------------------------------------------------------------------

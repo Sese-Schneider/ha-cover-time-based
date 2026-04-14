@@ -123,6 +123,16 @@ The **Tilt Mode** setting controls how tilt and travel interact:
 - **Sequential (closes then tilts open):** Mirror image of the above — for covers where slats articulate *open* when the motor drives further down past cover-closed, not closed. First the cover closes then the slats tilt open (motor continues down). When opening, the slats first tilt closed (motor up) then the cover opens.
 - **Separate tilt motor (dual_motor):** A separate motor controls the tilt. Requires dedicated tilt open/close/stop switches. Tilt is only allowed when the cover is in a safe position (configurable).
 
+### Close/Open Button Behavior (sequential modes only)
+
+For the two sequential tilt modes, the **Close/open button behavior** setting controls how the main close and open buttons interact with slat articulation:
+
+- **Travel only** (default): Close and open only drive travel. Slats stay at the resting position; use the dedicated tilt buttons to articulate.
+- **Travel, then articulate on repeat press:** Two-press UX. Press close once to close the cover; press close again (from the resting closed state) to articulate the slats to the opposite extreme. Press open once from the articulated state to return slats to the resting position (stops at middle); press open again to travel to fully open.
+- **Travel and articulate in one press:** Close runs travel and articulation as a single continuous motor motion. Open is unchanged (the default plan already combines slat restoration with travel).
+
+This setting is ignored for non-sequential tilt modes.
+
 ### Tilt Motor
 
 For covers with a dedicated tilt motor, configure:

@@ -174,6 +174,9 @@ async def ws_get_config(
                 "inline",
             ]
         ),
+        vol.Optional("sequential_button_behavior"): vol.In(
+            ["never", "on_repeat", "one_press"]
+        ),
         vol.Optional("travel_time_close"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))
         ),
