@@ -32,7 +32,7 @@ Add a new tilt mode — display label "Closes then tilts open" — in which tilt
 
 ## Config migration
 
-- Bump `ConfigEntry.VERSION` from `1` to `2`.
+- Bump `CoverTimeBasedConfigFlow.VERSION` from `2` to `3` in [config_flow.py:21](custom_components/cover_time_based/config_flow.py#L21).
 - Add `async_migrate_entry` in `custom_components/cover_time_based/__init__.py` that rewrites `options[CONF_TILT_MODE] == "sequential"` → `"sequential_close"` and updates the entry version.
 - In `_resolve_tilt_strategy` ([cover.py:247](custom_components/cover_time_based/cover.py#L247)), accept `"sequential"` as a legacy alias for `"sequential_close"`. This protects YAML users and any migration edge case.
 
@@ -160,8 +160,8 @@ New tests live alongside the existing `test_tilt_strategy.py`, `test_config_flow
 
 ### Integration — config migration
 
-- `ConfigEntry(version=1, options={"tilt_mode": "sequential", ...})` goes through `async_migrate_entry` and ends up with `version=2` and `options["tilt_mode"] == "sequential_close"`.
-- Idempotency: a v2 entry is not modified.
+- `ConfigEntry(version=2, options={"tilt_mode": "sequential", ...})` goes through `async_migrate_entry` and ends up with `version=3` and `options["tilt_mode"] == "sequential_close"`.
+- Idempotency: a v3 entry is not modified.
 
 ### Integration — legacy alias
 
