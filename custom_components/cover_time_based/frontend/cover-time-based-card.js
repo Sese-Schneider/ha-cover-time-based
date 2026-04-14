@@ -41,7 +41,8 @@ const EN = {
   "entities.stop_switch": "Stop switch",
   "tilt.label": "Tilt Mode",
   "tilt.none": "Not supported",
-  "tilt.sequential": "Closes then tilts",
+  "tilt.sequential_close": "Closes then tilts closed",
+  "tilt.sequential_open": "Closes then tilts open",
   "tilt.dual_motor": "Separate tilt motor",
   "tilt.inline": "Tilts inline with travel",
   "tilt_motor.label": "Tilt Motor",
@@ -89,10 +90,14 @@ const EN = {
   "controls.tilt_open": "Tilt open",
   "controls.tilt_stop": "Tilt stop",
   "controls.tilt_close": "Tilt close",
-  "hints.sequential.travel_time_close": "Start with cover fully open. Click Finish when the cover is fully closed, before the slats start tilting.",
-  "hints.sequential.travel_time_open": "Start with cover closed and slats open. Click Finish when the cover is fully open.",
-  "hints.sequential.tilt_time_close": "Start with cover closed but slats open. Click Finish when the slats are fully closed.",
-  "hints.sequential.tilt_time_open": "Start with cover and slats closed. Click Finish when the slats are open.",
+  "hints.sequential_close.travel_time_close": "Start with cover fully open. Click Finish when the cover is fully closed, before the slats start tilting.",
+  "hints.sequential_close.travel_time_open": "Start with cover closed and slats open. Click Finish when the cover is fully open.",
+  "hints.sequential_close.tilt_time_close": "Start with cover closed but slats open. Click Finish when the slats are fully closed.",
+  "hints.sequential_close.tilt_time_open": "Start with cover and slats closed. Click Finish when the slats are open.",
+  "hints.sequential_open.travel_time_close": "Start with cover fully open and slats closed. Click Finish when the cover is fully closed, before the slats start tilting open.",
+  "hints.sequential_open.travel_time_open": "Start with cover closed and slats closed. Click Finish when the cover is fully open.",
+  "hints.sequential_open.tilt_time_close": "Start with cover closed but slats open. Click Finish when the slats are fully closed.",
+  "hints.sequential_open.tilt_time_open": "Start with cover and slats closed. Click Finish when the slats are fully open.",
   "hints.dual_motor.travel_time_close": "Start with cover open and slats in safe position. Click Finish when the cover is fully closed.",
   "hints.dual_motor.travel_time_open": "Start with cover closed and slats in safe position. Click Finish when the cover is fully open.",
   "hints.dual_motor.tilt_time_close": "Start with cover closed and slats open. Click Finish when the slats are fully closed.",
@@ -131,7 +136,8 @@ const TRANSLATIONS = {
     "entities.stop_switch": "Interruptor de parar",
     "tilt.label": "Inclinação",
     "tilt.none": "Não suportado",
-    "tilt.sequential": "Fecha e depois inclina",
+    "tilt.sequential_close": "Fecha e depois inclina fechadas",
+    "tilt.sequential_open": "Fecha e depois inclina abertas",
     "tilt.dual_motor": "Motor de inclinação separado",
     "tilt.inline": "Inclina durante o deslocamento",
     "tilt_motor.label": "Motor de Inclinação",
@@ -179,10 +185,14 @@ const TRANSLATIONS = {
     "controls.tilt_open": "Inclinar abrir",
     "controls.tilt_stop": "Inclinar parar",
     "controls.tilt_close": "Inclinar fechar",
-    "hints.sequential.travel_time_close": "Comece com o estore totalmente aberto. Clique em Concluir quando o estore estiver totalmente fechado, antes de as lâminas começarem a inclinar.",
-    "hints.sequential.travel_time_open": "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando o estore estiver totalmente aberto.",
-    "hints.sequential.tilt_time_close": "Comece com o estore fechado mas as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
-    "hints.sequential.tilt_time_open": "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem abertas.",
+    "hints.sequential_close.travel_time_close": "Comece com o estore totalmente aberto. Clique em Concluir quando o estore estiver totalmente fechado, antes de as lâminas começarem a inclinar.",
+    "hints.sequential_close.travel_time_open": "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.sequential_close.tilt_time_close": "Comece com o estore fechado mas as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.sequential_close.tilt_time_open": "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem abertas.",
+    "hints.sequential_open.travel_time_close": "Comece com o estore totalmente aberto e as lâminas fechadas. Clique em Concluir quando o estore estiver totalmente fechado, antes de as lâminas começarem a inclinar-se abertas.",
+    "hints.sequential_open.travel_time_open": "Comece com o estore fechado e as lâminas fechadas. Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.sequential_open.tilt_time_close": "Comece com o estore fechado mas as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.sequential_open.tilt_time_open": "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
     "hints.dual_motor.travel_time_close": "Comece com o estore aberto e as lâminas na posição segura. Clique em Concluir quando o estore estiver totalmente fechado.",
     "hints.dual_motor.travel_time_open": "Comece com o estore fechado e as lâminas na posição segura. Clique em Concluir quando o estore estiver totalmente aberto.",
     "hints.dual_motor.tilt_time_close": "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
@@ -218,7 +228,8 @@ const TRANSLATIONS = {
     "entities.stop_switch": "Przełącznik zatrzymania",
     "tilt.label": "Nachylenie",
     "tilt.none": "Nieobsługiwane",
-    "tilt.sequential": "Najpierw zamyka, potem nachyla",
+    "tilt.sequential_close": "Najpierw zamyka, potem nachyla zamknięte",
+    "tilt.sequential_open": "Najpierw zamyka, potem nachyla otwarte",
     "tilt.dual_motor": "Osobny silnik nachylenia",
     "tilt.inline": "Nachylenie w trakcie ruchu",
     "tilt_motor.label": "Silnik nachylenia",
@@ -266,10 +277,14 @@ const TRANSLATIONS = {
     "controls.tilt_open": "Otwórz nachylenie",
     "controls.tilt_stop": "Zatrzymaj nachylenie",
     "controls.tilt_close": "Zamknij nachylenie",
-    "hints.sequential.travel_time_close": "Zacznij z roletą w pełni otwartą. Kliknij Zakończ, gdy roleta jest w pełni zamknięta, zanim listwy zaczną się nachylać.",
-    "hints.sequential.travel_time_open": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
-    "hints.sequential.tilt_time_close": "Zacznij z zamkniętą roletą, ale otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
-    "hints.sequential.tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są otwarte.",
+    "hints.sequential_close.travel_time_close": "Zacznij z roletą w pełni otwartą. Kliknij Zakończ, gdy roleta jest w pełni zamknięta, zanim listwy zaczną się nachylać.",
+    "hints.sequential_close.travel_time_open": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.sequential_close.tilt_time_close": "Zacznij z zamkniętą roletą, ale otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.sequential_close.tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są otwarte.",
+    "hints.sequential_open.travel_time_close": "Zacznij z roletą w pełni otwartą i zamkniętymi listwami. Kliknij Zakończ, gdy roleta jest w pełni zamknięta, zanim listwy zaczną się nachylać otwarte.",
+    "hints.sequential_open.travel_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.sequential_open.tilt_time_close": "Zacznij z zamkniętą roletą, ale otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.sequential_open.tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
     "hints.dual_motor.travel_time_close": "Zacznij z otwartą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni zamknięta.",
     "hints.dual_motor.travel_time_open": "Zacznij z zamkniętą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
     "hints.dual_motor.tilt_time_close": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
@@ -624,8 +639,8 @@ class CoverTimeBasedCard extends LitElement {
       });
     } else {
       const updates = { tilt_mode: mode };
-      if (mode === "sequential") {
-        // Clear dual-motor fields when switching to sequential
+      if (mode === "sequential_close" || mode === "sequential_open") {
+        // Clear dual-motor fields when switching to either sequential variant
         updates.safe_tilt_position = null;
         updates.max_tilt_allowed_position = null;
         updates.tilt_open_switch = null;
@@ -1025,8 +1040,11 @@ class CoverTimeBasedCard extends LitElement {
           <option value="none" ?selected=${tiltMode === "none"}>
             ${this._t("tilt.none")}
           </option>
-          <option value="sequential" ?selected=${tiltMode === "sequential"}>
-            ${this._t("tilt.sequential")}
+          <option value="sequential_close" ?selected=${tiltMode === "sequential_close"}>
+            ${this._t("tilt.sequential_close")}
+          </option>
+          <option value="sequential_open" ?selected=${tiltMode === "sequential_open"}>
+            ${this._t("tilt.sequential_open")}
           </option>
 <option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
             ${this._t("tilt.dual_motor")}
@@ -1135,7 +1153,7 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _renderTimingTable(c) {
-    const hasTiltTimes = c.tilt_mode === "sequential" || c.tilt_mode === "dual_motor" || c.tilt_mode === "inline";
+    const hasTiltTimes = c.tilt_mode === "sequential_close" || c.tilt_mode === "sequential_open" || c.tilt_mode === "dual_motor" || c.tilt_mode === "inline";
 
     const travelRows = [
       ["timing.travel_time_close", "travel_time_close", c.travel_time_close, 0.1],
@@ -1183,7 +1201,7 @@ class CoverTimeBasedCard extends LitElement {
 
   _renderPositionReset() {
     const tiltMode = this._config?.tilt_mode || "none";
-    const hasIndependentTilt = tiltMode === "sequential" || tiltMode === "dual_motor" || tiltMode === "inline";
+    const hasIndependentTilt = tiltMode === "sequential_close" || tiltMode === "sequential_open" || tiltMode === "dual_motor" || tiltMode === "inline";
 
     return html`
       <div class="section">
@@ -1259,7 +1277,7 @@ class CoverTimeBasedCard extends LitElement {
     const state = this._getEntityState();
     const attrs = state?.attributes || {};
     const tiltMode = this._config?.tilt_mode || "none";
-    const hasTiltCalibration = tiltMode === "sequential" || tiltMode === "dual_motor" || tiltMode === "inline";
+    const hasTiltCalibration = tiltMode === "sequential_close" || tiltMode === "sequential_open" || tiltMode === "dual_motor" || tiltMode === "inline";
 
     const availableAttributes = TIMING_ATTRIBUTES.filter(
       ([key]) => {
