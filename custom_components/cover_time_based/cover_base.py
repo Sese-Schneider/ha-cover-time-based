@@ -539,6 +539,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _async_move_tilt_to_endpoint(self, target):
         """Move tilt to an endpoint (0=fully closed, 100=fully open)."""
+        self._self_initiated_movement = not self._triggered_externally
         await self._abandon_active_lifecycle()
 
         closing = target == 0
@@ -713,6 +714,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def set_tilt_position(self, position):
         """Move cover tilt to a designated position."""
+        self._self_initiated_movement = not self._triggered_externally
         await self._abandon_active_lifecycle()
         current = self.tilt_calc.current_position()
         target = position

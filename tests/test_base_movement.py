@@ -2618,6 +2618,46 @@ class TestExternalMovementSkipsTiltPlanning:
         assert cover._self_initiated_movement is False
 
     @pytest.mark.asyncio
+    async def test_tilt_endpoint_clears_stale_external_flag(self, make_cover):
+        """_async_move_tilt_to_endpoint must reset _self_initiated_movement.
+
+        Regression: after an external travel movement the flag is False.
+        Without resetting at the top of _async_move_tilt_to_endpoint, a
+        subsequent HA-initiated tilt call carries that stale False through
+        to auto_stop_if_necessary, which then skips sending the STOP relay
+        — the motor can be left running indefinitely.
+        """
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(50)
+        # Simulate a prior external movement having left the flag False.
+        cover._self_initiated_movement = False
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover_tilt()
+
+        # HA-initiated tilt: flag must be restored to True so STOP fires
+        # when the tilt reaches the endpoint.
+        assert cover._self_initiated_movement is True
+
+    @pytest.mark.asyncio
+    async def test_set_tilt_position_clears_stale_external_flag(self, make_cover):
+        """set_tilt_position must reset _self_initiated_movement.
+
+        Same regression as test_tilt_endpoint_clears_stale_external_flag but
+        for the non-endpoint tilt path (arbitrary tilt_position service call).
+        """
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(20)
+        cover._self_initiated_movement = False
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(80)
+
+        assert cover._self_initiated_movement is True
+
+    @pytest.mark.asyncio
     async def test_external_sequential_close_couples_tilt(self, make_cover):
         """External open in sequential_close couples tilt so the tracker matches
         the single motor's physical tilt-then-travel motion.
