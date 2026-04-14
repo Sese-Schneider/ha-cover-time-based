@@ -160,3 +160,96 @@ async def test_sequential_tilt_rejected_when_not_at_endpoint(
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+
+
+async def test_sequential_open_close_drives_close_relay_from_top(
+    hass: HomeAssistant, setup_input_booleans
+):
+    """sequential_open: closing from the top sends the close relay (motor down).
+
+    End-to-end check that the inverted tilt direction doesn't leak into the
+    main travel direction — close is still the close relay, open is still
+    the open relay. Slats stay at implicit (tilt=0) during the travel.
+    """
+    options = {
+        "control_mode": "switch",
+        "open_switch_entity_id": "input_boolean.open_switch",
+        "close_switch_entity_id": "input_boolean.close_switch",
+        "travel_time_open": 10.0,
+        "travel_time_close": 10.0,
+        "tilt_mode": "sequential_open",
+        "tilt_time_open": 2.0,
+        "tilt_time_close": 2.0,
+        "endpoint_runon_time": 0,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, title="Test Cover", data={}, options=options
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    cover = _get_cover_entity(hass)
+    await cover.set_known_position(position=100)
+    await cover.set_known_tilt_position(tilt_position=0)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "cover", "close_cover", {"entity_id": "cover.test_cover"}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+    # Close switch on, open switch off — travel driven by the close relay
+    # (tilt=0 is implicit, no tilt pre-step needed).
+    assert hass.states.get("input_boolean.close_switch").state == "on"
+    assert hass.states.get("input_boolean.open_switch").state == "off"
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_sequential_open_tilt_open_drives_close_relay(
+    hass: HomeAssistant, setup_input_booleans
+):
+    """sequential_open: opening the tilt sends the close relay (motor further down).
+
+    This is the key inversion: articulating slats "open" physically requires
+    driving the motor down past the cover-closed position.
+    """
+    options = {
+        "control_mode": "switch",
+        "open_switch_entity_id": "input_boolean.open_switch",
+        "close_switch_entity_id": "input_boolean.close_switch",
+        "travel_time_open": 10.0,
+        "travel_time_close": 10.0,
+        "tilt_mode": "sequential_open",
+        "tilt_time_open": 2.0,
+        "tilt_time_close": 2.0,
+        "endpoint_runon_time": 0,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=3, title="Test Cover", data={}, options=options
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    cover = _get_cover_entity(hass)
+    await cover.set_known_position(position=0)
+    await cover.set_known_tilt_position(tilt_position=0)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "cover",
+        "open_cover_tilt",
+        {"entity_id": "cover.test_cover"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    # Inverted: opening the tilt drives the motor DOWN.
+    assert hass.states.get("input_boolean.close_switch").state == "on"
+    assert hass.states.get("input_boolean.open_switch").state == "off"
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()

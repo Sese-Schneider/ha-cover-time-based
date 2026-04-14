@@ -1712,9 +1712,7 @@ class TestSequentialOpenTiltEndpoint:
 
         calls = cover.hass.services.async_call.call_args_list
         turn_on_calls = [
-            c
-            for c in calls
-            if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+            c for c in calls if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
         ]
         activated = [c[0][2]["entity_id"] for c in turn_on_calls]
         # Inverted: closing the tilt should activate the OPEN relay.
@@ -1739,9 +1737,7 @@ class TestSequentialOpenTiltEndpoint:
 
         calls = cover.hass.services.async_call.call_args_list
         turn_on_calls = [
-            c
-            for c in calls
-            if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+            c for c in calls if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
         ]
         activated = [c[0][2]["entity_id"] for c in turn_on_calls]
         # Inverted: opening the tilt should activate the CLOSE relay.
@@ -1765,9 +1761,7 @@ class TestSequentialOpenTiltEndpoint:
 
         calls = cover.hass.services.async_call.call_args_list
         turn_on_calls = [
-            c
-            for c in calls
-            if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+            c for c in calls if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
         ]
         activated = [c[0][2]["entity_id"] for c in turn_on_calls]
         # Opening the tilt (target 50 > current 0) should drive CLOSE relay.
@@ -1791,9 +1785,7 @@ class TestSequentialOpenTiltEndpoint:
 
         calls = cover.hass.services.async_call.call_args_list
         turn_on_calls = [
-            c
-            for c in calls
-            if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+            c for c in calls if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
         ]
         activated = [c[0][2]["entity_id"] for c in turn_on_calls]
         # Closing the tilt (target 50 < current 100) should drive OPEN relay.

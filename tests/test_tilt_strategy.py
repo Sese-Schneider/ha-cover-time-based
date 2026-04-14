@@ -650,9 +650,7 @@ class TestSequentialOpenPlanMovePosition:
 class TestSequentialOpenPlanMoveTilt:
     def test_travels_to_closed_before_tilting(self):
         strategy = SequentialOpenTilt()
-        steps = strategy.plan_move_tilt(
-            target_tilt=50, current_pos=70, current_tilt=0
-        )
+        steps = strategy.plan_move_tilt(target_tilt=50, current_pos=70, current_tilt=0)
         assert steps == [TravelTo(0), TiltTo(50)]
 
     def test_tilts_directly_when_at_closed(self):

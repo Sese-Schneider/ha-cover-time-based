@@ -138,6 +138,7 @@ def make_cover(make_hass):
             from custom_components.cover_time_based.const import (
                 CONF_SEQUENTIAL_BUTTON_BEHAVIOR,
             )
+
             options[CONF_SEQUENTIAL_BUTTON_BEHAVIOR] = sequential_button_behavior
 
         cover = _create_cover_from_options(

@@ -1080,9 +1080,7 @@ class TestToggleExternalTravelWhileTraveling:
         cover._triggered_externally = True
         try:
             with patch.object(cover, "async_write_ha_state"):
-                await cover._handle_external_state_change(
-                    "switch.open", "off", "on"
-                )
+                await cover._handle_external_state_change("switch.open", "off", "on")
         finally:
             cover._triggered_externally = False
 
@@ -1099,9 +1097,7 @@ class TestToggleExternalTravelWhileTraveling:
         cover._triggered_externally = True
         try:
             with patch.object(cover, "async_write_ha_state"):
-                await cover._handle_external_state_change(
-                    "switch.close", "off", "on"
-                )
+                await cover._handle_external_state_change("switch.close", "off", "on")
         finally:
             cover._triggered_externally = False
 
@@ -1118,9 +1114,7 @@ class TestToggleExternalTravelWhileTraveling:
         cover._triggered_externally = True
         try:
             with patch.object(cover, "async_write_ha_state"):
-                await cover._handle_external_state_change(
-                    "switch.open", "off", "on"
-                )
+                await cover._handle_external_state_change("switch.open", "off", "on")
         finally:
             cover._triggered_externally = False
 

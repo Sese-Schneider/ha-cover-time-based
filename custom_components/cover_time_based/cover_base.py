@@ -416,7 +416,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         implicit = strategy.implicit_tilt_during_travel
         current_travel = self.travel_calc.current_position()
         current_tilt = self.tilt_calc.current_position()
-        if current_travel == 0 and current_tilt is not None and current_tilt != implicit:
+        if (
+            current_travel == 0
+            and current_tilt is not None
+            and current_tilt != implicit
+        ):
             self._log(
                 "async_open_cover :: sequential on_repeat articulated → "
                 "set_tilt_position(%d)",

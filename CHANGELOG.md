@@ -2,6 +2,8 @@
 
 ### Features
 
+- **Sequential tilt split into two variants:** `sequential_close` (conventional — slats close when the motor drives further down past cover-closed) and `sequential_open` (for covers where slats *open* by driving further down past cover-closed, e.g. certain tilting shutters). Existing `sequential` configs auto-migrate to `sequential_close` (issue #61).
+- **Close/open button behavior option:** For sequential tilt modes, choose how the close/open buttons interact with slat articulation — `never` (default, travel only), `on_repeat` (two-press: first click travels, second articulates), or `one_press` (single motor motion for travel + articulation).
 - **UI-first configuration:** Config flow creates covers via UI; all settings managed through a Lovelace card and WebSocket API
 - **Control mode:** Single `control_mode` setting replaces separate `device_type`/`input_mode` — choose from wrapped, switch, pulse, or toggle
 - **External state monitoring:** Detects physical switch presses and keeps the position tracker in sync with actual motor state. Supports all control modes for both cover and tilt switches
@@ -37,6 +39,10 @@
 - Fixed switch mode tilt handler using pulse-mode behavior (now uses latching: ON=start, OFF=stop)
 - Fixed tilt switch echo filtering (pending=2 for direction switches to handle ON+OFF transitions)
 - Fixed wrapped cover handler not tracking direction changes (opening→closing)
+- Fixed external movements skipping tilt coupling for shared-motor strategies: physical button presses now track both tilt and travel phases on sequential and inline modes (only dual-motor external movements still skip, since the separate tilt relay cannot be sequenced)
+- Fixed toggle-mode external travel handler re-issuing the direction on a same-direction pulse while traveling; now stops the motor, matching real toggle-style motor controllers that latch OFF on the second same-direction pulse
+- Fixed toggle-mode external debounce window of `pulse_time + 0.5s` swallowing legitimate rapid clicks; shortened to 100 ms (enough for contact bounce, short enough for human click cadence)
+- Fixed calibration attribute availability for `sequential_open` at the two closed-cover known positions: the allowed set was inverted vs the strategy's actual physical constraints
 
 ## 3.0.0 (2025-12-10)
 
