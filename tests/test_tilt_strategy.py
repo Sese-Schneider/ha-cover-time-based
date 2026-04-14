@@ -526,3 +526,38 @@ class TestHasTravelPreStep:
 
     def test_empty(self):
         assert has_travel_pre_step([]) is False
+
+
+# ===================================================================
+# TiltStrategy.tilt_command_for (default implementation)
+# ===================================================================
+
+
+class TestTiltCommandForDefault:
+    """Default tilt_command_for maps closing_tilt to the standard direction."""
+
+    def test_closing_tilt_sends_close(self):
+        from homeassistant.const import SERVICE_CLOSE_COVER
+
+        strategy = InlineTilt()
+        assert strategy.tilt_command_for(closing_tilt=True) == SERVICE_CLOSE_COVER
+
+    def test_opening_tilt_sends_open(self):
+        from homeassistant.const import SERVICE_OPEN_COVER
+
+        strategy = InlineTilt()
+        assert strategy.tilt_command_for(closing_tilt=False) == SERVICE_OPEN_COVER
+
+    def test_default_applies_to_sequential(self):
+        from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+
+        strategy = SequentialTilt()
+        assert strategy.tilt_command_for(True) == SERVICE_CLOSE_COVER
+        assert strategy.tilt_command_for(False) == SERVICE_OPEN_COVER
+
+    def test_default_applies_to_dual_motor(self):
+        from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+
+        strategy = DualMotorTilt()
+        assert strategy.tilt_command_for(True) == SERVICE_CLOSE_COVER
+        assert strategy.tilt_command_for(False) == SERVICE_OPEN_COVER
