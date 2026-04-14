@@ -1097,7 +1097,7 @@ class CoverTimeBasedCard extends LitElement {
               ${this._t("sequential_button_behavior.one_press")}
             </option>
           </select>
-          <div class="helper-text">
+          <div class="helper-text" style="margin-top: 8px;">
             ${this._t(`sequential_button_behavior.hint.${buttonBehavior}`)}
           </div>
         </div>
