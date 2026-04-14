@@ -19,7 +19,7 @@ It improves the original integration by adding tilt control, synchronized travel
 - **External state monitoring:** Detects physical switch presses and keeps the position tracker in sync.
 - **Multiple input modes:** Latching switches, momentary pulse buttons, or toggle-style relays.
 - **Wrap an existing cover:** Add time-based position tracking to any cover entity.
-- **Control the tilt of your cover based on time** with three tilt modes: inline, sequential (closes then tilts), or separate tilt motor.
+- **Control the tilt of your cover based on time** with four tilt modes: inline, sequential closes-then-tilts-closed, sequential closes-then-tilts-open, or separate tilt motor.
 - **Built-in configuration and calibration:** Calibrate travel times directly from the UI, including finer parameters to compensate for the time it takes the motor to startup.
 - **Resyncs position at endpoints:** The motor can be configured to run-on at the 0%/100% endpoints to resync the position tracker with the physical cover.
 
@@ -119,7 +119,8 @@ The **Tilt Mode** setting controls how tilt and travel interact:
 
 - **None:** Tilt is disabled. Only position tracking is used.
 - **Inline:** Tilt and travel use the same motor. Tilting can happen with the cover in any position. When closing the cover, the closing movement first causes the slats to tilt closed before the cover starts closing. When opening the cover, the opening movement first causes the slats to tilt open before the cover starts opening.
-- **Sequential (closes then tilts):** Tilting can only happen in the fully closed position. First the cover closes then the slats tilt closed. When opening, first the slats tilt open then the cover opens.
+- **Sequential (closes then tilts closed):** Tilting can only happen in the fully closed position. First the cover closes then the slats tilt closed (motor drives further down past cover-closed to close the slats). When opening, the slats first tilt open (motor up) then the cover opens.
+- **Sequential (closes then tilts open):** Mirror image of the above — for covers where slats articulate *open* when the motor drives further down past cover-closed, not closed. First the cover closes then the slats tilt open (motor continues down). When opening, the slats first tilt closed (motor up) then the cover opens.
 - **Separate tilt motor (dual_motor):** A separate motor controls the tilt. Requires dedicated tilt open/close/stop switches. Tilt is only allowed when the cover is in a safe position (configurable).
 
 ### Tilt Motor
