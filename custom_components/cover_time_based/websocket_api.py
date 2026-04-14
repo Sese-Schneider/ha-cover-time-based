@@ -165,7 +165,14 @@ async def ws_get_config(
         vol.Optional("stop_switch_entity_id"): vol.Any(str, None),
         vol.Optional("cover_entity_id"): vol.Any(str, None),
         vol.Optional("tilt_mode"): vol.In(
-            ["none", "sequential", "dual_motor", "inline"]
+            [
+                "none",
+                "sequential_close",
+                "sequential_open",
+                "sequential",
+                "dual_motor",
+                "inline",
+            ]
         ),
         vol.Optional("travel_time_close"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))

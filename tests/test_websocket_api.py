@@ -670,14 +670,14 @@ class TestWsUpdateConfig:
                     "entity_id": ENTITY_ID,
                     "tilt_time_close": 5.0,
                     "tilt_time_open": 5.5,
-                    "tilt_mode": "sequential",
+                    "tilt_mode": "sequential_close",
                 },
             )
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_options[CONF_TILT_TIME_CLOSE] == 5.0
         assert new_options[CONF_TILT_TIME_OPEN] == 5.5
-        assert new_options[CONF_TILT_MODE] == "sequential"
+        assert new_options[CONF_TILT_MODE] == "sequential_close"
 
     @pytest.mark.asyncio
     async def test_clear_tilt_fields(self):
@@ -711,6 +711,54 @@ class TestWsUpdateConfig:
         assert CONF_TILT_TIME_CLOSE not in new_options
         assert CONF_TILT_TIME_OPEN not in new_options
         assert new_options[CONF_TILT_MODE] == "none"
+
+
+# ---------------------------------------------------------------------------
+# ws_update_config — tilt_mode schema validation
+# ---------------------------------------------------------------------------
+
+
+class TestTiltModeSchemaValidation:
+    """Verify the update_config schema accepts all tilt_mode variants the UI emits."""
+
+    @pytest.mark.parametrize(
+        "tilt_mode",
+        [
+            "none",
+            "sequential_close",
+            "sequential_open",
+            "sequential",  # legacy alias retained as defense in depth
+            "dual_motor",
+            "inline",
+        ],
+    )
+    def test_valid_tilt_modes_accepted(self, tilt_mode):
+        """Each valid tilt_mode string must pass schema validation."""
+        schema = ws_update_config._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": ENTITY_ID,
+                "tilt_mode": tilt_mode,
+            }
+        )
+        assert result["tilt_mode"] == tilt_mode
+
+    def test_invalid_tilt_mode_rejected(self):
+        """Unknown tilt_mode strings must fail schema validation."""
+        import voluptuous as vol
+
+        schema = ws_update_config._ws_schema
+        with pytest.raises(vol.Invalid):
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "tilt_mode": "bogus_mode",
+                }
+            )
 
 
 # ---------------------------------------------------------------------------
