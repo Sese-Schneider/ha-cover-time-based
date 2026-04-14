@@ -2917,6 +2917,89 @@ class TestSequentialButtonBehaviorOnePress:
         assert cover.travel_calc._travel_to_position == 100
 
 
+class TestSequentialButtonBehaviorExternal:
+    """External movements (physical switch press) bypass sequential_button_behavior.
+
+    The relay is already on and the motor is running — the handler can't
+    redirect to a different motion. Tracking falls through to the normal
+    path (which couples tilt for shared-motor strategies).
+    """
+
+    @pytest.mark.asyncio
+    async def test_external_close_bypasses_on_repeat(self, make_cover):
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="on_repeat",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_close_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # on_repeat would normally articulate tilt here; external path falls
+        # through to _async_move_to_endpoint(0) — travel tracks directly.
+        assert cover.travel_calc._travel_to_position == 0
+        # Tilt tracker not re-engaged (travel was already 0, no change).
+        assert cover.tilt_calc._travel_to_position == 0
+
+    @pytest.mark.asyncio
+    async def test_external_close_bypasses_one_press(self, make_cover):
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="one_press",
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(0)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_close_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # one_press would normally route to set_tilt_position(100) (a combined
+        # travel+articulate motion). External path falls through to plain
+        # _async_move_to_endpoint(0): travel tracks to 0, tilt stays at 0.
+        assert cover.travel_calc._travel_to_position == 0
+        assert cover.tilt_calc._travel_to_position == 0
+
+    @pytest.mark.asyncio
+    async def test_external_open_bypasses_on_repeat(self, make_cover):
+        """External open from the articulated state does NOT do two-press —
+        it starts the normal travel-coupled-with-tilt motion."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="on_repeat",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_open_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # Travel target is 100. Tilt coupled to 0 (implicit) via
+        # _plan_tilt_for_travel — NOT a standalone tilt-restore as on_repeat
+        # would produce for self-initiated calls.
+        assert cover.travel_calc._travel_to_position == 100
+        assert cover.tilt_calc._travel_to_position == 0
+
+
 class TestSequentialButtonBehaviorIgnoredForNonSequential:
     """Behavior is a no-op for non-sequential tilt strategies."""
 

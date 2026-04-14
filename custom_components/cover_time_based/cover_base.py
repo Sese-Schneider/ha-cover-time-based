@@ -354,6 +354,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         for "never" and for non-sequential tilt strategies — the caller
         proceeds with the default close.
         """
+        # External movements (physical switch press) can't be redirected —
+        # the relay is already on and the motor is running. Fall through so
+        # the normal path sets up tracking for the actual motor motion.
+        if self._triggered_externally:
+            return False
+
         strategy = self._tilt_strategy
         behavior = self._sequential_button_behavior
         if behavior == SEQUENTIAL_BUTTON_BEHAVIOR_NEVER or not isinstance(
@@ -402,6 +408,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         already combines tilt restoration with travel), and non-sequential
         strategies.
         """
+        # External movements can't be redirected — the relay is already on.
+        if self._triggered_externally:
+            return False
+
         strategy = self._tilt_strategy
         behavior = self._sequential_button_behavior
         if behavior != SEQUENTIAL_BUTTON_BEHAVIOR_ON_REPEAT or not isinstance(
