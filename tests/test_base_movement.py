@@ -2690,3 +2690,260 @@ class TestExternalMovementSkipsTiltPlanning:
         assert cover.tilt_calc._travel_to_position == 0
         assert cover.travel_calc._travel_to_position == 100
         assert cover._pending_travel_target is None
+
+
+# ===================================================================
+# sequential_button_behavior: close/open buttons articulate slats
+# ===================================================================
+
+
+class TestSequentialButtonBehaviorNever:
+    """Default: close/open buttons only drive travel; tilt is unchanged.
+
+    The resting slat position (implicit_tilt_during_travel) is enforced by
+    snap_trackers_to_physical; articulation requires the explicit tilt
+    buttons.
+    """
+
+    @pytest.mark.asyncio
+    async def test_close_never_only_travels(self, make_cover):
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="never",
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # Travel tracker heads to 0; tilt tracker untouched (remains at 0 = implicit).
+        assert cover.travel_calc._travel_to_position == 0
+        assert cover.tilt_calc._travel_to_position == 0
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_close_never_at_rest_is_noop(self, make_cover):
+        """Second close click when already at travel=0 + tilt=implicit: no-op."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="never",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        assert not cover.tilt_calc.is_traveling()
+
+
+class TestSequentialButtonBehaviorOnRepeat:
+    """Two-press UX: first click behaves as 'never'; a second click from the
+    resting closed state articulates slats (close) or restores them (open)
+    in a separate motor motion.
+    """
+
+    @pytest.mark.asyncio
+    async def test_close_on_repeat_first_click_travels(self, make_cover):
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="on_repeat",
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # First click: same as 'never' — travel only.
+        assert cover.travel_calc._travel_to_position == 0
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_close_on_repeat_second_click_articulates(self, make_cover):
+        """sequential_open: second close from (travel=0, tilt=0) → tilt=100."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="on_repeat",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # Articulated to tilt=100 (opposite of implicit=0).
+        assert cover.tilt_calc._travel_to_position == 100
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_close_on_repeat_sequential_close_variant(self, make_cover):
+        """sequential_close: second close from (travel=0, tilt=100) → tilt=0."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_close",
+            sequential_button_behavior="on_repeat",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # Articulated to tilt=0 (opposite of implicit=100).
+        assert cover.tilt_calc._travel_to_position == 0
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_open_on_repeat_first_click_restores_tilt(self, make_cover):
+        """From (travel=0, tilt=100) on sequential_open, first open click only
+        closes the slats back to implicit (tilt=0), stopping at the middle."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="on_repeat",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+
+        # Tilt restoring to implicit (0); travel not engaged.
+        assert cover.tilt_calc._travel_to_position == 0
+        assert cover.tilt_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 0
+
+    @pytest.mark.asyncio
+    async def test_open_on_repeat_second_click_travels(self, make_cover):
+        """From middle (travel=0, tilt=implicit), second open click travels."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="on_repeat",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)  # implicit for sequential_open
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+
+        # Travels up; no tilt motion (already at implicit).
+        assert cover.travel_calc._travel_to_position == 100
+
+
+class TestSequentialButtonBehaviorOnePress:
+    """Single motor motion: close does travel + articulate in one click."""
+
+    @pytest.mark.asyncio
+    async def test_close_one_press_from_top_runs_full_motion(self, make_cover):
+        """From (travel=100, tilt=0), one_press close plans [TravelTo(0), TiltTo(100)]."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="one_press",
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # set_tilt_position(100) starts travel tracker toward 0 (pre-step)
+        # and queues tilt at 100 with a delay equal to travel_time_close.
+        assert cover.travel_calc._travel_to_position == 0
+        assert cover.tilt_calc._travel_to_position == 100
+
+    @pytest.mark.asyncio
+    async def test_close_one_press_from_middle_articulates(self, make_cover):
+        """From (travel=0, tilt=0), one_press close articulates only."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="one_press",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        assert cover.tilt_calc._travel_to_position == 100
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_close_one_press_sequential_close_variant(self, make_cover):
+        """sequential_close one_press: articulate to tilt=0 (opposite of implicit=100)."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_close",
+            sequential_button_behavior="one_press",
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        assert cover.travel_calc._travel_to_position == 0
+        assert cover.tilt_calc._travel_to_position == 0
+
+    @pytest.mark.asyncio
+    async def test_open_one_press_equivalent_to_never(self, make_cover):
+        """one_press open == never open: the default plan already combines
+        tilt restoration with travel."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+            sequential_button_behavior="one_press",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+
+        # plan_move_position(100, 0, 100) = [TiltTo(0), TravelTo(100)].
+        # tilt_calc targets 0, travel_calc targets 100 (with delay).
+        assert cover.tilt_calc._travel_to_position == 0
+        assert cover.travel_calc._travel_to_position == 100
+
+
+class TestSequentialButtonBehaviorIgnoredForNonSequential:
+    """Behavior is a no-op for non-sequential tilt strategies."""
+
+    @pytest.mark.asyncio
+    async def test_inline_ignores_on_repeat(self, make_cover):
+        cover = make_cover(
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+            sequential_button_behavior="on_repeat",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Second close at travel=0 — with "on_repeat" we'd expect a
+            # sequential_* cover to articulate, but inline just does its
+            # own thing (close is a no-op at position 0 since nothing to do).
+            await cover.async_close_cover()
+
+        # No articulation happened (tilt tracker not re-engaged).
+        assert not cover.tilt_calc.is_traveling()

@@ -82,6 +82,7 @@ def make_cover(make_hass):
         tilt_stop_switch=None,
         safe_tilt_position=None,
         max_tilt_allowed_position=None,
+        sequential_button_behavior=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -133,6 +134,11 @@ def make_cover(make_hass):
             options[CONF_SAFE_TILT_POSITION] = safe_tilt_position
         if max_tilt_allowed_position is not None:
             options[CONF_MAX_TILT_ALLOWED_POSITION] = max_tilt_allowed_position
+        if sequential_button_behavior is not None:
+            from custom_components.cover_time_based.const import (
+                CONF_SEQUENTIAL_BUTTON_BEHAVIOR,
+            )
+            options[CONF_SEQUENTIAL_BUTTON_BEHAVIOR] = sequential_button_behavior
 
         cover = _create_cover_from_options(
             options,

@@ -41,7 +41,12 @@ from .const import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    DEFAULT_SEQUENTIAL_BUTTON_BEHAVIOR,
+    SEQUENTIAL_BUTTON_BEHAVIOR_NEVER,
+    SEQUENTIAL_BUTTON_BEHAVIOR_ONE_PRESS,
+    SEQUENTIAL_BUTTON_BEHAVIOR_ON_REPEAT,
 )
+from .tilt_strategies import SequentialTilt
 from .tilt_strategies.planning import (
     calculate_pre_step_delay,
     extract_coupled_tilt,
@@ -71,6 +76,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt_open_switch=None,
         tilt_close_switch=None,
         tilt_stop_switch=None,
+        sequential_button_behavior=DEFAULT_SEQUENTIAL_BUTTON_BEHAVIOR,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -87,6 +93,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._tilt_open_switch_id = tilt_open_switch
         self._tilt_close_switch_id = tilt_close_switch
         self._tilt_stop_switch_id = tilt_stop_switch
+        self._sequential_button_behavior = sequential_button_behavior
 
         if name:
             self._name = name
@@ -323,6 +330,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("async_close_cover :: currently opening, stopping first")
             await self.async_stop_cover()
             await self._direction_change_delay()
+        if await self._handle_sequential_close_behavior():
+            return
         await self._async_move_to_endpoint(target=0)
 
     async def async_open_cover(self, **kwargs):
@@ -333,7 +342,89 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("async_open_cover :: currently closing, stopping first")
             await self.async_stop_cover()
             await self._direction_change_delay()
+        if await self._handle_sequential_open_behavior():
+            return
         await self._async_move_to_endpoint(target=100)
+
+    async def _handle_sequential_close_behavior(self) -> bool:
+        """Apply sequential_button_behavior for the close action.
+
+        Returns True if the behavior handled the close (caller should return
+        without falling through to _async_move_to_endpoint). Returns False
+        for "never" and for non-sequential tilt strategies — the caller
+        proceeds with the default close.
+        """
+        strategy = self._tilt_strategy
+        behavior = self._sequential_button_behavior
+        if behavior == SEQUENTIAL_BUTTON_BEHAVIOR_NEVER or not isinstance(
+            strategy, SequentialTilt
+        ):
+            return False
+
+        implicit = strategy.implicit_tilt_during_travel
+        articulated = 100 - implicit
+
+        if behavior == SEQUENTIAL_BUTTON_BEHAVIOR_ONE_PRESS:
+            # Single motor motion: travel to 0, then articulate slats.
+            # set_tilt_position plans [TravelTo(0), TiltTo(articulated)] when
+            # the cover is not already closed, or just [TiltTo(articulated)]
+            # when it is.
+            self._log(
+                "async_close_cover :: sequential one_press → set_tilt_position(%d)",
+                articulated,
+            )
+            await self.set_tilt_position(articulated)
+            return True
+
+        if behavior == SEQUENTIAL_BUTTON_BEHAVIOR_ON_REPEAT:
+            # Two-press: first press travels (handled by the caller's default
+            # _async_move_to_endpoint path). A second press from the resting
+            # closed state (travel=0, tilt=implicit) articulates the slats.
+            current_travel = self.travel_calc.current_position()
+            current_tilt = self.tilt_calc.current_position()
+            if current_travel == 0 and current_tilt == implicit:
+                self._log(
+                    "async_close_cover :: sequential on_repeat at rest → "
+                    "set_tilt_position(%d)",
+                    articulated,
+                )
+                await self.set_tilt_position(articulated)
+                return True
+            return False
+
+        return False
+
+    async def _handle_sequential_open_behavior(self) -> bool:
+        """Apply sequential_button_behavior for the open action.
+
+        Returns True if the behavior handled the open. Returns False for
+        "never", "one_press" (equivalent to "never" — the default plan
+        already combines tilt restoration with travel), and non-sequential
+        strategies.
+        """
+        strategy = self._tilt_strategy
+        behavior = self._sequential_button_behavior
+        if behavior != SEQUENTIAL_BUTTON_BEHAVIOR_ON_REPEAT or not isinstance(
+            strategy, SequentialTilt
+        ):
+            return False
+
+        # Two-press open: from (travel=0, tilt != implicit), the first press
+        # only restores tilt to the implicit resting value (stops at the
+        # middle position). The second press then travels to 100 via the
+        # default path, which sees tilt already at implicit and just travels.
+        implicit = strategy.implicit_tilt_during_travel
+        current_travel = self.travel_calc.current_position()
+        current_tilt = self.tilt_calc.current_position()
+        if current_travel == 0 and current_tilt is not None and current_tilt != implicit:
+            self._log(
+                "async_open_cover :: sequential on_repeat articulated → "
+                "set_tilt_position(%d)",
+                implicit,
+            )
+            await self.set_tilt_position(implicit)
+            return True
+        return False
 
     async def _direction_change_delay(self):
         """Pause between stop and direction change to let the motor settle.
