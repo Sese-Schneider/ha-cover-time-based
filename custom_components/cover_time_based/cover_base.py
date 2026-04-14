@@ -1374,8 +1374,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             else:
                 await self._send_tilt_open()
         else:
-            # Shared motor (inline): reverse main motor direction
-            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
+            # Shared motor (inline or sequential): consult the strategy for direction.
+            command = self._tilt_strategy.tilt_command_for(closing)
             await self._async_handle_command(command)
 
         self.tilt_calc.start_travel(restore_target)
