@@ -246,7 +246,12 @@ def _resolve_control_mode(config, defaults, has_cover_entity):
 
 def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwargs):
     """Map tilt_mode config string to a TiltStrategy instance (or None)."""
-    from .tilt_strategies import DualMotorTilt, InlineTilt, SequentialTilt
+    from .tilt_strategies import (
+        DualMotorTilt,
+        InlineTilt,
+        SequentialCloseTilt,
+        SequentialOpenTilt,
+    )
 
     if tilt_mode_str == "none":
         return None
@@ -262,11 +267,13 @@ def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwa
         )
     if tilt_mode_str == "inline":
         return InlineTilt()
+    if tilt_mode_str == "sequential_open":
+        return SequentialOpenTilt()
     if tilt_mode_str in ("sequential_close", "sequential"):
         # "sequential" is the legacy value; it resolves to sequential_close behavior.
-        return SequentialTilt()
+        return SequentialCloseTilt()
     # Unknown value → default to sequential_close for backward compatibility.
-    return SequentialTilt()
+    return SequentialCloseTilt()
 
 
 def _create_cover_from_options(options, device_id="", name=""):
