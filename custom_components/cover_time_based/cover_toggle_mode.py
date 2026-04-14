@@ -99,11 +99,33 @@ class ToggleModeCover(SwitchCoverTimeBased):
         self._last_external_toggle_time[entity_id] = now
 
         if entity_id == self._open_switch_entity_id:
-            self._log("_handle_external_state_change :: external open toggle detected")
-            await self.async_open_cover()
+            if self.is_opening:
+                # Same direction while opening: toggle-style motor controllers
+                # latch OFF on a second same-direction pulse → stop.
+                self._log(
+                    "_handle_external_state_change ::"
+                    " open toggle while opening, stopping"
+                )
+                await self.async_stop_cover()
+            else:
+                # Idle or closing (opposite direction): async_open_cover
+                # handles the direction-change stop-and-reverse internally.
+                self._log(
+                    "_handle_external_state_change :: external open toggle detected"
+                )
+                await self.async_open_cover()
         elif entity_id == self._close_switch_entity_id:
-            self._log("_handle_external_state_change :: external close toggle detected")
-            await self.async_close_cover()
+            if self.is_closing:
+                self._log(
+                    "_handle_external_state_change ::"
+                    " close toggle while closing, stopping"
+                )
+                await self.async_stop_cover()
+            else:
+                self._log(
+                    "_handle_external_state_change :: external close toggle detected"
+                )
+                await self.async_close_cover()
 
     async def _handle_external_tilt_state_change(self, entity_id, old_val, new_val):
         """Handle external tilt state change in toggle mode.
