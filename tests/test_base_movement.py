@@ -1749,6 +1749,58 @@ class TestSequentialOpenTiltEndpoint:
         assert cover._open_switch_entity_id not in activated
         assert cover._last_command == SERVICE_CLOSE_COVER
 
+    @pytest.mark.asyncio
+    async def test_sequential_open_set_tilt_position_sends_close(self, make_cover):
+        """SequentialOpenTilt: moving tilt from 0->50 sends CLOSE (motor down)."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(50)
+
+        calls = cover.hass.services.async_call.call_args_list
+        turn_on_calls = [
+            c
+            for c in calls
+            if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+        ]
+        activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+        # Opening the tilt (target 50 > current 0) should drive CLOSE relay.
+        assert cover._close_switch_entity_id in activated
+        assert cover._open_switch_entity_id not in activated
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_set_tilt_position_sends_open(self, make_cover):
+        """SequentialOpenTilt: moving tilt from 100->50 sends OPEN (motor up)."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(50)
+
+        calls = cover.hass.services.async_call.call_args_list
+        turn_on_calls = [
+            c
+            for c in calls
+            if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+        ]
+        activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+        # Closing the tilt (target 50 < current 100) should drive OPEN relay.
+        assert cover._open_switch_entity_id in activated
+        assert cover._close_switch_entity_id not in activated
+        assert cover._last_command == SERVICE_OPEN_COVER
+
 
 # ===================================================================
 # Wrapped cover + dual_motor: tilt via cover entity services

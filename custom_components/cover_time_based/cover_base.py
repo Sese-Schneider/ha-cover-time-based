@@ -690,17 +690,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         if current is None:
             closing = target <= 50
-            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
             current = 100 if closing else 0
             self.tilt_calc.update_position(current)
         elif target < current:
-            command = SERVICE_CLOSE_COVER
+            closing = True
         elif target > current:
-            command = SERVICE_OPEN_COVER
+            closing = False
         else:
             return
 
-        closing = command == SERVICE_CLOSE_COVER
+        if self._tilt_strategy is not None:
+            command = self._tilt_strategy.tilt_command_for(closing)
+        else:
+            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
 
         should_proceed, is_direction_change = await self._handle_pre_movement_checks(
             command
