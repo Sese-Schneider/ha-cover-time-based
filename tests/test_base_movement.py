@@ -2626,14 +2626,20 @@ class TestExternalMovementSkipsTiltPlanning:
         assert cover._self_initiated_movement is False
 
     @pytest.mark.asyncio
-    async def test_external_sequential_tilt_also_skipped(self, make_cover):
-        """External open also skips tilt planning for sequential mode."""
+    async def test_external_sequential_close_couples_tilt(self, make_cover):
+        """External open in sequential_close couples tilt so the tracker matches
+        the single motor's physical tilt-then-travel motion.
+
+        Starting from (travel=0, tilt=0) — slats articulated closed — pressing
+        the external up button physically lifts the motor through two phases:
+        first slats tilt to 100 (implicit rest), then cover travels to 100.
+        The travel tracker must be delayed by the tilt phase duration so both
+        calculators stay in sync with the real cover.
+        """
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
             tilt_mode="sequential",
-            safe_tilt_position=50,
-            max_tilt_allowed_position=50,
         )
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
@@ -2645,6 +2651,42 @@ class TestExternalMovementSkipsTiltPlanning:
         finally:
             cover._triggered_externally = False
 
-        # Travel tracking starts directly, no tilt coupling
-        assert cover.travel_calc.is_traveling()
+        # Tilt is coupled: calculator now targets implicit (100) and is
+        # actively tracking toward it.
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc._travel_to_position == 100
+        # Travel is still tracking (target 100) but delayed until the tilt
+        # phase completes — no dual-motor pre-step was triggered.
+        assert cover.travel_calc._travel_to_position == 100
+        assert cover._pending_travel_target is None
+
+    @pytest.mark.asyncio
+    async def test_external_sequential_open_couples_tilt(self, make_cover):
+        """External open in sequential_open couples tilt when starting from
+        the articulated-open position (travel=0, tilt=100).
+
+        Mirror of the sequential_close case: the motor runs UP, first closing
+        the slats (tilt 100→0) and then lifting the cover (travel 0→100).
+        Without coupled tilt tracking, the tilt tracker would stay at 100 and
+        snap-to-implicit on the next stop would make the tilt appear to jump.
+        """
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_open_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # Tilt is coupled: targeting implicit (0) and tracking.
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc._travel_to_position == 0
+        assert cover.travel_calc._travel_to_position == 100
         assert cover._pending_travel_target is None

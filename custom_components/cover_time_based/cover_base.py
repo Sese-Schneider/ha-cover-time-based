@@ -480,9 +480,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         tilt_target = None
         pre_step_delay = 0.0
-        if not self._triggered_externally:
-            # Only plan tilt for self-initiated movements — external movements
-            # can't control relay sequencing (the relay is already on).
+        # Dual-motor externals skip tilt planning entirely — the separate tilt
+        # relay can't be sequenced, and the snap-to-endpoint fall-through in
+        # _plan_tilt_for_travel has no way to drive the tilt motor afterwards.
+        # Shared-motor strategies (inline, sequential_*) still need planning
+        # so the calculators stay in sync with the single motor's multi-phase
+        # motion (e.g. sequential_open: tilt close 100→0 then travel 0→100).
+        skip_tilt_planning = (
+            self._triggered_externally
+            and self._tilt_strategy is not None
+            and self._tilt_strategy.uses_tilt_motor
+        )
+        if not skip_tilt_planning:
             current_tilt = (
                 self.tilt_calc.current_position() if self._tilt_strategy else None
             )
