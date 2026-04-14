@@ -74,6 +74,9 @@ class TestSequentialTiltProperties:
     def test_restores_tilt(self):
         assert SequentialTilt().restores_tilt is False
 
+    def test_implicit_tilt_during_travel(self):
+        assert SequentialTilt().implicit_tilt_during_travel == 100
+
 
 class TestSequentialPlanMovePosition:
     def test_flattens_tilt_before_travel(self):
