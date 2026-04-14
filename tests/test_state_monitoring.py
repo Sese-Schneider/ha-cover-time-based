@@ -333,7 +333,7 @@ class TestToggleModeExternalStateChange:
 
     @pytest.mark.asyncio
     async def test_debounce_ignores_rapid_second_pulse(self, make_cover):
-        """Second OFF->ON within debounce window is ignored."""
+        """Second OFF->ON within debounce window is ignored (contact bounce)."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
@@ -349,6 +349,38 @@ class TestToggleModeExternalStateChange:
                 await cover._handle_external_state_change("switch.open", "off", "on")
                 assert cover._last_command == SERVICE_OPEN_COVER
                 assert cover.is_opening
+            finally:
+                cover._triggered_externally = False
+
+    @pytest.mark.asyncio
+    async def test_debounce_allows_second_click_after_1_second(self, make_cover):
+        """Second click ~1s after the first is a legitimate toggle, not a bounce.
+
+        Regression: an earlier debounce window of pulse_time + 0.5 (1.5s with
+        default pulse_time=1.0) swallowed deliberate clicks up to 1.5s apart,
+        so a "start then stop" cadence got stuck on the start.
+        """
+        import time as time_module
+
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                # Click 1 starts opening
+                await cover._handle_external_state_change("switch.open", "off", "on")
+                assert cover.is_opening
+
+                # Backdate the recorded click so "now - last" == 1 second
+                cover._last_external_toggle_time["switch.open"] = (
+                    time_module.monotonic() - 1.0
+                )
+
+                # Click 2 at +1s should NOT be debounced → same-direction
+                # while opening → stops the motor.
+                await cover._handle_external_state_change("switch.open", "off", "on")
+                assert not cover.travel_calc.is_traveling()
             finally:
                 cover._triggered_externally = False
 

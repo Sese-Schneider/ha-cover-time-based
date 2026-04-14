@@ -14,6 +14,13 @@ from .cover_switch import SwitchCoverTimeBased
 
 _LOGGER = logging.getLogger(__name__)
 
+# Short debounce window (seconds) to suppress contact bounce on external
+# momentary switches — a few tens of ms is enough in practice. Must be
+# shorter than any realistic human click cadence (≥ 200ms between
+# deliberate presses) so legitimate rapid toggles (e.g. "start then stop")
+# are not dropped.
+_EXTERNAL_TOGGLE_DEBOUNCE = 0.1
+
 
 class ToggleModeCover(SwitchCoverTimeBased):
     """Cover controlled by toggle-style relays (toggle mode).
@@ -89,8 +96,7 @@ class ToggleModeCover(SwitchCoverTimeBased):
 
         now = time.monotonic()
         last = self._last_external_toggle_time.get(entity_id, 0)
-        debounce_window = self._pulse_time + 0.5
-        if now - last < debounce_window:
+        if now - last < _EXTERNAL_TOGGLE_DEBOUNCE:
             self._log(
                 "_handle_external_state_change :: debounced toggle on %s",
                 entity_id,
@@ -138,8 +144,7 @@ class ToggleModeCover(SwitchCoverTimeBased):
 
         now = time.monotonic()
         last = self._last_external_toggle_time.get(entity_id, 0)
-        debounce_window = self._pulse_time + 0.5
-        if now - last < debounce_window:
+        if now - last < _EXTERNAL_TOGGLE_DEBOUNCE:
             self._log(
                 "_handle_external_tilt_state_change :: debounced toggle on %s",
                 entity_id,
