@@ -1682,6 +1682,75 @@ class TestDualMotorTiltOnlyCommands:
 
 
 # ===================================================================
+# SequentialOpenTilt: inverted motor direction for tilt endpoint commands
+# ===================================================================
+
+
+class TestSequentialOpenTiltEndpoint:
+    """SequentialOpenTilt inverts the motor direction for tilt endpoint moves.
+
+    Slats physically sit at tilt=0 (closed) while the cover is not at the
+    closed position. Closing the tilt (target=0) means driving the motor
+    UP (OPEN relay) back to the slats-closed position; opening the tilt
+    (target=100) means driving the motor further DOWN (CLOSE relay) past
+    the cover-closed position.
+    """
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_tilt_close_sends_open_command(self, make_cover):
+        """SequentialOpenTilt: closing the tilt physically sends OPEN (motor up)."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover_tilt()
+
+        calls = cover.hass.services.async_call.call_args_list
+        turn_on_calls = [
+            c
+            for c in calls
+            if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+        ]
+        activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+        # Inverted: closing the tilt should activate the OPEN relay.
+        assert cover._open_switch_entity_id in activated
+        assert cover._close_switch_entity_id not in activated
+        # _last_command tracks the motor command actually sent.
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_tilt_open_sends_close_command(self, make_cover):
+        """SequentialOpenTilt: opening the tilt physically sends CLOSE (motor down)."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover_tilt()
+
+        calls = cover.hass.services.async_call.call_args_list
+        turn_on_calls = [
+            c
+            for c in calls
+            if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+        ]
+        activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+        # Inverted: opening the tilt should activate the CLOSE relay.
+        assert cover._close_switch_entity_id in activated
+        assert cover._open_switch_entity_id not in activated
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+
+# ===================================================================
 # Wrapped cover + dual_motor: tilt via cover entity services
 # ===================================================================
 

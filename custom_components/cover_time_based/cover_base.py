@@ -508,8 +508,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         await self._abandon_active_lifecycle()
 
         closing = target == 0
-        command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
-        opposite_command = SERVICE_OPEN_COVER if closing else SERVICE_CLOSE_COVER
+        if self._tilt_strategy is not None:
+            command = self._tilt_strategy.tilt_command_for(closing)
+            opposite_command = self._tilt_strategy.tilt_command_for(not closing)
+        else:
+            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
+            opposite_command = SERVICE_OPEN_COVER if closing else SERVICE_CLOSE_COVER
 
         if self._startup_delay_task and not self._startup_delay_task.done():
             if self._last_command == opposite_command:
