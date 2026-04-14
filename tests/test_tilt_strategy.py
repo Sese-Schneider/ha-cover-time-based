@@ -5,6 +5,8 @@ from custom_components.cover_time_based.travel_calculator import TravelCalculato
 from custom_components.cover_time_based.tilt_strategies import (
     DualMotorTilt,
     InlineTilt,
+    SequentialCloseTilt,
+    SequentialOpenTilt,
     SequentialTilt,
     TiltTo,
     TravelTo,
@@ -564,3 +566,125 @@ class TestTiltCommandForDefault:
         strategy = DualMotorTilt()
         assert strategy.tilt_command_for(True) == SERVICE_CLOSE_COVER
         assert strategy.tilt_command_for(False) == SERVICE_OPEN_COVER
+
+
+# ===================================================================
+# SequentialCloseTilt (concrete, conventional direction)
+# ===================================================================
+
+
+class TestSequentialCloseTilt:
+    def test_name(self):
+        assert SequentialCloseTilt().name == "sequential_close"
+
+    def test_is_sequential_tilt(self):
+        assert isinstance(SequentialCloseTilt(), SequentialTilt)
+
+    def test_implicit_tilt_during_travel(self):
+        assert SequentialCloseTilt().implicit_tilt_during_travel == 100
+
+    def test_tilt_command_for_closing(self):
+        from homeassistant.const import SERVICE_CLOSE_COVER
+
+        assert SequentialCloseTilt().tilt_command_for(True) == SERVICE_CLOSE_COVER
+
+    def test_tilt_command_for_opening(self):
+        from homeassistant.const import SERVICE_OPEN_COVER
+
+        assert SequentialCloseTilt().tilt_command_for(False) == SERVICE_OPEN_COVER
+
+
+# ===================================================================
+# SequentialOpenTilt (concrete, inverted direction)
+# ===================================================================
+
+
+class TestSequentialOpenTilt:
+    def test_name(self):
+        assert SequentialOpenTilt().name == "sequential_open"
+
+    def test_is_sequential_tilt(self):
+        assert isinstance(SequentialOpenTilt(), SequentialTilt)
+
+    def test_implicit_tilt_during_travel(self):
+        assert SequentialOpenTilt().implicit_tilt_during_travel == 0
+
+    def test_uses_tilt_motor(self):
+        assert SequentialOpenTilt().uses_tilt_motor is False
+
+    def test_restores_tilt(self):
+        assert SequentialOpenTilt().restores_tilt is False
+
+    def test_can_calibrate_tilt(self):
+        assert SequentialOpenTilt().can_calibrate_tilt() is True
+
+    def test_tilt_command_for_closing_returns_open(self):
+        """Inverted: closing_tilt=True sends OPEN (motor up)."""
+        from homeassistant.const import SERVICE_OPEN_COVER
+
+        assert SequentialOpenTilt().tilt_command_for(True) == SERVICE_OPEN_COVER
+
+    def test_tilt_command_for_opening_returns_close(self):
+        """Inverted: closing_tilt=False sends CLOSE (motor further down)."""
+        from homeassistant.const import SERVICE_CLOSE_COVER
+
+        assert SequentialOpenTilt().tilt_command_for(False) == SERVICE_CLOSE_COVER
+
+
+class TestSequentialOpenPlanMovePosition:
+    def test_flattens_tilt_to_zero_before_travel(self):
+        strategy = SequentialOpenTilt()
+        steps = strategy.plan_move_position(
+            target_pos=70, current_pos=0, current_tilt=80
+        )
+        assert steps == [TiltTo(0), TravelTo(70)]
+
+    def test_skips_tilt_when_already_zero(self):
+        strategy = SequentialOpenTilt()
+        steps = strategy.plan_move_position(
+            target_pos=70, current_pos=0, current_tilt=0
+        )
+        assert steps == [TravelTo(70)]
+
+
+class TestSequentialOpenPlanMoveTilt:
+    def test_travels_to_closed_before_tilting(self):
+        strategy = SequentialOpenTilt()
+        steps = strategy.plan_move_tilt(
+            target_tilt=50, current_pos=70, current_tilt=0
+        )
+        assert steps == [TravelTo(0), TiltTo(50)]
+
+    def test_tilts_directly_when_at_closed(self):
+        strategy = SequentialOpenTilt()
+        steps = strategy.plan_move_tilt(target_tilt=100, current_pos=0, current_tilt=0)
+        assert steps == [TiltTo(100)]
+
+
+class TestSequentialOpenSnapTrackers:
+    def test_forces_tilt_to_zero_when_not_at_closed(self):
+        strategy = SequentialOpenTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(50)
+        tilt.set_position(80)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 0
+
+    def test_no_op_when_at_closed(self):
+        strategy = SequentialOpenTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(0)
+        tilt.set_position(50)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 50
+
+    def test_no_op_when_already_zero(self):
+        strategy = SequentialOpenTilt()
+        travel = TravelCalculator(10.0, 10.0)
+        tilt = TravelCalculator(2.0, 2.0)
+        travel.set_position(30)
+        tilt.set_position(0)
+        strategy.snap_trackers_to_physical(travel, tilt)
+        assert tilt.current_position() == 0

@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import logging
 
+from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+
 from .base import TiltStrategy, TiltTo, TravelTo
 
 _LOGGER = logging.getLogger(__name__)
@@ -85,3 +87,36 @@ class SequentialTilt(TiltStrategy):
                 current_tilt_pos,
             )
             tilt_calc.set_position(implicit)
+
+
+class SequentialCloseTilt(SequentialTilt):
+    """Conventional sequential tilt.
+
+    Slats are physically at tilt=100 (open) while the cover is not at
+    the closed position. Tilt-close sends CLOSE (motor down);
+    tilt-open sends OPEN (motor up).
+
+    Inherits all behavior from SequentialTilt; exists as a distinct
+    type so callers can distinguish conventional and inverted sequential
+    variants via isinstance checks (see SequentialOpenTilt).
+    """
+
+
+class SequentialOpenTilt(SequentialTilt):
+    """Inverted sequential tilt (Sese-Schneider/ha-cover-time-based#61).
+
+    Slats are physically at tilt=0 (closed) while the cover is not at
+    the closed position. Tilt-open articulates the slats by driving
+    the motor further DOWN past the cover-closed position; tilt-close
+    sends OPEN (motor up to return from the open-slats position to
+    the slats-closed position).
+    """
+
+    implicit_tilt_during_travel: int = 0
+
+    @property
+    def name(self) -> str:
+        return "sequential_open"
+
+    def tilt_command_for(self, closing_tilt: bool) -> str:
+        return SERVICE_OPEN_COVER if closing_tilt else SERVICE_CLOSE_COVER
