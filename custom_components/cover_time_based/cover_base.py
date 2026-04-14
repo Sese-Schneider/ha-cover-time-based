@@ -353,13 +353,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         without falling through to _async_move_to_endpoint). Returns False
         for "never" and for non-sequential tilt strategies — the caller
         proceeds with the default close.
-        """
-        # External movements (physical switch press) can't be redirected —
-        # the relay is already on and the motor is running. Fall through so
-        # the normal path sets up tracking for the actual motor motion.
-        if self._triggered_externally:
-            return False
 
+        Applies to both HA-initiated and external (physical switch) close
+        actions — the integration assumes the physical motor performs the
+        same logical motion in both cases (e.g. for "one_press" that a
+        single close pulse on the external switch runs the combined
+        travel+articulate motion). Users whose hardware works differently
+        (e.g. pulse-mode switch that stops at cover-closed rather than
+        running to the mechanical end) should report an issue.
+        """
         strategy = self._tilt_strategy
         behavior = self._sequential_button_behavior
         if behavior == SEQUENTIAL_BUTTON_BEHAVIOR_NEVER or not isinstance(
@@ -407,11 +409,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         "never", "one_press" (equivalent to "never" — the default plan
         already combines tilt restoration with travel), and non-sequential
         strategies.
-        """
-        # External movements can't be redirected — the relay is already on.
-        if self._triggered_externally:
-            return False
 
+        Applies to both HA-initiated and external opens — see the close
+        handler's docstring for the assumption about external hardware.
+        """
         strategy = self._tilt_strategy
         behavior = self._sequential_button_behavior
         if behavior != SEQUENTIAL_BUTTON_BEHAVIOR_ON_REPEAT or not isinstance(

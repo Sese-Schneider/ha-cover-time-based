@@ -2918,15 +2918,17 @@ class TestSequentialButtonBehaviorOnePress:
 
 
 class TestSequentialButtonBehaviorExternal:
-    """External movements (physical switch press) bypass sequential_button_behavior.
+    """sequential_button_behavior applies to external movements too.
 
-    The relay is already on and the motor is running — the handler can't
-    redirect to a different motion. Tracking falls through to the normal
-    path (which couples tilt for shared-motor strategies).
+    The integration assumes the physical motor performs the same logical
+    motion regardless of whether the close/open was initiated by HA UI
+    or by a physical switch. Users whose hardware works differently
+    (e.g. pulse-mode switch that naturally stops at cover-closed rather
+    than running to the mechanical end) should report an issue.
     """
 
     @pytest.mark.asyncio
-    async def test_external_close_bypasses_on_repeat(self, make_cover):
+    async def test_external_close_on_repeat_articulates_at_rest(self, make_cover):
         cover = make_cover(
             tilt_time_close=4.0,
             tilt_time_open=4.0,
@@ -2943,14 +2945,12 @@ class TestSequentialButtonBehaviorExternal:
         finally:
             cover._triggered_externally = False
 
-        # on_repeat would normally articulate tilt here; external path falls
-        # through to _async_move_to_endpoint(0) — travel tracks directly.
-        assert cover.travel_calc._travel_to_position == 0
-        # Tilt tracker not re-engaged (travel was already 0, no change).
-        assert cover.tilt_calc._travel_to_position == 0
+        # Second-press semantics: tilt tracks 0 → 100.
+        assert cover.tilt_calc._travel_to_position == 100
+        assert cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_external_close_bypasses_one_press(self, make_cover):
+    async def test_external_close_one_press_runs_combined_motion(self, make_cover):
         cover = make_cover(
             tilt_time_close=4.0,
             tilt_time_open=4.0,
@@ -2967,16 +2967,18 @@ class TestSequentialButtonBehaviorExternal:
         finally:
             cover._triggered_externally = False
 
-        # one_press would normally route to set_tilt_position(100) (a combined
-        # travel+articulate motion). External path falls through to plain
-        # _async_move_to_endpoint(0): travel tracks to 0, tilt stays at 0.
+        # External close with one_press sets up the combined travel+tilt
+        # tracking. Travel targets 0, tilt targets 100 (delayed by the
+        # travel phase). Matches the motion of hardware where an external
+        # close pulse runs the full journey to the mechanical end.
         assert cover.travel_calc._travel_to_position == 0
-        assert cover.tilt_calc._travel_to_position == 0
+        assert cover.tilt_calc._travel_to_position == 100
 
     @pytest.mark.asyncio
-    async def test_external_open_bypasses_on_repeat(self, make_cover):
-        """External open from the articulated state does NOT do two-press —
-        it starts the normal travel-coupled-with-tilt motion."""
+    async def test_external_open_on_repeat_restores_tilt_at_rest(self, make_cover):
+        """External open from the articulated state uses the two-press
+        semantic: first press only restores tilt (motor up a bit),
+        stopping at the middle position."""
         cover = make_cover(
             tilt_time_close=4.0,
             tilt_time_open=4.0,
@@ -2993,11 +2995,10 @@ class TestSequentialButtonBehaviorExternal:
         finally:
             cover._triggered_externally = False
 
-        # Travel target is 100. Tilt coupled to 0 (implicit) via
-        # _plan_tilt_for_travel — NOT a standalone tilt-restore as on_repeat
-        # would produce for self-initiated calls.
-        assert cover.travel_calc._travel_to_position == 100
+        # Tilt tracker restores to implicit (0); travel stays at 0.
         assert cover.tilt_calc._travel_to_position == 0
+        assert cover.tilt_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 0
 
 
 class TestSequentialButtonBehaviorIgnoredForNonSequential:

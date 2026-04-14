@@ -125,13 +125,15 @@ The **Tilt Mode** setting controls how tilt and travel interact:
 
 ### Close/Open Button Behavior (sequential modes only)
 
-For the two sequential tilt modes, the **Close/open button behavior** setting controls how the main close and open buttons interact with slat articulation:
+For the two sequential tilt modes, the **Close/open button behavior** setting controls how the main close and open actions interact with slat articulation. The setting affects both close/open invoked from the HA UI and close/open triggered by the external switch entities (physical buttons, automations, etc.).
 
 - **Travel only** (default): Close and open only drive travel. Slats stay at the resting position; use the dedicated tilt buttons to articulate.
 - **Travel, then articulate on repeat press:** Two-press UX. Press close once to close the cover; press close again (from the resting closed state) to articulate the slats to the opposite extreme. Press open once from the articulated state to return slats to the resting position (stops at middle); press open again to travel to fully open.
 - **Travel and articulate in one press:** Close runs travel and articulation as a single continuous motor motion. Open is unchanged (the default plan already combines slat restoration with travel).
 
 This setting is ignored for non-sequential tilt modes.
+
+**External-switch assumption.** When the setting is not _Travel only_, the integration sets up position tracking as though the external motor is performing the same logical motion as the HA UI would (e.g. for _one press_, that a single external close pulse runs the full travel+articulate journey to the mechanical end). This matches pulse-mode motor controllers that latch and run until they hit a stop or receive another pulse. If your external switch behaves differently — for example a close pulse that naturally stops the motor at cover-closed rather than running through to the articulated position — the reported tilt/position may diverge from the physical state. Please [open an issue](https://github.com/clintongormley/ha-cover-time-based/issues) describing your hardware so we can support it.
 
 ### Tilt Motor
 
