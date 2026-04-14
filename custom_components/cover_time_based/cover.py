@@ -262,7 +262,10 @@ def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwa
         )
     if tilt_mode_str == "inline":
         return InlineTilt()
-    # "sequential" or any other value with tilt times → sequential
+    if tilt_mode_str in ("sequential_close", "sequential"):
+        # "sequential" is the legacy value; it resolves to sequential_close behavior.
+        return SequentialTilt()
+    # Unknown value → default to sequential_close for backward compatibility.
     return SequentialTilt()
 
 

@@ -42,7 +42,7 @@ class SequentialTilt(TiltStrategy):
 
     @property
     def name(self) -> str:
-        return "sequential"
+        return "sequential_close"
 
     @property
     def uses_tilt_motor(self) -> bool:

@@ -66,7 +66,7 @@ class TestSequentialTiltCanCalibrate:
 
 class TestSequentialTiltProperties:
     def test_name(self):
-        assert SequentialTilt().name == "sequential"
+        assert SequentialTilt().name == "sequential_close"
 
     def test_uses_tilt_motor(self):
         assert SequentialTilt().uses_tilt_motor is False

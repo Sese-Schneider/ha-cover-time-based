@@ -428,14 +428,21 @@ class TestResolveTiltStrategy:
         assert _resolve_tilt_strategy("none", 2.0, 2.0) is None
 
     def test_none_when_no_tilt_times(self):
-        assert _resolve_tilt_strategy("sequential", None, None) is None
+        assert _resolve_tilt_strategy("sequential_close", None, None) is None
 
     def test_none_when_partial_tilt_times(self):
-        assert _resolve_tilt_strategy("sequential", 2.0, None) is None
+        assert _resolve_tilt_strategy("sequential_close", 2.0, None) is None
 
-    def test_sequential(self):
+    def test_sequential_close(self):
+        result = _resolve_tilt_strategy("sequential_close", 2.0, 2.0)
+        assert isinstance(result, SequentialTilt)
+        assert result.name == "sequential_close"
+
+    def test_sequential_legacy_alias(self):
+        """Legacy 'sequential' value still resolves and normalizes to sequential_close."""
         result = _resolve_tilt_strategy("sequential", 2.0, 2.0)
         assert isinstance(result, SequentialTilt)
+        assert result.name == "sequential_close"
 
     def test_dual_motor_defaults(self):
         result = _resolve_tilt_strategy("dual_motor", 2.0, 2.0)
