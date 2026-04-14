@@ -41,10 +41,6 @@ from .const import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
-    DEFAULT_SEQUENTIAL_BUTTON_BEHAVIOR,
-    SEQUENTIAL_BUTTON_BEHAVIOR_NEVER,
-    SEQUENTIAL_BUTTON_BEHAVIOR_ONE_PRESS,
-    SEQUENTIAL_BUTTON_BEHAVIOR_ON_REPEAT,
 )
 from .tilt_strategies import SequentialTilt
 from .tilt_strategies.planning import (
@@ -76,7 +72,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt_open_switch=None,
         tilt_close_switch=None,
         tilt_stop_switch=None,
-        sequential_button_behavior=DEFAULT_SEQUENTIAL_BUTTON_BEHAVIOR,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -93,7 +88,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._tilt_open_switch_id = tilt_open_switch
         self._tilt_close_switch_id = tilt_close_switch
         self._tilt_stop_switch_id = tilt_stop_switch
-        self._sequential_button_behavior = sequential_button_behavior
 
         if name:
             self._name = name
@@ -330,8 +324,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("async_close_cover :: currently opening, stopping first")
             await self.async_stop_cover()
             await self._direction_change_delay()
-        if await self._handle_sequential_close_behavior():
-            return
         await self._async_move_to_endpoint(target=0)
 
     async def async_open_cover(self, **kwargs):
@@ -342,104 +334,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("async_open_cover :: currently closing, stopping first")
             await self.async_stop_cover()
             await self._direction_change_delay()
-        if await self._handle_sequential_open_behavior():
-            return
         await self._async_move_to_endpoint(target=100)
-
-    async def _handle_sequential_close_behavior(self) -> bool:
-        """Apply sequential_button_behavior for the close action.
-
-        Returns True if the behavior handled the close (caller should return
-        without falling through to _async_move_to_endpoint). Returns False
-        for "never" and for non-sequential tilt strategies — the caller
-        proceeds with the default close.
-
-        Applies to both HA-initiated and external (physical switch) close
-        actions — the integration assumes the physical motor performs the
-        same logical motion in both cases (e.g. for "one_press" that a
-        single close pulse on the external switch runs the combined
-        travel+articulate motion). Users whose hardware works differently
-        (e.g. pulse-mode switch that stops at cover-closed rather than
-        running to the mechanical end) should report an issue.
-        """
-        strategy = self._tilt_strategy
-        behavior = self._sequential_button_behavior
-        if behavior == SEQUENTIAL_BUTTON_BEHAVIOR_NEVER or not isinstance(
-            strategy, SequentialTilt
-        ):
-            return False
-
-        implicit = strategy.implicit_tilt_during_travel
-        articulated = 100 - implicit
-
-        if behavior == SEQUENTIAL_BUTTON_BEHAVIOR_ONE_PRESS:
-            # Single motor motion: travel to 0, then articulate slats.
-            # set_tilt_position plans [TravelTo(0), TiltTo(articulated)] when
-            # the cover is not already closed, or just [TiltTo(articulated)]
-            # when it is.
-            self._log(
-                "async_close_cover :: sequential one_press → set_tilt_position(%d)",
-                articulated,
-            )
-            await self.set_tilt_position(articulated)
-            return True
-
-        if behavior == SEQUENTIAL_BUTTON_BEHAVIOR_ON_REPEAT:
-            # Two-press: first press travels (handled by the caller's default
-            # _async_move_to_endpoint path). A second press from the resting
-            # closed state (travel=0, tilt=implicit) articulates the slats.
-            current_travel = self.travel_calc.current_position()
-            current_tilt = self.tilt_calc.current_position()
-            if current_travel == 0 and current_tilt == implicit:
-                self._log(
-                    "async_close_cover :: sequential on_repeat at rest → "
-                    "set_tilt_position(%d)",
-                    articulated,
-                )
-                await self.set_tilt_position(articulated)
-                return True
-            return False
-
-        return False
-
-    async def _handle_sequential_open_behavior(self) -> bool:
-        """Apply sequential_button_behavior for the open action.
-
-        Returns True if the behavior handled the open. Returns False for
-        "never", "one_press" (equivalent to "never" — the default plan
-        already combines tilt restoration with travel), and non-sequential
-        strategies.
-
-        Applies to both HA-initiated and external opens — see the close
-        handler's docstring for the assumption about external hardware.
-        """
-        strategy = self._tilt_strategy
-        behavior = self._sequential_button_behavior
-        if behavior != SEQUENTIAL_BUTTON_BEHAVIOR_ON_REPEAT or not isinstance(
-            strategy, SequentialTilt
-        ):
-            return False
-
-        # Two-press open: from (travel=0, tilt != implicit), the first press
-        # only restores tilt to the implicit resting value (stops at the
-        # middle position). The second press then travels to 100 via the
-        # default path, which sees tilt already at implicit and just travels.
-        implicit = strategy.implicit_tilt_during_travel
-        current_travel = self.travel_calc.current_position()
-        current_tilt = self.tilt_calc.current_position()
-        if (
-            current_travel == 0
-            and current_tilt is not None
-            and current_tilt != implicit
-        ):
-            self._log(
-                "async_open_cover :: sequential on_repeat articulated → "
-                "set_tilt_position(%d)",
-                implicit,
-            )
-            await self.set_tilt_position(implicit)
-            return True
-        return False
 
     async def _direction_change_delay(self):
         """Pause between stop and direction change to let the motor settle.
@@ -524,6 +419,30 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def _async_move_to_endpoint(self, target):
         """Move cover to an endpoint (0=fully closed, 100=fully open)."""
         self._self_initiated_movement = not self._triggered_externally
+
+        # External close on sequential hardware runs the full journey:
+        # the motor drives all the way past cover-closed to the articulated
+        # extreme (tilt=100 on sequential_open, tilt=0 on sequential_close).
+        # Redirect to set_tilt_position so tracking plans both phases as
+        # [TravelTo(0), TiltTo(articulated)].
+        #
+        # Open externally is already handled correctly by the default plan
+        # (plan_move_position restores tilt to implicit before travel when
+        # starting from the articulated state).
+        if (
+            target == 0
+            and self._triggered_externally
+            and isinstance(self._tilt_strategy, SequentialTilt)
+        ):
+            articulated = 100 - self._tilt_strategy.implicit_tilt_during_travel
+            self._log(
+                "_async_move_to_endpoint :: external close on sequential → "
+                "set_tilt_position(%d) for full-journey tracking",
+                articulated,
+            )
+            await self.set_tilt_position(articulated)
+            return
+
         await self._abandon_active_lifecycle()
 
         closing = target == 0

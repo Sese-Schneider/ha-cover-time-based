@@ -27,7 +27,6 @@ from .calibration import (
 from .const import (
     CONF_ENDPOINT_RUNON_TIME,
     CONF_MIN_MOVEMENT_TIME,
-    CONF_SEQUENTIAL_BUTTON_BEHAVIOR,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILT_TIME_CLOSE,
@@ -36,7 +35,6 @@ from .const import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
     DEFAULT_ENDPOINT_RUNON_TIME,
-    DEFAULT_SEQUENTIAL_BUTTON_BEHAVIOR,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
 from .helpers import resolve_entity
@@ -314,9 +312,6 @@ def _create_cover_from_options(options, device_id="", name=""):
         tilt_open_switch=options.get(CONF_TILT_OPEN_SWITCH),
         tilt_close_switch=options.get(CONF_TILT_CLOSE_SWITCH),
         tilt_stop_switch=options.get(CONF_TILT_STOP_SWITCH),
-        sequential_button_behavior=options.get(
-            CONF_SEQUENTIAL_BUTTON_BEHAVIOR, DEFAULT_SEQUENTIAL_BUTTON_BEHAVIOR
-        ),
     )
 
     if control_mode == CONTROL_MODE_WRAPPED:

@@ -2,8 +2,7 @@
 
 ### Features
 
-- **Sequential tilt split into two variants:** `sequential_close` (conventional — slats close when the motor drives further down past cover-closed) and `sequential_open` (for covers where slats *open* by driving further down past cover-closed, e.g. certain tilting shutters). Existing `sequential` configs auto-migrate to `sequential_close` (issue #61).
-- **Close/open button behavior option:** For sequential tilt modes, choose how the close/open buttons interact with slat articulation — `never` (default, travel only), `on_repeat` (two-press: first click travels, second articulates), or `one_press` (single motor motion for travel + articulation).
+- **Sequential tilt split into two variants:** `sequential_close` (conventional — slats close when the motor drives further down past cover-closed) and `sequential_open` (for covers where slats *open* by driving further down past cover-closed, e.g. certain tilting shutters). Existing `sequential` configs auto-migrate to `sequential_close` (issue #61). On sequential modes, external close (physical switch or automation) tracks the full motor journey — travel then articulate — assuming the motor runs past cover-closed to the mechanical end. HA UI buttons remain travel-only for `close`/`open` and tilt-only for `close_tilt`/`open_tilt`.
 - **UI-first configuration:** Config flow creates covers via UI; all settings managed through a Lovelace card and WebSocket API
 - **Control mode:** Single `control_mode` setting replaces separate `device_type`/`input_mode` — choose from wrapped, switch, pulse, or toggle
 - **External state monitoring:** Detects physical switch presses and keeps the position tracker in sync with actual motor state. Supports all control modes for both cover and tilt switches

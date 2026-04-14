@@ -38,9 +38,8 @@ from .cover import (
     CONTROL_MODE_WRAPPED,
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_PULSE_TIME,
-    DEFAULT_SEQUENTIAL_BUTTON_BEHAVIOR,
 )
-from .const import CONF_SEQUENTIAL_BUTTON_BEHAVIOR, DOMAIN
+from .const import DOMAIN
 from .helpers import resolve_entity_or_none
 
 _LOGGER = logging.getLogger(__name__)
@@ -67,7 +66,6 @@ _FIELD_MAP = {
     "tilt_open_switch": CONF_TILT_OPEN_SWITCH,
     "tilt_close_switch": CONF_TILT_CLOSE_SWITCH,
     "tilt_stop_switch": CONF_TILT_STOP_SWITCH,
-    "sequential_button_behavior": CONF_SEQUENTIAL_BUTTON_BEHAVIOR,
 }
 
 
@@ -149,9 +147,6 @@ async def ws_get_config(
             "tilt_open_switch": options.get(CONF_TILT_OPEN_SWITCH),
             "tilt_close_switch": options.get(CONF_TILT_CLOSE_SWITCH),
             "tilt_stop_switch": options.get(CONF_TILT_STOP_SWITCH),
-            "sequential_button_behavior": options.get(
-                CONF_SEQUENTIAL_BUTTON_BEHAVIOR, DEFAULT_SEQUENTIAL_BUTTON_BEHAVIOR
-            ),
         },
     )
 
@@ -184,9 +179,6 @@ async def ws_get_config(
                 "dual_motor",
                 "inline",
             ]
-        ),
-        vol.Optional("sequential_button_behavior"): vol.Any(
-            None, vol.In(["never", "on_repeat", "one_press"])
         ),
         vol.Optional("travel_time_close"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))

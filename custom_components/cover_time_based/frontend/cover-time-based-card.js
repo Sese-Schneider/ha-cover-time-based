@@ -43,13 +43,6 @@ const EN = {
   "tilt.none": "Not supported",
   "tilt.sequential_close": "Closes then tilts closed",
   "tilt.sequential_open": "Closes then tilts open",
-  "sequential_button_behavior.label": "Close/open button behavior",
-  "sequential_button_behavior.never": "Travel only",
-  "sequential_button_behavior.on_repeat": "Travel, then articulate on repeat press",
-  "sequential_button_behavior.one_press": "Travel and articulate in one press",
-  "sequential_button_behavior.hint.never": "Close and open only drive travel. Use the tilt buttons to articulate the slats. Applies to both HA UI and external switches.",
-  "sequential_button_behavior.hint.on_repeat": "Press close twice: first closes the cover, second articulates the slats. Press open twice: first returns slats to the resting position, second opens the cover. Applies to both HA UI and external switches — if your external switch behaves differently, please open an issue.",
-  "sequential_button_behavior.hint.one_press": "A single close press runs travel and articulation as one continuous motor motion. Applies to both HA UI and external switches — if your external switch behaves differently, please open an issue.",
   "tilt.dual_motor": "Separate tilt motor",
   "tilt.inline": "Tilts inline with travel",
   "tilt_motor.label": "Tilt Motor",
@@ -145,13 +138,6 @@ const TRANSLATIONS = {
     "tilt.none": "Não suportado",
     "tilt.sequential_close": "Fecha e depois inclina fechadas",
     "tilt.sequential_open": "Fecha e depois inclina abertas",
-    "sequential_button_behavior.label": "Comportamento dos botões fechar/abrir",
-    "sequential_button_behavior.never": "Apenas deslocar",
-    "sequential_button_behavior.on_repeat": "Deslocar, depois inclinar num segundo clique",
-    "sequential_button_behavior.one_press": "Deslocar e inclinar num só clique",
-    "sequential_button_behavior.hint.never": "Fechar e abrir apenas controlam o deslocamento. Use os botões de inclinação para inclinar as lâminas.",
-    "sequential_button_behavior.hint.on_repeat": "Clique em fechar duas vezes: primeiro fecha o estore, depois inclina as lâminas. Clique em abrir duas vezes: primeiro devolve as lâminas à posição de repouso, depois abre o estore.",
-    "sequential_button_behavior.hint.one_press": "Um único clique em fechar realiza o deslocamento e a inclinação numa só movimentação contínua do motor.",
     "tilt.dual_motor": "Motor de inclinação separado",
     "tilt.inline": "Inclina durante o deslocamento",
     "tilt_motor.label": "Motor de Inclinação",
@@ -244,13 +230,6 @@ const TRANSLATIONS = {
     "tilt.none": "Nieobsługiwane",
     "tilt.sequential_close": "Najpierw zamyka, potem nachyla zamknięte",
     "tilt.sequential_open": "Najpierw zamyka, potem nachyla otwarte",
-    "sequential_button_behavior.label": "Zachowanie przycisków zamykania/otwierania",
-    "sequential_button_behavior.never": "Tylko ruch",
-    "sequential_button_behavior.on_repeat": "Ruch, nachylenie przy powtórnym kliknięciu",
-    "sequential_button_behavior.one_press": "Ruch i nachylenie w jednym kliknięciu",
-    "sequential_button_behavior.hint.never": "Zamykanie i otwieranie wpływa tylko na ruch. Do nachylania listew użyj osobnych przycisków.",
-    "sequential_button_behavior.hint.on_repeat": "Kliknij zamknij dwa razy: najpierw zamyka roletę, potem nachyla listwy. Kliknij otwórz dwa razy: najpierw przywraca listwy do pozycji spoczynkowej, potem otwiera roletę.",
-    "sequential_button_behavior.hint.one_press": "Jedno kliknięcie zamknij wykonuje ruch i nachylenie w jednym ciągłym ruchu silnika.",
     "tilt.dual_motor": "Osobny silnik nachylenia",
     "tilt.inline": "Nachylenie w trakcie ruchu",
     "tilt_motor.label": "Silnik nachylenia",
@@ -657,8 +636,6 @@ class CoverTimeBasedCard extends LitElement {
         tilt_open_switch: null,
         tilt_close_switch: null,
         tilt_stop_switch: null,
-        // Only meaningful for sequential_* modes
-        sequential_button_behavior: null,
       });
     } else {
       const updates = { tilt_mode: mode };
@@ -678,8 +655,6 @@ class CoverTimeBasedCard extends LitElement {
         if (this._config.max_tilt_allowed_position == null) {
           updates.max_tilt_allowed_position = 0;
         }
-        // Only meaningful for sequential_* modes
-        updates.sequential_button_behavior = null;
       } else if (mode === "inline") {
         // Clear dual-motor fields when switching to inline
         updates.safe_tilt_position = null;
@@ -687,8 +662,6 @@ class CoverTimeBasedCard extends LitElement {
         updates.tilt_open_switch = null;
         updates.tilt_close_switch = null;
         updates.tilt_stop_switch = null;
-        // Only meaningful for sequential_* modes
-        updates.sequential_button_behavior = null;
       }
       this._updateLocal(updates);
     }
@@ -1059,8 +1032,6 @@ class CoverTimeBasedCard extends LitElement {
       if (!(features & (16 | 32))) return "";
     }
     const tiltMode = c.tilt_mode || "none";
-    const isSequential = tiltMode === "sequential_close" || tiltMode === "sequential_open";
-    const buttonBehavior = c.sequential_button_behavior || "never";
 
     return html`
       <div class="section">
@@ -1075,7 +1046,7 @@ class CoverTimeBasedCard extends LitElement {
           <option value="sequential_open" ?selected=${tiltMode === "sequential_open"}>
             ${this._t("tilt.sequential_open")}
           </option>
-<option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
+          <option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
             ${this._t("tilt.dual_motor")}
           </option>
           <option value="inline" ?selected=${tiltMode === "inline"}>
@@ -1083,30 +1054,7 @@ class CoverTimeBasedCard extends LitElement {
           </option>
         </select>
       </div>
-      ${isSequential ? html`
-        <div class="section">
-          <div class="field-label">${this._t("sequential_button_behavior.label")}</div>
-          <select class="ha-select" @change=${this._onSequentialButtonBehaviorChange}>
-            <option value="never" ?selected=${buttonBehavior === "never"}>
-              ${this._t("sequential_button_behavior.never")}
-            </option>
-            <option value="on_repeat" ?selected=${buttonBehavior === "on_repeat"}>
-              ${this._t("sequential_button_behavior.on_repeat")}
-            </option>
-            <option value="one_press" ?selected=${buttonBehavior === "one_press"}>
-              ${this._t("sequential_button_behavior.one_press")}
-            </option>
-          </select>
-          <div class="helper-text" style="margin-top: 8px;">
-            ${this._t(`sequential_button_behavior.hint.${buttonBehavior}`)}
-          </div>
-        </div>
-      ` : ""}
     `;
-  }
-
-  _onSequentialButtonBehaviorChange(e) {
-    this._updateLocal({ sequential_button_behavior: e.target.value });
   }
 
   _renderTiltMotorSection(c) {
