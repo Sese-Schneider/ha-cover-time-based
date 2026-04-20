@@ -31,6 +31,7 @@ from .travel_calculator import TravelCalculator, TravelStatus
 
 from .calibration import CalibrationState
 from .cover_calibration import CalibrationMixin
+from .position_storage import async_get_position_store
 from .const import (
     CONF_ENDPOINT_RUNON_TIME,
     CONF_MIN_MOVEMENT_TIME,
@@ -127,23 +128,52 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Log a debug message prefixed with the entity ID."""
         _LOGGER.debug("(%s) " + msg, self.entity_id, *args)
 
+    async def _async_load_restored_positions(self) -> tuple[int | None, int | None]:
+        """Return (position, tilt_position) for restore.
+
+        PositionStore is authoritative; RestoreEntity state is only used
+        when the Store has no record for this entry (pre-Store installs
+        or fresh entries).
+        """
+        if self._config_entry_id is not None:
+            store = await async_get_position_store(self.hass)
+            stored = await store.async_get(self._config_entry_id)
+            if stored is not None:
+                return stored.get("position"), stored.get("tilt_position")
+
+        old_state = await self.async_get_last_state()
+        self._log("async_added_to_hass :: oldState %s", old_state)
+        if old_state is None:
+            return None, None
+        return (
+            old_state.attributes.get(ATTR_CURRENT_POSITION),
+            old_state.attributes.get(ATTR_CURRENT_TILT_POSITION),
+        )
+
+    async def _async_persist_position(self) -> None:
+        """Write the current travel/tilt position to the position store."""
+        if self._config_entry_id is None:
+            return
+        data: dict[str, int] = {}
+        position = self.travel_calc.current_position()
+        if position is not None:
+            data["position"] = int(position)
+        if self._has_tilt_support():
+            tilt_position = self.tilt_calc.current_position()
+            if tilt_position is not None:
+                data["tilt_position"] = int(tilt_position)
+        store = await async_get_position_store(self.hass)
+        await store.async_save(self._config_entry_id, data)
+
     # -----------------------------------------------------------------------
     # Lifecycle
     # -----------------------------------------------------------------------
 
     async def async_added_to_hass(self):
         """Only cover's position and tilt matters."""
-        old_state = await self.async_get_last_state()
-        self._log("async_added_to_hass :: oldState %s", old_state)
-        pos = (
-            old_state.attributes.get(ATTR_CURRENT_POSITION)
-            if old_state is not None
-            else None
-        )
-        if old_state is not None and self.travel_calc is not None and pos is not None:
+        pos, tilt_pos = await self._async_load_restored_positions()
+        if self.travel_calc is not None and pos is not None:
             self.travel_calc.set_position(int(pos))
-
-            tilt_pos = old_state.attributes.get(ATTR_CURRENT_TILT_POSITION)
             if self._has_tilt_support() and tilt_pos is not None:
                 self.tilt_calc.set_position(int(tilt_pos))
 
@@ -367,6 +397,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 await self._send_tilt_stop()
         self.async_write_ha_state()
         self._last_command = None
+        await self._async_persist_position()
 
     async def async_close_cover_tilt(self, **kwargs):
         """Tilt the cover fully closed."""
@@ -403,6 +434,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self.travel_calc, self.tilt_calc
             )
         self.async_write_ha_state()
+        await self._async_persist_position()
 
     async def set_known_tilt_position(self, **kwargs):
         """Set the tilt to a known position (0=closed, 100=open)."""
@@ -411,6 +443,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         position = kwargs[ATTR_TILT_POSITION]
         self.tilt_calc.set_position(position)
         self.async_write_ha_state()
+        await self._async_persist_position()
 
     # -----------------------------------------------------------------------
     # Movement orchestration
@@ -1099,6 +1132,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                         self.travel_calc, self.tilt_calc
                     )
                 self._last_command = None
+                await self._async_persist_position()
                 return
 
             if self._tilt_restore_active:
@@ -1113,6 +1147,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                         self.travel_calc, self.tilt_calc
                     )
                 self._last_command = None
+                await self._async_persist_position()
                 return
 
             if self._pending_travel_target is not None:
@@ -1155,6 +1190,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
             self._last_command = None
+            await self._async_persist_position()
 
     async def _delayed_stop(self, delay):
         """Stop the relay after a delay."""

@@ -10,6 +10,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
+from .position_storage import async_get_position_store
 from .websocket_api import async_register_websocket_api
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,6 +66,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove a config entry — drop its saved position."""
+    store = await async_get_position_store(hass)
+    await store.async_remove(entry.entry_id)
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
