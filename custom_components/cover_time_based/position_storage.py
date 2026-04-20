@@ -44,7 +44,7 @@ class PositionStore:
         if current.get(entry_id) == data:
             return
         current[entry_id] = data
-        self._store.async_delay_save(lambda: self._data, SAVE_DELAY)
+        self._store.async_delay_save(lambda: current, SAVE_DELAY)
 
     async def async_remove(self, entry_id: str) -> None:
         """Remove an entry — writes synchronously so cleanup is durable."""
@@ -52,6 +52,12 @@ class PositionStore:
         if entry_id in current:
             del current[entry_id]
             await self._store.async_save(current)
+
+    async def async_flush(self) -> None:
+        """Force any pending debounced writes to disk."""
+        if self._data is None:
+            return
+        await self._store.async_save(self._data)
 
 
 @singleton(_DATA_STORE)

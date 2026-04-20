@@ -17,7 +17,6 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
-    flush_store,
 )
 
 from custom_components.cover_time_based.position_storage import (
@@ -82,7 +81,7 @@ async def _advance_time(hass: HomeAssistant, mock_time: _MockTime, seconds: floa
 async def _flush_position_store(hass: HomeAssistant) -> None:
     """Force any debounced writes from PositionStore to disk."""
     store = await async_get_position_store(hass)
-    await flush_store(store._store)
+    await store.async_flush()
 
 
 async def test_set_known_position_writes_to_store(
@@ -247,6 +246,37 @@ async def test_position_loaded_from_store_on_startup(
 
     cover = _get_cover_entity(hass)
     assert cover.current_cover_position == 73
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_tilt_position_loaded_from_store_on_startup(
+    hass: HomeAssistant, hass_storage, setup_input_booleans
+):
+    """Tilt position from the Store is restored on startup alongside travel."""
+    options = {
+        **BASIC_OPTIONS,
+        "tilt_mode": "sequential_close",
+        "tilt_time_open": 2.0,
+        "tilt_time_close": 2.0,
+    }
+    entry = _make_entry(options)
+    entry.add_to_hass(hass)
+
+    hass_storage[POSITION_STORE_KEY] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": POSITION_STORE_KEY,
+        "data": {entry.entry_id: {"position": 60, "tilt_position": 25}},
+    }
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    cover = _get_cover_entity(hass)
+    assert cover.current_cover_position == 60
+    assert cover.current_cover_tilt_position == 25
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
