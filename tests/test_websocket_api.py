@@ -249,7 +249,10 @@ class TestWsGetConfig:
         assert result["travel_time_open"] == 50
         assert result["tilt_time_close"] == 3.0
         assert result["tilt_time_open"] == 3.5
-        assert result["tilt_mode"] == "sequential"
+        # Legacy "sequential" is normalized to "sequential_close" in the
+        # GET response so the frontend (which no longer has dropdown/hint
+        # keys for the legacy string) always sees the canonical name.
+        assert result["tilt_mode"] == "sequential_close"
         assert result["travel_startup_delay"] == 1.2
         assert result["tilt_startup_delay"] == 0.8
         assert result["min_movement_time"] == 0.5
@@ -383,6 +386,56 @@ class TestDualMotorFieldRoundTrip:
         assert result["tilt_open_switch"] is None
         assert result["tilt_close_switch"] is None
         assert result["tilt_stop_switch"] is None
+
+    @pytest.mark.asyncio
+    async def test_update_config_normalizes_legacy_sequential(self):
+        """Writing tilt_mode='sequential' rewrites to 'sequential_close' on
+        persist — the frontend no longer has dropdown/hint keys for the
+        legacy string."""
+        hass = MagicMock()
+        connection = MagicMock()
+        config_entry = MagicMock()
+        config_entry.options = {}
+        config_entry.domain = DOMAIN
+
+        msg = {
+            "id": 4,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "tilt_mode": "sequential",
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            handler = _unwrap(ws_update_config)
+            await handler(hass, connection, msg)
+
+        new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_opts["tilt_mode"] == "sequential_close"
+
+    @pytest.mark.asyncio
+    async def test_get_config_normalizes_legacy_sequential(self):
+        """Stored legacy 'sequential' (from an entry that somehow escaped
+        migration) is surfaced to the UI as 'sequential_close'."""
+        hass = MagicMock()
+        connection = MagicMock()
+        config_entry = MagicMock()
+        config_entry.entry_id = ENTRY_ID
+        config_entry.domain = DOMAIN
+        config_entry.options = {"tilt_mode": "sequential"}
+        msg = {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID}
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            handler = _unwrap(ws_get_config)
+            await handler(hass, connection, msg)
+
+        result = connection.send_result.call_args[0][1]
+        assert result["tilt_mode"] == "sequential_close"
 
 
 # ---------------------------------------------------------------------------
@@ -670,14 +723,14 @@ class TestWsUpdateConfig:
                     "entity_id": ENTITY_ID,
                     "tilt_time_close": 5.0,
                     "tilt_time_open": 5.5,
-                    "tilt_mode": "sequential",
+                    "tilt_mode": "sequential_close",
                 },
             )
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_options[CONF_TILT_TIME_CLOSE] == 5.0
         assert new_options[CONF_TILT_TIME_OPEN] == 5.5
-        assert new_options[CONF_TILT_MODE] == "sequential"
+        assert new_options[CONF_TILT_MODE] == "sequential_close"
 
     @pytest.mark.asyncio
     async def test_clear_tilt_fields(self):
@@ -711,6 +764,54 @@ class TestWsUpdateConfig:
         assert CONF_TILT_TIME_CLOSE not in new_options
         assert CONF_TILT_TIME_OPEN not in new_options
         assert new_options[CONF_TILT_MODE] == "none"
+
+
+# ---------------------------------------------------------------------------
+# ws_update_config — tilt_mode schema validation
+# ---------------------------------------------------------------------------
+
+
+class TestTiltModeSchemaValidation:
+    """Verify the update_config schema accepts all tilt_mode variants the UI emits."""
+
+    @pytest.mark.parametrize(
+        "tilt_mode",
+        [
+            "none",
+            "sequential_close",
+            "sequential_open",
+            "sequential",  # legacy alias retained as defense in depth
+            "dual_motor",
+            "inline",
+        ],
+    )
+    def test_valid_tilt_modes_accepted(self, tilt_mode):
+        """Each valid tilt_mode string must pass schema validation."""
+        schema = ws_update_config._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": ENTITY_ID,
+                "tilt_mode": tilt_mode,
+            }
+        )
+        assert result["tilt_mode"] == tilt_mode
+
+    def test_invalid_tilt_mode_rejected(self):
+        """Unknown tilt_mode strings must fail schema validation."""
+        import voluptuous as vol
+
+        schema = ws_update_config._ws_schema
+        with pytest.raises(vol.Invalid):
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "tilt_mode": "bogus_mode",
+                }
+            )
 
 
 # ---------------------------------------------------------------------------

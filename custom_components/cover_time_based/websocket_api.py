@@ -39,7 +39,6 @@ from .cover import (
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_PULSE_TIME,
 )
-
 from .const import DOMAIN
 from .helpers import resolve_entity_or_none
 
@@ -115,6 +114,13 @@ async def ws_get_config(
         return
 
     options = config_entry.options
+    # Normalize the legacy "sequential" string in the GET response so the
+    # frontend always sees the current canonical name. The migration and
+    # resolver alias handle behavior; this guard keeps the UI consistent
+    # for any entry that somehow escapes migration.
+    tilt_mode = options.get(CONF_TILT_MODE, "none")
+    if tilt_mode == "sequential":
+        tilt_mode = "sequential_close"
     connection.send_result(
         msg["id"],
         {
@@ -125,7 +131,7 @@ async def ws_get_config(
             "close_switch_entity_id": options.get(CONF_CLOSE_SWITCH_ENTITY_ID),
             "stop_switch_entity_id": options.get(CONF_STOP_SWITCH_ENTITY_ID),
             "cover_entity_id": options.get(CONF_COVER_ENTITY_ID),
-            "tilt_mode": options.get(CONF_TILT_MODE, "none"),
+            "tilt_mode": tilt_mode,
             "travel_time_close": options.get(CONF_TRAVEL_TIME_CLOSE),
             "travel_time_open": options.get(CONF_TRAVEL_TIME_OPEN),
             "tilt_time_close": options.get(CONF_TILT_TIME_CLOSE),
@@ -165,7 +171,14 @@ async def ws_get_config(
         vol.Optional("stop_switch_entity_id"): vol.Any(str, None),
         vol.Optional("cover_entity_id"): vol.Any(str, None),
         vol.Optional("tilt_mode"): vol.In(
-            ["none", "sequential", "dual_motor", "inline"]
+            [
+                "none",
+                "sequential_close",
+                "sequential_open",
+                "sequential",
+                "dual_motor",
+                "inline",
+            ]
         ),
         vol.Optional("travel_time_close"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))
@@ -235,6 +248,11 @@ async def ws_update_config(
             if value is None:
                 new_options.pop(conf_key, None)
             else:
+                # Normalize the legacy "sequential" string on write so
+                # persisted options never carry it — the frontend no longer
+                # has dropdown/hint keys for it.
+                if conf_key == CONF_TILT_MODE and value == "sequential":
+                    value = "sequential_close"
                 new_options[conf_key] = value
 
     hass.config_entries.async_update_entry(config_entry, options=new_options)

@@ -11,12 +11,14 @@ from .planning import (
     extract_coupled_tilt,
     extract_coupled_travel,
 )
-from .sequential import SequentialTilt
+from .sequential import SequentialCloseTilt, SequentialOpenTilt, SequentialTilt
 
 __all__ = [
     "DualMotorTilt",
     "InlineTilt",
     "MovementStep",
+    "SequentialCloseTilt",
+    "SequentialOpenTilt",
     "SequentialTilt",
     "TiltStrategy",
     "TiltTo",

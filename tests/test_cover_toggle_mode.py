@@ -1051,3 +1051,73 @@ class TestToggleExternalTiltCloseWhileTraveling:
         # Tilt should have stopped traveling
         assert not cover.tilt_calc.is_traveling()
         await _cancel_tasks(cover)
+
+
+# ===================================================================
+# Travel toggle while traveling stops (parity with tilt handler)
+# ===================================================================
+
+
+class TestToggleExternalTravelWhileTraveling:
+    """External travel toggle while the cover is moving should stop it.
+
+    Parity with the existing tilt-while-traveling handler: a second pulse on
+    the same direction button (or any travel button) while the motor is
+    running is interpreted as a stop, matching how toggle-style motor
+    controllers physically behave. Previously the travel handler unconditionally
+    re-issued the direction command, which on real hardware was ignored while
+    the motor was already running in that direction — the cover would not stop.
+    """
+
+    @pytest.mark.asyncio
+    async def test_external_open_while_opening_stops(self):
+        cover = _make_toggle_cover()
+        # Simulate currently opening
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel_up()
+        assert cover.travel_calc.is_traveling()
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_state_change("switch.open", "off", "on")
+        finally:
+            cover._triggered_externally = False
+
+        assert not cover.travel_calc.is_traveling()
+        await _cancel_tasks(cover)
+
+    @pytest.mark.asyncio
+    async def test_external_close_while_closing_stops(self):
+        cover = _make_toggle_cover()
+        cover.travel_calc.set_position(100)
+        cover.travel_calc.start_travel_down()
+        assert cover.travel_calc.is_traveling()
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_state_change("switch.close", "off", "on")
+        finally:
+            cover._triggered_externally = False
+
+        assert not cover.travel_calc.is_traveling()
+        await _cancel_tasks(cover)
+
+    @pytest.mark.asyncio
+    async def test_external_open_when_idle_starts_opening(self):
+        """Sanity: idle + external open pulse still opens the cover."""
+        cover = _make_toggle_cover()
+        cover.travel_calc.set_position(0)
+        assert not cover.travel_calc.is_traveling()
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_state_change("switch.open", "off", "on")
+        finally:
+            cover._triggered_externally = False
+
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 100
+        await _cancel_tasks(cover)

@@ -47,6 +47,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate config entries between versions."""
+    _LOGGER.debug(
+        "Migrating config entry %s from version %s", entry.entry_id, entry.version
+    )
+
+    if entry.version < 3:
+        new_options = dict(entry.options)
+        if new_options.get("tilt_mode") == "sequential":
+            new_options["tilt_mode"] = "sequential_close"
+        hass.config_entries.async_update_entry(entry, options=new_options, version=3)
+
+    return True
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

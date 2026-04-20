@@ -42,6 +42,7 @@ from .const import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
 )
+from .tilt_strategies import SequentialTilt
 from .tilt_strategies.planning import (
     calculate_pre_step_delay,
     extract_coupled_tilt,
@@ -418,6 +419,30 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def _async_move_to_endpoint(self, target):
         """Move cover to an endpoint (0=fully closed, 100=fully open)."""
         self._self_initiated_movement = not self._triggered_externally
+
+        # External close on sequential hardware runs the full journey:
+        # the motor drives all the way past cover-closed to the articulated
+        # extreme (tilt=100 on sequential_open, tilt=0 on sequential_close).
+        # Redirect to set_tilt_position so tracking plans both phases as
+        # [TravelTo(0), TiltTo(articulated)].
+        #
+        # Open externally is already handled correctly by the default plan
+        # (plan_move_position restores tilt to implicit before travel when
+        # starting from the articulated state).
+        if (
+            target == 0
+            and self._triggered_externally
+            and isinstance(self._tilt_strategy, SequentialTilt)
+        ):
+            articulated = 100 - self._tilt_strategy.implicit_tilt_during_travel
+            self._log(
+                "_async_move_to_endpoint :: external close on sequential → "
+                "set_tilt_position(%d) for full-journey tracking",
+                articulated,
+            )
+            await self.set_tilt_position(articulated)
+            return
+
         await self._abandon_active_lifecycle()
 
         closing = target == 0
@@ -480,9 +505,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         tilt_target = None
         pre_step_delay = 0.0
-        if not self._triggered_externally:
-            # Only plan tilt for self-initiated movements — external movements
-            # can't control relay sequencing (the relay is already on).
+        # Dual-motor externals skip tilt planning entirely — the separate tilt
+        # relay can't be sequenced, and the snap-to-endpoint fall-through in
+        # _plan_tilt_for_travel has no way to drive the tilt motor afterwards.
+        # Shared-motor strategies (inline, sequential_*) still need planning
+        # so the calculators stay in sync with the single motor's multi-phase
+        # motion (e.g. sequential_open: tilt close 100→0 then travel 0→100).
+        skip_tilt_planning = (
+            self._triggered_externally
+            and self._tilt_strategy is not None
+            and self._tilt_strategy.uses_tilt_motor
+        )
+        if not skip_tilt_planning:
             current_tilt = (
                 self.tilt_calc.current_position() if self._tilt_strategy else None
             )
@@ -505,11 +539,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _async_move_tilt_to_endpoint(self, target):
         """Move tilt to an endpoint (0=fully closed, 100=fully open)."""
+        self._self_initiated_movement = not self._triggered_externally
         await self._abandon_active_lifecycle()
 
         closing = target == 0
-        command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
-        opposite_command = SERVICE_OPEN_COVER if closing else SERVICE_CLOSE_COVER
+        if self._tilt_strategy is not None:
+            command = self._tilt_strategy.tilt_command_for(closing)
+            opposite_command = self._tilt_strategy.tilt_command_for(not closing)
+        else:
+            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
+            opposite_command = SERVICE_OPEN_COVER if closing else SERVICE_CLOSE_COVER
 
         if self._startup_delay_task and not self._startup_delay_task.done():
             if self._last_command == opposite_command:
@@ -675,6 +714,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def set_tilt_position(self, position):
         """Move cover tilt to a designated position."""
+        self._self_initiated_movement = not self._triggered_externally
         await self._abandon_active_lifecycle()
         current = self.tilt_calc.current_position()
         target = position
@@ -686,17 +726,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         if current is None:
             closing = target <= 50
-            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
             current = 100 if closing else 0
             self.tilt_calc.update_position(current)
         elif target < current:
-            command = SERVICE_CLOSE_COVER
+            closing = True
         elif target > current:
-            command = SERVICE_OPEN_COVER
+            closing = False
         else:
             return
 
-        closing = command == SERVICE_CLOSE_COVER
+        if self._tilt_strategy is not None:
+            command = self._tilt_strategy.tilt_command_for(closing)
+        else:
+            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
 
         should_proceed, is_direction_change = await self._handle_pre_movement_checks(
             command
@@ -1368,8 +1410,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             else:
                 await self._send_tilt_open()
         else:
-            # Shared motor (inline): reverse main motor direction
-            command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
+            # Shared motor (inline or sequential): consult the strategy for direction.
+            command = self._tilt_strategy.tilt_command_for(closing)
             await self._async_handle_command(command)
 
         self.tilt_calc.start_travel(restore_target)

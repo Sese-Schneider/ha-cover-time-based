@@ -215,6 +215,63 @@ class TestCalibrationTiltTime:
             await cover.start_calibration(attribute="tilt_time_open", timeout=30.0)
         assert cover._calibration.attribute == "tilt_time_open"
 
+    @pytest.mark.asyncio
+    async def test_sequential_open_tilt_time_open_sends_close(self, make_cover):
+        """With SequentialOpenTilt, calibrating tilt_time_open moves motor DOWN."""
+        cover = make_cover(
+            travel_time_open=10.0,
+            travel_time_close=10.0,
+            tilt_time_open=2.0,
+            tilt_time_close=2.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_open", timeout=60.0)
+
+            turn_on_calls = [
+                c
+                for c in cover.hass.services.async_call.call_args_list
+                if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+            ]
+            activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+            # tilt_time_open on sequential_open -> motor DOWN -> CLOSE relay.
+            assert cover._close_switch_entity_id in activated
+            assert cover._open_switch_entity_id not in activated
+
+            # Cleanup: cancel the running calibration.
+            await cover.stop_calibration(cancel=True)
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_tilt_time_close_sends_open(self, make_cover):
+        """With SequentialOpenTilt, calibrating tilt_time_close moves motor UP."""
+        cover = make_cover(
+            travel_time_open=10.0,
+            travel_time_close=10.0,
+            tilt_time_open=2.0,
+            tilt_time_close=2.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_close", timeout=60.0)
+
+            turn_on_calls = [
+                c
+                for c in cover.hass.services.async_call.call_args_list
+                if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+            ]
+            activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+            # tilt_time_close on sequential_open -> motor UP -> OPEN relay.
+            assert cover._open_switch_entity_id in activated
+            assert cover._close_switch_entity_id not in activated
+
+            await cover.stop_calibration(cancel=True)
+
 
 class TestMotorOverheadCalibration:
     @pytest.mark.asyncio

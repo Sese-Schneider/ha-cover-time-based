@@ -293,8 +293,13 @@ class TestToggleModeExternalStateChange:
         assert cover._last_command == SERVICE_CLOSE_COVER
 
     @pytest.mark.asyncio
-    async def test_off_to_on_while_opening_reissues(self, make_cover):
-        """OFF->ON on open switch while opening re-issues open (no special stop)."""
+    async def test_off_to_on_while_opening_stops(self, make_cover):
+        """OFF->ON on open switch while opening stops the motor.
+
+        Toggle motor controllers latch OFF on a second same-direction pulse.
+        The integration mirrors that: a same-direction external toggle during
+        travel stops instead of re-issuing the direction.
+        """
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
@@ -307,11 +312,11 @@ class TestToggleModeExternalStateChange:
             finally:
                 cover._triggered_externally = False
 
-        assert cover._last_command == SERVICE_OPEN_COVER
+        assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_off_to_on_while_closing_reissues(self, make_cover):
-        """OFF->ON on close switch while closing re-issues close (no special stop)."""
+    async def test_off_to_on_while_closing_stops(self, make_cover):
+        """OFF->ON on close switch while closing stops the motor (same-direction toggle)."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -324,11 +329,11 @@ class TestToggleModeExternalStateChange:
             finally:
                 cover._triggered_externally = False
 
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
     async def test_debounce_ignores_rapid_second_pulse(self, make_cover):
-        """Second OFF->ON within debounce window is ignored."""
+        """Second OFF->ON within debounce window is ignored (contact bounce)."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(0)
 
@@ -348,8 +353,40 @@ class TestToggleModeExternalStateChange:
                 cover._triggered_externally = False
 
     @pytest.mark.asyncio
-    async def test_full_cycle_same_direction_reissues(self, make_cover):
-        """Click 1 starts, click 2 (same direction after debounce) re-issues open."""
+    async def test_debounce_allows_second_click_after_1_second(self, make_cover):
+        """Second click ~1s after the first is a legitimate toggle, not a bounce.
+
+        Regression: an earlier debounce window of pulse_time + 0.5 (1.5s with
+        default pulse_time=1.0) swallowed deliberate clicks up to 1.5s apart,
+        so a "start then stop" cadence got stuck on the start.
+        """
+        import time as time_module
+
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            cover._triggered_externally = True
+            try:
+                # Click 1 starts opening
+                await cover._handle_external_state_change("switch.open", "off", "on")
+                assert cover.is_opening
+
+                # Backdate the recorded click so "now - last" == 1 second
+                cover._last_external_toggle_time["switch.open"] = (
+                    time_module.monotonic() - 1.0
+                )
+
+                # Click 2 at +1s should NOT be debounced → same-direction
+                # while opening → stops the motor.
+                await cover._handle_external_state_change("switch.open", "off", "on")
+                assert not cover.travel_calc.is_traveling()
+            finally:
+                cover._triggered_externally = False
+
+    @pytest.mark.asyncio
+    async def test_full_cycle_same_direction_stops(self, make_cover):
+        """Click 1 starts, click 2 (same direction after debounce) stops."""
         import time as time_module
 
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
@@ -368,9 +405,10 @@ class TestToggleModeExternalStateChange:
                     time_module.monotonic() - cover._pulse_time - 0.5 - 0.1
                 )
 
-                # Click 2: same direction re-issues open (no special stop)
+                # Click 2: same direction stops the motor (matches toggle
+                # hardware where a second same-direction pulse latches OFF).
                 await cover._handle_external_state_change("switch.open", "off", "on")
-                assert cover._last_command == SERVICE_OPEN_COVER
+                assert not cover.travel_calc.is_traveling()
             finally:
                 cover._triggered_externally = False
 

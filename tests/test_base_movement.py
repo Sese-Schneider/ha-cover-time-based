@@ -1682,6 +1682,119 @@ class TestDualMotorTiltOnlyCommands:
 
 
 # ===================================================================
+# SequentialOpenTilt: inverted motor direction for tilt endpoint commands
+# ===================================================================
+
+
+class TestSequentialOpenTiltEndpoint:
+    """SequentialOpenTilt inverts the motor direction for tilt endpoint moves.
+
+    Slats physically sit at tilt=0 (closed) while the cover is not at the
+    closed position. Closing the tilt (target=0) means driving the motor
+    UP (OPEN relay) back to the slats-closed position; opening the tilt
+    (target=100) means driving the motor further DOWN (CLOSE relay) past
+    the cover-closed position.
+    """
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_tilt_close_sends_open_command(self, make_cover):
+        """SequentialOpenTilt: closing the tilt physically sends OPEN (motor up)."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover_tilt()
+
+        calls = cover.hass.services.async_call.call_args_list
+        turn_on_calls = [
+            c for c in calls if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+        ]
+        activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+        # Inverted: closing the tilt should activate the OPEN relay.
+        assert cover._open_switch_entity_id in activated
+        assert cover._close_switch_entity_id not in activated
+        # _last_command tracks the motor command actually sent.
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_tilt_open_sends_close_command(self, make_cover):
+        """SequentialOpenTilt: opening the tilt physically sends CLOSE (motor down)."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover_tilt()
+
+        calls = cover.hass.services.async_call.call_args_list
+        turn_on_calls = [
+            c for c in calls if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+        ]
+        activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+        # Inverted: opening the tilt should activate the CLOSE relay.
+        assert cover._close_switch_entity_id in activated
+        assert cover._open_switch_entity_id not in activated
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_set_tilt_position_sends_close(self, make_cover):
+        """SequentialOpenTilt: moving tilt from 0->50 sends CLOSE (motor down)."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(50)
+
+        calls = cover.hass.services.async_call.call_args_list
+        turn_on_calls = [
+            c for c in calls if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+        ]
+        activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+        # Opening the tilt (target 50 > current 0) should drive CLOSE relay.
+        assert cover._close_switch_entity_id in activated
+        assert cover._open_switch_entity_id not in activated
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_set_tilt_position_sends_open(self, make_cover):
+        """SequentialOpenTilt: moving tilt from 100->50 sends OPEN (motor up)."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(50)
+
+        calls = cover.hass.services.async_call.call_args_list
+        turn_on_calls = [
+            c for c in calls if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+        ]
+        activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+        # Closing the tilt (target 50 < current 100) should drive OPEN relay.
+        assert cover._open_switch_entity_id in activated
+        assert cover._close_switch_entity_id not in activated
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+
+# ===================================================================
 # Wrapped cover + dual_motor: tilt via cover entity services
 # ===================================================================
 
@@ -2505,14 +2618,60 @@ class TestExternalMovementSkipsTiltPlanning:
         assert cover._self_initiated_movement is False
 
     @pytest.mark.asyncio
-    async def test_external_sequential_tilt_also_skipped(self, make_cover):
-        """External open also skips tilt planning for sequential mode."""
+    async def test_tilt_endpoint_clears_stale_external_flag(self, make_cover):
+        """_async_move_tilt_to_endpoint must reset _self_initiated_movement.
+
+        Regression: after an external travel movement the flag is False.
+        Without resetting at the top of _async_move_tilt_to_endpoint, a
+        subsequent HA-initiated tilt call carries that stale False through
+        to auto_stop_if_necessary, which then skips sending the STOP relay
+        — the motor can be left running indefinitely.
+        """
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(50)
+        # Simulate a prior external movement having left the flag False.
+        cover._self_initiated_movement = False
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover_tilt()
+
+        # HA-initiated tilt: flag must be restored to True so STOP fires
+        # when the tilt reaches the endpoint.
+        assert cover._self_initiated_movement is True
+
+    @pytest.mark.asyncio
+    async def test_set_tilt_position_clears_stale_external_flag(self, make_cover):
+        """set_tilt_position must reset _self_initiated_movement.
+
+        Same regression as test_tilt_endpoint_clears_stale_external_flag but
+        for the non-endpoint tilt path (arbitrary tilt_position service call).
+        """
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(20)
+        cover._self_initiated_movement = False
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(80)
+
+        assert cover._self_initiated_movement is True
+
+    @pytest.mark.asyncio
+    async def test_external_sequential_close_couples_tilt(self, make_cover):
+        """External open in sequential_close couples tilt so the tracker matches
+        the single motor's physical tilt-then-travel motion.
+
+        Starting from (travel=0, tilt=0) — slats articulated closed — pressing
+        the external up button physically lifts the motor through two phases:
+        first slats tilt to 100 (implicit rest), then cover travels to 100.
+        The travel tracker must be delayed by the tilt phase duration so both
+        calculators stay in sync with the real cover.
+        """
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
             tilt_mode="sequential",
-            safe_tilt_position=50,
-            max_tilt_allowed_position=50,
         )
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
@@ -2524,6 +2683,203 @@ class TestExternalMovementSkipsTiltPlanning:
         finally:
             cover._triggered_externally = False
 
-        # Travel tracking starts directly, no tilt coupling
-        assert cover.travel_calc.is_traveling()
+        # Tilt is coupled: calculator now targets implicit (100) and is
+        # actively tracking toward it.
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc._travel_to_position == 100
+        # Travel is still tracking (target 100) but delayed until the tilt
+        # phase completes — no dual-motor pre-step was triggered.
+        assert cover.travel_calc._travel_to_position == 100
         assert cover._pending_travel_target is None
+
+    @pytest.mark.asyncio
+    async def test_external_sequential_open_couples_tilt(self, make_cover):
+        """External open in sequential_open couples tilt when starting from
+        the articulated-open position (travel=0, tilt=100).
+
+        Mirror of the sequential_close case: the motor runs UP, first closing
+        the slats (tilt 100→0) and then lifting the cover (travel 0→100).
+        Without coupled tilt tracking, the tilt tracker would stay at 100 and
+        snap-to-implicit on the next stop would make the tilt appear to jump.
+        """
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_open_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # Tilt is coupled: targeting implicit (0) and tracking.
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc._travel_to_position == 0
+        assert cover.travel_calc._travel_to_position == 100
+        assert cover._pending_travel_target is None
+
+
+# ===================================================================
+# External close on sequential hardware: full journey (travel + articulate)
+# ===================================================================
+
+
+class TestSequentialExternalFullJourney:
+    """Sequential-mode external close is assumed to run the full journey.
+
+    A physical close pulse drives the motor DOWN past the cover-closed
+    position to the mechanical end — articulating the slats as a second
+    phase. The tracker needs to plan both phases so the reported tilt
+    position follows the real motor.
+
+    Assumption: the external motor doesn't auto-stop at cover-closed for
+    sequential hardware. Users whose hardware behaves differently should
+    open an issue.
+    """
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_external_close_from_top_tracks_both_phases(
+        self, make_cover
+    ):
+        """External close at (travel=100, tilt=0): motor goes 100→0 travel,
+        then 0→100 tilt."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(0)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_close_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # Travel tracker targets 0 (close); tilt tracker targets 100
+        # (articulated), delayed until the travel phase completes.
+        assert cover.travel_calc._travel_to_position == 0
+        assert cover.tilt_calc._travel_to_position == 100
+
+    @pytest.mark.asyncio
+    async def test_sequential_close_external_close_from_top_articulates(
+        self, make_cover
+    ):
+        """Conventional sequential_close: external close 100→0 travel then
+        100→0 tilt (slats articulate closed)."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_close",
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_close_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # Travel → 0, tilt → 0 (opposite of implicit=100).
+        assert cover.travel_calc._travel_to_position == 0
+        assert cover.tilt_calc._travel_to_position == 0
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_external_close_from_middle_articulates(
+        self, make_cover
+    ):
+        """External close at (0, 0): cover already closed, motor just
+        articulates slats 0→100."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_close_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # No travel needed; tilt tracks 0→100.
+        assert cover.tilt_calc._travel_to_position == 100
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_external_close_already_articulated_noop(
+        self, make_cover
+    ):
+        """External close at (0, 100): already at the mechanical end — no-op."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_close_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # Nothing is tracking — we're already at the final state.
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_self_initiated_close_only_travels(self, make_cover):
+        """HA-UI close (not external) still just travels — separate close
+        and close-tilt buttons handle their own phases."""
+        cover = make_cover(
+            tilt_time_close=4.0,
+            tilt_time_open=4.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # Travel tracker targets 0; tilt tracker stays put.
+        assert cover.travel_calc._travel_to_position == 0
+        assert cover.tilt_calc._travel_to_position == 0
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_non_sequential_external_close_not_redirected(self, make_cover):
+        """Inline/dual_motor external close uses the default endpoint path —
+        the sequential redirect only fires for SequentialTilt strategies."""
+        cover = make_cover(
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(50)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_close_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # Travel targets 0 (standard close); tilt target follows the
+        # inline plan (coupled to 0 as part of travel).
+        assert cover.travel_calc._travel_to_position == 0

@@ -41,7 +41,8 @@ from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBas
 from custom_components.cover_time_based.tilt_strategies import (
     DualMotorTilt,
     InlineTilt,
-    SequentialTilt,
+    SequentialCloseTilt,
+    SequentialOpenTilt,
 )
 
 
@@ -428,14 +429,26 @@ class TestResolveTiltStrategy:
         assert _resolve_tilt_strategy("none", 2.0, 2.0) is None
 
     def test_none_when_no_tilt_times(self):
-        assert _resolve_tilt_strategy("sequential", None, None) is None
+        assert _resolve_tilt_strategy("sequential_close", None, None) is None
 
     def test_none_when_partial_tilt_times(self):
-        assert _resolve_tilt_strategy("sequential", 2.0, None) is None
+        assert _resolve_tilt_strategy("sequential_close", 2.0, None) is None
 
-    def test_sequential(self):
+    def test_sequential_close(self):
+        result = _resolve_tilt_strategy("sequential_close", 2.0, 2.0)
+        assert isinstance(result, SequentialCloseTilt)
+        assert result.name == "sequential_close"
+
+    def test_sequential_open(self):
+        result = _resolve_tilt_strategy("sequential_open", 2.0, 2.0)
+        assert isinstance(result, SequentialOpenTilt)
+        assert result.name == "sequential_open"
+
+    def test_sequential_legacy_alias(self):
+        """Legacy 'sequential' value resolves to SequentialCloseTilt."""
         result = _resolve_tilt_strategy("sequential", 2.0, 2.0)
-        assert isinstance(result, SequentialTilt)
+        assert isinstance(result, SequentialCloseTilt)
+        assert result.name == "sequential_close"
 
     def test_dual_motor_defaults(self):
         result = _resolve_tilt_strategy("dual_motor", 2.0, 2.0)
@@ -464,9 +477,9 @@ class TestResolveTiltStrategy:
         result = _resolve_tilt_strategy("inline", 2.0, 2.0)
         assert isinstance(result, InlineTilt)
 
-    def test_unknown_mode_defaults_to_sequential(self):
+    def test_unknown_mode_defaults_to_sequential_close(self):
         result = _resolve_tilt_strategy("unknown_value", 2.0, 2.0)
-        assert isinstance(result, SequentialTilt)
+        assert isinstance(result, SequentialCloseTilt)
 
 
 # ===================================================================

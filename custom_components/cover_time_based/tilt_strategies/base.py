@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+
 if TYPE_CHECKING:
     from ..travel_calculator import TravelCalculator
 
@@ -75,6 +77,16 @@ class TiltStrategy(ABC):
     def allows_tilt_at_position(self, _position: int) -> bool:
         """Whether tilt is allowed at the given cover position."""
         return True
+
+    def tilt_command_for(self, closing_tilt: bool) -> str:
+        """Return the HA cover service to send for this tilt direction.
+
+        The default maps closing_tilt=True to close and closing_tilt=False
+        to open. Strategies with inverted physical direction (e.g.
+        SequentialOpenTilt, where slats open by motor driving further down)
+        override this.
+        """
+        return SERVICE_CLOSE_COVER if closing_tilt else SERVICE_OPEN_COVER
 
     @abstractmethod
     def snap_trackers_to_physical(

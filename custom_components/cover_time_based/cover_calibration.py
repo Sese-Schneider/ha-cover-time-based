@@ -117,12 +117,16 @@ class CalibrationMixin:
         """Start a simple travel/tilt time test by moving the cover."""
         assert self._calibration is not None
         if direction:
-            self._calibration.move_command = self._resolve_direction(direction, None)
+            move_command = self._resolve_direction(direction, None)
+        elif attribute.startswith("tilt_") and self._tilt_strategy is not None:
+            closing_tilt = "close" in attribute
+            move_command = self._tilt_strategy.tilt_command_for(closing_tilt)
         elif "close" in attribute:
-            self._calibration.move_command = SERVICE_CLOSE_COVER
+            move_command = SERVICE_CLOSE_COVER
         else:
-            self._calibration.move_command = SERVICE_OPEN_COVER
-        await self._async_handle_command(self._calibration.move_command)
+            move_command = SERVICE_OPEN_COVER
+        self._calibration.move_command = move_command
+        await self._async_handle_command(move_command)
 
     async def _start_overhead_test(self, attribute, direction):
         """Start automated step test for motor overhead."""
