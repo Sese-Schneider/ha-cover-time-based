@@ -555,6 +555,43 @@ class TestWrappedCoverExternalStateChange:
 
         assert not cover.travel_calc.is_traveling()
 
+    @pytest.mark.asyncio
+    async def test_opening_to_unknown_does_not_stop(self, make_cover):
+        """Stateless covers transition to 'unknown' while still moving.
+
+        opening->unknown must NOT be treated as an external stop, because
+        'unknown' means 'no state feedback', not 'stopped'.
+        """
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change(
+                "cover.inner", "opening", "unknown"
+            )
+
+        # Tracker should still be running — not stopped
+        assert cover.travel_calc.is_traveling()
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_closing_to_unavailable_does_not_stop(self, make_cover):
+        """closing->unavailable must NOT be treated as an external stop."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change(
+                "cover.inner", "closing", "unavailable"
+            )
+
+        assert cover.travel_calc.is_traveling()
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
 
 # ===================================================================
 # End-to-end tests through _async_switch_state_changed

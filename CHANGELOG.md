@@ -25,6 +25,7 @@
 
 ### Bug Fixes
 
+- Fixed wrapped cover treating `unknown`/`unavailable` state as an external stop — stateless covers (e.g. Somfy RTS via Overkiz) now track position correctly (#59)
 - Fixed calibration direction override for tilt attributes — server now derives direction from attribute name instead of card sending position-based guess
 - Fixed calibration overhead calculation for tilt (3 steps vs 8 travel steps)
 - Fixed toggle mode tilt restore clearing `_last_command` prematurely, breaking stop pulse
