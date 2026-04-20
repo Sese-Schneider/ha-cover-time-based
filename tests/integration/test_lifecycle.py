@@ -5,9 +5,12 @@ Tests correct entity creation from config and position restore on restart.
 
 from __future__ import annotations
 
-from homeassistant.components.cover import CoverEntityFeature
-from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.components.cover import ATTR_CURRENT_POSITION, CoverEntityFeature
+from homeassistant.core import HomeAssistant, State
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    mock_restore_cache,
+)
 
 from .conftest import DOMAIN
 
@@ -157,3 +160,80 @@ async def test_migrate_v3_is_idempotent(hass: HomeAssistant):
     assert result is True
     assert entry.version == 3
     assert entry.options["tilt_mode"] == "sequential_close"
+
+
+async def test_state_has_position_attribute_after_movement(
+    hass: HomeAssistant, setup_input_booleans
+):
+    """After set_known_position, the HA state should expose current_position.
+
+    This is what RestoreStateData saves to disk at HA shutdown. If the
+    attribute is missing, position cannot be restored on restart.
+    """
+    options = {
+        "control_mode": "switch",
+        "open_switch_entity_id": "input_boolean.open_switch",
+        "close_switch_entity_id": "input_boolean.close_switch",
+        "travel_time_open": 30.0,
+        "travel_time_close": 30.0,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=2, title="Test Cover", data={}, options=options
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    cover = _get_cover_entity(hass)
+    await cover.set_known_position(position=37)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("cover.test_cover")
+    assert state is not None
+    assert state.attributes.get(ATTR_CURRENT_POSITION) == 37
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_position_restored_from_ha_restart(
+    hass: HomeAssistant, setup_input_booleans
+):
+    """Position is restored from RestoreStateData after a full HA restart.
+
+    Simulates a real HA restart (not just config entry reload) by seeding
+    the restore cache with a prior state, then setting up the config entry.
+    The cover should read the saved state and restore its position.
+    """
+    options = {
+        "control_mode": "switch",
+        "open_switch_entity_id": "input_boolean.open_switch",
+        "close_switch_entity_id": "input_boolean.close_switch",
+        "travel_time_open": 30.0,
+        "travel_time_close": 30.0,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=2, title="Test Cover", data={}, options=options
+    )
+    entry.add_to_hass(hass)
+
+    # Seed the restore cache as if HA had saved state before restart.
+    mock_restore_cache(
+        hass,
+        [
+            State(
+                "cover.test_cover",
+                "open",
+                {ATTR_CURRENT_POSITION: 42},
+            )
+        ],
+    )
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    cover = _get_cover_entity(hass)
+    assert cover.current_cover_position == 42
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()

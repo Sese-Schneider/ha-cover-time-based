@@ -3,7 +3,7 @@
 import asyncio
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -57,7 +57,21 @@ def make_hass():
 
 
 @pytest.fixture
-def make_cover(make_hass):
+def _mock_position_store():
+    """Stub the PositionStore so unit tests with a MagicMock hass don't hit real Store."""
+    fake = MagicMock()
+    fake.async_get = AsyncMock(return_value=None)
+    fake.async_save = AsyncMock()
+    fake.async_remove = AsyncMock()
+    with patch(
+        "custom_components.cover_time_based.cover_base.async_get_position_store",
+        AsyncMock(return_value=fake),
+    ):
+        yield fake
+
+
+@pytest.fixture
+def make_cover(make_hass, _mock_position_store):
     """Return a factory that creates the appropriate cover subclass wired to a mock hass."""
     covers = []
 

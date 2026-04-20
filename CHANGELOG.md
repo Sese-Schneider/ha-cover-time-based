@@ -26,6 +26,7 @@
 
 ### Bug Fixes
 
+- **Position restore on restart:** Positions are now written to a dedicated Store whenever they stabilise (stop, `set_known_position`, movement completion) and reloaded on startup. Previously relied on HA's `RestoreEntity` state save, which misses position when shutdown is non-graceful or the entity is unavailable at save time. Store entries are cleaned up when a config entry is removed.
 - Fixed wrapped cover treating `unknown`/`unavailable` state as an external stop — stateless covers (e.g. Somfy RTS via Overkiz) now track position correctly (#59)
 - Fixed calibration direction override for tilt attributes — server now derives direction from attribute name instead of card sending position-based guess
 - Fixed calibration overhead calculation for tilt (3 steps vs 8 travel steps)
