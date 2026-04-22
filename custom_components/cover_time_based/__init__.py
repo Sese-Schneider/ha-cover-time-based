@@ -8,6 +8,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
 from .position_storage import async_get_position_store
@@ -15,33 +16,28 @@ from .websocket_api import async_register_websocket_api
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.COVER]
-_FRONTEND_KEY = f"{DOMAIN}_frontend_registered"
+_PANEL_URL = f"/{DOMAIN}_panel"
+_CARD_JS_URL = f"{_PANEL_URL}/cover-time-based-card.js"
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the Lovelace card and WebSocket API once per HA session."""
+    async_register_websocket_api(hass)
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                _PANEL_URL,
+                str(Path(__file__).parent / "frontend"),
+                cache_headers=False,
+            )
+        ]
+    )
+    frontend.add_extra_js_url(hass, _CARD_JS_URL)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Cover Time Based from a config entry."""
-    # Register frontend and WebSocket API once (not per entry).
-    # Done before platform setup so the card works even if the entity fails.
-    if _FRONTEND_KEY not in hass.data:
-        hass.data[_FRONTEND_KEY] = True
-
-        async_register_websocket_api(hass)
-
-        if hass.http is not None:
-            await hass.http.async_register_static_paths(
-                [
-                    StaticPathConfig(
-                        "/cover_time_based_panel",
-                        str(Path(__file__).parent / "frontend"),
-                        cache_headers=False,
-                    )
-                ]
-            )
-
-            frontend.add_extra_js_url(
-                hass, "/cover_time_based_panel/cover-time-based-card.js"
-            )
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 

@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Bug Fixes
+
+- Card JS is now registered when the integration loads, not when the first config entry is set up, so dashboards referencing `custom:cover-time-based-card` render correctly even before any cover_time_based entity exists.
+
 ### Features
 
 - **Sequential tilt split into two variants:** `sequential_close` (conventional — slats close when the motor drives further down past cover-closed) and `sequential_open` (for covers where slats *open* by driving further down past cover-closed, e.g. certain tilting shutters). Existing `sequential` configs auto-migrate to `sequential_close` (issue #61). On sequential modes, external close (physical switch or automation) tracks the full motor journey — travel then articulate — assuming the motor runs past cover-closed to the mechanical end. HA UI buttons remain travel-only for `close`/`open` and tilt-only for `close_tilt`/`open_tilt`.
