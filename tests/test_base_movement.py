@@ -758,6 +758,84 @@ class TestRelayDelayAtEnd:
         # startup delay task was created rather than is_traveling)
         assert cover._startup_delay_task is not None or cover.travel_calc.is_traveling()
 
+    @pytest.mark.asyncio
+    async def test_no_runon_at_closed_for_sequential_close(self, make_cover):
+        """Sequential close-tilt runs a tilt phase at position 0.
+
+        Run-on there would extend the motor past the tilt phase, so
+        the relay should stop immediately at the closed endpoint.
+        """
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_close",
+            endpoint_runon_time=4.0,
+        )
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(0)
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.auto_stop_if_necessary()
+
+        assert cover._delay_task is None
+
+    @pytest.mark.asyncio
+    async def test_runon_at_open_for_sequential_close(self, make_cover):
+        """Open endpoint has no trailing tilt phase — run-on still applies."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_close",
+            endpoint_runon_time=4.0,
+        )
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        cover.travel_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.auto_stop_if_necessary()
+
+        assert cover._delay_task is not None
+        cover._delay_task.cancel()
+
+    @pytest.mark.asyncio
+    async def test_no_runon_at_closed_for_sequential_open(self, make_cover):
+        """Sequential open-tilt also runs a tilt phase at position 0."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+            endpoint_runon_time=4.0,
+        )
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(0)
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.auto_stop_if_necessary()
+
+        assert cover._delay_task is None
+
+    @pytest.mark.asyncio
+    async def test_runon_at_open_for_sequential_open(self, make_cover):
+        """Open endpoint has no trailing tilt phase — run-on still applies."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+            endpoint_runon_time=4.0,
+        )
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        cover.travel_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.auto_stop_if_necessary()
+
+        assert cover._delay_task is not None
+        cover._delay_task.cancel()
+
 
 # ===================================================================
 # Stop cover

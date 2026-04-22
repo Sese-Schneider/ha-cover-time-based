@@ -78,6 +78,15 @@ class TiltStrategy(ABC):
         """Whether tilt is allowed at the given cover position."""
         return True
 
+    def allows_endpoint_runon(self, _position: int) -> bool:
+        """Whether endpoint run-on should fire at the given endpoint.
+
+        Strategies that run a tilt phase at an endpoint (e.g. sequential
+        modes at position 0) should return False there, so that run-on
+        does not extend the motor beyond the tilt phase.
+        """
+        return True
+
     def tilt_command_for(self, closing_tilt: bool) -> str:
         """Return the HA cover service to send for this tilt direction.
 
