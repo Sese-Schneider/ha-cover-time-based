@@ -1173,15 +1173,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 return
 
             current_travel = self.travel_calc.current_position()
-            runon_allowed_by_strategy = (
-                self._tilt_strategy is None
-                or self._tilt_strategy.allows_endpoint_runon(current_travel)
-            )
             if (
                 self._endpoint_runon_time is not None
                 and self._endpoint_runon_time > 0
+                and current_travel is not None
                 and current_travel in (0, 100)
-                and runon_allowed_by_strategy
+                and (
+                    self._tilt_strategy is None
+                    or self._tilt_strategy.allows_endpoint_runon(current_travel)
+                )
             ):
                 self._log(
                     "auto_stop_if_necessary :: at endpoint (position=%d),"
