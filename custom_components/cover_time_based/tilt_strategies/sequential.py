@@ -72,6 +72,12 @@ class SequentialTilt(TiltStrategy):
         steps.append(TiltTo(target_tilt))
         return steps
 
+    def allows_endpoint_runon(self, position: int) -> bool:
+        # At position 0 sequential modes run a tilt phase (TiltTo after
+        # TravelTo(0)). Run-on there would keep the motor driving after
+        # that tilt phase completes, adding unwanted motor travel.
+        return position != 0
+
     def snap_trackers_to_physical(self, travel_calc, tilt_calc):
         current_travel = travel_calc.current_position()
         current_tilt_pos = tilt_calc.current_position()

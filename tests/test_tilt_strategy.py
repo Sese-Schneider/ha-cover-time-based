@@ -80,6 +80,33 @@ class TestSequentialTiltProperties:
         assert SequentialTilt().implicit_tilt_during_travel == 100
 
 
+class TestSequentialAllowsEndpointRunon:
+    """Sequential tilt modes execute a tilt phase at position 0.
+
+    Run-on at the closed endpoint would keep the motor running after
+    that tilt phase, adding unwanted motor travel. The open endpoint
+    has no trailing tilt phase, so run-on is allowed there.
+    """
+
+    def test_disallowed_at_closed_endpoint(self):
+        assert SequentialTilt().allows_endpoint_runon(0) is False
+
+    def test_allowed_at_open_endpoint(self):
+        assert SequentialTilt().allows_endpoint_runon(100) is True
+
+    def test_sequential_close_disallowed_at_closed(self):
+        assert SequentialCloseTilt().allows_endpoint_runon(0) is False
+
+    def test_sequential_close_allowed_at_open(self):
+        assert SequentialCloseTilt().allows_endpoint_runon(100) is True
+
+    def test_sequential_open_disallowed_at_closed(self):
+        assert SequentialOpenTilt().allows_endpoint_runon(0) is False
+
+    def test_sequential_open_allowed_at_open(self):
+        assert SequentialOpenTilt().allows_endpoint_runon(100) is True
+
+
 class TestSequentialPlanMovePosition:
     def test_flattens_tilt_before_travel(self):
         strategy = SequentialTilt()
@@ -216,6 +243,16 @@ class TestDualMotorTiltProperties:
 
     def test_restores_tilt(self):
         assert DualMotorTilt().restores_tilt is True
+
+
+class TestDualMotorAllowsEndpointRunon:
+    """Dual-motor uses a separate tilt motor — travel run-on not affected."""
+
+    def test_allowed_at_closed(self):
+        assert DualMotorTilt().allows_endpoint_runon(0) is True
+
+    def test_allowed_at_open(self):
+        assert DualMotorTilt().allows_endpoint_runon(100) is True
 
 
 class TestDualMotorPlanMovePosition:
@@ -384,6 +421,16 @@ class TestInlineTiltProperties:
 
     def test_can_calibrate_tilt(self):
         assert InlineTilt().can_calibrate_tilt() is True
+
+
+class TestInlineAllowsEndpointRunon:
+    """Inline tilt has no trailing tilt phase at endpoints — run-on allowed."""
+
+    def test_allowed_at_closed(self):
+        assert InlineTilt().allows_endpoint_runon(0) is True
+
+    def test_allowed_at_open(self):
+        assert InlineTilt().allows_endpoint_runon(100) is True
 
 
 class TestInlinePlanMovePosition:

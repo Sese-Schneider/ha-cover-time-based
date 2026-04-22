@@ -198,6 +198,8 @@ Recommended values: 0.05 - 0.15 seconds. Can be configured separately for travel
 
 Position tracking is not exact and can drift over time. To reduce drift, the position tracker resyncs itself whenever the cover is sent to the 0% or 100% endpoints. The motor continues running for the number of seconds specified in the **Endpoint Run-on Time** in case the physical cover hasn't quite reached the endpoint. Defaults to 2s.
 
+Under the **sequential closes-then-tilts-closed** and **sequential closes-then-tilts-open** tilt modes, run-on is skipped at the closed (0%) endpoint, because the motor is already driven past cover-closed for the tilt phase. Run-on still applies at the open (100%) endpoint.
+
 #### Min movement time
 
 Prevents position drift by blocking relay activations too brief to physically move the cover. Movements to 0% or 100% are always allowed. Recommended values: 0.5 - 1.5 seconds.

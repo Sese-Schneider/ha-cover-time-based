@@ -26,6 +26,7 @@
 
 ### Bug Fixes
 
+- Endpoint run-on is now skipped at the closed (0%) endpoint under `sequential_close` and `sequential_open` tilt modes, where the motor is already driven past cover-closed for the tilt phase. Run-on still applies at the open (100%) endpoint.
 - **Position restore on restart:** Positions are now written to a dedicated Store whenever they stabilise (stop, `set_known_position`, movement completion) and reloaded on startup. Previously relied on HA's `RestoreEntity` state save, which misses position when shutdown is non-graceful or the entity is unavailable at save time. Store entries are cleaned up when a config entry is removed.
 - Fixed wrapped cover treating `unknown`/`unavailable` state as an external stop — stateless covers (e.g. Somfy RTS via Overkiz) now track position correctly (#59)
 - Fixed calibration direction override for tilt attributes — server now derives direction from attribute name instead of card sending position-based guess
