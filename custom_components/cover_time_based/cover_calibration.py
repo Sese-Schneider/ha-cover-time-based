@@ -118,15 +118,30 @@ class CalibrationMixin:
         assert self._calibration is not None
         if direction:
             move_command = self._resolve_direction(direction, None)
-        elif attribute.startswith("tilt_") and self._tilt_strategy is not None:
+        elif attribute.startswith("tilt_"):
             closing_tilt = "close" in attribute
-            move_command = self._tilt_strategy.tilt_command_for(closing_tilt)
+            move_command = self._tilt_calibration_command(closing_tilt)
         elif "close" in attribute:
             move_command = SERVICE_CLOSE_COVER
         else:
             move_command = SERVICE_OPEN_COVER
         self._calibration.move_command = move_command
         await self._async_handle_command(move_command)
+
+    def _tilt_calibration_command(self, closing_tilt: bool) -> str:
+        """Resolve the relay direction for tilt calibration.
+
+        Prefers the live tilt strategy, but falls back to the raw configured
+        tilt_mode string when the strategy hasn't been resolved yet — this
+        happens before both tilt times are set, i.e. during first-time
+        calibration. Without this fallback sequential_open would send the
+        sequential_close-shaped default (issue #61).
+        """
+        if self._tilt_strategy is not None:
+            return self._tilt_strategy.tilt_command_for(closing_tilt)
+        if getattr(self, "_tilt_mode_str", None) == "sequential_open":
+            return SERVICE_OPEN_COVER if closing_tilt else SERVICE_CLOSE_COVER
+        return SERVICE_CLOSE_COVER if closing_tilt else SERVICE_OPEN_COVER
 
     async def _start_overhead_test(self, attribute, direction):
         """Start automated step test for motor overhead."""
