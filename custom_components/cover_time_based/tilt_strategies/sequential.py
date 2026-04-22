@@ -73,9 +73,11 @@ class SequentialTilt(TiltStrategy):
         return steps
 
     def allows_endpoint_runon(self, position: int) -> bool:
-        # At position 0 sequential modes run a tilt phase (TiltTo after
-        # TravelTo(0)). Run-on there would keep the motor driving after
-        # that tilt phase completes, adding unwanted motor travel.
+        # Run-on at position 0 would drive the motor further down past
+        # cover-closed — which for sequential modes is a slat-articulation
+        # direction (tilt-close for sequential_close; tilt-open for
+        # sequential_open). Blocking here is correct for both the post-
+        # TiltTo(0) case and for a bare TravelTo(0) with no trailing tilt.
         return position != 0
 
     def snap_trackers_to_physical(self, travel_calc, tilt_calc):
