@@ -272,6 +272,73 @@ class TestCalibrationTiltTime:
 
             await cover.stop_calibration(cancel=True)
 
+    @pytest.mark.asyncio
+    async def test_sequential_open_tilt_time_close_without_tilt_times_set(
+        self, make_cover
+    ):
+        """First-time tilt_time_close calibration on sequential_open must press OPEN.
+
+        When the user configures tilt_mode=sequential_open but hasn't yet
+        calibrated either tilt time, _tilt_strategy resolves to None (because
+        has_tilt_times=False).  The calibration dispatch must still consult
+        tilt_mode to pick the correct relay — otherwise it falls back to the
+        SequentialCloseTilt-shaped default (tilt_time_close → CLOSE relay),
+        which is inverted for sequential_open.  Reported in issue #61 after
+        beta.3: user saw `down` relay fire when calibrating tilt_time_close
+        with mode "Closes then tilts open".
+        """
+        cover = make_cover(
+            travel_time_open=10.0,
+            travel_time_close=10.0,
+            # Neither tilt time set — user is calibrating for the first time.
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_close", timeout=60.0)
+
+            turn_on_calls = [
+                c
+                for c in cover.hass.services.async_call.call_args_list
+                if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+            ]
+            activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+            assert cover._open_switch_entity_id in activated, (
+                f"expected OPEN relay, got {activated}"
+            )
+            assert cover._close_switch_entity_id not in activated
+
+            await cover.stop_calibration(cancel=True)
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_tilt_time_open_without_tilt_times_set(
+        self, make_cover
+    ):
+        """First-time tilt_time_open calibration on sequential_open must press CLOSE."""
+        cover = make_cover(
+            travel_time_open=10.0,
+            travel_time_close=10.0,
+            tilt_mode="sequential_open",
+        )
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_open", timeout=60.0)
+
+            turn_on_calls = [
+                c
+                for c in cover.hass.services.async_call.call_args_list
+                if c[0][0] == "homeassistant" and c[0][1] == "turn_on"
+            ]
+            activated = [c[0][2]["entity_id"] for c in turn_on_calls]
+            assert cover._close_switch_entity_id in activated, (
+                f"expected CLOSE relay, got {activated}"
+            )
+            assert cover._open_switch_entity_id not in activated
+
+            await cover.stop_calibration(cancel=True)
+
 
 class TestMotorOverheadCalibration:
     @pytest.mark.asyncio

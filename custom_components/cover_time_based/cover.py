@@ -299,6 +299,7 @@ def _create_cover_from_options(options, device_id="", name=""):
         device_id=device_id,
         name=name,
         tilt_strategy=tilt_strategy,
+        tilt_mode_str=tilt_mode_str,
         travel_time_close=options.get(CONF_TRAVEL_TIME_CLOSE),
         travel_time_open=options.get(CONF_TRAVEL_TIME_OPEN),
         tilt_time_close=options.get(CONF_TILT_TIME_CLOSE),

@@ -73,11 +73,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt_open_switch=None,
         tilt_close_switch=None,
         tilt_stop_switch=None,
+        tilt_mode_str="none",
     ):
         """Initialize the cover."""
         self._unique_id = device_id
 
         self._tilt_strategy = tilt_strategy
+        # Keep the raw configured mode so calibration can still pick the right
+        # relay before tilt times are set (when _tilt_strategy is None).
+        self._tilt_mode_str = tilt_mode_str
         self._travel_time_close = travel_time_close
         self._travel_time_open = travel_time_open
         self._tilting_time_close = tilt_time_close
