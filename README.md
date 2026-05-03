@@ -50,6 +50,8 @@ Click here:
 
 The configuration card provides a visual interface for all settings and supports built-in calibration to measure timing parameters automatically.
 
+> **Create at least one cover first.** The configuration card is delivered as a frontend asset of this integration, and Home Assistant only loads an integration's frontend assets once the integration is loaded — which requires at least one config entry to exist. If you add the card to a dashboard before creating any cover, Lovelace will show a red **Configuration error** ("custom element doesn't exist: cover-time-based-card"). Create a cover via the steps above, then add the card.
+
 1. Go to **Settings → Dashboards**.
 2. Click **Add dashboard → New dashboard from scratch**.
 3. Fill in a name and make sure **Add to sidebar** is selected.
