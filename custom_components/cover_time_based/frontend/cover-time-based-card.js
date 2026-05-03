@@ -448,7 +448,10 @@ class CoverTimeBasedCard extends LitElement {
       );
       this.requestUpdate();
     } catch (err) {
-      console.error("Failed to load entity registry:", err);
+      console.error(
+        "Failed to load entity registry / config entries:",
+        err
+      );
       this._configEntryEntities = [];
     }
   }
