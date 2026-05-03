@@ -2,6 +2,7 @@
 
 ### Bug Fixes
 
+- Configuration card no longer lists orphaned cover entities whose config entry has been deleted (HA's "this device is no longer provided by this integration" state). The entity-registry filter now cross-checks against the live `config_entries/get` list and excludes entries pointing at a non-existent config entry.
 - Card JS is now registered when the integration loads, not when the first config entry is set up, so dashboards referencing `custom:cover-time-based-card` render correctly even before any cover_time_based entity exists.
 
 ### Features
