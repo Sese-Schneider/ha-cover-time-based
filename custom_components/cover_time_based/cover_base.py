@@ -358,6 +358,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("async_close_cover :: currently opening, stopping first")
             await self.async_stop_cover()
             await self._direction_change_delay()
+        # Sequential modes: "fully closed" requires both travel=0 AND tilt=0.
+        # If travel is already at 0 but the slats are still open (the state
+        # HA's Toggle action lands in after one close press — issue #70),
+        # close the tilt instead of emitting a no-op travel resync.
+        # Externals have their own redirect inside _async_move_to_endpoint
+        # that drives the full mechanical journey (set_tilt_position to the
+        # articulated extreme), so this fast path is for self-initiated only.
+        if (
+            not self._triggered_externally
+            and isinstance(self._tilt_strategy, SequentialTilt)
+            and self.travel_calc.current_position() == 0
+            and self.tilt_calc.current_position() not in (None, 0)
+        ):
+            self._log(
+                "async_close_cover :: sequential, travel already closed but "
+                "tilt open → closing tilt"
+            )
+            await self._async_move_tilt_to_endpoint(target=0)
+            return
         await self._async_move_to_endpoint(target=0)
 
     async def async_open_cover(self, **kwargs):
