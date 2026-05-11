@@ -365,9 +365,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # Externals have their own redirect inside _async_move_to_endpoint
         # that drives the full mechanical journey (set_tilt_position to the
         # articulated extreme), so this fast path is for self-initiated only.
+        # Gate on travel_direction (not is_traveling/current_position, which
+        # both share the same int(...) truncation and could simultaneously
+        # report "at 0, not traveling" in the final 1% of a close). The
+        # direction stays at DIRECTION_DOWN until the auto-updater calls
+        # stop() on the calculator, so it's a clean "motor settled" signal.
         if (
             not self._triggered_externally
             and isinstance(self._tilt_strategy, SequentialTilt)
+            and self.travel_calc.travel_direction == TravelStatus.STOPPED
             and self.travel_calc.current_position() == 0
             and self.tilt_calc.current_position() not in (None, 0)
         ):

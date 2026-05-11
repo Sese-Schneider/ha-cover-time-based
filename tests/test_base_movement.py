@@ -164,7 +164,7 @@ class TestCloseWithTiltCoupling:
 
 class TestCloseFromArticulatedSequential:
     """Issue #70: async_close_cover when travel is already closed but the
-    slats are not should drive the tilt closed instead of emitting a no-op
+    slats are not, should drive the tilt closed instead of emitting a no-op
     travel resync. This is the second-toggle scenario HA hits because
     is_closed = travel_closed AND tilt_closed."""
 
@@ -283,6 +283,42 @@ class TestCloseFromArticulatedSequential:
         assert cover.travel_calc.is_traveling()
         assert not cover.tilt_calc.is_traveling()
         assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_fast_path_skipped_while_travel_still_in_progress(self, make_cover):
+        """current_position() truncates with int(...), so it can briefly
+        return 0 in the final 1% of a close. is_traveling() shares the same
+        truncation and flips to False at the same moment, so the fast path
+        gates on travel_direction (set when the motor was started, cleared
+        only when the auto-updater stops it). Otherwise a re-issued close
+        near the endpoint would skip the planned travel finish."""
+        from custom_components.cover_time_based.travel_calculator import (
+            TravelStatus,
+        )
+
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="sequential_close"
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+        # Simulate an in-flight close that has reached the int-truncated 0
+        # while still traveling (last 1% of journey).
+        cover.travel_calc.start_travel_down()
+        cover.travel_calc._last_known_position = 0
+        assert cover.travel_calc.current_position() == 0
+        assert cover.travel_calc.travel_direction == TravelStatus.DIRECTION_DOWN
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # The fast path must not fire mid-close — the slats must not start
+        # closing before the cover is confirmed at rest. Either the regular
+        # path takes over (driving travel to the real endpoint) or it's a
+        # no-op, but tilt must not be driven by the fast path here.
+        assert cover.tilt_calc.travel_direction == TravelStatus.STOPPED, (
+            "tilt should not have been driven by the fast path while travel "
+            "was still in progress"
+        )
 
 
 # ===================================================================
