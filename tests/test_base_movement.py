@@ -249,9 +249,7 @@ class TestCloseFromArticulatedSequential:
         assert cover._last_command == SERVICE_OPEN_COVER
 
     @pytest.mark.asyncio
-    async def test_sequential_open_close_from_fully_open_only_travels(
-        self, make_cover
-    ):
+    async def test_sequential_open_close_from_fully_open_only_travels(self, make_cover):
         """sequential_open at (100, 0): close just travels down. Tilt sits
         at implicit=0 throughout — no tilt step planned."""
         cover = make_cover(
