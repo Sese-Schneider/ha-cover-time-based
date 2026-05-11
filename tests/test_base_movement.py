@@ -162,6 +162,165 @@ class TestCloseWithTiltCoupling:
         assert cover.tilt_calc.is_traveling()
 
 
+class TestCloseFromArticulatedSequential:
+    """Issue #70: async_close_cover when travel is already closed but the
+    slats are not, should drive the tilt closed instead of emitting a no-op
+    travel resync. This is the second-toggle scenario HA hits because
+    is_closed = travel_closed AND tilt_closed."""
+
+    @pytest.mark.asyncio
+    async def test_sequential_close_drives_tilt_closed_when_travel_at_0(
+        self, make_cover
+    ):
+        """sequential_close at travel=0, tilt=100 (slats open): close
+        should travel the tilt toward 0 (slats closed)."""
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="sequential_close"
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        assert cover.tilt_calc.is_traveling(), (
+            "tilt should be closing; instead async_close_cover emitted a "
+            "travel-only resync (issue #70)"
+        )
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_drives_tilt_closed_when_travel_at_0(
+        self, make_cover
+    ):
+        """sequential_open at travel=0, tilt=100 (slats articulated open):
+        close should drive the tilt back to 0 (slats closed). tilt_command
+        for sequential_open closing is OPEN (motor up)."""
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="sequential_open"
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        assert cover.tilt_calc.is_traveling()
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_sequential_close_open_from_fully_closed_drives_both(
+        self, make_cover
+    ):
+        """sequential_close at (0, 0): async_open_cover should plan both
+        tilt 0→100 and travel 0→100 (single motor-up phase)."""
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="sequential_close"
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+
+        assert cover.travel_calc.is_traveling()
+        assert cover.tilt_calc.is_traveling()
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_open_from_articulated_plans_full_journey(
+        self, make_cover
+    ):
+        """sequential_open at (0, 100) (articulated): async_open_cover must
+        close the tilt back to 0 first, then travel up to 100. Both phases
+        run on a single motor-up command."""
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="sequential_open"
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+
+        # Both trackers should be moving; the planning step couples them.
+        assert cover.travel_calc.is_traveling()
+        assert cover.tilt_calc.is_traveling()
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_close_from_fully_open_only_travels(self, make_cover):
+        """sequential_open at (100, 0): close just travels down. Tilt sits
+        at implicit=0 throughout — no tilt step planned."""
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="sequential_open"
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        assert cover.travel_calc.is_traveling()
+        assert not cover.tilt_calc.is_traveling()
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_sequential_open_open_from_fully_closed_only_travels(
+        self, make_cover
+    ):
+        """sequential_open at (0, 0): open just travels up. Tilt already at
+        implicit=0 — no tilt step planned."""
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="sequential_open"
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+
+        assert cover.travel_calc.is_traveling()
+        assert not cover.tilt_calc.is_traveling()
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_fast_path_skipped_while_travel_still_in_progress(self, make_cover):
+        """current_position() truncates with int(...), so it can briefly
+        return 0 in the final 1% of a close. is_traveling() shares the same
+        truncation and flips to False at the same moment, so the fast path
+        gates on travel_direction (set when the motor was started, cleared
+        only when the auto-updater stops it). Otherwise a re-issued close
+        near the endpoint would skip the planned travel finish."""
+        from custom_components.cover_time_based.travel_calculator import (
+            TravelStatus,
+        )
+
+        cover = make_cover(
+            tilt_time_close=5.0, tilt_time_open=5.0, tilt_mode="sequential_close"
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+        # Simulate an in-flight close that has reached the int-truncated 0
+        # while still traveling (last 1% of journey).
+        cover.travel_calc.start_travel_down()
+        cover.travel_calc._last_known_position = 0
+        assert cover.travel_calc.current_position() == 0
+        assert cover.travel_calc.travel_direction == TravelStatus.DIRECTION_DOWN
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        # The fast path must not fire mid-close — the slats must not start
+        # closing before the cover is confirmed at rest. Either the regular
+        # path takes over (driving travel to the real endpoint) or it's a
+        # no-op, but tilt must not be driven by the fast path here.
+        assert cover.tilt_calc.travel_direction == TravelStatus.STOPPED, (
+            "tilt should not have been driven by the fast path while travel "
+            "was still in progress"
+        )
+
+
 # ===================================================================
 # Tilt endpoint movement (async_close_cover_tilt / async_open_cover_tilt)
 # ===================================================================
