@@ -13,6 +13,7 @@ import {
   html,
   css,
 } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
+import { filterEntitiesByValidEntries } from "./entity-filter.js";
 
 const DOMAIN = "cover_time_based";
 
@@ -435,15 +436,22 @@ class CoverTimeBasedCard extends LitElement {
   async _loadEntityList() {
     if (!this.hass) return;
     try {
-      const entries = await this.hass.callWS({
-        type: "config/entity_registry/list",
-      });
-      this._configEntryEntities = entries
-        .filter((e) => e.platform === "cover_time_based" && e.config_entry_id)
-        .map((e) => e.entity_id);
+      const [registry, configEntries] = await Promise.all([
+        this.hass.callWS({ type: "config/entity_registry/list" }),
+        this.hass.callWS({ type: "config_entries/get", domain: DOMAIN }),
+      ]);
+      const validEntryIds = configEntries.map((e) => e.entry_id);
+      this._configEntryEntities = filterEntitiesByValidEntries(
+        registry,
+        validEntryIds,
+        DOMAIN
+      );
       this.requestUpdate();
     } catch (err) {
-      console.error("Failed to load entity registry:", err);
+      console.error(
+        "Failed to load entity registry / config entries:",
+        err
+      );
       this._configEntryEntities = [];
     }
   }
