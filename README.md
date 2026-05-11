@@ -95,6 +95,8 @@ Wrap an existing cover entity to add time-based position tracking. Useful for co
 
 Specify the **Cover entity**.
 
+**Reacting to physical wall switches.** When the wrapped cover is operated externally (physical wall switch, remote, or another integration), the time-based tracker can only follow the movement if the wrapped entity emits an `opening` / `closing` state during travel. Some wrapped entities — notably certain Tuya / ZHA cover modules — stay in their current `open` or `closed` state the entire time the motor runs, only reporting the final settled state once the movement completes. In that case the time-based position cannot be tracked *during* the physical movement, but it will snap to the wrapped entity's reported position once it settles (or once you click the wrapped cover's stop button, if the wrapped entity reports its current position at that point).
+
 ### Switch-based covers
 
 Control a cover using two relay switches (one for open, one for close), with an optional third stop switch.
