@@ -1656,10 +1656,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._pending_switch.get(entity_id, 0),
         )
 
-        # Skip attribute-only updates (same state string, only attributes
-        # changed).  Must run before echo filtering so that position updates
-        # on a moving wrapped cover don't consume pending echo counts.
+        # Attribute-only updates (same state string, only attributes changed)
+        # must not consume pending echo counts, but may carry useful info
+        # (e.g. a wrapped cover updating its current_position attribute).
+        # Dispatch to a subclass hook, then return without touching the echo
+        # filter or external-state handler. _triggered_externally is set so
+        # downstream helpers (async_stop_cover etc.) don't echo a service
+        # call back to the wrapped entity in response to its own update.
         if old_val == new_val:
+            self._triggered_externally = True
+            try:
+                await self._handle_external_attribute_change(event)
+            finally:
+                self._triggered_externally = False
             return
 
         # Echo filtering: if this switch has pending echoes, decrement and skip
@@ -1733,3 +1742,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle external state change. Override in subclasses for mode-specific behavior."""
+
+    async def _handle_external_attribute_change(self, event):
+        """Handle attribute-only updates on monitored entities. Default no-op.
+
+        Override in subclasses that need to react to attribute changes
+        (e.g. a wrapped cover updating its current_position attribute).
+        """

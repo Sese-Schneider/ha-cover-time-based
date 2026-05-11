@@ -9,9 +9,12 @@ External state changes only start tracking movement — they never auto-stop,
 since we can't reliably know when the motor stopped from switch state alone.
 """
 
+import time
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.components.cover import ATTR_CURRENT_POSITION
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based.cover import (
@@ -20,12 +23,14 @@ from custom_components.cover_time_based.cover import (
 )
 
 
-def _make_state_event(entity_id, old_state, new_state):
+def _make_state_event(entity_id, old_state, new_state, *, new_attributes=None):
     """Create a mock state change event like HA fires."""
     old = MagicMock()
     old.state = old_state
+    old.attributes = {}
     new = MagicMock()
     new.state = new_state
+    new.attributes = new_attributes if new_attributes is not None else {}
     event = MagicMock()
     event.data = {
         "entity_id": entity_id,
@@ -629,6 +634,405 @@ class TestWrappedCoverExternalStateChange:
 
         assert cover.travel_calc.is_traveling()
         assert cover._last_command == SERVICE_CLOSE_COVER
+
+
+class TestWrappedCoverBounceGraceWindow:
+    """Bounce-back suppression for misbehaving wrapped covers (e.g. Tuya TS130F).
+
+    Some wrapped cover entities briefly emit a spurious "moving → stopped"
+    state transition shortly after acknowledging a movement command — the
+    cover bounces back to its pre-command state for a fraction of a second
+    before eventually settling. Without protection, our handler interprets
+    this as an external stop and aborts position tracking, leaving the
+    time-based entity stuck while the physical cover keeps moving.
+
+    After issuing any command to the wrapped cover (open/close/stop) we
+    enter a short "grace window" during which external state changes are
+    ignored — we trust our own time-based position calculation.
+    """
+
+    @pytest.mark.parametrize(
+        "start_pos,start_direction,send,old_val,new_val,last_command",
+        [
+            # Closed (0%) → opening, bounces back to "closed"
+            (0, "up", "_send_open", "opening", "closed", SERVICE_OPEN_COVER),
+            # 50% (state "open") → opening, bounces back to "open"
+            # (direction-consistent bounce — still must be suppressed)
+            (50, "up", "_send_open", "opening", "open", SERVICE_OPEN_COVER),
+            # 50% (state "open") → closing, bounces back to "open"
+            (50, "down", "_send_close", "closing", "open", SERVICE_CLOSE_COVER),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_bounce_back_within_grace_window_is_suppressed(
+        self,
+        make_cover,
+        start_pos,
+        start_direction,
+        send,
+        old_val,
+        new_val,
+        last_command,
+    ):
+        """A wrapped-cover bounce-back arriving within the grace window
+        must not stop our position tracker."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(start_pos)
+        if start_direction == "up":
+            cover.travel_calc.start_travel_up()
+        else:
+            cover.travel_calc.start_travel_down()
+        cover._last_command = last_command
+
+        with patch.object(cover, "async_write_ha_state"):
+            await getattr(cover, send)()
+            await cover._handle_external_state_change("cover.inner", old_val, new_val)
+
+        assert cover.travel_calc.is_traveling()
+        assert cover._last_command == last_command
+
+    @pytest.mark.asyncio
+    async def test_external_stop_honored_after_grace_window_expires(self, make_cover):
+        """A real external stop occurring outside the grace window is honored."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        # Place the last command timestamp well in the past.
+        cover._last_self_command_time = time.monotonic() - 5.0
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "opening", "open")
+
+        assert cover._last_command is None
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_no_command_no_grace_window(self, make_cover):
+        """With no preceding self-initiated command, external stops are honored.
+
+        Covers the externally-initiated movement path (e.g. another
+        integration commanding the wrapped cover): we never sent a
+        command, so there is no grace window to suppress anything.
+        """
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "opening", "open")
+
+        assert cover._last_command is None
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_stop_command_also_starts_grace_window(self, make_cover):
+        """_send_stop also opens a grace window for post-stop bounce-back.
+
+        After we issue STOP, the wrapped cover may briefly flip state
+        through opening/closing on its way back to a stopped state.
+        These should be ignored within the grace window.
+        """
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._send_stop()
+            # Suppose the wrapped cover briefly re-reports "opening" then
+            # settles to "open" within the grace window. Both should be ignored.
+            await cover._handle_external_state_change("cover.inner", "opening", "open")
+
+        # Tracker remains as it was — _send_stop itself does not stop tracking
+        # (the caller does); we only verify the bounce was not interpreted as
+        # a fresh external event.
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+
+class TestWrappedCoverStopThenLateSettle:
+    """When the user clicks STOP via the tile card, the wrapped cover may take
+    several seconds to settle back to a stopped state (reported behaviour:
+    state remains `opening`/`closing` for a few seconds before going to
+    `open`/`closed`). Verify our combined grace-window + pending-echo
+    protection handles the full timeline correctly.
+    """
+
+    @pytest.mark.asyncio
+    async def test_late_stop_echo_consumed_by_pending_counter(self, make_cover):
+        """The wrapped cover's late settling echo (after grace window has
+        expired) must be consumed by the pending counter, not interpreted
+        as a fresh external event."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            # User clicks stop on the tile card. _send_stop marks pending=1
+            # and opens the bounce grace window.
+            await cover._send_stop()
+            # Caller (async_stop_cover) freezes the tracker at the calculated
+            # position. Simulate that here:
+            cover.travel_calc.stop()
+            cover._last_command = None
+
+            # Advance time past the grace window — the late echo arrives
+            # several seconds after the stop command.
+            cover._last_self_command_time = time.monotonic() - 5.0
+            assert cover._pending_switch.get("cover.inner") == 1
+
+            # Wrapped cover finally settles: opening → open
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "opening", "open")
+            )
+
+        # Echo consumed; tracker still frozen at the calculated position
+        assert cover._pending_switch.get("cover.inner") is None
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_bounce_during_stop_grace_window_does_not_restart_tracker(
+        self, make_cover
+    ):
+        """If the wrapped cover emits a spurious state change within the
+        grace window after stop (e.g. opening→closing flip), grace-window
+        suppression prevents it from restarting position tracking."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._send_stop()
+            cover.travel_calc.stop()
+            cover._last_command = None
+
+            # Spurious mid-stop bounce within grace window
+            await cover._handle_external_state_change(
+                "cover.inner", "opening", "closing"
+            )
+
+        # Grace window suppressed; tracker remains frozen
+        assert not cover.travel_calc.is_traveling()
+        assert cover._last_command is None
+
+
+def _set_wrapped_state(cover, state, current_position=None):
+    """Make cover.hass.states.get return a state with optional current_position."""
+    fake_state = MagicMock()
+    fake_state.state = state
+    attrs = {}
+    if current_position is not None:
+        attrs[ATTR_CURRENT_POSITION] = current_position
+    fake_state.attributes = attrs
+    cover.hass.states.get = lambda eid: fake_state if eid == "cover.inner" else None
+    return fake_state
+
+
+def _make_attribute_event(entity_id, state, current_position):
+    """Attribute-only state-change event (state unchanged, attribute changed)."""
+    return _make_state_event(
+        entity_id,
+        state,
+        state,
+        new_attributes={ATTR_CURRENT_POSITION: current_position},
+    )
+
+
+class TestWrappedCoverSnapToReportedPosition:
+    """When the wrapped cover transitions to a stopped state, trust the
+    position it reports and snap our tracker to match. Handles physical
+    switch operation (where state may or may not change) and HA-initiated
+    movement that eventually settles to a different position than our
+    time-based calc predicted.
+    """
+
+    @pytest.mark.parametrize(
+        "starting_pos,old_val,new_val,reported_pos,expected_pos",
+        [
+            # Physical close: state changes open→closed, position reports 0
+            (52, "open", "closed", 0, 0),
+            # HA-initiated close eventually settles: open→closed, attr=0
+            (50, "open", "closed", 0, 0),
+            # Physical close where wrapped reports no attribute → state fallback
+            (52, "open", "closed", None, 0),
+            # Physical open from fully closed: closed→open, attr=100
+            (0, "closed", "open", 100, 100),
+            # External mid-travel stop: closing→open, attr=30
+            (50, "closing", "open", 30, 30),
+            # Well-behaved cover endpoint: closing→closed
+            (50, "closing", "closed", 0, 0),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_state_change_to_stopped_snaps_to_reported_position(
+        self,
+        make_cover,
+        starting_pos,
+        old_val,
+        new_val,
+        reported_pos,
+        expected_pos,
+    ):
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(starting_pos)
+        cover._last_command = SERVICE_OPEN_COVER
+        _set_wrapped_state(cover, new_val, reported_pos)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", old_val, new_val)
+
+        assert cover.travel_calc.current_position() == expected_pos
+        assert cover._last_command is None
+
+    @pytest.mark.asyncio
+    async def test_state_open_without_attribute_does_not_snap(self, make_cover):
+        """state=open with no position attribute is ambiguous; tracker stops
+        but position is not changed (existing fallback preserved)."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+        _set_wrapped_state(cover, "open", current_position=None)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "opening", "open")
+
+        assert cover.travel_calc.current_position() == 50
+        assert cover._last_command is None
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_attribute_only_update_in_stopped_state_snaps(self, make_cover):
+        """Physical-switch open from 52%: wrapped state stays 'open' but
+        current_position updates to 100 via attribute change."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(52)
+        cover._last_command = None
+        _set_wrapped_state(cover, "open", current_position=100)
+
+        event = _make_attribute_event("cover.inner", "open", 100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_attribute_change(event)
+
+        assert cover.travel_calc.current_position() == 100
+
+    @pytest.mark.asyncio
+    async def test_attribute_only_update_while_wrapped_moving_ignored(self, make_cover):
+        """If wrapped state is opening/closing, position attribute changes
+        are mid-travel and we don't trust them."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover._last_command = SERVICE_OPEN_COVER
+
+        event = _make_attribute_event("cover.inner", "opening", 60)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_attribute_change(event)
+
+        assert cover.travel_calc.current_position() == 50
+
+    @pytest.mark.asyncio
+    async def test_attribute_update_for_unrelated_entity_ignored(self, make_cover):
+        """Attribute events for non-wrapped entities (e.g. switches) are ignored."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        _set_wrapped_state(cover, "open", current_position=100)
+
+        event = _make_attribute_event("switch.other", "open", 100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_attribute_change(event)
+
+        # Position unchanged
+        assert cover.travel_calc.current_position() == 50
+
+    @pytest.mark.asyncio
+    async def test_attribute_update_within_grace_window_ignored(self, make_cover):
+        """Bounce grace window applies to attribute updates too."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        _set_wrapped_state(cover, "open", current_position=100)
+
+        event = _make_attribute_event("cover.inner", "open", 100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._send_open()  # opens grace window
+            await cover._handle_external_attribute_change(event)
+
+        # Position unchanged — grace window suppressed the snap
+        assert cover.travel_calc.current_position() == 50
+
+    @pytest.mark.asyncio
+    async def test_snap_while_traveling_with_matching_calc_position_stops_tracker(
+        self, make_cover
+    ):
+        """If the wrapped cover reports a position that happens to equal our
+        calculated position at this instant *while* our tracker is still
+        traveling, we must still stop the tracker — otherwise the auto-updater
+        keeps advancing past the physical cover's actual position."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+        # Wrapped cover reports the same position our calc currently has.
+        _set_wrapped_state(cover, "open", current_position=50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "opening", "open")
+
+        assert not cover.travel_calc.is_traveling()
+        assert cover._last_command is None
+
+
+class TestAttributeChangeHookDispatch:
+    """The _async_switch_state_changed dispatcher must call the new
+    _handle_external_attribute_change hook on attribute-only updates,
+    while still skipping the echo filter (so that mid-travel attribute
+    updates from a wrapped cover don't consume pending echo counts).
+    """
+
+    @pytest.mark.asyncio
+    async def test_attribute_only_update_dispatches_to_attribute_hook(self, make_cover):
+        cover = make_cover(cover_entity_id="cover.inner")
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover,
+                "_handle_external_attribute_change",
+                new_callable=AsyncMock,
+            ) as attr_hook,
+            patch.object(
+                cover,
+                "_handle_external_state_change",
+                new_callable=AsyncMock,
+            ) as state_hook,
+        ):
+            event = _make_attribute_event("cover.inner", "open", 100)
+            await cover._async_switch_state_changed(event)
+
+        attr_hook.assert_awaited_once()
+        state_hook.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_attribute_only_update_does_not_consume_pending_echo(
+        self, make_cover
+    ):
+        """Critical: attribute-only updates must not consume pending echo
+        counts, otherwise a moving wrapped cover's position updates would
+        eat the echoes from our subsequent stop commands."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover._mark_switch_pending("cover.inner", 1)
+        assert cover._pending_switch["cover.inner"] == 1
+
+        with patch.object(cover, "async_write_ha_state"):
+            event = _make_attribute_event("cover.inner", "opening", 50)
+            await cover._async_switch_state_changed(event)
+
+        # Pending echo count unchanged
+        assert cover._pending_switch.get("cover.inner") == 1
 
 
 # ===================================================================
