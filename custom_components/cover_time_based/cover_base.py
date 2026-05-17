@@ -368,9 +368,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self.async_stop_cover()
             await self._direction_change_delay()
 
-        # Skip the resync motor pulse when already settled at 0, but not when:
-        # - a startup-delay open task is pending (needs cancel+stop via endpoint)
-        # - an external trigger on sequential tilt needs to articulate slats
+        # Carve-outs that must always reach _async_move_to_endpoint, even when
+        # tracker says we're already settled at 0. See _async_move_to_endpoint
+        # for the corresponding handling:
+        #   - startup-delay direction reversal cancel: lines ~519-527
+        #   - external sequential close (articulates slats): lines ~497-509
         startup_delay_open = (
             self._startup_delay_task is not None
             and not self._startup_delay_task.done()
@@ -379,14 +381,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         external_sequential = self._triggered_externally and isinstance(
             self._tilt_strategy, SequentialTilt
         )
-        settled_at_zero = (
+        if not (startup_delay_open or external_sequential) and (
             self.travel_calc.current_position() == 0
             and self.travel_calc.travel_direction == TravelStatus.STOPPED
-            and not startup_delay_open
-            and not external_sequential
-        )
-        if not settled_at_zero:
-            await self._async_move_to_endpoint(target=0)
+        ):
+            # Already at travel=0 and motor settled — no-op (HA convention).
+            return
+
+        await self._async_move_to_endpoint(target=0)
 
     async def async_open_cover(self, **kwargs):
         """Open the cover fully."""
