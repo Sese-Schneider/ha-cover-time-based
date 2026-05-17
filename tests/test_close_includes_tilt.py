@@ -227,3 +227,67 @@ class TestTrailingTiltClose:
 
         assert cover._tilt_restore_target is None
         mock_tilt.assert_not_awaited()
+
+
+class TestDualMotor:
+    """The async_close_cover implementation is strategy-agnostic. Confirm
+    dual_motor behaves identically to sequential_close for the trailing
+    tilt-close decision (via _tilt_restore_target)."""
+
+    @pytest.mark.asyncio
+    async def test_dual_motor_option_true_closes_tilt_after_travel(self, make_cover):
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            safe_tilt_position=100,
+            close_includes_tilt=True,
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)  # parked at safe
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_travel,
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_travel.assert_awaited_once_with(target=0)
+        mock_tilt.assert_not_awaited()
+        assert cover._tilt_restore_target == 0
+
+    @pytest.mark.asyncio
+    async def test_dual_motor_option_false_leaves_tilt_at_safe(self, make_cover):
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            safe_tilt_position=100,
+            close_includes_tilt=False,
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_travel,
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_travel.assert_awaited_once_with(target=0)
+        mock_tilt.assert_not_awaited()
+        assert cover._tilt_restore_target is None
