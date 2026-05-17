@@ -958,16 +958,18 @@ class TestProperties:
         assert cover.is_closed is False
 
     def test_is_closed_with_tilt(self, make_cover):
+        """is_closed reports travel position only — tilt is independent."""
         cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
         assert cover.is_closed is True
 
-    def test_is_not_closed_when_tilt_open(self, make_cover):
+    def test_is_closed_when_tilt_open(self, make_cover):
+        """is_closed is True at travel=0 even if tilt is still open."""
         cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(100)
-        assert cover.is_closed is False
+        assert cover.is_closed is True
 
     def test_current_position(self, make_cover):
         cover = make_cover()
@@ -2267,12 +2269,12 @@ class TestInlineTiltCoverProperties:
         cover.tilt_calc.set_position(60)
         assert cover.current_cover_tilt_position == 60
 
-    def test_is_closed_requires_both(self, make_cover):
-        """is_closed requires travel=0 AND tilt=0 for inline."""
+    def test_is_closed_travel_only_inline(self, make_cover):
+        """For inline, is_closed tracks travel position regardless of tilt."""
         cover = self._make_inline_cover(make_cover)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(50)
-        assert cover.is_closed is False
+        assert cover.is_closed is True
 
     def test_is_closed_when_both_closed(self, make_cover):
         cover = self._make_inline_cover(make_cover)

@@ -309,11 +309,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     @property
     def is_closed(self):
-        """Return if the cover is closed."""
-        if not self._has_tilt_support():
-            return self.travel_calc.is_closed()
+        """Return if the cover is closed.
 
-        return self.travel_calc.is_closed() and self.tilt_calc.is_closed()
+        Tracks travel position only — tilt is reported independently via
+        current_cover_tilt_position. This matches HA's general cover
+        semantics and is what drives the built-in toggle action.
+        """
+        return self.travel_calc.is_closed()
 
     @property
     def extra_state_attributes(self):
