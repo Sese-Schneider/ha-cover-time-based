@@ -398,11 +398,23 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             and self._has_tilt_support()
             and self.tilt_calc.current_position() not in (None, 0)
         ):
-            self._log(
-                "async_close_cover :: close_includes_tilt=True, "
-                "closing tilt to 0"
-            )
-            await self._async_move_tilt_to_endpoint(target=0)
+            if skip_travel:
+                # Already settled at travel=0. The auto-updater isn't running
+                # to consume _tilt_restore_target, so drive tilt directly.
+                self._log(
+                    "async_close_cover :: travel already at 0, "
+                    "closing tilt directly"
+                )
+                await self._async_move_tilt_to_endpoint(target=0)
+            else:
+                # Travel is in flight via the auto-updater. Set the restore
+                # target so the auto-updater chains _start_tilt_restore after
+                # travel completes. This avoids _abandon_active_lifecycle
+                # cancelling the in-flight travel.
+                self._log(
+                    "async_close_cover :: scheduling tilt-close after travel"
+                )
+                self._tilt_restore_target = 0
 
     async def async_open_cover(self, **kwargs):
         """Open the cover fully."""

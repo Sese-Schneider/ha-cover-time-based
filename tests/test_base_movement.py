@@ -126,7 +126,7 @@ class TestCloseWithTiltCoupling:
     @pytest.mark.asyncio
     async def test_close_no_tilt_when_already_flat_sequential(self, make_cover):
         """Sequential: closing with tilt already flat does not move tilt."""
-        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0, close_includes_tilt=False)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(100)
 
@@ -1159,7 +1159,6 @@ class TestDualMotorTiltPreStep:
             tilt_mode="dual_motor",
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
-            close_includes_tilt=False,
         )
 
     # -- Pre-step phase --
@@ -1242,7 +1241,6 @@ class TestDualMotorTiltPreStep:
         # Travel should start immediately (no pre-step)
         assert cover.travel_calc.is_traveling()
         assert cover._pending_travel_target is None
-        assert cover._tilt_restore_target is None
 
     # -- Pre-step completion → travel starts --
 
@@ -1402,7 +1400,6 @@ class TestDualMotorTiltPreStep:
         # Travel should start immediately (with pre_step_delay, not tilt motor)
         assert cover.travel_calc.is_traveling()
         assert cover._pending_travel_target is None
-        assert cover._tilt_restore_target is None
 
 
 # ===================================================================
@@ -1890,7 +1887,6 @@ class TestWrappedDualMotorTilt:
             tilt_time_close=5.0,
             tilt_time_open=5.0,
             tilt_mode="dual_motor",
-            close_includes_tilt=False,
         )
 
     @pytest.mark.asyncio
@@ -2012,7 +2008,6 @@ class TestInlineTiltRestore:
             tilt_time_close=2.0,
             tilt_time_open=2.0,
             tilt_mode="inline",
-            close_includes_tilt=False,
         )
 
     @pytest.mark.asyncio
@@ -2171,8 +2166,6 @@ class TestInlineTiltRestore:
 
         # Travel started (with pre_step_delay for tilt phase)
         assert cover.travel_calc.is_traveling()
-        # No restore at endpoint
-        assert cover._tilt_restore_target is None
 
     @pytest.mark.asyncio
     async def test_set_position_endpoint_also_no_restore(self, make_cover):
@@ -2311,7 +2304,14 @@ class TestInlineTiltConstraints:
     @pytest.mark.asyncio
     async def test_auto_stop_preserves_tilt_at_closed(self, make_cover):
         """When travel reaches 0%, tilt is not snapped."""
-        cover = self._make_inline_cover(make_cover)
+        # close_includes_tilt=False: this test verifies inline tilt snap is a
+        # no-op; it should not chain a tilt restore via the auto-updater.
+        cover = make_cover(
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+            close_includes_tilt=False,
+        )
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(100)
 
@@ -2375,7 +2375,6 @@ class TestAbandonActiveLifecycle:
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
             tilt_stop_switch="switch.tilt_stop",
-            close_includes_tilt=False,
         )
 
     def _make_inline_cover(self, make_cover):
@@ -2383,7 +2382,6 @@ class TestAbandonActiveLifecycle:
             tilt_time_close=2.0,
             tilt_time_open=2.0,
             tilt_mode="inline",
-            close_includes_tilt=False,
         )
 
     # -- During tilt pre-step (dual motor) --
@@ -2579,7 +2577,6 @@ class TestExternalMovementSkipsTiltPlanning:
             tilt_close_switch="switch.tilt_close",
             safe_tilt_position=50,
             max_tilt_allowed_position=50,
-            close_includes_tilt=False,
         )
 
     @pytest.mark.asyncio
@@ -2608,7 +2605,19 @@ class TestExternalMovementSkipsTiltPlanning:
     @pytest.mark.asyncio
     async def test_external_close_skips_tilt_pre_step(self, make_cover):
         """External close should start travel tracking directly, no tilt pre-step."""
-        cover = self._make_dual_motor_cover(make_cover)
+        # close_includes_tilt=False: this test verifies that _plan_tilt_for_travel
+        # does not set _tilt_restore_target for external moves; the close_includes_tilt
+        # feature would overwrite that state, obscuring the assertion's purpose.
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            safe_tilt_position=50,
+            max_tilt_allowed_position=50,
+            close_includes_tilt=False,
+        )
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(30)
 
@@ -2914,7 +2923,6 @@ class TestSequentialExternalFullJourney:
             tilt_time_close=4.0,
             tilt_time_open=4.0,
             tilt_mode="sequential_open",
-            close_includes_tilt=False,
         )
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(100)
@@ -2957,7 +2965,6 @@ class TestSequentialExternalFullJourney:
             tilt_time_close=2.0,
             tilt_time_open=2.0,
             tilt_mode="inline",
-            close_includes_tilt=False,
         )
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(50)

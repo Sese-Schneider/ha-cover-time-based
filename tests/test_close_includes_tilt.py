@@ -99,7 +99,8 @@ class TestTrailingTiltClose:
             await cover.async_close_cover()
 
         mock_travel.assert_awaited_once_with(target=0)
-        mock_tilt.assert_awaited_once_with(target=0)
+        # Travel is in flight: restore target is set for the auto-updater to chain.
+        assert cover._tilt_restore_target == 0
 
     @pytest.mark.asyncio
     async def test_sequential_close_option_true_from_articulated(self, make_cover):
@@ -152,6 +153,7 @@ class TestTrailingTiltClose:
 
         mock_travel.assert_awaited_once_with(target=0)
         mock_tilt.assert_not_awaited()
+        assert cover._tilt_restore_target is None
 
     @pytest.mark.asyncio
     async def test_sequential_close_option_false_from_articulated(self, make_cover):
@@ -178,6 +180,7 @@ class TestTrailingTiltClose:
 
         mock_travel.assert_not_awaited()
         mock_tilt.assert_not_awaited()
+        assert cover._tilt_restore_target is None
 
     @pytest.mark.asyncio
     async def test_no_trailing_tilt_when_tilt_already_zero(self, make_cover):
@@ -203,6 +206,7 @@ class TestTrailingTiltClose:
             await cover.async_close_cover()
 
         mock_tilt.assert_not_awaited()
+        assert cover._tilt_restore_target is None
 
     @pytest.mark.asyncio
     async def test_no_trailing_tilt_when_no_tilt_support(self, make_cover):
@@ -221,4 +225,5 @@ class TestTrailingTiltClose:
         ):
             await cover.async_close_cover()
 
+        assert cover._tilt_restore_target is None
         mock_tilt.assert_not_awaited()
