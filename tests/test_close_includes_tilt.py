@@ -291,3 +291,65 @@ class TestDualMotor:
         mock_travel.assert_awaited_once_with(target=0)
         mock_tilt.assert_not_awaited()
         assert cover._tilt_restore_target is None
+
+
+class TestUnaffectedStrategies:
+    """inline and sequential_open already land tilt at 0 after close_cover,
+    so the trailing tilt-close should be a no-op regardless of option value.
+    These tests pin that behavior."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("option", [True, False])
+    async def test_inline_no_trailing_tilt_close(self, make_cover, option):
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="inline",
+            close_includes_tilt=option,
+        )
+        cover.travel_calc.set_position(100)
+        # Simulate the post-_async_move_to_endpoint(0) state for inline:
+        # tilt ends at 0 because plan_move_position pre-steps TiltTo(0).
+        # Since we mock _async_move_to_endpoint, we set tilt manually.
+        cover.tilt_calc.set_position(0)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ),
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_tilt.assert_not_awaited()
+        assert cover._tilt_restore_target is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("option", [True, False])
+    async def test_sequential_open_no_trailing_tilt_close(self, make_cover, option):
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+            close_includes_tilt=option,
+        )
+        cover.travel_calc.set_position(100)
+        # For sequential_open, implicit_tilt_during_travel=0, so tilt sits at 0.
+        cover.tilt_calc.set_position(0)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ),
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_tilt.assert_not_awaited()
+        assert cover._tilt_restore_target is None
