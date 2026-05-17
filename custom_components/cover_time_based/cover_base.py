@@ -74,6 +74,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt_close_switch=None,
         tilt_stop_switch=None,
         tilt_mode_str="none",
+        close_includes_tilt=True,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -93,6 +94,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._tilt_open_switch_id = tilt_open_switch
         self._tilt_close_switch_id = tilt_close_switch
         self._tilt_stop_switch_id = tilt_stop_switch
+        self._close_includes_tilt = close_includes_tilt
 
         if name:
             self._name = name

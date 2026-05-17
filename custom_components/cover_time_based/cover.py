@@ -25,6 +25,7 @@ from .calibration import (
     SERVICE_STOP_CALIBRATION,
 )
 from .const import (
+    CONF_CLOSE_INCLUDES_TILT,
     CONF_ENDPOINT_RUNON_TIME,
     CONF_MIN_MOVEMENT_TIME,
     CONF_TILT_MODE,
@@ -34,6 +35,7 @@ from .const import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    DEFAULT_CLOSE_INCLUDES_TILT,
     DEFAULT_ENDPOINT_RUNON_TIME,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
@@ -313,6 +315,9 @@ def _create_cover_from_options(options, device_id="", name=""):
         tilt_open_switch=options.get(CONF_TILT_OPEN_SWITCH),
         tilt_close_switch=options.get(CONF_TILT_CLOSE_SWITCH),
         tilt_stop_switch=options.get(CONF_TILT_STOP_SWITCH),
+        close_includes_tilt=options.get(
+            CONF_CLOSE_INCLUDES_TILT, DEFAULT_CLOSE_INCLUDES_TILT
+        ),
     )
 
     if control_mode == CONTROL_MODE_WRAPPED:
