@@ -1,5 +1,6 @@
 """Cover Time Based integration."""
 
+import hashlib
 import logging
 from pathlib import Path
 
@@ -16,7 +17,23 @@ from .websocket_api import async_register_websocket_api
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.COVER]
-_PANEL_URL = f"/{DOMAIN}_panel"
+_FRONTEND_DIR = Path(__file__).parent / "frontend"
+
+
+def _compute_frontend_hash(files: list[Path]) -> str:
+    """Short content hash for cache busting. Order-independent."""
+    h = hashlib.sha256()
+    for f in sorted(files):
+        h.update(f.read_bytes())
+    return h.hexdigest()[:8]
+
+
+# Versioning the static-path prefix (rather than appending ?v= to the outer
+# URL) busts both the main card and any relative-import siblings (e.g.
+# entity-filter.js) on every file change, since the relative imports resolve
+# under the same hashed prefix.
+_FRONTEND_HASH = _compute_frontend_hash(list(_FRONTEND_DIR.glob("*.js")))
+_PANEL_URL = f"/{DOMAIN}_panel/{_FRONTEND_HASH}"
 _CARD_JS_URL = f"{_PANEL_URL}/cover-time-based-card.js"
 
 
