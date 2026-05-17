@@ -43,7 +43,7 @@ from .const import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
 )
-from .tilt_strategies import SequentialTilt
+from .tilt_strategies import InlineTilt, SequentialTilt
 from .tilt_strategies.planning import (
     calculate_pre_step_delay,
     extract_coupled_tilt,
@@ -112,8 +112,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         #   - _plan_tilt_for_travel (mid-position moves: restore prior tilt;
         #     dual-motor endpoint moves: snap tilt to endpoint).
         #   - _start_tilt_pre_step (after pre-step + travel completes).
-        #   - async_close_cover when close_includes_tilt is on (close slats
-        #     after travel reaches 0).
+        #   - async_close_cover when close_includes_tilt is on and the tilt
+        #     strategy doesn't already drive tilt to 0 during close travel
+        #     (sequential_close, dual_motor — not inline or sequential_open).
         self._tilt_restore_target: int | None = None
         self._tilt_restore_active: bool = False
         self._pending_travel_target: int | None = None
@@ -400,9 +401,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if not skip_travel:
             await self._async_move_to_endpoint(target=0)
 
+        # Skip inline: its close already drives tilt to 0 via a TiltTo pre-step,
+        # so the trailing restore would be a no-op AND would short-circuit the
+        # endpoint_runon_time block in auto_stop_if_necessary.
         if (
             self._close_includes_tilt
             and self._has_tilt_support()
+            and not isinstance(self._tilt_strategy, InlineTilt)
             and self.tilt_calc.current_position() not in (None, 0)
         ):
             if skip_travel:

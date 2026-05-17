@@ -347,3 +347,34 @@ class TestUnaffectedStrategies:
 
         mock_tilt.assert_not_awaited()
         assert cover._tilt_restore_target is None
+
+    @pytest.mark.asyncio
+    async def test_inline_with_endpoint_runon_does_not_set_restore_target(
+        self, make_cover
+    ):
+        """Regression: inline cover with endpoint_runon_time must not have
+        close_cover set _tilt_restore_target, because that would short-circuit
+        the endpoint runon block in auto_stop_if_necessary. Inline already
+        drives tilt to 0 as a pre-step during close travel, so the trailing
+        restore would be a redundant no-op that disables runon."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="inline",
+            endpoint_runon_time=2.0,
+            close_includes_tilt=True,
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)  # mid-tilt — would match the guard
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_async_move_to_endpoint", new_callable=AsyncMock),
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_tilt.assert_not_awaited()
+        assert cover._tilt_restore_target is None
