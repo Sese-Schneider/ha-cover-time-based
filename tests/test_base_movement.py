@@ -39,17 +39,18 @@ class TestCloseFromOpen:
         cover.hass.services.async_call.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_close_when_already_closed_sends_resync(self, make_cover):
+    async def test_close_when_already_closed_is_noop(self, make_cover):
+        """close_cover re-applied at settled 0 is a no-op (HA convention)."""
         cover = make_cover()
         cover.travel_calc.set_position(0)  # fully closed
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        # Resync: command still sent even though tracker says we're at endpoint
+        # No motor command sent: already at 0, no resync pulse.
         assert not cover.travel_calc.is_traveling()
-        cover.hass.services.async_call.assert_awaited()
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        cover.hass.services.async_call.assert_not_awaited()
+        assert cover._last_command is None
 
 
 class TestOpenFromClosed:

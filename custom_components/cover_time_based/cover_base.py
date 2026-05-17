@@ -355,14 +355,38 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # -----------------------------------------------------------------------
 
     async def async_close_cover(self, **kwargs):
-        """Close the cover fully."""
+        """Close the cover fully.
+
+        When already settled at travel=0, skip the resync motor pulse that
+        the default _async_move_to_endpoint(0) emits at target==current.
+        This matches HA's convention that close_cover re-applied is a no-op.
+        """
         self._require_configured()
         self._log("async_close_cover")
         if self.is_opening:
             self._log("async_close_cover :: currently opening, stopping first")
             await self.async_stop_cover()
             await self._direction_change_delay()
-        await self._async_move_to_endpoint(target=0)
+
+        # Skip the resync motor pulse when already settled at 0, but not when:
+        # - a startup-delay open task is pending (needs cancel+stop via endpoint)
+        # - an external trigger on sequential tilt needs to articulate slats
+        startup_delay_open = (
+            self._startup_delay_task is not None
+            and not self._startup_delay_task.done()
+            and self._last_command == SERVICE_OPEN_COVER
+        )
+        external_sequential = self._triggered_externally and isinstance(
+            self._tilt_strategy, SequentialTilt
+        )
+        settled_at_zero = (
+            self.travel_calc.current_position() == 0
+            and self.travel_calc.travel_direction == TravelStatus.STOPPED
+            and not startup_delay_open
+            and not external_sequential
+        )
+        if not settled_at_zero:
+            await self._async_move_to_endpoint(target=0)
 
     async def async_open_cover(self, **kwargs):
         """Open the cover fully."""
