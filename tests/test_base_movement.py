@@ -2304,8 +2304,11 @@ class TestInlineTiltConstraints:
     @pytest.mark.asyncio
     async def test_auto_stop_preserves_tilt_at_closed(self, make_cover):
         """When travel reaches 0%, tilt is not snapped."""
-        # close_includes_tilt=False: this test verifies inline tilt snap is a
-        # no-op; it should not chain a tilt restore via the auto-updater.
+        # close_includes_tilt=False because this test manually invokes
+        # auto_stop_if_necessary; with the default True, async_close_cover
+        # would set _tilt_restore_target=0, which the auto-updater would
+        # then consume to snap tilt to 0 — invalidating this test's
+        # assertion that tilt remains at its pre-stop value.
         cover = make_cover(
             tilt_time_close=2.0,
             tilt_time_open=2.0,

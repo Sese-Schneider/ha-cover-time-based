@@ -107,6 +107,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._delay_task = None
         self._startup_delay_task = None
         self._last_command = None
+        # Drives the post-travel tilt phase via _start_tilt_restore (consumed
+        # by the auto-updater when travel reaches endpoint). Set by:
+        #   - _plan_tilt_for_travel (mid-position moves: restore prior tilt;
+        #     dual-motor endpoint moves: snap tilt to endpoint).
+        #   - _start_tilt_pre_step (after pre-step + travel completes).
+        #   - async_close_cover when close_includes_tilt is on (close slats
+        #     after travel reaches 0).
         self._tilt_restore_target: int | None = None
         self._tilt_restore_active: bool = False
         self._pending_travel_target: int | None = None
@@ -411,6 +418,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 # target so the auto-updater chains _start_tilt_restore after
                 # travel completes. This avoids _abandon_active_lifecycle
                 # cancelling the in-flight travel.
+                #
+                # Idempotency note: dual-motor + non-safe-tilt triggers
+                # _start_tilt_pre_step inside _async_move_to_endpoint, which
+                # itself sets _tilt_restore_target = target (here also 0).
+                # Re-setting to 0 here is a no-op for that path.
                 self._log(
                     "async_close_cover :: scheduling tilt-close after travel"
                 )
