@@ -100,6 +100,8 @@ class TestTrailingTiltClose:
 
         mock_travel.assert_awaited_once_with(target=0)
         # Travel is in flight: restore target is set for the auto-updater to chain.
+        # Direct tilt call is not made; the auto-updater chain mechanism is used.
+        mock_tilt.assert_not_awaited()
         assert cover._tilt_restore_target == 0
 
     @pytest.mark.asyncio
@@ -196,9 +198,7 @@ class TestTrailingTiltClose:
 
         with (
             patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "_async_move_to_endpoint", new_callable=AsyncMock
-            ),
+            patch.object(cover, "_async_move_to_endpoint", new_callable=AsyncMock),
             patch.object(
                 cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
             ) as mock_tilt,
@@ -216,9 +216,7 @@ class TestTrailingTiltClose:
 
         with (
             patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "_async_move_to_endpoint", new_callable=AsyncMock
-            ),
+            patch.object(cover, "_async_move_to_endpoint", new_callable=AsyncMock),
             patch.object(
                 cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
             ) as mock_tilt,
@@ -315,9 +313,7 @@ class TestUnaffectedStrategies:
 
         with (
             patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "_async_move_to_endpoint", new_callable=AsyncMock
-            ),
+            patch.object(cover, "_async_move_to_endpoint", new_callable=AsyncMock),
             patch.object(
                 cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
             ) as mock_tilt,
@@ -342,9 +338,7 @@ class TestUnaffectedStrategies:
 
         with (
             patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "_async_move_to_endpoint", new_callable=AsyncMock
-            ),
+            patch.object(cover, "_async_move_to_endpoint", new_callable=AsyncMock),
             patch.object(
                 cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
             ) as mock_tilt,
