@@ -12,3 +12,6 @@ CONF_TILT_STARTUP_DELAY = "tilt_startup_delay"
 CONF_ENDPOINT_RUNON_TIME = "endpoint_runon_time"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
 DEFAULT_ENDPOINT_RUNON_TIME = 2.0
+
+CONF_CLOSE_INCLUDES_TILT = "close_includes_tilt"
+DEFAULT_CLOSE_INCLUDES_TILT = True
