@@ -357,9 +357,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def async_close_cover(self, **kwargs):
         """Close the cover fully.
 
-        When already settled at travel=0, skip the resync motor pulse that
-        the default _async_move_to_endpoint(0) emits at target==current.
-        This matches HA's convention that close_cover re-applied is a no-op.
+        Travel is moved to 0 unless already settled there (no resync motor
+        pulse — matches HA convention that close_cover re-applied is a no-op).
+
+        When close_includes_tilt is True and the cover has tilt support and
+        tilt is not already at 0, the slats are closed afterward. This makes
+        close_cover land at (0, 0) on strategies that would otherwise park
+        tilt at an implicit-open or safe position (sequential_close, dual_motor).
         """
         self._require_configured()
         self._log("async_close_cover")
@@ -381,14 +385,24 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         external_sequential = self._triggered_externally and isinstance(
             self._tilt_strategy, SequentialTilt
         )
-        if not (startup_delay_open or external_sequential) and (
-            self.travel_calc.current_position() == 0
+        skip_travel = (
+            not (startup_delay_open or external_sequential)
+            and self.travel_calc.current_position() == 0
             and self.travel_calc.travel_direction == TravelStatus.STOPPED
-        ):
-            # Already at travel=0 and motor settled — no-op (HA convention).
-            return
+        )
+        if not skip_travel:
+            await self._async_move_to_endpoint(target=0)
 
-        await self._async_move_to_endpoint(target=0)
+        if (
+            self._close_includes_tilt
+            and self._has_tilt_support()
+            and self.tilt_calc.current_position() not in (None, 0)
+        ):
+            self._log(
+                "async_close_cover :: close_includes_tilt=True, "
+                "closing tilt to 0"
+            )
+            await self._async_move_tilt_to_endpoint(target=0)
 
     async def async_open_cover(self, **kwargs):
         """Open the cover fully."""

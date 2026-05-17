@@ -70,3 +70,155 @@ class TestSkipResyncAtZero:
             await cover.async_close_cover()
 
         mock_move.assert_awaited_once_with(target=0)
+
+
+class TestTrailingTiltClose:
+    """When close_includes_tilt=True, async_close_cover follows the travel
+    move with a tilt-close if tilt is not already at 0."""
+
+    @pytest.mark.asyncio
+    async def test_sequential_close_option_true_from_fully_open(self, make_cover):
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_close",
+            close_includes_tilt=True,
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_travel,
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_travel.assert_awaited_once_with(target=0)
+        mock_tilt.assert_awaited_once_with(target=0)
+
+    @pytest.mark.asyncio
+    async def test_sequential_close_option_true_from_articulated(self, make_cover):
+        """Settled at (0, 100): travel skipped, tilt-close fires."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_close",
+            close_includes_tilt=True,
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_travel,
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_travel.assert_not_awaited()
+        mock_tilt.assert_awaited_once_with(target=0)
+
+    @pytest.mark.asyncio
+    async def test_sequential_close_option_false_from_fully_open(self, make_cover):
+        """Option off: travel only, no tilt-close."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_close",
+            close_includes_tilt=False,
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_travel,
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_travel.assert_awaited_once_with(target=0)
+        mock_tilt.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_sequential_close_option_false_from_articulated(self, make_cover):
+        """Option off + already at 0 + tilt open: total no-op."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_close",
+            close_includes_tilt=False,
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_travel,
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_travel.assert_not_awaited()
+        mock_tilt.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_trailing_tilt_when_tilt_already_zero(self, make_cover):
+        """Even with option=true, skip the tilt-close when tilt is already 0."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_close",
+            close_includes_tilt=True,
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(0)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ),
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_tilt.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_trailing_tilt_when_no_tilt_support(self, make_cover):
+        """No tilt support → no trailing tilt-close, period."""
+        cover = make_cover(close_includes_tilt=True)  # no tilt times
+        cover.travel_calc.set_position(100)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ),
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_tilt.assert_not_awaited()

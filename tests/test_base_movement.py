@@ -126,7 +126,7 @@ class TestCloseWithTiltCoupling:
     @pytest.mark.asyncio
     async def test_close_no_tilt_when_already_flat_sequential(self, make_cover):
         """Sequential: closing with tilt already flat does not move tilt."""
-        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0, close_includes_tilt=False)
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(100)
 
@@ -1159,6 +1159,7 @@ class TestDualMotorTiltPreStep:
             tilt_mode="dual_motor",
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
+            close_includes_tilt=False,
         )
 
     # -- Pre-step phase --
@@ -1889,6 +1890,7 @@ class TestWrappedDualMotorTilt:
             tilt_time_close=5.0,
             tilt_time_open=5.0,
             tilt_mode="dual_motor",
+            close_includes_tilt=False,
         )
 
     @pytest.mark.asyncio
@@ -2010,6 +2012,7 @@ class TestInlineTiltRestore:
             tilt_time_close=2.0,
             tilt_time_open=2.0,
             tilt_mode="inline",
+            close_includes_tilt=False,
         )
 
     @pytest.mark.asyncio
@@ -2372,6 +2375,7 @@ class TestAbandonActiveLifecycle:
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
             tilt_stop_switch="switch.tilt_stop",
+            close_includes_tilt=False,
         )
 
     def _make_inline_cover(self, make_cover):
@@ -2379,6 +2383,7 @@ class TestAbandonActiveLifecycle:
             tilt_time_close=2.0,
             tilt_time_open=2.0,
             tilt_mode="inline",
+            close_includes_tilt=False,
         )
 
     # -- During tilt pre-step (dual motor) --
@@ -2574,6 +2579,7 @@ class TestExternalMovementSkipsTiltPlanning:
             tilt_close_switch="switch.tilt_close",
             safe_tilt_position=50,
             max_tilt_allowed_position=50,
+            close_includes_tilt=False,
         )
 
     @pytest.mark.asyncio
@@ -2908,6 +2914,7 @@ class TestSequentialExternalFullJourney:
             tilt_time_close=4.0,
             tilt_time_open=4.0,
             tilt_mode="sequential_open",
+            close_includes_tilt=False,
         )
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(100)
@@ -2950,6 +2957,7 @@ class TestSequentialExternalFullJourney:
             tilt_time_close=2.0,
             tilt_time_open=2.0,
             tilt_mode="inline",
+            close_includes_tilt=False,
         )
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(50)
