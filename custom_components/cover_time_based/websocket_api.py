@@ -12,6 +12,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .calibration import CALIBRATABLE_ATTRIBUTES
 from .cover import (
+    CONF_CLOSE_INCLUDES_TILT,
     CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_CONTROL_MODE,
     CONF_COVER_ENTITY_ID,
@@ -36,6 +37,7 @@ from .cover import (
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_WRAPPED,
+    DEFAULT_CLOSE_INCLUDES_TILT,
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_PULSE_TIME,
 )
@@ -66,6 +68,7 @@ _FIELD_MAP = {
     "tilt_open_switch": CONF_TILT_OPEN_SWITCH,
     "tilt_close_switch": CONF_TILT_CLOSE_SWITCH,
     "tilt_stop_switch": CONF_TILT_STOP_SWITCH,
+    "close_includes_tilt": CONF_CLOSE_INCLUDES_TILT,
 }
 
 
@@ -147,6 +150,9 @@ async def ws_get_config(
             "tilt_open_switch": options.get(CONF_TILT_OPEN_SWITCH),
             "tilt_close_switch": options.get(CONF_TILT_CLOSE_SWITCH),
             "tilt_stop_switch": options.get(CONF_TILT_STOP_SWITCH),
+            "close_includes_tilt": options.get(
+                CONF_CLOSE_INCLUDES_TILT, DEFAULT_CLOSE_INCLUDES_TILT
+            ),
         },
     )
 
@@ -213,6 +219,7 @@ async def ws_get_config(
         vol.Optional("tilt_open_switch"): vol.Any(str, None),
         vol.Optional("tilt_close_switch"): vol.Any(str, None),
         vol.Optional("tilt_stop_switch"): vol.Any(str, None),
+        vol.Optional("close_includes_tilt"): bool,
     }
 )
 @websocket_api.async_response
