@@ -388,10 +388,24 @@ class TestStopOnInMotionClick:
     stop-then-reverse behavior."""
 
     @pytest.mark.asyncio
-    async def test_close_while_closing_stops(self, make_cover):
+    @pytest.mark.parametrize(
+        "start_pos,start_dir,method",
+        [
+            (100, "down", "async_close_cover"),
+            (0, "up", "async_close_cover"),
+            (0, "up", "async_open_cover"),
+            (100, "down", "async_open_cover"),
+        ],
+    )
+    async def test_in_motion_click_stops(
+        self, make_cover, start_pos, start_dir, method
+    ):
         cover = make_cover()
-        cover.travel_calc.set_position(100)
-        cover.travel_calc.start_travel_down()
+        cover.travel_calc.set_position(start_pos)
+        if start_dir == "down":
+            cover.travel_calc.start_travel_down()
+        else:
+            cover.travel_calc.start_travel_up()
 
         with (
             patch.object(cover, "async_write_ha_state"),
@@ -402,16 +416,25 @@ class TestStopOnInMotionClick:
                 cover, "_async_move_to_endpoint", new_callable=AsyncMock
             ) as mock_move,
         ):
-            await cover.async_close_cover()
+            await getattr(cover, method)()
 
         mock_stop.assert_awaited_once()
         mock_move.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_close_while_opening_stops(self, make_cover):
+    @pytest.mark.parametrize(
+        "start_pos,method,expected_target",
+        [
+            (100, "async_close_cover", 0),
+            (0, "async_open_cover", 100),
+        ],
+    )
+    async def test_idle_click_proceeds_normally(
+        self, make_cover, start_pos, method, expected_target
+    ):
+        """Sanity: when idle, close_cover/open_cover proceeds normally."""
         cover = make_cover()
-        cover.travel_calc.set_position(0)
-        cover.travel_calc.start_travel_up()
+        cover.travel_calc.set_position(start_pos)
 
         with (
             patch.object(cover, "async_write_ha_state"),
@@ -422,87 +445,7 @@ class TestStopOnInMotionClick:
                 cover, "_async_move_to_endpoint", new_callable=AsyncMock
             ) as mock_move,
         ):
-            await cover.async_close_cover()
-
-        mock_stop.assert_awaited_once()
-        mock_move.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_open_while_opening_stops(self, make_cover):
-        cover = make_cover()
-        cover.travel_calc.set_position(0)
-        cover.travel_calc.start_travel_up()
-
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "async_stop_cover", new_callable=AsyncMock
-            ) as mock_stop,
-            patch.object(
-                cover, "_async_move_to_endpoint", new_callable=AsyncMock
-            ) as mock_move,
-        ):
-            await cover.async_open_cover()
-
-        mock_stop.assert_awaited_once()
-        mock_move.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_open_while_closing_stops(self, make_cover):
-        cover = make_cover()
-        cover.travel_calc.set_position(100)
-        cover.travel_calc.start_travel_down()
-
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "async_stop_cover", new_callable=AsyncMock
-            ) as mock_stop,
-            patch.object(
-                cover, "_async_move_to_endpoint", new_callable=AsyncMock
-            ) as mock_move,
-        ):
-            await cover.async_open_cover()
-
-        mock_stop.assert_awaited_once()
-        mock_move.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_close_when_idle_at_open_starts_close(self, make_cover):
-        """Sanity: when idle, close_cover proceeds normally (does not stop)."""
-        cover = make_cover()
-        cover.travel_calc.set_position(100)
-
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "async_stop_cover", new_callable=AsyncMock
-            ) as mock_stop,
-            patch.object(
-                cover, "_async_move_to_endpoint", new_callable=AsyncMock
-            ) as mock_move,
-        ):
-            await cover.async_close_cover()
+            await getattr(cover, method)()
 
         mock_stop.assert_not_awaited()
-        mock_move.assert_awaited_once_with(target=0)
-
-    @pytest.mark.asyncio
-    async def test_open_when_idle_at_closed_starts_open(self, make_cover):
-        """Sanity: when idle, open_cover proceeds normally (does not stop)."""
-        cover = make_cover()
-        cover.travel_calc.set_position(0)
-
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "async_stop_cover", new_callable=AsyncMock
-            ) as mock_stop,
-            patch.object(
-                cover, "_async_move_to_endpoint", new_callable=AsyncMock
-            ) as mock_move,
-        ):
-            await cover.async_open_cover()
-
-        mock_stop.assert_not_awaited()
-        mock_move.assert_awaited_once_with(target=100)
+        mock_move.assert_awaited_once_with(target=expected_target)

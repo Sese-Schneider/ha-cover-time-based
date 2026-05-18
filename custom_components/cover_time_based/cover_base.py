@@ -391,11 +391,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self.async_stop_cover()
             await self._direction_change_delay()
 
-        # Carve-outs that must always reach _async_move_to_endpoint, even when
-        # tracker says we're already settled at 0. See _async_move_to_endpoint
-        # for the corresponding handling:
-        #   - startup-delay direction reversal cancel: lines ~519-527
-        #   - external sequential close (articulates slats): lines ~497-509
+        # Carve-outs that must always reach _async_move_to_endpoint even
+        # when the tracker says we're settled at 0: a pending opposite-
+        # direction startup delay needs cancelling, and an external
+        # sequential close needs to articulate the slats.
         startup_delay_open = (
             self._startup_delay_task is not None
             and not self._startup_delay_task.done()
@@ -428,16 +427,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     "async_close_cover :: travel already at 0, closing tilt directly"
                 )
                 await self._async_move_tilt_to_endpoint(target=0)
-            else:
+            elif self._tilt_restore_target is None:
                 # Travel is in flight via the auto-updater. Set the restore
                 # target so the auto-updater chains _start_tilt_restore after
                 # travel completes. This avoids _abandon_active_lifecycle
                 # cancelling the in-flight travel.
                 #
-                # Idempotency note: dual-motor + non-safe-tilt triggers
-                # _start_tilt_pre_step inside _async_move_to_endpoint, which
-                # itself sets _tilt_restore_target = target (here also 0).
-                # Re-setting to 0 here is a no-op for that path.
+                # Guarded on `is None` so we don't overwrite a value that
+                # _plan_tilt_for_travel may already have set (e.g. dual_motor
+                # pre-step path sets _tilt_restore_target = target).
                 self._log("async_close_cover :: scheduling tilt-close after travel")
                 self._tilt_restore_target = 0
 

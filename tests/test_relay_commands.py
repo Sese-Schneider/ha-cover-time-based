@@ -1248,9 +1248,8 @@ class TestSwitchModeTiltPendingCounts:
     handler from firing.
     """
 
-    @pytest.mark.asyncio
-    async def test_send_tilt_open_marks_target_pending_one(self, make_cover):
-        cover = make_cover(
+    def _make_dual_motor_switch_cover(self, make_cover):
+        return make_cover(
             control_mode=CONTROL_MODE_SWITCH,
             tilt_time_close=2.0,
             tilt_time_open=2.0,
@@ -1258,6 +1257,10 @@ class TestSwitchModeTiltPendingCounts:
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
         )
+
+    @pytest.mark.asyncio
+    async def test_send_tilt_open_marks_target_pending_one(self, make_cover):
+        cover = self._make_dual_motor_switch_cover(make_cover)
         _mock_switch_on(cover.hass)  # all off
 
         await cover._send_tilt_open()
@@ -1266,14 +1269,7 @@ class TestSwitchModeTiltPendingCounts:
 
     @pytest.mark.asyncio
     async def test_send_tilt_close_marks_target_pending_one(self, make_cover):
-        cover = make_cover(
-            control_mode=CONTROL_MODE_SWITCH,
-            tilt_time_close=2.0,
-            tilt_time_open=2.0,
-            tilt_mode="dual_motor",
-            tilt_open_switch="switch.tilt_open",
-            tilt_close_switch="switch.tilt_close",
-        )
+        cover = self._make_dual_motor_switch_cover(make_cover)
         _mock_switch_on(cover.hass)  # all off
 
         await cover._send_tilt_close()
@@ -1287,14 +1283,7 @@ class TestSwitchModeTiltPendingCounts:
         """External wall-switch press: target is already on (user flipped it).
         Integration must NOT mark pending — otherwise the user's later on→off
         release would be consumed as an echo, missing the external-stop signal."""
-        cover = make_cover(
-            control_mode=CONTROL_MODE_SWITCH,
-            tilt_time_close=2.0,
-            tilt_time_open=2.0,
-            tilt_mode="dual_motor",
-            tilt_open_switch="switch.tilt_open",
-            tilt_close_switch="switch.tilt_close",
-        )
+        cover = self._make_dual_motor_switch_cover(make_cover)
         _mock_switch_on(cover.hass, "switch.tilt_open")  # already on
 
         await cover._send_tilt_open()
@@ -1305,14 +1294,7 @@ class TestSwitchModeTiltPendingCounts:
     async def test_send_tilt_close_skips_pending_when_target_already_on(
         self, make_cover
     ):
-        cover = make_cover(
-            control_mode=CONTROL_MODE_SWITCH,
-            tilt_time_close=2.0,
-            tilt_time_open=2.0,
-            tilt_mode="dual_motor",
-            tilt_open_switch="switch.tilt_open",
-            tilt_close_switch="switch.tilt_close",
-        )
+        cover = self._make_dual_motor_switch_cover(make_cover)
         _mock_switch_on(cover.hass, "switch.tilt_close")  # already on
 
         await cover._send_tilt_close()
