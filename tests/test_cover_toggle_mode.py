@@ -320,6 +320,7 @@ class TestToggleDirectionChange:
             await cover.async_close_cover()
 
         mock_stop.assert_awaited_once()
+        await _cancel_tasks(cover)
 
     @pytest.mark.asyncio
     async def test_open_while_closing_stops_first(self):
