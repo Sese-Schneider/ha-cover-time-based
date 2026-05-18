@@ -219,7 +219,7 @@ async def ws_get_config(
         vol.Optional("tilt_open_switch"): vol.Any(str, None),
         vol.Optional("tilt_close_switch"): vol.Any(str, None),
         vol.Optional("tilt_stop_switch"): vol.Any(str, None),
-        vol.Optional("close_includes_tilt"): bool,
+        vol.Optional("close_includes_tilt"): vol.Any(None, bool),
     }
 )
 @websocket_api.async_response

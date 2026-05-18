@@ -1518,3 +1518,36 @@ class TestCloseIncludesTiltFieldRoundTrip:
 
         new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_opts["close_includes_tilt"] is False
+
+    @pytest.mark.asyncio
+    async def test_update_config_accepts_null_to_clear(self):
+        """Frontend sends close_includes_tilt=null when switching tilt_mode
+        away from sequential_close/dual_motor. Schema must accept None and
+        the handler must drop the stored option."""
+        hass = MagicMock()
+        connection = MagicMock()
+        config_entry = MagicMock()
+        config_entry.options = {
+            "tilt_mode": "sequential_close",
+            "close_includes_tilt": False,
+        }
+        config_entry.domain = DOMAIN
+
+        msg = {
+            "id": 3,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "close_includes_tilt": None,
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            handler = _unwrap(ws_update_config)
+            await handler(hass, connection, msg)
+
+        # send_error must NOT have been called (the bug was schema rejection)
+        connection.send_error.assert_not_called()
+        new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert "close_includes_tilt" not in new_opts
