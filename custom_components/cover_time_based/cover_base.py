@@ -375,8 +375,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         self._require_configured()
         self._log("async_close_cover")
-        if self.is_opening:
-            self._log("async_close_cover :: currently opening, stopping first")
+        if not self._triggered_externally and (self.is_opening or self.is_closing):
+            # In-motion UI click stops the cover. Reversing direction requires
+            # a second click after the stop, or use set_cover_position which
+            # keeps its existing stop-then-reverse behavior. External triggers
+            # (wall switches) keep the legacy "stop and reverse if needed"
+            # behavior to honor the physical user intent.
+            self._log("async_close_cover :: cover is in motion, stopping")
+            await self.async_stop_cover()
+            return
+        if self._triggered_externally and self.is_opening:
+            # External trigger: stop the opposite-direction motion, settle,
+            # then proceed with close (legacy reverse behavior).
+            self._log("async_close_cover :: external close while opening, reversing")
             await self.async_stop_cover()
             await self._direction_change_delay()
 
@@ -431,11 +442,21 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._tilt_restore_target = 0
 
     async def async_open_cover(self, **kwargs):
-        """Open the cover fully."""
+        """Open the cover fully.
+
+        In-motion UI click stops the cover. Reversing direction requires a
+        second click, or use set_cover_position which keeps its existing
+        stop-then-reverse behavior. External triggers (wall switches) keep
+        the legacy "stop and reverse if needed" behavior.
+        """
         self._require_configured()
         self._log("async_open_cover")
-        if self.is_closing:
-            self._log("async_open_cover :: currently closing, stopping first")
+        if not self._triggered_externally and (self.is_opening or self.is_closing):
+            self._log("async_open_cover :: cover is in motion, stopping")
+            await self.async_stop_cover()
+            return
+        if self._triggered_externally and self.is_closing:
+            self._log("async_open_cover :: external open while closing, reversing")
             await self.async_stop_cover()
             await self._direction_change_delay()
         await self._async_move_to_endpoint(target=100)

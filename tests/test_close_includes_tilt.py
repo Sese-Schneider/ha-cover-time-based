@@ -378,3 +378,131 @@ class TestUnaffectedStrategies:
 
         mock_tilt.assert_not_awaited()
         assert cover._tilt_restore_target is None
+
+
+class TestStopOnInMotionClick:
+    """Clicking close_cover or open_cover while the cover is moving (in any
+    direction) should stop the cover and return — not re-issue the command
+    and not chain a direction-change reversal. Reversing requires a second
+    click, or use set_cover_position which keeps its existing
+    stop-then-reverse behavior."""
+
+    @pytest.mark.asyncio
+    async def test_close_while_closing_stops(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(100)
+        cover.travel_calc.start_travel_down()
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "async_stop_cover", new_callable=AsyncMock
+            ) as mock_stop,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_move,
+        ):
+            await cover.async_close_cover()
+
+        mock_stop.assert_awaited_once()
+        mock_move.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_close_while_opening_stops(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel_up()
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "async_stop_cover", new_callable=AsyncMock
+            ) as mock_stop,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_move,
+        ):
+            await cover.async_close_cover()
+
+        mock_stop.assert_awaited_once()
+        mock_move.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_open_while_opening_stops(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel_up()
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "async_stop_cover", new_callable=AsyncMock
+            ) as mock_stop,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_move,
+        ):
+            await cover.async_open_cover()
+
+        mock_stop.assert_awaited_once()
+        mock_move.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_open_while_closing_stops(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(100)
+        cover.travel_calc.start_travel_down()
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "async_stop_cover", new_callable=AsyncMock
+            ) as mock_stop,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_move,
+        ):
+            await cover.async_open_cover()
+
+        mock_stop.assert_awaited_once()
+        mock_move.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_close_when_idle_at_open_starts_close(self, make_cover):
+        """Sanity: when idle, close_cover proceeds normally (does not stop)."""
+        cover = make_cover()
+        cover.travel_calc.set_position(100)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "async_stop_cover", new_callable=AsyncMock
+            ) as mock_stop,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_move,
+        ):
+            await cover.async_close_cover()
+
+        mock_stop.assert_not_awaited()
+        mock_move.assert_awaited_once_with(target=0)
+
+    @pytest.mark.asyncio
+    async def test_open_when_idle_at_closed_starts_open(self, make_cover):
+        """Sanity: when idle, open_cover proceeds normally (does not stop)."""
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "async_stop_cover", new_callable=AsyncMock
+            ) as mock_stop,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_move,
+        ):
+            await cover.async_open_cover()
+
+        mock_stop.assert_not_awaited()
+        mock_move.assert_awaited_once_with(target=100)

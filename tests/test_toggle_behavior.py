@@ -26,35 +26,36 @@ from custom_components.cover_time_based.cover import (
 
 
 class TestToggleCloseWhileMoving:
-    """Same-direction commands re-issue (no special stop override)."""
+    """In-motion UI clicks stop the cover (do not re-issue same direction)."""
 
     @pytest.mark.asyncio
-    async def test_close_while_closing_reissues(self, make_cover):
+    async def test_close_while_closing_stops(self, make_cover):
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
 
         # Simulate that the cover is currently closing (position 100 = fully open)
         cover.travel_calc.set_position(100)
         cover.travel_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        # Same-direction re-issues close command (base class behavior)
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        # async_stop_cover clears _last_command back to None
+        assert cover._last_command is None
 
     @pytest.mark.asyncio
-    async def test_open_while_opening_reissues(self, make_cover):
+    async def test_open_while_opening_stops(self, make_cover):
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
 
         # Simulate that the cover is currently opening (position 0 = fully closed)
         cover.travel_calc.set_position(0)
         cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()
 
-        # Same-direction re-issues open command (base class behavior)
-        assert cover._last_command == SERVICE_OPEN_COVER
+        assert cover._last_command is None
 
 
 # ===================================================================

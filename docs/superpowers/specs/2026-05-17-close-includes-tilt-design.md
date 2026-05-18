@@ -124,6 +124,24 @@ This naturally handles "close from articulated state" (settled at 0, tilt!=0 →
    - Tests confirming inline + sequential_open behavior is unchanged regardless of option value.
    - Test that `close_cover` at settled `(0, 0)` is a no-op (no resync pulse) for all strategies.
 
+### Change 5: UI-initiated close_cover / open_cover stops the cover when in motion
+
+A UI click of `cover.close_cover` or `cover.open_cover` on a cover that is currently moving (in either direction) now **stops** the cover instead of either re-issuing the same direction or reversing. Reversing direction requires a second click, or a `set_cover_position` call (which keeps its existing stop-then-reverse behavior).
+
+External triggers (wall switches and wrapped underlying covers, detected via `_triggered_externally`) keep the legacy "stop and reverse if needed" behavior to honor the physical user intent.
+
+Rationale: when the cover is moving and the user clicks close/open, the most common intent is "stop here", not "keep going" or "go the other way". This aligns close/open with HA's built-in `cover.toggle` which already dispatches stop when `is_closing or is_opening`.
+
+Implementation: in both `async_close_cover` and `async_open_cover`, before any movement logic:
+
+```python
+if not self._triggered_externally and (self.is_opening or self.is_closing):
+    await self.async_stop_cover()
+    return
+```
+
+For external triggers in the opposite direction, the legacy `async_stop_cover()` + `_direction_change_delay()` flow is preserved.
+
 ## What is explicitly NOT changing
 
 - All `set_cover_position` calls — no new tilt coupling.

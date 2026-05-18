@@ -83,10 +83,12 @@ class TestOpenFromClosed:
 
 
 class TestCloseStopsOppositeDirection:
-    """Closing while opening should stop first, then close."""
+    """UI close while opening just stops — does not reverse. (Reverse is
+    still available via set_cover_position which preserves the legacy
+    stop-then-reverse flow.)"""
 
     @pytest.mark.asyncio
-    async def test_close_while_opening_stops_then_closes(self, make_cover):
+    async def test_close_while_opening_stops(self, make_cover):
         cover = make_cover()
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
@@ -95,15 +97,16 @@ class TestCloseStopsOppositeDirection:
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        # Should now be traveling down (closing)
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        # Stopped, not reversed. async_stop_cover clears _last_command.
+        assert cover._last_command is None
+        assert not cover.travel_calc.is_traveling()
 
 
 class TestOpenStopsOppositeDirection:
-    """Opening while closing should stop first, then open."""
+    """UI open while closing just stops — does not reverse."""
 
     @pytest.mark.asyncio
-    async def test_open_while_closing_stops_then_opens(self, make_cover):
+    async def test_open_while_closing_stops(self, make_cover):
         cover = make_cover()
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -112,7 +115,8 @@ class TestOpenStopsOppositeDirection:
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()
 
-        assert cover._last_command == SERVICE_OPEN_COVER
+        assert cover._last_command is None
+        assert not cover.travel_calc.is_traveling()
 
 
 # ===================================================================
@@ -2522,8 +2526,10 @@ class TestAbandonActiveLifecycle:
     # -- Endpoint commands during lifecycle --
 
     @pytest.mark.asyncio
-    async def test_close_during_pre_step_abandons_and_closes(self, make_cover):
-        """async_close_cover during pre-step abandons and starts fresh close."""
+    async def test_close_during_pre_step_stops(self, make_cover):
+        """async_close_cover during a pre-step now stops the cover (new
+        in-motion-click semantics). Use set_cover_position(0) if you want
+        the old abandon-and-close-from-anywhere flow."""
         cover = self._make_dual_motor_cover(make_cover)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(50)
@@ -2536,8 +2542,9 @@ class TestAbandonActiveLifecycle:
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        # Old pre-step is gone, fresh close started
-        assert cover._pending_travel_target == 0 or cover.travel_calc.is_traveling()
+        # Pre-step abandoned (via async_stop_cover), no new close started.
+        assert cover._pending_travel_target is None
+        assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
     async def test_open_tilt_during_restore_abandons(self, make_cover):
