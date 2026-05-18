@@ -153,16 +153,6 @@ Consequences before the fix:
 
 Fix in `cover_base.py:1631-1665`: the same-direction switch is now only marked pending if it isn't already in the target state, and the mark count is `1`, matching what one `turn_on` actually produces. This brings tilt-switch handling in line with how `cover_switch_mode._send_open` / `_send_close` already work for the cover motor.
 
-### Change 7: Frontend default for `max_tilt_allowed_position`
-
-Pre-existing UX trap. When you selected dual_motor in the config card, the field was defaulted to `0` — the most restrictive boundary-lock setting ("tilt only allowed when travel is at 0"). Almost every cover physical motion would then violate the invariant and trigger `snap_trackers_to_physical` to "correct" the tilt tracker to the safe position, surprising the user with abrupt tilt-attribute changes.
-
-Fix: don't auto-populate `max_tilt_allowed_position` on switch to dual_motor. Leave it unset (the backend treats unset as "no boundary lock", matching the most common case). Users with a physical constraint (e.g., slats that hit the window frame above a certain travel position) can opt in by entering a value.
-
-## Known issues deferred to follow-up PRs
-
-- **External-trigger tilt planning on dual_motor.** When `_async_move_to_endpoint` is called via an external trigger (wall switch state change), it currently skips tilt planning entirely on dual_motor strategies ([cover_base.py:595-606](../../custom_components/cover_time_based/cover_base.py#L595-L606), `skip_tilt_planning`). The rationale was "the user is in direct hardware control", but for dual_motor the cover and tilt are independent motors — the integration could and arguably should still drive tilt to safe before allowing travel above the boundary. Without that, `snap_trackers_to_physical` papers over the violation by forcing the tilt tracker to safe at stop time, leading to abrupt attribute changes. This deserves its own design discussion and separate PR.
-
 ## What is explicitly NOT changing
 
 - All `set_cover_position` calls — no new tilt coupling.
