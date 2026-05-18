@@ -1228,3 +1228,93 @@ class TestToggleModeIgnoresStopSwitch:
             # pulse completion (background)
             _ha("turn_off", "switch.close"),
         ]
+
+
+# ===================================================================
+# Switch mode tilt: pending count must match actual relay state changes
+# ===================================================================
+
+
+class TestSwitchModeTiltPendingCounts:
+    """Switch-mode (latching) _send_tilt_open / _send_tilt_close must mark
+    pending=1 for the target switch (one off→on echo expected), and only
+    mark pending for the opposite switch when it's actually on.
+
+    Pre-existing bug fix: the base implementation marked pending=2 for the
+    target switch (copied from pulse/toggle where _complete_pulse adds a
+    follow-up turn_off, giving 2 echoes). Switch mode is latching, so only
+    1 echo fires. The extra pending leaked, consuming the user's eventual
+    on→off release as if it were an echo and preventing the external stop
+    handler from firing.
+    """
+
+    @pytest.mark.asyncio
+    async def test_send_tilt_open_marks_target_pending_one(self, make_cover):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SWITCH,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        _mock_switch_on(cover.hass)  # all off
+
+        await cover._send_tilt_open()
+
+        assert cover._pending_switch.get("switch.tilt_open") == 1
+
+    @pytest.mark.asyncio
+    async def test_send_tilt_close_marks_target_pending_one(self, make_cover):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SWITCH,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        _mock_switch_on(cover.hass)  # all off
+
+        await cover._send_tilt_close()
+
+        assert cover._pending_switch.get("switch.tilt_close") == 1
+
+    @pytest.mark.asyncio
+    async def test_send_tilt_open_skips_pending_when_target_already_on(
+        self, make_cover
+    ):
+        """External wall-switch press: target is already on (user flipped it).
+        Integration must NOT mark pending — otherwise the user's later on→off
+        release would be consumed as an echo, missing the external-stop signal."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SWITCH,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        _mock_switch_on(cover.hass, "switch.tilt_open")  # already on
+
+        await cover._send_tilt_open()
+
+        assert cover._pending_switch.get("switch.tilt_open") is None
+
+    @pytest.mark.asyncio
+    async def test_send_tilt_close_skips_pending_when_target_already_on(
+        self, make_cover
+    ):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SWITCH,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        _mock_switch_on(cover.hass, "switch.tilt_close")  # already on
+
+        await cover._send_tilt_close()
+
+        assert cover._pending_switch.get("switch.tilt_close") is None

@@ -1049,13 +1049,14 @@ class TestTiltSendMarkSwitchPending:
             with patch.object(cover, "_mark_switch_pending") as mock_mark:
                 await cover._send_tilt_open()
 
-        # Should mark close switch with 1 (it was on) and open switch with 2
+        # Should mark close switch with 1 (it was on; one off echo expected)
+        # and open switch with 1 (target was off; one on echo expected).
         calls = mock_mark.call_args_list
         assert any(c.args == ("switch.tilt_close", 1) for c in calls), (
             f"Expected close switch marked with 1, got {calls}"
         )
-        assert any(c.args == ("switch.tilt_open", 2) for c in calls), (
-            f"Expected open switch marked with 2, got {calls}"
+        assert any(c.args == ("switch.tilt_open", 1) for c in calls), (
+            f"Expected open switch marked with 1, got {calls}"
         )
 
     @pytest.mark.asyncio
@@ -1082,8 +1083,8 @@ class TestTiltSendMarkSwitchPending:
         assert any(c.args == ("switch.tilt_open", 1) for c in calls), (
             f"Expected open switch marked with 1, got {calls}"
         )
-        assert any(c.args == ("switch.tilt_close", 2) for c in calls), (
-            f"Expected close switch marked with 2, got {calls}"
+        assert any(c.args == ("switch.tilt_close", 1) for c in calls), (
+            f"Expected close switch marked with 1, got {calls}"
         )
 
     @pytest.mark.asyncio

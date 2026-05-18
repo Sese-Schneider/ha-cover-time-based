@@ -1629,10 +1629,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
     async def _send_tilt_open(self) -> None:
-        """Send open to the tilt motor (bypasses position tracker)."""
+        """Send open to the tilt motor (bypasses position tracker).
+
+        Switch-mode (latching) semantics: each turn_on/turn_off produces
+        at most one state-change event, and only when the switch isn't
+        already in the target state. Mark pending=1 per expected echo,
+        and only when the relay call will actually flip state. Otherwise
+        the orphan pending count consumes the next real state change.
+        """
         if self._switch_is_on(self._tilt_close_switch_id):
             self._mark_switch_pending(self._tilt_close_switch_id, 1)
-        self._mark_switch_pending(self._tilt_open_switch_id, 2)
+        if not self._switch_is_on(self._tilt_open_switch_id):
+            self._mark_switch_pending(self._tilt_open_switch_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -1647,10 +1655,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
     async def _send_tilt_close(self) -> None:
-        """Send close to the tilt motor (bypasses position tracker)."""
+        """Send close to the tilt motor (bypasses position tracker).
+
+        See _send_tilt_open for the pending-count rationale.
+        """
         if self._switch_is_on(self._tilt_open_switch_id):
             self._mark_switch_pending(self._tilt_open_switch_id, 1)
-        self._mark_switch_pending(self._tilt_close_switch_id, 2)
+        if not self._switch_is_on(self._tilt_close_switch_id):
+            self._mark_switch_pending(self._tilt_close_switch_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",

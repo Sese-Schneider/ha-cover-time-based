@@ -142,6 +142,17 @@ if not self._triggered_externally and (self.is_opening or self.is_closing):
 
 For external triggers in the opposite direction, the legacy `async_stop_cover()` + `_direction_change_delay()` flow is preserved.
 
+### Change 6: Switch-mode tilt-relay pending count fix
+
+Pre-existing bug surfaced during dual_motor smoke testing. The base-class `_send_tilt_open` and `_send_tilt_close` (used by switch mode) marked `pending=2` for the same-direction switch even though each call only issues one `turn_on`. The "2" was inherited from the pulse/toggle-mode overrides (where `_complete_pulse` adds a follow-up `turn_off`, giving 2 echoes); switch mode is latching and only produces 1 echo per `turn_on`.
+
+Consequences before the fix:
+- An external wall-switch press caused the integration to fire a redundant `turn_on` (idempotent — no event), but the pending counter was still inflated by 2.
+- One pending count was drained later (e.g. by the user's release `on→off`), but the other leaked until the `_pending_switch_timers` timeout (~5s) cleared it.
+- Worse: the user's `on→off` release was consumed as if it were the integration's own echo, so the external-state-change handler never fired and the motor kept running to the endpoint instead of stopping when the user let go of the switch.
+
+Fix in `cover_base.py:1631-1665`: the same-direction switch is now only marked pending if it isn't already in the target state, and the mark count is `1`, matching what one `turn_on` actually produces. This brings tilt-switch handling in line with how `cover_switch_mode._send_open` / `_send_close` already work for the cover motor.
+
 ## What is explicitly NOT changing
 
 - All `set_cover_position` calls — no new tilt coupling.
