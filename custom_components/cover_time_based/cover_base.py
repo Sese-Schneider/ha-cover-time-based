@@ -633,26 +633,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         tilt_target = None
         pre_step_delay = 0.0
-        # Dual-motor externals skip tilt planning entirely — the separate tilt
-        # relay can't be sequenced, and the snap-to-endpoint fall-through in
-        # _plan_tilt_for_travel has no way to drive the tilt motor afterwards.
-        # Shared-motor strategies (inline, sequential_*) still need planning
-        # so the calculators stay in sync with the single motor's multi-phase
-        # motion (e.g. sequential_open: tilt close 100→0 then travel 0→100).
-        skip_tilt_planning = (
-            self._triggered_externally
-            and self._tilt_strategy is not None
-            and self._tilt_strategy.uses_tilt_motor
+        # Plan tilt for every trigger including external. Even when the cover
+        # motor is externally controlled, the hardware itself is expected to
+        # move tilt to safe before travel (interlock behavior); tracking the
+        # pre-step keeps the integration's tilt_calc in sync with reality
+        # without needing snap_trackers_to_physical to "correct" the tracker
+        # at stop time. _start_tilt_pre_step and _start_pending_travel already
+        # skip relay firing when _triggered_externally is True, so the
+        # integration only mirrors the physical motion in its calculators.
+        current_tilt = (
+            self.tilt_calc.current_position() if self._tilt_strategy else None
         )
-        if not skip_tilt_planning:
-            current_tilt = (
-                self.tilt_calc.current_position() if self._tilt_strategy else None
-            )
-            tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
-                target, command, current, current_tilt
-            )
-            if started:
-                return
+        tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
+            target, command, current, current_tilt
+        )
+        if started:
+            return
 
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
@@ -1411,8 +1407,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Start travel after tilt pre-step completes (dual_motor).
 
         Called by auto_stop_if_necessary when tilt_calc reaches the safe
-        position. Stops the tilt motor, sends the travel command, and starts
-        tracking with travel_calc.
+        position. For self-initiated moves: stops the tilt motor and sends
+        the travel command. For external triggers (where hardware is doing
+        the multi-phase motion itself), only updates the integration's
+        trackers — the relays are left to the hardware.
         """
         target = self._pending_travel_target
         command = self._pending_travel_command
@@ -1426,11 +1424,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             command,
         )
 
-        # Stop tilt motor
-        await self._send_tilt_stop()
-
-        # Send travel command and start tracking
-        await self._async_handle_command(command)
+        if not self._triggered_externally:
+            # Stop tilt motor and send travel command.
+            await self._send_tilt_stop()
+            await self._async_handle_command(command)
         self._last_command = command
         self._begin_movement(
             target,

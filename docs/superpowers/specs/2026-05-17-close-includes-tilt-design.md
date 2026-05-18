@@ -153,6 +153,22 @@ Consequences before the fix:
 
 Fix in `cover_base.py:1631-1665`: the same-direction switch is now only marked pending if it isn't already in the target state, and the mark count is `1`, matching what one `turn_on` actually produces. This brings tilt-switch handling in line with how `cover_switch_mode._send_open` / `_send_close` already work for the cover motor.
 
+### Change 7: Track tilt pre-step for external triggers on dual_motor
+
+Pre-existing design problem surfaced during dual_motor smoke testing. `_async_move_to_endpoint` had a `skip_tilt_planning` bypass that, for external triggers on dual_motor strategies, skipped `_plan_tilt_for_travel` entirely and started travel tracking immediately. The rationale was "the separate tilt relay can't be sequenced and the integration can't drive it afterwards."
+
+Consequences before the fix: when the user externally triggered an open from `(0, 0)` with `safe_tilt_position=100` and `max_tilt_allowed_position=0` (a real boundary-lock scenario), the integration assumed travel started immediately. The hardware (which actually moves tilt to safe before travel — typical interlock behavior) was out of sync with the tracker. When travel stopped, `snap_trackers_to_physical` "corrected" the tilt tracker by abruptly setting it to safe — papering over the lie with another lie.
+
+The fix removes the `skip_tilt_planning` bypass. `_plan_tilt_for_travel` runs for all triggers, including external. For external triggers, `_start_tilt_pre_step` and `_start_pending_travel` already skip relay firing (via existing `_triggered_externally` gates) — they only update the integration's trackers. This means:
+
+- The pre-step phase tracks tilt 0→safe in `tilt_calc` while the hardware does the same motion physically.
+- When the tracker says tilt has reached safe, `_start_pending_travel` starts `travel_calc` tracking from current → target.
+- Both calculators stay in sync with the assumed hardware behavior, and `snap_trackers_to_physical` no longer needs to fire its tracker-rewriting branch.
+
+`_start_pending_travel` was modified to skip its relay calls (`_send_tilt_stop` and `_async_handle_command(command)`) when `_triggered_externally` — the hardware is already running those switches itself.
+
+If the user's hardware doesn't have the assumed pre-step behavior (i.e., the cover ignores tilt and just moves), this change can leave the trackers ahead of reality. Users in that situation should configure their cover with `max_tilt_allowed_position=null` (no boundary lock) or accept that the tracker is optimistic during the pre-step window.
+
 ## What is explicitly NOT changing
 
 - All `set_cover_position` calls — no new tilt coupling.
