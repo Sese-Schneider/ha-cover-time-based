@@ -2,7 +2,7 @@
  * Cover Time Based Configuration Card
  *
  * A Lovelace card for configuring and calibrating cover_time_based entities.
- * Uses HA built-in elements (ha-entity-picker, ha-textfield, ha-checkbox,
+ * Uses HA built-in elements (ha-entity-picker, ha-input/ha-textfield, ha-checkbox,
  * ha-button) for consistent look and feel.
  *
  * All user-visible strings are translatable. Translations are embedded below.
@@ -14,6 +14,7 @@ import {
   css,
 } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import { filterEntitiesByValidEntries } from "./entity-filter.js";
+import { renderTextfield } from "./textfield-render.js";
 
 const DOMAIN = "cover_time_based";
 
@@ -964,16 +965,16 @@ class CoverTimeBasedCard extends LitElement {
         ${showPulseTime
           ? html`
               <div class="inline-field">
-                <ha-textfield
-                  type="number"
-                  min="0.1"
-                  max="10"
-                  step="0.1"
-                  suffix="s"
-                  label=${this._t("control_mode.pulse_time")}
-                  .value=${String(c.pulse_time || 1.0)}
-                  @change=${this._onPulseTimeChange}
-                ></ha-textfield>
+                ${renderTextfield({
+                  type: "number",
+                  min: "0.1",
+                  max: "10",
+                  step: "0.1",
+                  suffix: "s",
+                  label: this._t("control_mode.pulse_time"),
+                  value: String(c.pulse_time || 1.0),
+                  onChange: this._onPulseTimeChange,
+                })}
               </div>
             `
           : ""}
@@ -1102,36 +1103,39 @@ class CoverTimeBasedCard extends LitElement {
         </div>
         ` : ""}
         <div class="dual-motor-config">
-          <ha-textfield
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-            label=${this._t("tilt_motor.safe_position")}
-            helper=${this._t("tilt_motor.safe_position_helper")}
-            .value=${String(c.safe_tilt_position ?? 100)}
-            @change=${(e) => {
+          ${renderTextfield({
+            type: "number",
+            min: "0",
+            max: "100",
+            step: "1",
+            label: this._t("tilt_motor.safe_position"),
+            hint: this._t("tilt_motor.safe_position_helper"),
+            value: String(c.safe_tilt_position ?? 100),
+            onChange: (e) => {
               const v = parseInt(e.target.value);
               if (!isNaN(v) && v >= 0 && v <= 100) {
                 this._updateLocal({ safe_tilt_position: v });
               }
-            }}
-          ></ha-textfield>
-          <ha-textfield
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-            label=${this._t("tilt_motor.max_allowed_position")}
-            helper=${this._t("tilt_motor.max_allowed_helper")}
-            .value=${c.max_tilt_allowed_position != null ? String(c.max_tilt_allowed_position) : ""}
-            @change=${(e) => {
+            },
+          })}
+          ${renderTextfield({
+            type: "number",
+            min: "0",
+            max: "100",
+            step: "1",
+            label: this._t("tilt_motor.max_allowed_position"),
+            hint: this._t("tilt_motor.max_allowed_helper"),
+            value:
+              c.max_tilt_allowed_position != null
+                ? String(c.max_tilt_allowed_position)
+                : "",
+            onChange: (e) => {
               const v = e.target.value.trim();
               this._updateLocal({
                 max_tilt_allowed_position: v === "" ? null : parseInt(v),
               });
-            }}
-          ></ha-textfield>
+            },
+          })}
         </div>
       </div>
     `;
@@ -1593,7 +1597,8 @@ class CoverTimeBasedCard extends LitElement {
         margin-top: 12px;
       }
 
-      .dual-motor-config ha-textfield {
+      .dual-motor-config ha-textfield,
+      .dual-motor-config ha-input {
         flex: 1;
       }
 
@@ -1671,13 +1676,13 @@ class CoverTimeBasedCard extends LitElement {
 
       .value-cell {
         font-family: var(--code-font-family, monospace);
-        display: flex;
-        align-items: center;
-        gap: 4px;
+        text-align: right;
+        white-space: nowrap;
       }
 
       .timing-input {
-        width: 80px;
+        box-sizing: content-box;
+        width: 14ch;
         padding: 4px 8px;
         border: 1px solid var(--divider-color, #e0e0e0);
         border-radius: 4px;
