@@ -664,10 +664,11 @@ class CoverTimeBasedCard extends LitElement {
         if (this._config.safe_tilt_position == null) {
           updates.safe_tilt_position = 100;
         }
-        // Default max_tilt_allowed_position to 0 (fully closed)
-        if (this._config.max_tilt_allowed_position == null) {
-          updates.max_tilt_allowed_position = 0;
-        }
+        // Leave max_tilt_allowed_position unset by default (no boundary lock).
+        // Users with a physical constraint can opt in by setting a value.
+        // The previous default of 0 meant "tilt only at travel=0", which
+        // was the most restrictive setting and surprised users by forcing
+        // tilt tracker snaps every time the cover moved.
       } else if (mode === "inline") {
         // Clear dual-motor fields when switching to inline
         updates.safe_tilt_position = null;
