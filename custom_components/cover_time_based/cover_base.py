@@ -43,7 +43,7 @@ from .const import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
 )
-from .tilt_strategies import SequentialTilt
+from .tilt_strategies import InlineTilt, SequentialTilt
 from .tilt_strategies.planning import (
     calculate_pre_step_delay,
     extract_coupled_tilt,
@@ -74,6 +74,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt_close_switch=None,
         tilt_stop_switch=None,
         tilt_mode_str="none",
+        close_includes_tilt=True,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -93,6 +94,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._tilt_open_switch_id = tilt_open_switch
         self._tilt_close_switch_id = tilt_close_switch
         self._tilt_stop_switch_id = tilt_stop_switch
+        self._close_includes_tilt = close_includes_tilt
 
         if name:
             self._name = name
@@ -105,6 +107,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._delay_task = None
         self._startup_delay_task = None
         self._last_command = None
+        # Drives the post-travel tilt phase via _start_tilt_restore (consumed
+        # by the auto-updater when travel reaches endpoint). Set by:
+        #   - _plan_tilt_for_travel (mid-position moves: restore prior tilt;
+        #     dual-motor endpoint moves: snap tilt to endpoint).
+        #   - _start_tilt_pre_step (after pre-step + travel completes).
+        #   - async_close_cover when close_includes_tilt is on and the tilt
+        #     strategy doesn't already drive tilt to 0 during close travel
+        #     (sequential_close, dual_motor — not inline or sequential_open).
         self._tilt_restore_target: int | None = None
         self._tilt_restore_active: bool = False
         self._pending_travel_target: int | None = None
@@ -309,11 +319,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     @property
     def is_closed(self):
-        """Return if the cover is closed."""
-        if not self._has_tilt_support():
-            return self.travel_calc.is_closed()
+        """Return if the cover is closed.
 
-        return self.travel_calc.is_closed() and self.tilt_calc.is_closed()
+        Tracks travel position only — tilt is reported independently via
+        current_cover_tilt_position. This matches HA's general cover
+        semantics and is what drives the built-in toggle action.
+        """
+        return self.travel_calc.is_closed()
 
     @property
     def extra_state_attributes(self):
@@ -351,21 +363,98 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # -----------------------------------------------------------------------
 
     async def async_close_cover(self, **kwargs):
-        """Close the cover fully."""
+        """Close the cover fully.
+
+        Travel is moved to 0 unless already settled there (no resync motor
+        pulse — matches HA convention that close_cover re-applied is a no-op).
+
+        When close_includes_tilt is True and the cover has tilt support and
+        tilt is not already at 0, the slats are closed afterward. This makes
+        close_cover land at (0, 0) on strategies that would otherwise park
+        tilt at an implicit-open or safe position (sequential_close, dual_motor).
+        """
         self._require_configured()
         self._log("async_close_cover")
-        if self.is_opening:
-            self._log("async_close_cover :: currently opening, stopping first")
+        if not self._triggered_externally and (self.is_opening or self.is_closing):
+            # In-motion UI click stops the cover. Reversing direction requires
+            # a second click after the stop, or use set_cover_position which
+            # keeps its existing stop-then-reverse behavior. External triggers
+            # (wall switches) keep the legacy "stop and reverse if needed"
+            # behavior to honor the physical user intent.
+            self._log("async_close_cover :: cover is in motion, stopping")
+            await self.async_stop_cover()
+            return
+        if self._triggered_externally and self.is_opening:
+            # External trigger: stop the opposite-direction motion, settle,
+            # then proceed with close (legacy reverse behavior).
+            self._log("async_close_cover :: external close while opening, reversing")
             await self.async_stop_cover()
             await self._direction_change_delay()
-        await self._async_move_to_endpoint(target=0)
+
+        # Carve-outs that must always reach _async_move_to_endpoint even
+        # when the tracker says we're settled at 0: a pending opposite-
+        # direction startup delay needs cancelling, and an external
+        # sequential close needs to articulate the slats.
+        startup_delay_open = (
+            self._startup_delay_task is not None
+            and not self._startup_delay_task.done()
+            and self._last_command == SERVICE_OPEN_COVER
+        )
+        external_sequential = self._triggered_externally and isinstance(
+            self._tilt_strategy, SequentialTilt
+        )
+        skip_travel = (
+            not (startup_delay_open or external_sequential)
+            and self.travel_calc.current_position() == 0
+            and self.travel_calc.travel_direction == TravelStatus.STOPPED
+        )
+        if not skip_travel:
+            await self._async_move_to_endpoint(target=0)
+
+        # Skip inline: its close already drives tilt to 0 via a TiltTo pre-step,
+        # so the trailing restore would be a no-op AND would short-circuit the
+        # endpoint_runon_time block in auto_stop_if_necessary.
+        if (
+            self._close_includes_tilt
+            and self._has_tilt_support()
+            and not isinstance(self._tilt_strategy, InlineTilt)
+            and self.tilt_calc.current_position() not in (None, 0)
+        ):
+            if skip_travel:
+                # Already settled at travel=0. The auto-updater isn't running
+                # to consume _tilt_restore_target, so drive tilt directly.
+                self._log(
+                    "async_close_cover :: travel already at 0, closing tilt directly"
+                )
+                await self._async_move_tilt_to_endpoint(target=0)
+            elif self._tilt_restore_target is None:
+                # Travel is in flight via the auto-updater. Set the restore
+                # target so the auto-updater chains _start_tilt_restore after
+                # travel completes. This avoids _abandon_active_lifecycle
+                # cancelling the in-flight travel.
+                #
+                # Guarded on `is None` so we don't overwrite a value that
+                # _plan_tilt_for_travel may already have set (e.g. dual_motor
+                # pre-step path sets _tilt_restore_target = target).
+                self._log("async_close_cover :: scheduling tilt-close after travel")
+                self._tilt_restore_target = 0
 
     async def async_open_cover(self, **kwargs):
-        """Open the cover fully."""
+        """Open the cover fully.
+
+        In-motion UI click stops the cover. Reversing direction requires a
+        second click, or use set_cover_position which keeps its existing
+        stop-then-reverse behavior. External triggers (wall switches) keep
+        the legacy "stop and reverse if needed" behavior.
+        """
         self._require_configured()
         self._log("async_open_cover")
-        if self.is_closing:
-            self._log("async_open_cover :: currently closing, stopping first")
+        if not self._triggered_externally and (self.is_opening or self.is_closing):
+            self._log("async_open_cover :: cover is in motion, stopping")
+            await self.async_stop_cover()
+            return
+        if self._triggered_externally and self.is_closing:
+            self._log("async_open_cover :: external open while closing, reversing")
             await self.async_stop_cover()
             await self._direction_change_delay()
         await self._async_move_to_endpoint(target=100)
@@ -542,26 +631,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         tilt_target = None
         pre_step_delay = 0.0
-        # Dual-motor externals skip tilt planning entirely — the separate tilt
-        # relay can't be sequenced, and the snap-to-endpoint fall-through in
-        # _plan_tilt_for_travel has no way to drive the tilt motor afterwards.
-        # Shared-motor strategies (inline, sequential_*) still need planning
-        # so the calculators stay in sync with the single motor's multi-phase
-        # motion (e.g. sequential_open: tilt close 100→0 then travel 0→100).
-        skip_tilt_planning = (
-            self._triggered_externally
-            and self._tilt_strategy is not None
-            and self._tilt_strategy.uses_tilt_motor
+        # Plan tilt for every trigger including external. Even when the cover
+        # motor is externally controlled, the hardware itself is expected to
+        # move tilt to safe before travel (interlock behavior); tracking the
+        # pre-step keeps the integration's tilt_calc in sync with reality
+        # without needing snap_trackers_to_physical to "correct" the tracker
+        # at stop time. _start_tilt_pre_step and _start_pending_travel already
+        # skip relay firing when _triggered_externally is True, so the
+        # integration only mirrors the physical motion in its calculators.
+        current_tilt = (
+            self.tilt_calc.current_position() if self._tilt_strategy else None
         )
-        if not skip_tilt_planning:
-            current_tilt = (
-                self.tilt_calc.current_position() if self._tilt_strategy else None
-            )
-            tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
-                target, command, current, current_tilt
-            )
-            if started:
-                return
+        tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
+            target, command, current, current_tilt
+        )
+        if started:
+            return
 
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
@@ -1320,8 +1405,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Start travel after tilt pre-step completes (dual_motor).
 
         Called by auto_stop_if_necessary when tilt_calc reaches the safe
-        position. Stops the tilt motor, sends the travel command, and starts
-        tracking with travel_calc.
+        position. For self-initiated moves: stops the tilt motor and sends
+        the travel command. For external triggers (where hardware is doing
+        the multi-phase motion itself), only updates the integration's
+        trackers — the relays are left to the hardware.
         """
         target = self._pending_travel_target
         command = self._pending_travel_command
@@ -1335,11 +1422,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             command,
         )
 
-        # Stop tilt motor
-        await self._send_tilt_stop()
-
-        # Send travel command and start tracking
-        await self._async_handle_command(command)
+        if not self._triggered_externally:
+            # Stop tilt motor and send travel command.
+            await self._send_tilt_stop()
+            await self._async_handle_command(command)
         self._last_command = command
         self._begin_movement(
             target,
@@ -1538,10 +1624,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
     async def _send_tilt_open(self) -> None:
-        """Send open to the tilt motor (bypasses position tracker)."""
+        """Send open to the tilt motor (bypasses position tracker).
+
+        Switch-mode (latching) semantics: each turn_on/turn_off produces
+        at most one state-change event, and only when the switch isn't
+        already in the target state. Mark pending=1 per expected echo,
+        and only when the relay call will actually flip state. Otherwise
+        the orphan pending count consumes the next real state change.
+        """
         if self._switch_is_on(self._tilt_close_switch_id):
             self._mark_switch_pending(self._tilt_close_switch_id, 1)
-        self._mark_switch_pending(self._tilt_open_switch_id, 2)
+        if not self._switch_is_on(self._tilt_open_switch_id):
+            self._mark_switch_pending(self._tilt_open_switch_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -1556,10 +1650,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
     async def _send_tilt_close(self) -> None:
-        """Send close to the tilt motor (bypasses position tracker)."""
+        """Send close to the tilt motor (bypasses position tracker).
+
+        See _send_tilt_open for the pending-count rationale.
+        """
         if self._switch_is_on(self._tilt_open_switch_id):
             self._mark_switch_pending(self._tilt_open_switch_id, 1)
-        self._mark_switch_pending(self._tilt_close_switch_id, 2)
+        if not self._switch_is_on(self._tilt_close_switch_id):
+            self._mark_switch_pending(self._tilt_close_switch_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",

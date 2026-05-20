@@ -39,17 +39,18 @@ class TestCloseFromOpen:
         cover.hass.services.async_call.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_close_when_already_closed_sends_resync(self, make_cover):
+    async def test_close_when_already_closed_is_noop(self, make_cover):
+        """close_cover re-applied at settled 0 is a no-op (HA convention)."""
         cover = make_cover()
         cover.travel_calc.set_position(0)  # fully closed
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        # Resync: command still sent even though tracker says we're at endpoint
+        # No motor command sent: already at 0, no resync pulse.
         assert not cover.travel_calc.is_traveling()
-        cover.hass.services.async_call.assert_awaited()
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        cover.hass.services.async_call.assert_not_awaited()
+        assert cover._last_command is None
 
 
 class TestOpenFromClosed:
@@ -82,10 +83,12 @@ class TestOpenFromClosed:
 
 
 class TestCloseStopsOppositeDirection:
-    """Closing while opening should stop first, then close."""
+    """UI close while opening just stops — does not reverse. (Reverse is
+    still available via set_cover_position which preserves the legacy
+    stop-then-reverse flow.)"""
 
     @pytest.mark.asyncio
-    async def test_close_while_opening_stops_then_closes(self, make_cover):
+    async def test_close_while_opening_stops(self, make_cover):
         cover = make_cover()
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
@@ -94,15 +97,16 @@ class TestCloseStopsOppositeDirection:
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        # Should now be traveling down (closing)
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        # Stopped, not reversed. async_stop_cover clears _last_command.
+        assert cover._last_command is None
+        assert not cover.travel_calc.is_traveling()
 
 
 class TestOpenStopsOppositeDirection:
-    """Opening while closing should stop first, then open."""
+    """UI open while closing just stops — does not reverse."""
 
     @pytest.mark.asyncio
-    async def test_open_while_closing_stops_then_opens(self, make_cover):
+    async def test_open_while_closing_stops(self, make_cover):
         cover = make_cover()
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -111,7 +115,8 @@ class TestOpenStopsOppositeDirection:
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()
 
-        assert cover._last_command == SERVICE_OPEN_COVER
+        assert cover._last_command is None
+        assert not cover.travel_calc.is_traveling()
 
 
 # ===================================================================
@@ -958,16 +963,18 @@ class TestProperties:
         assert cover.is_closed is False
 
     def test_is_closed_with_tilt(self, make_cover):
+        """is_closed reports travel position only — tilt is independent."""
         cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
         assert cover.is_closed is True
 
-    def test_is_not_closed_when_tilt_open(self, make_cover):
+    def test_is_closed_when_tilt_open(self, make_cover):
+        """is_closed is True at travel=0 even if tilt is still open."""
         cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(100)
-        assert cover.is_closed is False
+        assert cover.is_closed is True
 
     def test_current_position(self, make_cover):
         cover = make_cover()
@@ -1238,7 +1245,6 @@ class TestDualMotorTiltPreStep:
         # Travel should start immediately (no pre-step)
         assert cover.travel_calc.is_traveling()
         assert cover._pending_travel_target is None
-        assert cover._tilt_restore_target is None
 
     # -- Pre-step completion → travel starts --
 
@@ -1398,7 +1404,6 @@ class TestDualMotorTiltPreStep:
         # Travel should start immediately (with pre_step_delay, not tilt motor)
         assert cover.travel_calc.is_traveling()
         assert cover._pending_travel_target is None
-        assert cover._tilt_restore_target is None
 
 
 # ===================================================================
@@ -2165,8 +2170,6 @@ class TestInlineTiltRestore:
 
         # Travel started (with pre_step_delay for tilt phase)
         assert cover.travel_calc.is_traveling()
-        # No restore at endpoint
-        assert cover._tilt_restore_target is None
 
     @pytest.mark.asyncio
     async def test_set_position_endpoint_also_no_restore(self, make_cover):
@@ -2267,12 +2270,12 @@ class TestInlineTiltCoverProperties:
         cover.tilt_calc.set_position(60)
         assert cover.current_cover_tilt_position == 60
 
-    def test_is_closed_requires_both(self, make_cover):
-        """is_closed requires travel=0 AND tilt=0 for inline."""
+    def test_is_closed_travel_only_inline(self, make_cover):
+        """For inline, is_closed tracks travel position regardless of tilt."""
         cover = self._make_inline_cover(make_cover)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(50)
-        assert cover.is_closed is False
+        assert cover.is_closed is True
 
     def test_is_closed_when_both_closed(self, make_cover):
         cover = self._make_inline_cover(make_cover)
@@ -2305,7 +2308,17 @@ class TestInlineTiltConstraints:
     @pytest.mark.asyncio
     async def test_auto_stop_preserves_tilt_at_closed(self, make_cover):
         """When travel reaches 0%, tilt is not snapped."""
-        cover = self._make_inline_cover(make_cover)
+        # close_includes_tilt=False because this test manually invokes
+        # auto_stop_if_necessary; with the default True, async_close_cover
+        # would set _tilt_restore_target=0, which the auto-updater would
+        # then consume to snap tilt to 0 — invalidating this test's
+        # assertion that tilt remains at its pre-stop value.
+        cover = make_cover(
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+            close_includes_tilt=False,
+        )
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(100)
 
@@ -2513,8 +2526,10 @@ class TestAbandonActiveLifecycle:
     # -- Endpoint commands during lifecycle --
 
     @pytest.mark.asyncio
-    async def test_close_during_pre_step_abandons_and_closes(self, make_cover):
-        """async_close_cover during pre-step abandons and starts fresh close."""
+    async def test_close_during_pre_step_stops(self, make_cover):
+        """async_close_cover during a pre-step now stops the cover (new
+        in-motion-click semantics). Use set_cover_position(0) if you want
+        the old abandon-and-close-from-anywhere flow."""
         cover = self._make_dual_motor_cover(make_cover)
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(50)
@@ -2527,8 +2542,9 @@ class TestAbandonActiveLifecycle:
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        # Old pre-step is gone, fresh close started
-        assert cover._pending_travel_target == 0 or cover.travel_calc.is_traveling()
+        # Pre-step abandoned (via async_stop_cover), no new close started.
+        assert cover._pending_travel_target is None
+        assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
     async def test_open_tilt_during_restore_abandons(self, make_cover):
@@ -2574,8 +2590,10 @@ class TestExternalMovementSkipsTiltPlanning:
         )
 
     @pytest.mark.asyncio
-    async def test_external_open_skips_tilt_pre_step(self, make_cover):
-        """External open should start travel tracking directly, no tilt pre-step."""
+    async def test_external_open_tracks_tilt_pre_step(self, make_cover):
+        """External open with unsafe tilt mirrors the hardware's pre-step:
+        tilt_calc tracks 0 → safe (without firing any relay), and travel
+        tracking is deferred until the tracker says tilt is safe."""
         cover = self._make_dual_motor_cover(make_cover)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
@@ -2587,19 +2605,28 @@ class TestExternalMovementSkipsTiltPlanning:
         finally:
             cover._triggered_externally = False
 
-        # Travel tracking should have started directly
-        assert cover.travel_calc.is_traveling()
-        assert cover.travel_calc._travel_to_position == 100
-
-        # No tilt pre-step should have been started
-        assert cover._pending_travel_target is None
-        assert cover._pending_travel_command is None
-        assert cover._tilt_restore_target is None
+        # Tilt pre-step is in flight (tracking tilt to safe), travel deferred.
+        assert cover.tilt_calc.is_traveling()
+        assert not cover.travel_calc.is_traveling()
+        # Pending travel queued for when tilt completes.
+        assert cover._pending_travel_target == 100
 
     @pytest.mark.asyncio
-    async def test_external_close_skips_tilt_pre_step(self, make_cover):
-        """External close should start travel tracking directly, no tilt pre-step."""
-        cover = self._make_dual_motor_cover(make_cover)
+    async def test_external_close_tracks_tilt_pre_step(self, make_cover):
+        """External close with unsafe tilt mirrors the hardware's pre-step:
+        tilt_calc tracks current → safe before travel begins. Uses
+        close_includes_tilt=False to isolate the pre-step assertion from
+        the trailing-tilt-close feature."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            safe_tilt_position=50,
+            max_tilt_allowed_position=50,
+            close_includes_tilt=False,
+        )
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(30)
 
@@ -2610,13 +2637,10 @@ class TestExternalMovementSkipsTiltPlanning:
         finally:
             cover._triggered_externally = False
 
-        # Travel tracking should have started directly
-        assert cover.travel_calc.is_traveling()
-        assert cover.travel_calc._travel_to_position == 0
-
-        # No tilt pre-step
-        assert cover._pending_travel_target is None
-        assert cover._tilt_restore_target is None
+        # Tilt pre-step in flight, travel deferred until tilt completes.
+        assert cover.tilt_calc.is_traveling()
+        assert not cover.travel_calc.is_traveling()
+        assert cover._pending_travel_target == 0
 
     @pytest.mark.asyncio
     async def test_self_initiated_does_tilt_pre_step(self, make_cover):
@@ -2678,6 +2702,76 @@ class TestExternalMovementSkipsTiltPlanning:
             if c[0][2].get("entity_id") in ("switch.open", "switch.close")
         ]
         assert len(main_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_external_open_with_tilt_already_safe_no_pre_step(self, make_cover):
+        """External open when tilt is already at safe needs no pre-step:
+        travel tracking starts immediately."""
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(50)  # = safe_tilt_position from fixture
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_open_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # No pre-step queued; travel tracking started directly.
+        assert cover._pending_travel_target is None
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 100
+
+    @pytest.mark.asyncio
+    async def test_external_pre_step_completion_starts_travel_without_relay(
+        self, make_cover
+    ):
+        """When the external pre-step finishes (tilt_calc reaches safe), the
+        integration must NOT fire any relay — the hardware is already moving
+        on its own. Travel tracking should still start so the integration
+        mirrors the second phase."""
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover.async_open_cover()
+        finally:
+            cover._triggered_externally = False
+
+        # Pre-step in flight. Now simulate tilt reaching safe.
+        cover.tilt_calc.set_position(50)
+        # Re-enter external context for the auto-stop fire.
+        cover._triggered_externally = True
+        cover._self_initiated_movement = False
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._start_pending_travel.__wrapped__(cover) if hasattr(
+                    cover._start_pending_travel, "__wrapped__"
+                ) else await cover._start_pending_travel()
+        finally:
+            cover._triggered_externally = False
+
+        # Travel tracking now started.
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 100
+        # No relay commands fired during pending-travel transition.
+        calls = cover.hass.services.async_call.call_args_list
+        triggering_calls = [
+            c
+            for c in calls
+            if c[0][2].get("entity_id")
+            in (
+                "switch.open",
+                "switch.close",
+                "switch.tilt_open",
+                "switch.tilt_close",
+            )
+        ]
+        assert len(triggering_calls) == 0
 
     @pytest.mark.asyncio
     async def test_external_movement_sets_self_initiated_false(self, make_cover):

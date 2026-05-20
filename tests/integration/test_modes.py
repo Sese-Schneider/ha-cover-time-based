@@ -42,8 +42,12 @@ def _get_cover_entity(hass: HomeAssistant):
     return entities[0]
 
 
-async def test_toggle_stop_before_reverse(hass: HomeAssistant, setup_input_booleans):
-    """Toggle mode: closing while opening sends stop then close."""
+async def test_toggle_in_motion_close_stops(hass: HomeAssistant, setup_input_booleans):
+    """Toggle mode: UI close_cover while opening just stops (no reverse).
+
+    Reversing direction now requires either a second click or a
+    set_cover_position call (which keeps its stop-then-reverse behavior).
+    """
     real_sleep = asyncio.sleep
 
     async def instant_sleep(delay, *args, **kwargs):
@@ -85,14 +89,15 @@ async def test_toggle_stop_before_reverse(hass: HomeAssistant, setup_input_boole
         )
         await hass.async_block_till_done()
 
-        # Now close — toggle mode should stop first, then close
+        # Now close — UI click stops the cover (does not reverse)
         await hass.services.async_call(
             "cover", "close_cover", {"entity_id": "cover.test_cover"}, blocking=True
         )
         await hass.async_block_till_done()
 
-        # Cover should now be closing (stop + reverse happened)
-        assert cover.is_closing
+        # Cover should be stopped, not closing
+        assert not cover.is_opening
+        assert not cover.is_closing
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()

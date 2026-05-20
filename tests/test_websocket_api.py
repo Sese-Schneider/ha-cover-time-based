@@ -1441,3 +1441,113 @@ class TestRegistration:
         assert ws_start_calibration in registered_fns
         assert ws_stop_calibration in registered_fns
         assert ws_raw_command in registered_fns
+
+
+# ---------------------------------------------------------------------------
+# close_includes_tilt field round-tripping
+# ---------------------------------------------------------------------------
+
+
+class TestCloseIncludesTiltFieldRoundTrip:
+    """get_config returns the value (defaulting to True); update_config persists it."""
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_default_true_when_unset(self):
+        hass = MagicMock()
+        connection = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = ENTRY_ID
+        entry.domain = DOMAIN
+        entry.options = {"tilt_mode": "sequential_close"}
+        msg = {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID}
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(entry, None),
+        ):
+            handler = _unwrap(ws_get_config)
+            await handler(hass, connection, msg)
+
+        result = connection.send_result.call_args[0][1]
+        assert result["close_includes_tilt"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_stored_false(self):
+        hass = MagicMock()
+        connection = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = ENTRY_ID
+        entry.domain = DOMAIN
+        entry.options = {
+            "tilt_mode": "sequential_close",
+            "close_includes_tilt": False,
+        }
+        msg = {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID}
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(entry, None),
+        ):
+            handler = _unwrap(ws_get_config)
+            await handler(hass, connection, msg)
+
+        result = connection.send_result.call_args[0][1]
+        assert result["close_includes_tilt"] is False
+
+    @pytest.mark.asyncio
+    async def test_update_config_persists_close_includes_tilt(self):
+        hass = MagicMock()
+        connection = MagicMock()
+        config_entry = MagicMock()
+        config_entry.options = {"tilt_mode": "dual_motor"}
+        config_entry.domain = DOMAIN
+
+        msg = {
+            "id": 2,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "close_includes_tilt": False,
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            handler = _unwrap(ws_update_config)
+            await handler(hass, connection, msg)
+
+        new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_opts["close_includes_tilt"] is False
+
+    @pytest.mark.asyncio
+    async def test_update_config_accepts_null_to_clear(self):
+        """Frontend sends close_includes_tilt=null when switching tilt_mode
+        away from sequential_close/dual_motor. Schema must accept None and
+        the handler must drop the stored option."""
+        hass = MagicMock()
+        connection = MagicMock()
+        config_entry = MagicMock()
+        config_entry.options = {
+            "tilt_mode": "sequential_close",
+            "close_includes_tilt": False,
+        }
+        config_entry.domain = DOMAIN
+
+        msg = {
+            "id": 3,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "close_includes_tilt": None,
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            handler = _unwrap(ws_update_config)
+            await handler(hass, connection, msg)
+
+        # send_error must NOT have been called (the bug was schema rejection)
+        connection.send_error.assert_not_called()
+        new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert "close_includes_tilt" not in new_opts

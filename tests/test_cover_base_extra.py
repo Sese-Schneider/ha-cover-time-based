@@ -1213,3 +1213,15 @@ class TestSetKnownTiltNoTilt:
             await cover.set_known_tilt_position(tilt_position=50)
         # Should not crash, no service call for tilt
         # Position didn't change from None
+
+
+def test_close_includes_tilt_defaults_to_true(make_cover):
+    """The new close_includes_tilt option defaults to True when not set."""
+    cover = make_cover()
+    assert cover._close_includes_tilt is True
+
+
+def test_close_includes_tilt_can_be_disabled(make_cover):
+    """The option can be set False via the make_cover fixture."""
+    cover = make_cover(close_includes_tilt=False)
+    assert cover._close_includes_tilt is False

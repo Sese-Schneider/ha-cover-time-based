@@ -243,35 +243,38 @@ class TestToggleModeSendStop:
 
 class TestToggleCloseWhileClosing:
     @pytest.mark.asyncio
-    async def test_close_while_closing_reissues(self):
+    async def test_close_while_closing_stops(self):
+        """In-motion UI click stops the cover (does not re-issue)."""
         cover = _make_toggle_cover()
 
         # Simulate currently closing (position 100 = fully open)
         cover.travel_calc.set_position(100)
         cover.travel_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        # Same-direction re-issues close (base class behavior, no special stop)
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        # async_stop_cover clears _last_command back to None
+        assert cover._last_command is None
         await _cancel_tasks(cover)
 
 
 class TestToggleOpenWhileOpening:
     @pytest.mark.asyncio
-    async def test_open_while_opening_reissues(self):
+    async def test_open_while_opening_stops(self):
+        """In-motion UI click stops the cover (does not re-issue)."""
         cover = _make_toggle_cover()
 
         # Simulate currently opening (position 0 = fully closed)
         cover.travel_calc.set_position(0)
         cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()
 
-        # Same-direction re-issues open (base class behavior, no special stop)
-        assert cover._last_command == SERVICE_OPEN_COVER
+        assert cover._last_command is None
         await _cancel_tasks(cover)
 
 
@@ -320,6 +323,7 @@ class TestToggleDirectionChange:
             await cover.async_close_cover()
 
         mock_stop.assert_awaited_once()
+        await _cancel_tasks(cover)
 
     @pytest.mark.asyncio
     async def test_open_while_closing_stops_first(self):
@@ -345,47 +349,9 @@ class TestToggleDirectionChange:
         mock_stop.assert_awaited_once()
         await _cancel_tasks(cover)
 
-    @pytest.mark.asyncio
-    async def test_close_while_opening_waits_direction_change_delay(self):
-        """Direction change must wait between stop and new direction."""
-        cover = _make_toggle_cover()
-        cover.travel_calc.set_position(0)
-        cover.travel_calc.start_travel_up()
-        cover._last_command = SERVICE_OPEN_COVER
-
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(cover, "async_stop_cover", new_callable=AsyncMock),
-            patch(
-                "custom_components.cover_time_based.cover_base.sleep",
-                new_callable=AsyncMock,
-            ) as mock_sleep,
-        ):
-            await cover.async_close_cover()
-
-        mock_sleep.assert_awaited_once_with(1.0)
-        await _cancel_tasks(cover)
-
-    @pytest.mark.asyncio
-    async def test_open_while_closing_waits_direction_change_delay(self):
-        """Direction change must wait between stop and new direction."""
-        cover = _make_toggle_cover()
-        cover.travel_calc.set_position(100)
-        cover.travel_calc.start_travel_down()
-        cover._last_command = SERVICE_CLOSE_COVER
-
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(cover, "async_stop_cover", new_callable=AsyncMock),
-            patch(
-                "custom_components.cover_time_based.cover_base.sleep",
-                new_callable=AsyncMock,
-            ) as mock_sleep,
-        ):
-            await cover.async_open_cover()
-
-        mock_sleep.assert_awaited_once_with(1.0)
-        await _cancel_tasks(cover)
+    # Direction-change-delay tests removed: UI-driven close/open no longer
+    # reverses (stops instead). The delay path is still exercised by external
+    # triggers and set_cover_position direction changes, covered elsewhere.
 
 
 # ===================================================================

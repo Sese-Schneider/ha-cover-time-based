@@ -452,8 +452,10 @@ class TestToggleModeExternalStateChange:
         assert cover._last_command == SERVICE_OPEN_COVER
 
     @pytest.mark.asyncio
-    async def test_ha_ui_close_while_opening_reverses(self, make_cover):
-        """HA UI close while opening should reverse direction (not just stop)."""
+    async def test_ha_ui_close_while_opening_stops(self, make_cover):
+        """HA UI close while opening just stops — does NOT reverse. Reversing
+        now requires a second click, or use set_cover_position which keeps
+        the legacy stop-then-reverse flow."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
@@ -463,11 +465,13 @@ class TestToggleModeExternalStateChange:
             # _triggered_externally is False (HA UI trigger)
             await cover.async_close_cover()
 
-        assert cover._last_command == SERVICE_CLOSE_COVER
+        # Stopped, not reversed.
+        assert cover._last_command is None
+        assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
-    async def test_ha_ui_open_while_closing_reverses(self, make_cover):
-        """HA UI open while closing should reverse direction (not just stop)."""
+    async def test_ha_ui_open_while_closing_stops(self, make_cover):
+        """HA UI open while closing just stops — does NOT reverse."""
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
@@ -477,7 +481,8 @@ class TestToggleModeExternalStateChange:
             # _triggered_externally is False (HA UI trigger)
             await cover.async_open_cover()
 
-        assert cover._last_command == SERVICE_OPEN_COVER
+        assert cover._last_command is None
+        assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
     async def test_unknown_entity_ignored(self, make_cover):
@@ -559,16 +564,24 @@ class TestWrappedCoverExternalStateChange:
 
     @pytest.mark.asyncio
     async def test_direction_change_opening_to_closing(self, make_cover):
-        """Opening→closing should switch tracker to closing."""
+        """Opening→closing should switch tracker to closing.
+
+        Sets _triggered_externally to mirror how the real listener wraps
+        _handle_external_state_change — external triggers preserve the
+        legacy stop-then-reverse behavior."""
         cover = make_cover(cover_entity_id="cover.inner")
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
         cover._last_command = SERVICE_OPEN_COVER
 
         with patch.object(cover, "async_write_ha_state"):
-            await cover._handle_external_state_change(
-                "cover.inner", "opening", "closing"
-            )
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_state_change(
+                    "cover.inner", "opening", "closing"
+                )
+            finally:
+                cover._triggered_externally = False
 
         assert cover._last_command == SERVICE_CLOSE_COVER
 
@@ -581,9 +594,13 @@ class TestWrappedCoverExternalStateChange:
         cover._last_command = SERVICE_CLOSE_COVER
 
         with patch.object(cover, "async_write_ha_state"):
-            await cover._handle_external_state_change(
-                "cover.inner", "closing", "opening"
-            )
+            cover._triggered_externally = True
+            try:
+                await cover._handle_external_state_change(
+                    "cover.inner", "closing", "opening"
+                )
+            finally:
+                cover._triggered_externally = False
 
         assert cover._last_command == SERVICE_OPEN_COVER
 

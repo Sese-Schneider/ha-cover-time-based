@@ -55,6 +55,8 @@ const EN = {
   "tilt_motor.safe_position_helper": "Tilt moves here before travel (100 = fully open)",
   "tilt_motor.max_allowed_position": "Max tilt allowed position (optional)",
   "tilt_motor.max_allowed_helper": "Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)",
+  "tilt.close_includes_tilt": "Close cover also closes slats",
+  "tilt.close_includes_tilt_helper": "When closing, slats tilt closed at the end of travel",
   "timing.attribute_header": "Attribute",
   "timing.travel_attribute_header": "Travel Attribute",
   "timing.tilt_attribute_header": "Tilt Attribute",
@@ -645,6 +647,8 @@ class CoverTimeBasedCard extends LitElement {
         tilt_open_switch: null,
         tilt_close_switch: null,
         tilt_stop_switch: null,
+        // Clear close_includes_tilt (not applicable when tilt is none)
+        close_includes_tilt: null,
       });
     } else {
       const updates = { tilt_mode: mode };
@@ -671,6 +675,15 @@ class CoverTimeBasedCard extends LitElement {
         updates.tilt_open_switch = null;
         updates.tilt_close_switch = null;
         updates.tilt_stop_switch = null;
+      }
+      // Default close_includes_tilt for modes where closing tilts slats closed
+      if (mode === "sequential_close" || mode === "dual_motor") {
+        if (this._config.close_includes_tilt == null) {
+          updates.close_includes_tilt = true;
+        }
+      } else {
+        // inline and sequential_open do not use close_includes_tilt
+        updates.close_includes_tilt = null;
       }
       this._updateLocal(updates);
     }
@@ -1062,6 +1075,19 @@ class CoverTimeBasedCard extends LitElement {
             ${this._t("tilt.inline")}
           </option>
         </select>
+        ${tiltMode === "sequential_close" || tiltMode === "dual_motor"
+          ? html`
+              <div class="inline-field">
+                <ha-formfield .label=${this._t("tilt.close_includes_tilt")}>
+                  <ha-switch
+                    .checked=${c.close_includes_tilt !== false}
+                    @change=${(e) =>
+                      this._updateLocal({ close_includes_tilt: e.target.checked })}
+                  ></ha-switch>
+                </ha-formfield>
+              </div>
+            `
+          : ""}
       </div>
     `;
   }
