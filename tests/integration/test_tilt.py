@@ -253,3 +253,86 @@ async def test_sequential_open_tilt_open_drives_close_relay(
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+
+
+async def test_same_direction_retarget_tilt_cover_does_not_reissue_command(
+    hass: HomeAssistant, setup_input_booleans
+):
+    """Same-direction retarget on a tilt cover must not re-issue travel.
+
+    The same-direction retarget fast-path is taken for tilt-coupled covers
+    too. It must recompute tilt coupling for the new target (it runs through
+    _plan_tilt_for_travel like a normal move) while skipping the redundant
+    travel command, and the cover must still stop at the new target.
+    """
+    options = {
+        "control_mode": "switch",
+        "open_switch_entity_id": "input_boolean.open_switch",
+        "close_switch_entity_id": "input_boolean.close_switch",
+        "travel_time_open": 10.0,
+        "travel_time_close": 10.0,
+        "tilt_mode": "inline",
+        "tilt_time_open": 1.0,
+        "tilt_time_close": 1.0,
+        "endpoint_runon_time": 0,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=2, title="Test Cover", data={}, options=options
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    mt = MockTime()
+    with patch("time.time", mt.time):
+        cover = _get_cover_entity(hass)
+        # Fire HA time changes off a single base with offsets matching the
+        # cumulative MockTime advance, keeping the scheduler and
+        # TravelCalculator clocks aligned.
+        now = dt_util.utcnow()
+
+        await cover.set_known_position(position=100)
+        await cover.set_known_tilt_position(tilt_position=50)
+        await hass.async_block_till_done()
+
+        with patch.object(cover, "_send_close", wraps=cover._send_close) as send_close:
+            # Mid-position move (closing).
+            await hass.services.async_call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.test_cover", "position": 60},
+                blocking=True,
+            )
+            await hass.async_block_till_done()
+            assert cover.is_closing
+            assert send_close.call_count == 1
+
+            # Let the inline tilt pre-step finish and travel get underway.
+            mt.advance(2.0)
+            async_fire_time_changed(hass, now + timedelta(seconds=2), fire_all=True)
+            await hass.async_block_till_done()
+            assert cover.travel_calc.is_traveling()
+
+            # Retarget (same direction) to a lower mid-position.
+            await hass.services.async_call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.test_cover", "position": 30},
+                blocking=True,
+            )
+            await hass.async_block_till_done()
+            assert cover.is_closing
+            assert send_close.call_count == 1, (
+                "same-direction retarget must not re-command a tilt cover"
+            )
+
+            # Reaches the new target and stops there.
+            mt.advance(8.0)
+            async_fire_time_changed(hass, now + timedelta(seconds=10), fire_all=True)
+            await hass.async_block_till_done()
+
+        assert not cover.is_closing
+        assert cover.current_cover_position == 30
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
