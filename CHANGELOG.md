@@ -1,58 +1,25 @@
-## Unreleased
+## 4.0.0 (2026-05-23)
 
-### Bug Fixes
+If you're coming from v2.3.2, this is essentially a new integration.
 
-- Configuration card no longer lists orphaned cover entities whose config entry has been deleted (HA's "this device is no longer provided by this integration" state). The entity-registry filter now cross-checks against the live `config_entries/get` list and excludes entries pointing at a non-existent config entry.
-- Card JS is now registered when the integration loads, not when the first config entry is set up, so dashboards referencing `custom:cover-time-based-card` render correctly even before any cover_time_based entity exists.
-- **Wrapped covers: ignore spurious state bounces after issuing a command.** Some wrapped cover entities (e.g. Tuya TS130F on ZHA) briefly flip their state back to the pre-command value milliseconds after acknowledging an open/close — for example `closed → opening → closed → ... → open`. The integration previously read the spurious second transition as an external stop and aborted position tracking, leaving the time-based entity stuck at the pre-command position while the physical cover kept moving. State changes from the wrapped cover are now ignored for 500 ms after we issue a command; our time-based calculation is trusted during that window (#71).
-- **Wrapped covers: snap to the wrapped cover's reported position when it settles.** When the wrapped cover transitions to a stopped state (`open`/`closed`), the integration now reads its `current_position` attribute and snaps the time-based tracker to that value. This also handles wrapped covers that update `current_position` *without* changing state (e.g. opening from 52% to 100% where the wrapped entity stays in state `open` throughout, only the position attribute changes at the end). Mid-travel attribute updates (state `opening`/`closing`) are still ignored, so the time-based tracker remains authoritative during travel for wrapped covers that don't report intermediate positions reliably (#71).
-- Frontend assets are served under a content-hashed URL prefix (e.g. `/cover_time_based_panel/<hash>/cover-time-based-card.js`), so users picking up a new release no longer have to hard-refresh to clear a stale cached card from the browser. Both the main card and its sibling modules (e.g. `entity-filter.js`, loaded via relative import) bust together on every file change.
+Cover Time Based controls any motor-driven cover from Home Assistant, even when the cover hardware itself can't report its position. It tracks where the cover is by timing how long the motor has been running — and v4 makes that a lot more capable, and a lot easier to live with.
 
-### Features
+What you get:
 
-- **Sequential tilt split into two variants:** `sequential_close` (conventional — slats close when the motor drives further down past cover-closed) and `sequential_open` (for covers where slats *open* by driving further down past cover-closed, e.g. certain tilting shutters). Existing `sequential` configs auto-migrate to `sequential_close` (issue #61). On sequential modes, external close (physical switch or automation) tracks the full motor journey — travel then articulate — assuming the motor runs past cover-closed to the mechanical end. HA UI buttons remain travel-only for `close`/`open` and tilt-only for `close_tilt`/`open_tilt`.
-- **UI-first configuration:** Config flow creates covers via UI; all settings managed through a Lovelace card and WebSocket API
-- **Control mode:** Single `control_mode` setting replaces separate `device_type`/`input_mode` — choose from wrapped, switch, pulse, or toggle
-- **External state monitoring:** Detects physical switch presses and keeps the position tracker in sync with actual motor state. Supports all control modes for both cover and tilt switches
-- **Separate tilt motor (dual_motor) mode:** Support for covers with a dedicated tilt motor, with configurable safe tilt position and max tilt allowed position
-- **Inline tilt mode:** Support for covers where the tilt mechanism is part of the main travel range (e.g. Venetian blinds), with configurable tilt range within the overall travel
-- **Calibration system:** Measure timing parameters interactively — start calibration, let the motor run, stop when done. Supports all travel and tilt timing attributes with overhead compensation
-- **Background pulse completion:** Pulse and toggle mode commands return immediately while the relay pulse completes in the background
-- **Tilt switch monitoring:** Monitors tilt switch entities for external changes in all modes (pulse, switch, toggle)
-- **Lovelace configuration card:** Full settings UI with entity pickers, timing fields, tilt strategy selection, and calibration controls
-- **Toggle mode improvements:** Debounce for momentary switches, cross-direction external toggles treated as stop, HA UI direction changes still reverse
+- **Configure everything from a dashboard card.** No more YAML. Add a cover under **Settings → Devices & Services → Helpers**, then tune every setting from a built-in card on your dashboard.
+- **Calibrate at the click of a button.** Start the motor, let it run, hit stop — the card figures out your travel and tilt times for you.
+- **Works with whatever hardware you have.** Latching relays, momentary push-buttons with a separate stop switch, single-button "toggle" controllers, or any existing cover entity you'd like to add position tracking to.
+- **Real tilt support.** Venetian blinds, conventional shutters, inverted shutters, and covers with a separate tilt motor — pick the mode that matches your hardware.
+- **Stays in sync with physical buttons.** Wall switches and automations driving the motor outside Home Assistant don't throw the position tracker off any more.
+- **Survives restarts.** Positions are saved properly and reloaded — even after unexpected shutdowns.
+- **Lots of fine-tuning options** for awkward motors: startup delays, minimum movement times, endpoint resync, and more.
+- **Translated** into English, Portuguese, and Polish.
 
-### Improvements
+### Upgrading from v2.3.2
 
-- Replaced external `xknx` TravelCalculator dependency with a local HA-convention copy (no external dependencies)
-- Card translations embedded directly in JS with `_t()` helper and `hass.language` locale lookup (English, Portuguese, Polish)
-- Refactored codebase: extracted calibration mixin, tilt strategies package, shared constants, entity resolution helpers
-- Updated calibration hint descriptions for all tilt modes (inline, sequential, dual_motor)
-- Frontend defaults safe_tilt_position=100 and max_tilt_allowed_position=0 for new dual_motor configs
-- Cleaned up diagnostic logging in toggle mode
-- Improved test coverage from 66% to 97% (528 tests)
+Your existing YAML configuration still works with a deprecation warning. When you have a moment, recreate your covers via the helper flow so you can manage them through the UI from then on.
 
-### Bug Fixes
-
-- Endpoint run-on is now skipped at the closed (0%) endpoint under `sequential_close` and `sequential_open` tilt modes, where the motor is already driven past cover-closed for the tilt phase. Run-on still applies at the open (100%) endpoint.
-- **Position restore on restart:** Positions are now written to a dedicated Store whenever they stabilise (stop, `set_known_position`, movement completion) and reloaded on startup. Previously relied on HA's `RestoreEntity` state save, which misses position when shutdown is non-graceful or the entity is unavailable at save time. Store entries are cleaned up when a config entry is removed.
-- Fixed wrapped cover treating `unknown`/`unavailable` state as an external stop — stateless covers (e.g. Somfy RTS via Overkiz) now track position correctly (#59)
-- Fixed calibration direction override for tilt attributes — server now derives direction from attribute name instead of card sending position-based guess
-- Fixed calibration overhead calculation for tilt (3 steps vs 8 travel steps)
-- Fixed toggle mode tilt restore clearing `_last_command` prematurely, breaking stop pulse
-- Fixed dual_motor tilt commands using wrong service calls
-- Fixed `safe_tilt_position=0` being coerced to default 100
-- Fixed zero travel/tilt times accepted by WebSocket API schema
-- Fixed `_last_command` not set during toggle mode calibration
-- Fixed pulse mode stop switch not stopping the position tracker
-- Fixed toggle mode external state handler only reacting to ON→OFF (now handles both transitions)
-- Fixed switch mode tilt handler using pulse-mode behavior (now uses latching: ON=start, OFF=stop)
-- Fixed tilt switch echo filtering (pending=2 for direction switches to handle ON+OFF transitions)
-- Fixed wrapped cover handler not tracking direction changes (opening→closing)
-- Fixed external movements skipping tilt coupling for shared-motor strategies: physical button presses now track both tilt and travel phases on sequential and inline modes (only dual-motor external movements still skip, since the separate tilt relay cannot be sequenced)
-- Fixed toggle-mode external travel handler re-issuing the direction on a same-direction pulse while traveling; now stops the motor, matching real toggle-style motor controllers that latch OFF on the second same-direction pulse
-- Fixed toggle-mode external debounce window of `pulse_time + 0.5s` swallowing legitimate rapid clicks; shortened to 100 ms (enough for contact bounce, short enough for human click cadence)
-- Fixed calibration attribute availability for `sequential_open` at the two closed-cover known positions: the allowed set was inverted vs the strategy's actual physical constraints
+This release also includes a long list of smaller fixes, especially around wrapped covers, sequential tilt strategies, and toggle-mode button handling.
 
 ## 3.0.0 (2025-12-10)
 
