@@ -164,3 +164,32 @@ class TestWrappedAsyncAddedToHass:
         # Verify the entity list includes the wrapped cover
         assert mock_track.call_args[0][1] == ["cover.inner"]
         assert unsub in cover._state_listener_unsubs
+
+
+class TestWrappedSameDirectionRetarget:
+    """Same-direction retarget must not re-issue the directional command.
+
+    Wrapped mode never had the toggle-mode runaway (it delegates STOP to the
+    underlying cover's real stop_cover), but the shared set_position fix
+    should still skip the redundant close_cover call when the cover is
+    already travelling the right way.
+    """
+
+    @pytest.mark.asyncio
+    async def test_retarget_same_direction_does_not_reissue_command(self):
+        cover = _make_wrapped_cover(cover_entity_id="cover.inner")
+        # Avoid scheduling a real auto-updater / writing state on the mock hass.
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+        cover.travel_calc.set_position(100)  # fully open
+
+        with patch.object(cover, "_send_close", wraps=cover._send_close) as send_close:
+            await cover.set_position(60)
+            assert cover.travel_calc.is_traveling()
+            assert send_close.call_count == 1
+
+            # Same direction (still closing), lower target.
+            await cover.set_position(30)
+            assert send_close.call_count == 1
+            assert cover.travel_calc._travel_to_position == 30

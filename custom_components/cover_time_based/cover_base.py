@@ -814,6 +814,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         self._last_command = command
 
+        # If the cover is already travelling the right way, the motor is
+        # running and only the stop target needs to change. Re-issuing the
+        # start command would, in toggle mode, pulse the direction switch a
+        # second time and stop the motor — desyncing it from the position
+        # tracker (a later auto-stop pulse then restarts it and runs the cover
+        # to the endpoint). Tilt coupling is still recomputed below for the new
+        # target before we retarget.
+        already_moving_same_dir = (
+            not is_direction_change and self.travel_calc.is_traveling()
+        )
+
         current_tilt = (
             self.tilt_calc.current_position() if self._tilt_strategy else None
         )
@@ -823,8 +834,24 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if started:
             return
 
-        await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
+
+        if already_moving_same_dir:
+            # Retarget the running calculators without re-commanding the motor
+            # and without re-applying the startup delay (the motor is already
+            # up to speed). Otherwise mirrors the normal start below.
+            self._log("set_position :: retargeting active movement to %d", target)
+            self._begin_movement(
+                target,
+                tilt_target,
+                self.travel_calc,
+                coupled_calc,
+                None,
+                pre_step_delay,
+            )
+            return
+
+        await self._async_handle_command(command)
         self._begin_movement(
             target,
             tilt_target,
