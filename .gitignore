@@ -9,3 +9,5 @@ __pycache__/
 *.iml
 .coverage
 docs/plans/
+.ha-changes-state.json
+HA_CHANGES_REPORT.md
