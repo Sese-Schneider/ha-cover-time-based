@@ -24,3 +24,15 @@ export function filterEntitiesByValidEntries(
     )
     .map((e) => e.entity_id);
 }
+
+/**
+ * Entity-picker domains for switch-based control modes.
+ *
+ * Pulse mode commands via homeassistant.turn_on/off and ignores the OFF
+ * edge, so `script` entities (e.g. IR-remote open/close/stop scripts) work
+ * there. Switch and toggle modes rely on a latched/held state a script
+ * cannot provide, so they stay switch-only.
+ */
+export function switchPickerDomains(controlMode) {
+  return controlMode === "pulse" ? ["switch", "script"] : ["switch"];
+}
