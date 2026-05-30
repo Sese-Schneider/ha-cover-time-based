@@ -47,3 +47,32 @@ export function switchPickerDomains(controlMode) {
 export function switchLabelKey(baseKey, controlMode) {
   return controlMode === "pulse" ? `${baseKey}_pulse` : baseKey;
 }
+
+/**
+ * Entity fields to null out when the control mode changes, so entities from
+ * the previous mode don't linger as stale config.
+ *
+ * Wrapped mode uses an inner cover and none of the switch/tilt slots, so all
+ * six are cleared — including tilt_open/tilt_close, which would otherwise
+ * survive and trip the backend script guard. Switch/toggle keep the direction
+ * switches but drop the wrapped cover and the pulse-only stop slots. Pulse
+ * only drops the wrapped cover.
+ */
+export function clearedEntitiesForMode(mode) {
+  const updates = {};
+  if (mode === "wrapped") {
+    updates.open_switch_entity_id = null;
+    updates.close_switch_entity_id = null;
+    updates.stop_switch_entity_id = null;
+    updates.tilt_open_switch = null;
+    updates.tilt_close_switch = null;
+    updates.tilt_stop_switch = null;
+  } else {
+    updates.cover_entity_id = null;
+  }
+  if (mode !== "pulse") {
+    updates.stop_switch_entity_id = null;
+    updates.tilt_stop_switch = null;
+  }
+  return updates;
+}

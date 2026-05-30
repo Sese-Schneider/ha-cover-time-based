@@ -84,15 +84,16 @@ _SWITCH_ENTITY_CONF_KEYS = (
 
 
 def _script_in_non_pulse_mode(control_mode, options):
-    """Return the first script entity_id configured outside pulse/wrapped mode, else None.
+    """Return the first script entity_id configured outside pulse mode, else None.
 
     Scripts are only supported in pulse mode (they auto-return to 'off',
-    which switch/toggle modes misread as a stop). Wrapped mode delegates all
-    movement to an inner cover entity and ignores the switch/tilt slots
-    entirely, so a stale `script.*` value there is harmless. `options` is
-    the merged config that would be persisted.
+    which switch/toggle modes misread as a stop). Every other mode rejects
+    them, keeping the rule simple and unequivocal. Wrapped mode never carries
+    switch-slot entities via the UI — the card clears them when the mode
+    changes (see _onControlModeChange) — so this rejection only fires on raw
+    API/YAML misuse. `options` is the merged config that would be persisted.
     """
-    if control_mode in (CONTROL_MODE_PULSE, CONTROL_MODE_WRAPPED):
+    if control_mode == CONTROL_MODE_PULSE:
         return None
     for key in _SWITCH_ENTITY_CONF_KEYS:
         value = options.get(key)

@@ -17,6 +17,7 @@ import {
   filterEntitiesByValidEntries,
   switchPickerDomains,
   switchLabelKey,
+  clearedEntitiesForMode,
 } from "./entity-filter.js";
 import { renderTextfield } from "./textfield-render.js";
 
@@ -631,20 +632,9 @@ class CoverTimeBasedCard extends LitElement {
 
   _onControlModeChange(e) {
     const mode = e.target.value;
-    const updates = { control_mode: mode };
-    // Clear irrelevant entities when switching modes
-    if (mode === "wrapped") {
-      updates.open_switch_entity_id = null;
-      updates.close_switch_entity_id = null;
-      updates.stop_switch_entity_id = null;
-    } else {
-      updates.cover_entity_id = null;
-    }
-    if (mode !== "pulse") {
-      updates.stop_switch_entity_id = null;
-      updates.tilt_stop_switch = null;
-    }
-    this._updateLocal(updates);
+    // Clear entities that don't belong to the new mode so they don't linger
+    // as stale config (see clearedEntitiesForMode).
+    this._updateLocal({ control_mode: mode, ...clearedEntitiesForMode(mode) });
   }
 
   _onPulseTimeChange(e) {

@@ -1599,12 +1599,19 @@ class TestScriptGuardHelper:
         }
         assert _script_in_non_pulse_mode(CONTROL_MODE_SWITCH, options) is None
 
-    def test_allows_scripts_in_wrapped_mode(self):
+    def test_rejects_script_in_wrapped_mode(self):
+        # Only pulse mode supports scripts. Wrapped never carries switch-slot
+        # scripts via the UI (the card clears them on mode switch), so this
+        # only guards against raw API/YAML misuse — the rule stays simple:
+        # scripts are valid in pulse mode, rejected everywhere else.
         options = {
             CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
             CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
         }
-        assert _script_in_non_pulse_mode(CONTROL_MODE_WRAPPED, options) is None
+        assert (
+            _script_in_non_pulse_mode(CONTROL_MODE_WRAPPED, options)
+            == "script.open_blind"
+        )
 
     def test_rejects_script_when_control_mode_absent(self):
         # No explicit mode → runtime defaults to switch → scripts must be rejected.
