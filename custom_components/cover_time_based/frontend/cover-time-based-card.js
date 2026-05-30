@@ -13,7 +13,11 @@ import {
   html,
   css,
 } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
-import { filterEntitiesByValidEntries } from "./entity-filter.js";
+import {
+  filterEntitiesByValidEntries,
+  switchPickerDomains,
+  switchLabelKey,
+} from "./entity-filter.js";
 import { renderTextfield } from "./textfield-render.js";
 
 const DOMAIN = "cover_time_based";
@@ -1022,7 +1026,7 @@ class CoverTimeBasedCard extends LitElement {
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.open_switch_entity_id || ""}
-            .includeDomains=${["switch"]}
+            .includeDomains=${switchPickerDomains(c.control_mode)}
             label=${this._t("entities.open_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("open_switch_entity_id", e)}
@@ -1030,7 +1034,7 @@ class CoverTimeBasedCard extends LitElement {
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.close_switch_entity_id || ""}
-            .includeDomains=${["switch"]}
+            .includeDomains=${switchPickerDomains(c.control_mode)}
             label=${this._t("entities.close_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("close_switch_entity_id", e)}
@@ -1039,7 +1043,7 @@ class CoverTimeBasedCard extends LitElement {
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.stop_switch_entity_id || ""}
-            .includeDomains=${["switch"]}
+            .includeDomains=${switchPickerDomains(c.control_mode)}
             label=${this._t("entities.stop_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("stop_switch_entity_id", e)}
@@ -1107,7 +1111,7 @@ class CoverTimeBasedCard extends LitElement {
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.tilt_open_switch || ""}
-            .includeDomains=${["switch"]}
+            .includeDomains=${switchPickerDomains(c.control_mode)}
             label=${this._t("tilt_motor.open_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_open_switch", e)}
@@ -1115,7 +1119,7 @@ class CoverTimeBasedCard extends LitElement {
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.tilt_close_switch || ""}
-            .includeDomains=${["switch"]}
+            .includeDomains=${switchPickerDomains(c.control_mode)}
             label=${this._t("tilt_motor.close_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_close_switch", e)}
@@ -1124,7 +1128,7 @@ class CoverTimeBasedCard extends LitElement {
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.tilt_stop_switch || ""}
-            .includeDomains=${["switch"]}
+            .includeDomains=${switchPickerDomains(c.control_mode)}
             label=${this._t("tilt_motor.stop_switch")}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_stop_switch", e)}
