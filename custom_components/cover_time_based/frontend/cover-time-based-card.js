@@ -45,6 +45,10 @@ const EN = {
   "entities.open_switch": "Open switch",
   "entities.close_switch": "Close switch",
   "entities.stop_switch": "Stop switch",
+  "entities.switch_entities_pulse": "Switch / Script Entities",
+  "entities.open_switch_pulse": "Open switch or script",
+  "entities.close_switch_pulse": "Close switch or script",
+  "entities.stop_switch_pulse": "Stop switch or script",
   "tilt.label": "Tilt Mode",
   "tilt.none": "Not supported",
   "tilt.sequential_close": "Closes then tilts closed",
@@ -55,6 +59,10 @@ const EN = {
   "tilt_motor.open_switch": "Tilt open switch",
   "tilt_motor.close_switch": "Tilt close switch",
   "tilt_motor.stop_switch": "Tilt stop switch",
+  "tilt_motor.label_pulse": "Tilt Motor (switch or script)",
+  "tilt_motor.open_switch_pulse": "Tilt open switch or script",
+  "tilt_motor.close_switch_pulse": "Tilt close switch or script",
+  "tilt_motor.stop_switch_pulse": "Tilt stop switch or script",
   "tilt_motor.safe_position": "Safe tilt position",
   "tilt_motor.safe_position_helper": "Tilt moves here before travel (100 = fully open)",
   "tilt_motor.max_allowed_position": "Max tilt allowed position (optional)",
@@ -142,6 +150,10 @@ const TRANSLATIONS = {
     "entities.open_switch": "Interruptor de abrir",
     "entities.close_switch": "Interruptor de fechar",
     "entities.stop_switch": "Interruptor de parar",
+    "entities.switch_entities_pulse": "Entidades de Interruptor / Script",
+    "entities.open_switch_pulse": "Interruptor ou script de abrir",
+    "entities.close_switch_pulse": "Interruptor ou script de fechar",
+    "entities.stop_switch_pulse": "Interruptor ou script de parar",
     "tilt.label": "Inclinação",
     "tilt.none": "Não suportado",
     "tilt.sequential_close": "Fecha e depois inclina fechadas",
@@ -152,6 +164,10 @@ const TRANSLATIONS = {
     "tilt_motor.open_switch": "Interruptor de abrir inclinação",
     "tilt_motor.close_switch": "Interruptor de fechar inclinação",
     "tilt_motor.stop_switch": "Interruptor de parar inclinação",
+    "tilt_motor.label_pulse": "Motor de Inclinação (interruptor ou script)",
+    "tilt_motor.open_switch_pulse": "Interruptor ou script de abrir inclinação",
+    "tilt_motor.close_switch_pulse": "Interruptor ou script de fechar inclinação",
+    "tilt_motor.stop_switch_pulse": "Interruptor ou script de parar inclinação",
     "tilt_motor.safe_position": "Posição de inclinação segura",
     "tilt_motor.safe_position_helper": "A inclinação move-se para aqui antes do deslocamento (100 = totalmente aberto)",
     "tilt_motor.max_allowed_position": "Posição máxima permitida de inclinação (opcional)",
@@ -236,6 +252,10 @@ const TRANSLATIONS = {
     "entities.open_switch": "Przełącznik otwierania",
     "entities.close_switch": "Przełącznik zamykania",
     "entities.stop_switch": "Przełącznik zatrzymania",
+    "entities.switch_entities_pulse": "Encje przełączników / skryptów",
+    "entities.open_switch_pulse": "Przełącznik lub skrypt otwierania",
+    "entities.close_switch_pulse": "Przełącznik lub skrypt zamykania",
+    "entities.stop_switch_pulse": "Przełącznik lub skrypt zatrzymania",
     "tilt.label": "Nachylenie",
     "tilt.none": "Nieobsługiwane",
     "tilt.sequential_close": "Najpierw zamyka, potem nachyla zamknięte",
@@ -246,6 +266,10 @@ const TRANSLATIONS = {
     "tilt_motor.open_switch": "Przełącznik otwierania nachylenia",
     "tilt_motor.close_switch": "Przełącznik zamykania nachylenia",
     "tilt_motor.stop_switch": "Przełącznik zatrzymania nachylenia",
+    "tilt_motor.label_pulse": "Silnik nachylenia (przełącznik lub skrypt)",
+    "tilt_motor.open_switch_pulse": "Przełącznik lub skrypt otwierania nachylenia",
+    "tilt_motor.close_switch_pulse": "Przełącznik lub skrypt zamykania nachylenia",
+    "tilt_motor.stop_switch_pulse": "Przełącznik lub skrypt zatrzymania nachylenia",
     "tilt_motor.safe_position": "Bezpieczna pozycja nachylenia",
     "tilt_motor.safe_position_helper": "Nachylenie przesuwa się tu przed ruchem (100 = w pełni otwarte)",
     "tilt_motor.max_allowed_position": "Maks. dozwolona pozycja nachylenia (opcjonalna)",
@@ -372,6 +396,10 @@ class CoverTimeBasedCard extends LitElement {
       }
     }
     return str;
+  }
+
+  _switchLabel(baseKey, controlMode) {
+    return this._t(switchLabelKey(baseKey, controlMode));
   }
 
   // --- Lifecycle ---
@@ -1021,13 +1049,13 @@ class CoverTimeBasedCard extends LitElement {
 
     return html`
       <div class="section">
-        <div class="field-label">${this._t("entities.switch_entities")}</div>
+        <div class="field-label">${this._switchLabel("entities.switch_entities", c.control_mode)}</div>
         <div class="entity-grid">
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.open_switch_entity_id || ""}
             .includeDomains=${switchPickerDomains(c.control_mode)}
-            label=${this._t("entities.open_switch")}
+            label=${this._switchLabel("entities.open_switch", c.control_mode)}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("open_switch_entity_id", e)}
           ></ha-entity-picker>
@@ -1035,7 +1063,7 @@ class CoverTimeBasedCard extends LitElement {
             .hass=${this.hass}
             .value=${c.close_switch_entity_id || ""}
             .includeDomains=${switchPickerDomains(c.control_mode)}
-            label=${this._t("entities.close_switch")}
+            label=${this._switchLabel("entities.close_switch", c.control_mode)}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("close_switch_entity_id", e)}
           ></ha-entity-picker>
@@ -1044,7 +1072,7 @@ class CoverTimeBasedCard extends LitElement {
             .hass=${this.hass}
             .value=${c.stop_switch_entity_id || ""}
             .includeDomains=${switchPickerDomains(c.control_mode)}
-            label=${this._t("entities.stop_switch")}
+            label=${this._switchLabel("entities.stop_switch", c.control_mode)}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("stop_switch_entity_id", e)}
           ></ha-entity-picker>
@@ -1105,14 +1133,14 @@ class CoverTimeBasedCard extends LitElement {
 
     return html`
       <div class="section">
-        <div class="field-label">${this._t("tilt_motor.label")}</div>
+        <div class="field-label">${this._switchLabel("tilt_motor.label", c.control_mode)}</div>
         ${c.control_mode !== "wrapped" ? html`
         <div class="entity-grid">
           <ha-entity-picker
             .hass=${this.hass}
             .value=${c.tilt_open_switch || ""}
             .includeDomains=${switchPickerDomains(c.control_mode)}
-            label=${this._t("tilt_motor.open_switch")}
+            label=${this._switchLabel("tilt_motor.open_switch", c.control_mode)}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_open_switch", e)}
           ></ha-entity-picker>
@@ -1120,7 +1148,7 @@ class CoverTimeBasedCard extends LitElement {
             .hass=${this.hass}
             .value=${c.tilt_close_switch || ""}
             .includeDomains=${switchPickerDomains(c.control_mode)}
-            label=${this._t("tilt_motor.close_switch")}
+            label=${this._switchLabel("tilt_motor.close_switch", c.control_mode)}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_close_switch", e)}
           ></ha-entity-picker>
@@ -1129,7 +1157,7 @@ class CoverTimeBasedCard extends LitElement {
             .hass=${this.hass}
             .value=${c.tilt_stop_switch || ""}
             .includeDomains=${switchPickerDomains(c.control_mode)}
-            label=${this._t("tilt_motor.stop_switch")}
+            label=${this._switchLabel("tilt_motor.stop_switch", c.control_mode)}
             @value-changed=${(e) =>
               this._onSwitchEntityChange("tilt_stop_switch", e)}
           ></ha-entity-picker>
