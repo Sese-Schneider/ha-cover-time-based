@@ -1551,3 +1551,65 @@ class TestCloseIncludesTiltFieldRoundTrip:
         connection.send_error.assert_not_called()
         new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert "close_includes_tilt" not in new_opts
+
+
+# ---------------------------------------------------------------------------
+# _script_in_non_pulse_mode helper
+# ---------------------------------------------------------------------------
+
+
+class TestScriptGuardHelper:
+    """Tests for _script_in_non_pulse_mode (pure validation helper)."""
+
+    def test_allows_scripts_in_pulse_mode(self):
+        from custom_components.cover_time_based.websocket_api import (
+            _script_in_non_pulse_mode,
+        )
+
+        options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
+            CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
+            CONF_CLOSE_SWITCH_ENTITY_ID: "script.close_blind",
+            CONF_STOP_SWITCH_ENTITY_ID: "script.stop_blind",
+        }
+        assert _script_in_non_pulse_mode(CONTROL_MODE_PULSE, options) is None
+
+    def test_rejects_script_in_switch_mode(self):
+        from custom_components.cover_time_based.websocket_api import (
+            _script_in_non_pulse_mode,
+        )
+
+        options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
+            CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
+            CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close_relay",
+        }
+        assert (
+            _script_in_non_pulse_mode(CONTROL_MODE_SWITCH, options)
+            == "script.open_blind"
+        )
+
+    def test_rejects_script_tilt_entity_in_toggle_mode(self):
+        from custom_components.cover_time_based.websocket_api import (
+            _script_in_non_pulse_mode,
+        )
+
+        options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_TOGGLE,
+            CONF_TILT_OPEN_SWITCH: "script.tilt_open",
+        }
+        assert (
+            _script_in_non_pulse_mode(CONTROL_MODE_TOGGLE, options)
+            == "script.tilt_open"
+        )
+
+    def test_allows_plain_switches_in_switch_mode(self):
+        from custom_components.cover_time_based.websocket_api import (
+            _script_in_non_pulse_mode,
+        )
+
+        options = {
+            CONF_OPEN_SWITCH_ENTITY_ID: "switch.open_relay",
+            CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close_relay",
+        }
+        assert _script_in_non_pulse_mode(CONTROL_MODE_SWITCH, options) is None
