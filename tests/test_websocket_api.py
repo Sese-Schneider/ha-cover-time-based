@@ -1616,9 +1616,7 @@ class TestScriptGuardHelper:
     def test_rejects_script_when_control_mode_absent(self):
         # No explicit mode → runtime defaults to switch → scripts must be rejected.
         options = {CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind"}
-        assert (
-            _script_in_non_pulse_mode(None, options) == "script.open_blind"
-        )
+        assert _script_in_non_pulse_mode(None, options) == "script.open_blind"
 
 
 # ---------------------------------------------------------------------------

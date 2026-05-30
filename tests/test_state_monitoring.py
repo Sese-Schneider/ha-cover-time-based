@@ -1875,9 +1875,7 @@ class TestPulseModeScriptEntities:
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
-            await cover._handle_external_state_change(
-                "script.open_blind", "off", "on"
-            )
+            await cover._handle_external_state_change("script.open_blind", "off", "on")
 
         assert cover._last_command == SERVICE_OPEN_COVER
 
@@ -1892,9 +1890,7 @@ class TestPulseModeScriptEntities:
         cover.travel_calc.set_position(50)
 
         with patch.object(cover, "async_write_ha_state"):
-            await cover._handle_external_state_change(
-                "script.open_blind", "on", "off"
-            )
+            await cover._handle_external_state_change("script.open_blind", "on", "off")
 
         # OFF edge ignored in pulse mode — no movement, no stop.
         assert not cover.travel_calc.is_traveling()
