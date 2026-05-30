@@ -72,7 +72,7 @@ _FIELD_MAP = {
 }
 
 
-# Entity-config fields that may carry a switch- or script-style entity_id.
+# Entity-id slots that must not hold a `script.` entity outside pulse mode.
 _SWITCH_ENTITY_CONF_KEYS = (
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -84,13 +84,15 @@ _SWITCH_ENTITY_CONF_KEYS = (
 
 
 def _script_in_non_pulse_mode(control_mode, options):
-    """Return the first script entity_id configured outside pulse mode, else None.
+    """Return the first script entity_id configured outside pulse/wrapped mode, else None.
 
     Scripts are only supported in pulse mode (they auto-return to 'off',
-    which switch/toggle modes misread as a stop). `options` is the merged
-    config that would be persisted.
+    which switch/toggle modes misread as a stop). Wrapped mode delegates all
+    movement to an inner cover entity and ignores the switch/tilt slots
+    entirely, so a stale `script.*` value there is harmless. `options` is
+    the merged config that would be persisted.
     """
-    if control_mode == CONTROL_MODE_PULSE:
+    if control_mode in (CONTROL_MODE_PULSE, CONTROL_MODE_WRAPPED):
         return None
     for key in _SWITCH_ENTITY_CONF_KEYS:
         value = options.get(key)
@@ -300,7 +302,7 @@ async def ws_update_config(
         connection.send_error(
             msg["id"],
             "invalid_entity",
-            "Script entities are only supported in pulse mode",
+            f"Script entities are only supported in pulse mode (got {offending})",
         )
         return
 

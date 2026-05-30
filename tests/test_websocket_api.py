@@ -29,6 +29,7 @@ from custom_components.cover_time_based.cover import (
 )
 from custom_components.cover_time_based.websocket_api import (
     _resolve_config_entry,
+    _script_in_non_pulse_mode,
     async_register_websocket_api,
     ws_get_config,
     ws_raw_command,
@@ -1562,10 +1563,6 @@ class TestScriptGuardHelper:
     """Tests for _script_in_non_pulse_mode (pure validation helper)."""
 
     def test_allows_scripts_in_pulse_mode(self):
-        from custom_components.cover_time_based.websocket_api import (
-            _script_in_non_pulse_mode,
-        )
-
         options = {
             CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
             CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
@@ -1575,10 +1572,6 @@ class TestScriptGuardHelper:
         assert _script_in_non_pulse_mode(CONTROL_MODE_PULSE, options) is None
 
     def test_rejects_script_in_switch_mode(self):
-        from custom_components.cover_time_based.websocket_api import (
-            _script_in_non_pulse_mode,
-        )
-
         options = {
             CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
             CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
@@ -1590,10 +1583,6 @@ class TestScriptGuardHelper:
         )
 
     def test_rejects_script_tilt_entity_in_toggle_mode(self):
-        from custom_components.cover_time_based.websocket_api import (
-            _script_in_non_pulse_mode,
-        )
-
         options = {
             CONF_CONTROL_MODE: CONTROL_MODE_TOGGLE,
             CONF_TILT_OPEN_SWITCH: "script.tilt_open",
@@ -1604,15 +1593,25 @@ class TestScriptGuardHelper:
         )
 
     def test_allows_plain_switches_in_switch_mode(self):
-        from custom_components.cover_time_based.websocket_api import (
-            _script_in_non_pulse_mode,
-        )
-
         options = {
             CONF_OPEN_SWITCH_ENTITY_ID: "switch.open_relay",
             CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close_relay",
         }
         assert _script_in_non_pulse_mode(CONTROL_MODE_SWITCH, options) is None
+
+    def test_allows_scripts_in_wrapped_mode(self):
+        options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+            CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
+        }
+        assert _script_in_non_pulse_mode(CONTROL_MODE_WRAPPED, options) is None
+
+    def test_rejects_script_when_control_mode_absent(self):
+        # No explicit mode → runtime defaults to switch → scripts must be rejected.
+        options = {CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind"}
+        assert (
+            _script_in_non_pulse_mode(None, options) == "script.open_blind"
+        )
 
 
 # ---------------------------------------------------------------------------
