@@ -36,3 +36,14 @@ export function filterEntitiesByValidEntries(
 export function switchPickerDomains(controlMode) {
   return controlMode === "pulse" ? ["switch", "script"] : ["switch"];
 }
+
+/**
+ * Translation-key selector for switch/script picker labels.
+ *
+ * In pulse mode the picker accepts switches OR scripts, so labels use a
+ * "<base>_pulse" variant (e.g. "Open switch or script"). Other modes use
+ * the base key.
+ */
+export function switchLabelKey(baseKey, controlMode) {
+  return controlMode === "pulse" ? `${baseKey}_pulse` : baseKey;
+}
