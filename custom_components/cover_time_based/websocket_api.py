@@ -289,6 +289,21 @@ async def ws_update_config(
                     value = "sequential_close"
                 new_options[conf_key] = value
 
+    # Reject script entities outside pulse mode (they auto-return to 'off',
+    # which switch/toggle modes misread as a stop). Validate the merged result
+    # so switching an existing script-configured cover into switch/toggle is
+    # caught too.
+    offending = _script_in_non_pulse_mode(
+        new_options.get(CONF_CONTROL_MODE), new_options
+    )
+    if offending is not None:
+        connection.send_error(
+            msg["id"],
+            "invalid_entity",
+            "Script entities are only supported in pulse mode",
+        )
+        return
+
     hass.config_entries.async_update_entry(config_entry, options=new_options)
 
     connection.send_result(msg["id"], {"success": True})

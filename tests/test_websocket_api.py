@@ -1613,3 +1613,87 @@ class TestScriptGuardHelper:
             CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close_relay",
         }
         assert _script_in_non_pulse_mode(CONTROL_MODE_SWITCH, options) is None
+
+
+# ---------------------------------------------------------------------------
+# ws_update_config — script entity guard
+# ---------------------------------------------------------------------------
+
+
+class TestScriptGuardInUpdateConfig:
+    """ws_update_config rejects script entities outside pulse mode."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_setting_script_in_switch_mode(self):
+        config_entry = MagicMock()
+        config_entry.domain = DOMAIN
+        config_entry.options = {CONF_CONTROL_MODE: CONTROL_MODE_SWITCH}
+        hass = MagicMock()
+        conn = _make_connection()
+        msg = {
+            "id": 1,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "open_switch_entity_id": "script.open_blind",
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            await _ws_update_config(hass, conn, msg)
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "invalid_entity"
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rejects_switching_existing_script_into_switch_mode(self):
+        config_entry = MagicMock()
+        config_entry.domain = DOMAIN
+        config_entry.options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
+            CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
+        }
+        hass = MagicMock()
+        conn = _make_connection()
+        msg = {
+            "id": 1,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "control_mode": CONTROL_MODE_SWITCH,
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            await _ws_update_config(hass, conn, msg)
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "invalid_entity"
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_allows_script_in_pulse_mode(self):
+        config_entry = MagicMock()
+        config_entry.domain = DOMAIN
+        config_entry.options = {CONF_CONTROL_MODE: CONTROL_MODE_PULSE}
+        hass = MagicMock()
+        conn = _make_connection()
+        msg = {
+            "id": 1,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "open_switch_entity_id": "script.open_blind",
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            await _ws_update_config(hass, conn, msg)
+
+        conn.send_error.assert_not_called()
+        new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_opts[CONF_OPEN_SWITCH_ENTITY_ID] == "script.open_blind"
