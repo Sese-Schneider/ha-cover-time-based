@@ -29,6 +29,7 @@ from custom_components.cover_time_based.cover import (
 )
 from custom_components.cover_time_based.websocket_api import (
     _resolve_config_entry,
+    _script_in_non_pulse_mode,
     async_register_websocket_api,
     ws_get_config,
     ws_raw_command,
@@ -1551,3 +1552,152 @@ class TestCloseIncludesTiltFieldRoundTrip:
         connection.send_error.assert_not_called()
         new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert "close_includes_tilt" not in new_opts
+
+
+# ---------------------------------------------------------------------------
+# _script_in_non_pulse_mode helper
+# ---------------------------------------------------------------------------
+
+
+class TestScriptGuardHelper:
+    """Tests for _script_in_non_pulse_mode (pure validation helper)."""
+
+    def test_allows_scripts_in_pulse_mode(self):
+        options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
+            CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
+            CONF_CLOSE_SWITCH_ENTITY_ID: "script.close_blind",
+            CONF_STOP_SWITCH_ENTITY_ID: "script.stop_blind",
+        }
+        assert _script_in_non_pulse_mode(CONTROL_MODE_PULSE, options) is None
+
+    def test_rejects_script_in_switch_mode(self):
+        options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
+            CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
+            CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close_relay",
+        }
+        assert (
+            _script_in_non_pulse_mode(CONTROL_MODE_SWITCH, options)
+            == "script.open_blind"
+        )
+
+    def test_rejects_script_tilt_entity_in_toggle_mode(self):
+        options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_TOGGLE,
+            CONF_TILT_OPEN_SWITCH: "script.tilt_open",
+        }
+        assert (
+            _script_in_non_pulse_mode(CONTROL_MODE_TOGGLE, options)
+            == "script.tilt_open"
+        )
+
+    def test_allows_plain_switches_in_switch_mode(self):
+        options = {
+            CONF_OPEN_SWITCH_ENTITY_ID: "switch.open_relay",
+            CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close_relay",
+        }
+        assert _script_in_non_pulse_mode(CONTROL_MODE_SWITCH, options) is None
+
+    def test_rejects_script_in_wrapped_mode(self):
+        # Only pulse mode supports scripts. Wrapped never carries switch-slot
+        # scripts via the UI (the card clears them on mode switch), so this
+        # only guards against raw API/YAML misuse — the rule stays simple:
+        # scripts are valid in pulse mode, rejected everywhere else.
+        options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+            CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
+        }
+        assert (
+            _script_in_non_pulse_mode(CONTROL_MODE_WRAPPED, options)
+            == "script.open_blind"
+        )
+
+    def test_rejects_script_when_control_mode_absent(self):
+        # No explicit mode → runtime defaults to switch → scripts must be rejected.
+        options = {CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind"}
+        assert _script_in_non_pulse_mode(None, options) == "script.open_blind"
+
+
+# ---------------------------------------------------------------------------
+# ws_update_config — script entity guard
+# ---------------------------------------------------------------------------
+
+
+class TestScriptGuardInUpdateConfig:
+    """ws_update_config rejects script entities outside pulse mode."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_setting_script_in_switch_mode(self):
+        config_entry = MagicMock()
+        config_entry.domain = DOMAIN
+        config_entry.options = {CONF_CONTROL_MODE: CONTROL_MODE_SWITCH}
+        hass = MagicMock()
+        conn = _make_connection()
+        msg = {
+            "id": 1,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "open_switch_entity_id": "script.open_blind",
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            await _ws_update_config(hass, conn, msg)
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "invalid_entity"
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rejects_switching_existing_script_into_switch_mode(self):
+        config_entry = MagicMock()
+        config_entry.domain = DOMAIN
+        config_entry.options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
+            CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
+        }
+        hass = MagicMock()
+        conn = _make_connection()
+        msg = {
+            "id": 1,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "control_mode": CONTROL_MODE_SWITCH,
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            await _ws_update_config(hass, conn, msg)
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "invalid_entity"
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_allows_script_in_pulse_mode(self):
+        config_entry = MagicMock()
+        config_entry.domain = DOMAIN
+        config_entry.options = {CONF_CONTROL_MODE: CONTROL_MODE_PULSE}
+        hass = MagicMock()
+        conn = _make_connection()
+        msg = {
+            "id": 1,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "open_switch_entity_id": "script.open_blind",
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            await _ws_update_config(hass, conn, msg)
+
+        conn.send_error.assert_not_called()
+        new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_opts[CONF_OPEN_SWITCH_ENTITY_ID] == "script.open_blind"

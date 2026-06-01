@@ -72,6 +72,36 @@ _FIELD_MAP = {
 }
 
 
+# Entity-id slots that must not hold a `script.` entity outside pulse mode.
+_SWITCH_ENTITY_CONF_KEYS = (
+    CONF_OPEN_SWITCH_ENTITY_ID,
+    CONF_CLOSE_SWITCH_ENTITY_ID,
+    CONF_STOP_SWITCH_ENTITY_ID,
+    CONF_TILT_OPEN_SWITCH,
+    CONF_TILT_CLOSE_SWITCH,
+    CONF_TILT_STOP_SWITCH,
+)
+
+
+def _script_in_non_pulse_mode(control_mode, options):
+    """Return the first script entity_id configured outside pulse mode, else None.
+
+    Scripts are only supported in pulse mode (they auto-return to 'off',
+    which switch/toggle modes misread as a stop). Every other mode rejects
+    them, keeping the rule simple and unequivocal. Wrapped mode never carries
+    switch-slot entities via the UI — the card clears them when the mode
+    changes (see _onControlModeChange) — so this rejection only fires on raw
+    API/YAML misuse. `options` is the merged config that would be persisted.
+    """
+    if control_mode == CONTROL_MODE_PULSE:
+        return None
+    for key in _SWITCH_ENTITY_CONF_KEYS:
+        value = options.get(key)
+        if isinstance(value, str) and value.startswith("script."):
+            return value
+    return None
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register WebSocket API commands."""
     websocket_api.async_register_command(hass, ws_get_config)
@@ -261,6 +291,21 @@ async def ws_update_config(
                 if conf_key == CONF_TILT_MODE and value == "sequential":
                     value = "sequential_close"
                 new_options[conf_key] = value
+
+    # Reject script entities outside pulse mode (they auto-return to 'off',
+    # which switch/toggle modes misread as a stop). Validate the merged result
+    # so switching an existing script-configured cover into switch/toggle is
+    # caught too.
+    offending = _script_in_non_pulse_mode(
+        new_options.get(CONF_CONTROL_MODE), new_options
+    )
+    if offending is not None:
+        connection.send_error(
+            msg["id"],
+            "invalid_entity",
+            f"Script entities are only supported in pulse mode (got {offending})",
+        )
+        return
 
     hass.config_entries.async_update_entry(config_entry, options=new_options)
 

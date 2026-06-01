@@ -1,3 +1,9 @@
+## 4.1.0 (2026-05-30)
+
+### Features
+
+- **Use scripts as open/close/stop switches in Pulse mode** ([#82](https://github.com/Sese-Schneider/ha-cover-time-based/issues/82)): the open, close, and stop targets (and the dual-motor tilt targets) can now be `script` entities as well as `switch` entities when the control mode is **Pulse** — handy for covers driven by IR remotes, where each script fires an open/close/stop command. Switch and Toggle modes still require `switch` entities, since they rely on a held on-state a script can't provide. Note that a script still running when the configured **Pulse time** elapses will be stopped.
+
 ## 4.0.0 (2026-05-23)
 
 If you're coming from v2.3.2, this is essentially a new integration.

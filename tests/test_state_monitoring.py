@@ -1852,3 +1852,72 @@ class TestRawDirectionChangeEchoFiltering:
                 _make_state_event("switch.open", "on", "off")
             )
             assert not cover.travel_calc.is_traveling()
+
+
+class TestPulseModeScriptEntities:
+    """Pulse mode works with `script` entities (issue #82).
+
+    A script auto-returns to 'off' when it finishes. These tests pin the
+    two behaviors that make scripts safe in pulse mode:
+      - a manual run (off->on) is detected as the external command;
+      - the auto-return (on->off) is ignored, so no spurious stop;
+      - an integration-initiated run + auto-return is fully echo-filtered.
+    """
+
+    @pytest.mark.asyncio
+    async def test_manual_script_run_detected_as_open(self, make_cover):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_PULSE,
+            open_switch="script.open_blind",
+            close_switch="script.close_blind",
+            stop_switch="script.stop_blind",
+        )
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("script.open_blind", "off", "on")
+
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_script_auto_return_to_off_is_ignored(self, make_cover):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_PULSE,
+            open_switch="script.open_blind",
+            close_switch="script.close_blind",
+            stop_switch="script.stop_blind",
+        )
+        cover.travel_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("script.open_blind", "on", "off")
+
+        # OFF edge ignored in pulse mode — no movement, no stop.
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_integration_run_and_autoreturn_are_echo_filtered(self, make_cover):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_PULSE,
+            open_switch="script.open_blind",
+            close_switch="script.close_blind",
+            stop_switch="script.stop_blind",
+        )
+        # _send_open marks the open entity pending=2 (expects on + off).
+        cover._pending_switch["script.open_blind"] = 2
+
+        on_event = _make_state_event("script.open_blind", "off", "on")
+        off_event = _make_state_event("script.open_blind", "on", "off")
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
+            await cover._async_switch_state_changed(on_event)
+            await cover._async_switch_state_changed(off_event)
+
+        # Both transitions consumed as echoes — external handler never fires.
+        handler.assert_not_awaited()
+        assert "script.open_blind" not in cover._pending_switch

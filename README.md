@@ -114,6 +114,8 @@ Three input modes are available to describe how the switch entities for switch-b
 | **Pulse**  | Momentary pulse buttons. A brief ON-OFF pulse latches the motor on. Requires a stop button to stop movement, or movement stops when the hardware reaches its endpoint. |
 | **Toggle** | Toggle-style relays. A brief ON-OFF pulse latches the motor on. A second pulse on the same direction button stops the motor.                                           |
 
+> **Scripts in Pulse mode.** In **Pulse** mode the Open / Close / Stop entities (and the dual-motor tilt entities) may be `script` entities as well as `switch` entities — for example, IR-remote-controlled covers where each script fires an open / close / stop IR command. **Switch** and **Toggle** modes require `switch` entities: they rely on the entity reporting a held/latched on-state, which a script (which auto-returns to `off`) cannot provide. Keep the scripts short: after **Pulse time** elapses the integration turns the entity off again, which cancels any script still running — so a script whose own internal `delay` is longer than the pulse time would be cut short.
+
 #### Pulse time
 
 With the **Pulse** and **Toggle** input modes, the **Pulse time** configures how long the switch should send the ON signal before it turns OFF. Defaults to **1s**.
@@ -320,9 +322,9 @@ cover:
 | Name                   | Type    | Requirement                                     | Description                                                             | Default |
 | ---------------------- | ------- | ----------------------------------------------- | ----------------------------------------------------------------------- | ------- |
 | name                   | string  | **Required**                                    | Name of the created entity                                              |         |
-| open_switch_entity_id  | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for opening the cover                           |         |
-| close_switch_entity_id | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover                           |         |
-| stop_switch_entity_id  | entity  | _Optional_                                      | Entity ID of the switch for stopping the cover                          | None    |
+| open_switch_entity_id  | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for opening the cover. Accepts a `script` entity when `input_mode: pulse` |         |
+| close_switch_entity_id | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover. Accepts a `script` entity when `input_mode: pulse` |         |
+| stop_switch_entity_id  | entity  | _Optional_                                      | Entity ID of the switch for stopping the cover. Accepts a `script` entity when `input_mode: pulse` | None    |
 | cover_entity_id        | entity  | **Required** or `open_\|close_switch_entity_id` | Entity ID of an existing cover entity                                   |         |
 | is_button              | boolean | _Optional_                                      | Set to `true` for momentary pulse buttons (same as `input_mode: pulse`) | false   |
 | travelling_time_down   | float   | _Optional_                                      | Time in seconds to close the cover                                      | 30      |
