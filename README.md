@@ -340,10 +340,10 @@ cover:
 
 </details>
 
-[commits-shield]: https://img.shields.io/github/commit-activity/y/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
+[commits-shield]: https://img.shields.io/github/commit-activity/y/Sese-Schneider/ha-cover-time-based?style=for-the-badge
 [commits]: https://github.com/Sese-Schneider/ha-cover-time-based/commits/main
 [installations-shield]: https://img.shields.io/badge/dynamic/json?url=https://analytics.home-assistant.io/custom_integrations.json&query=$.cover_time_based.total&label=Active%20installations&color=41BDF5&style=for-the-badge
-[license-shield]: https://img.shields.io/github/license/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
+[license-shield]: https://img.shields.io/github/license/Sese-Schneider/ha-cover-time-based?style=for-the-badge
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg?style=for-the-badge
-[releases-shield]: https://img.shields.io/github/release/Sese-Schneider/ha-cover-time-based.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/v/release/Sese-Schneider/ha-cover-time-based?style=for-the-badge
 [releases]: https://github.com/Sese-Schneider/ha-cover-time-based/releases
