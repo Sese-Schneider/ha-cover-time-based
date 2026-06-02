@@ -304,7 +304,11 @@ class TestIgnoreReportedPositionRoundTrip:
             await _ws_get_config(
                 hass,
                 conn,
-                {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID},
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
             )
 
         result = conn.send_result.call_args[0][1]
@@ -328,7 +332,11 @@ class TestIgnoreReportedPositionRoundTrip:
             await _ws_get_config(
                 hass,
                 conn,
-                {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID},
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
             )
 
         result = conn.send_result.call_args[0][1]
