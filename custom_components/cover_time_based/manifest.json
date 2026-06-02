@@ -1,6 +1,7 @@
 {
   "domain": "cover_time_based",
   "name": "Cover Time Based",
+  "after_dependencies": ["lovelace"],
   "codeowners": ["@Sese-Schneider", "@clintongormley"],
   "config_flow": true,
   "dependencies": ["http"],

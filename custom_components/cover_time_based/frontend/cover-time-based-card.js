@@ -1941,7 +1941,12 @@ class CoverTimeBasedCard extends LitElement {
   }
 }
 
-customElements.define("cover-time-based-card", CoverTimeBasedCard);
+// Guard the define: now that the card loads via a Lovelace resource (after HA
+// swaps in the scoped-custom-element-registry polyfill) a double-evaluation
+// would otherwise throw "already defined".
+if (!customElements.get("cover-time-based-card")) {
+  customElements.define("cover-time-based-card", CoverTimeBasedCard);
+}
 
 // Register with Lovelace card picker
 window.customCards = window.customCards || [];
