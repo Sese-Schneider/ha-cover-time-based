@@ -54,7 +54,10 @@ async def async_register_card_resource(
             for item in resources.async_items():
                 url = item.get("url", "")
                 if url == card_url:
-                    return  # Already the current version.
+                    # Already current — record the id (hass.data is empty after
+                    # a restart) so a later full uninstall can delete it.
+                    hass.data.setdefault(DOMAIN, {})[_RESOURCE_ID_KEY] = item["id"]
+                    return
                 if url.startswith(base_url):
                     # Old version → cache-bust in place.
                     await resources.async_update_item(item["id"], {"url": card_url})

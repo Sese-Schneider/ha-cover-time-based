@@ -16,6 +16,7 @@ from custom_components.cover_time_based import (
     async_unload_entry,
     async_update_options,
 )
+from custom_components.cover_time_based.card_resources import _RESOURCE_ID_KEY
 from custom_components.cover_time_based.const import DOMAIN
 
 
@@ -196,6 +197,21 @@ class TestCardResourceRegistration:
         mock_add_js.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_setup_records_id_when_resource_already_current(self):
+        """After a restart hass.data is empty but the resource is already
+        current; setup must still record its id so a later uninstall can
+        delete it (rather than leaving it orphaned in Dashboards → Resources)."""
+        resources = FakeResources(
+            items=[{"id": "abc", "url": _CARD_JS_URL}], loaded=True
+        )
+        hass = _make_setup_hass(resources)
+
+        with patch("homeassistant.components.frontend.add_extra_js_url"):
+            await async_setup(hass, {})
+
+        assert hass.data[DOMAIN][_RESOURCE_ID_KEY] == "abc"
+
+    @pytest.mark.asyncio
     async def test_setup_updates_existing_resource_on_version_change(self):
         stale_url = f"{_CARD_BASE_URL}deadbeef/cover-time-based-card.js"
         resources = FakeResources(items=[{"id": "old", "url": stale_url}], loaded=True)
@@ -359,6 +375,30 @@ class TestCardResourceUnregistration:
             await async_remove_entry(hass, entry)
 
         assert resources.deleted == ["new-id"]
+
+    @pytest.mark.asyncio
+    async def test_uninstall_deletes_already_current_resource(self):
+        """Regression: after a restart the resource is already current and
+        hass.data is empty; setup records the id so full uninstall deletes the
+        resource instead of falling back to the no-op remove_extra_js_url."""
+        resources = FakeResources(
+            items=[{"id": "abc", "url": _CARD_JS_URL}], loaded=True
+        )
+        hass = _make_setup_hass(resources)
+
+        with patch("homeassistant.components.frontend.add_extra_js_url"):
+            await async_setup(hass, {})
+
+        entry = MagicMock()
+        entry.entry_id = "e1"
+        hass.config_entries.async_entries = MagicMock(return_value=[])
+        with patch(
+            "custom_components.cover_time_based.async_get_position_store"
+        ) as mock_store:
+            mock_store.return_value.async_remove = AsyncMock()
+            await async_remove_entry(hass, entry)
+
+        assert resources.deleted == ["abc"]
 
     @pytest.mark.asyncio
     async def test_remove_entry_keeps_resource_when_others_remain(self):
