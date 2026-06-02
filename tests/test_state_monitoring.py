@@ -1921,3 +1921,70 @@ class TestPulseModeScriptEntities:
         # Both transitions consumed as echoes — external handler never fires.
         handler.assert_not_awaited()
         assert "script.open_blind" not in cover._pending_switch
+
+
+class TestWrappedCoverIgnoreReportedPosition:
+    """With ignore_reported_position set, the wrapper never trusts the
+    underlying cover's reported current_position. It tracks position purely
+    by time, behaving like a cover that reports no position at all. The
+    unambiguous closed endpoint is still honored (it is a state, not a
+    reported position number).
+    """
+
+    @pytest.mark.asyncio
+    async def test_stopped_state_does_not_snap_to_reported_position(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner", ignore_reported_position=True
+        )
+        cover.travel_calc.set_position(52)
+        cover._last_command = SERVICE_OPEN_COVER
+        _set_wrapped_state(cover, "open", current_position=100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "opening", "open")
+
+        # Reported 100 must be ignored; tracker stays where time-based calc put it.
+        assert cover.travel_calc.current_position() == 52
+
+    @pytest.mark.asyncio
+    async def test_attribute_only_update_does_not_snap(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner", ignore_reported_position=True
+        )
+        cover.travel_calc.set_position(52)
+        cover._last_command = None
+        _set_wrapped_state(cover, "open", current_position=100)
+
+        event = _make_attribute_event("cover.inner", "open", 100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_attribute_change(event)
+
+        assert cover.travel_calc.current_position() == 52
+
+    @pytest.mark.asyncio
+    async def test_still_snaps_to_zero_on_closed_state(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner", ignore_reported_position=True
+        )
+        cover.travel_calc.set_position(52)
+        cover._last_command = SERVICE_CLOSE_COVER
+        # Reported 80 is bogus, but the closed *state* is trusted.
+        _set_wrapped_state(cover, "closed", current_position=80)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "closing", "closed")
+
+        assert cover.travel_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_default_still_snaps_to_reported_position(self, make_cover):
+        """Sanity: without the flag, the existing snap behavior is unchanged."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(52)
+        cover._last_command = SERVICE_OPEN_COVER
+        _set_wrapped_state(cover, "open", current_position=100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "opening", "open")
+
+        assert cover.travel_calc.current_position() == 100

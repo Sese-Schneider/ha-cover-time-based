@@ -27,6 +27,7 @@ from .calibration import (
 from .const import (
     CONF_CLOSE_INCLUDES_TILT,
     CONF_ENDPOINT_RUNON_TIME,
+    CONF_IGNORE_REPORTED_POSITION,
     CONF_MIN_MOVEMENT_TIME,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
@@ -37,6 +38,7 @@ from .const import (
     CONF_TRAVEL_TIME_OPEN,
     DEFAULT_CLOSE_INCLUDES_TILT,
     DEFAULT_ENDPOINT_RUNON_TIME,
+    DEFAULT_IGNORE_REPORTED_POSITION,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
 from .helpers import resolve_entity
@@ -323,6 +325,9 @@ def _create_cover_from_options(options, device_id="", name=""):
     if control_mode == CONTROL_MODE_WRAPPED:
         return WrappedCoverTimeBased(
             cover_entity_id=options.get(CONF_COVER_ENTITY_ID, ""),
+            ignore_reported_position=options.get(
+                CONF_IGNORE_REPORTED_POSITION, DEFAULT_IGNORE_REPORTED_POSITION
+            ),
             **common,
         )
 

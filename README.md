@@ -98,6 +98,10 @@ Specify the **Cover entity**.
 
 **Reacting to physical wall switches.** When the wrapped cover is operated externally (physical wall switch, remote, or another integration), the time-based tracker can only follow the movement if the wrapped entity emits an `opening` / `closing` state during travel. Some wrapped entities — notably certain Tuya / ZHA cover modules — stay in their current `open` or `closed` state the entire time the motor runs, only reporting the final settled state once the movement completes. In that case the time-based position cannot be tracked *during* the physical movement, but it will snap to the wrapped entity's reported position once it settles (or once you click the wrapped cover's stop button, if the wrapped entity reports its current position at that point).
 
+**Ignore reported position.** Enable this option when the wrapped cover reports an unreliable position. The integration then tracks the position purely by time and ignores the `current_position` the wrapped entity reports (the fully-closed endpoint is still trusted). This is also what lets time-based tilt work cleanly on a wrapped cover whose reported position would otherwise interfere.
+
+**Tilt on a wrapped cover.** The **Inline** and **Sequential** tilt modes drive the wrapped cover's normal open / close commands, so they work on any wrapped cover regardless of whether it reports tilt support. Only the **Separate tilt motor** mode requires the wrapped cover to expose its own tilt commands, so it is offered only when the wrapped entity reports native tilt support.
+
 ### Switch-based covers
 
 Control a cover using two relay switches (one for open, one for close), with an optional third stop switch.

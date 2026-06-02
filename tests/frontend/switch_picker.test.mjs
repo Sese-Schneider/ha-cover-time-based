@@ -10,6 +10,7 @@ import {
   switchPickerDomains,
   switchLabelKey,
   clearedEntitiesForMode,
+  clearedTiltConfig,
 } from "../../custom_components/cover_time_based/frontend/entity-filter.js";
 
 test("pulse mode allows switch and script domains", () => {
@@ -62,5 +63,22 @@ test("switching to switch/toggle clears the cover and the pulse-only stop slots"
 test("switching to pulse only clears the wrapped cover slot", () => {
   assert.deepEqual(clearedEntitiesForMode("pulse"), {
     cover_entity_id: null,
+  });
+});
+
+test("clearedTiltConfig resets tilt mode and every tilt field", () => {
+  // Used when tilt is set to "none", and when a context change (control mode
+  // or wrapped cover entity) invalidates a dual_motor selection.
+  assert.deepEqual(clearedTiltConfig(), {
+    tilt_mode: "none",
+    tilt_time_close: null,
+    tilt_time_open: null,
+    tilt_startup_delay: null,
+    safe_tilt_position: null,
+    max_tilt_allowed_position: null,
+    tilt_open_switch: null,
+    tilt_close_switch: null,
+    tilt_stop_switch: null,
+    close_includes_tilt: null,
   });
 });

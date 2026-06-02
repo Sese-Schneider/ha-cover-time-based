@@ -1,3 +1,10 @@
+## 4.2.0 (2026-06-02)
+
+### Features
+
+- **Tilt support for wrapped covers without native tilt** ([#85](https://github.com/Sese-Schneider/ha-cover-time-based/issues/85)): the **Inline** and **Sequential** tilt modes are now available when wrapping an existing cover, even if that cover only exposes open/close/stop. These modes drive the wrapped cover's normal open/close commands, so they work on any cover — previously the tilt options were hidden unless the wrapped cover reported native tilt support. The **Separate tilt motor** mode still requires native tilt support (it delegates the tilt commands to the wrapped entity), so it remains hidden until the selected cover advertises it.
+- **Ignore reported position (wrapped covers)**: a new option to track position purely by time and ignore the `current_position` the wrapped cover reports. Enable it for covers that report an unreliable position (the fully-closed endpoint is still trusted).
+
 ## 4.1.0 (2026-05-30)
 
 ### Features
