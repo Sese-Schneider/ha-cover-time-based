@@ -30,10 +30,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
     def __init__(
         self,
         cover_entity_id,
+        ignore_reported_position=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._cover_entity_id = cover_entity_id
+        self._ignore_reported_position = ignore_reported_position
         self._last_self_command_time: float | None = None
 
     async def async_added_to_hass(self):
@@ -134,9 +136,14 @@ class WrappedCoverTimeBased(CoverTimeBased):
         state = self.hass.states.get(self._cover_entity_id)
         if state is None:
             return None
-        attr_pos = state.attributes.get(ATTR_CURRENT_POSITION)
-        if isinstance(attr_pos, (int, float)) and 0 <= attr_pos <= 100:
-            return int(attr_pos)
+        # When configured to ignore the reported position, behave like a cover
+        # that reports no position at all: track purely by time. The closed
+        # state below is still trusted — it is an unambiguous endpoint, not a
+        # reported position number.
+        if not self._ignore_reported_position:
+            attr_pos = state.attributes.get(ATTR_CURRENT_POSITION)
+            if isinstance(attr_pos, (int, float)) and 0 <= attr_pos <= 100:
+                return int(attr_pos)
         if state.state == STATE_CLOSED:
             return 0
         return None

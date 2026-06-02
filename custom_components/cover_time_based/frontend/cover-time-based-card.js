@@ -18,6 +18,7 @@ import {
   switchPickerDomains,
   switchLabelKey,
   clearedEntitiesForMode,
+  clearedTiltConfig,
 } from "./entity-filter.js";
 import { renderTextfield } from "./textfield-render.js";
 
@@ -42,6 +43,9 @@ const EN = {
   "control_mode.toggle": "Toggle (same button)",
   "control_mode.pulse_time": "Pulse time",
   "entities.cover_entity": "Cover Entity",
+  "entities.ignore_reported_position": "Ignore reported position",
+  "entities.ignore_reported_position_helper":
+    "Track position by time only and ignore the position the wrapped cover reports. Enable this if the underlying cover reports an unreliable position.",
   "entities.switch_entities": "Switch Entities",
   "entities.open_switch": "Open switch",
   "entities.close_switch": "Close switch",
@@ -147,6 +151,9 @@ const TRANSLATIONS = {
     "control_mode.toggle": "Alternar (mesmo botão)",
     "control_mode.pulse_time": "Duração do pulso",
     "entities.cover_entity": "Entidade de Estore",
+    "entities.ignore_reported_position": "Ignorar posição reportada",
+    "entities.ignore_reported_position_helper":
+      "Rastrear a posição apenas pelo tempo e ignorar a posição reportada pelo estore. Ative isto se o estore subjacente reportar uma posição não fiável.",
     "entities.switch_entities": "Entidades de Interruptor",
     "entities.open_switch": "Interruptor de abrir",
     "entities.close_switch": "Interruptor de fechar",
@@ -249,6 +256,9 @@ const TRANSLATIONS = {
     "control_mode.toggle": "Przełączanie (ten sam przycisk)",
     "control_mode.pulse_time": "Czas impulsu",
     "entities.cover_entity": "Encja rolety",
+    "entities.ignore_reported_position": "Ignoruj zgłaszaną pozycję",
+    "entities.ignore_reported_position_helper":
+      "Śledź pozycję wyłącznie na podstawie czasu i ignoruj pozycję zgłaszaną przez roletę. Włącz tę opcję, jeśli roleta zgłasza niewiarygodną pozycję.",
     "entities.switch_entities": "Encje przełączników",
     "entities.open_switch": "Przełącznik otwierania",
     "entities.close_switch": "Przełącznik zamykania",
@@ -634,7 +644,16 @@ class CoverTimeBasedCard extends LitElement {
     const mode = e.target.value;
     // Clear entities that don't belong to the new mode so they don't linger
     // as stale config (see clearedEntitiesForMode).
-    this._updateLocal({ control_mode: mode, ...clearedEntitiesForMode(mode) });
+    const updates = { control_mode: mode, ...clearedEntitiesForMode(mode) };
+    // Dual-motor tilt on a wrapped cover delegates tilt to the underlying
+    // entity, so it is only valid once a cover that supports tilt natively is
+    // selected. Switching into wrapped mode can't carry a dual_motor selection
+    // from another mode, so reset it (the user can re-select it after picking a
+    // suitable cover). Mirrors the "none" reset in _onTiltModeChange.
+    if (mode === "wrapped" && this._config?.tilt_mode === "dual_motor") {
+      Object.assign(updates, clearedTiltConfig());
+    }
+    this._updateLocal(updates);
   }
 
   _onPulseTimeChange(e) {
@@ -654,28 +673,32 @@ class CoverTimeBasedCard extends LitElement {
     return !entry || entry.platform !== DOMAIN;
   };
 
+  _coverSupportsNativeTilt(entityId) {
+    const features =
+      (entityId && this.hass?.states?.[entityId]?.attributes?.supported_features) ||
+      0;
+    // CoverEntityFeature: OPEN_TILT=16, CLOSE_TILT=32
+    return !!(features & (16 | 32));
+  }
+
   _onCoverEntityChange(e) {
     const value = e.detail?.value || e.target?.value || null;
-    this._updateLocal({ cover_entity_id: value || null });
+    const updates = { cover_entity_id: value || null };
+    // If dual_motor tilt is selected but the newly chosen cover doesn't support
+    // tilt natively, dual_motor can no longer be backed — reset it.
+    if (
+      this._config?.tilt_mode === "dual_motor" &&
+      !this._coverSupportsNativeTilt(value)
+    ) {
+      Object.assign(updates, clearedTiltConfig());
+    }
+    this._updateLocal(updates);
   }
 
   _onTiltModeChange(e) {
     const mode = e.target.value;
     if (mode === "none") {
-      this._updateLocal({
-        tilt_time_close: null,
-        tilt_time_open: null,
-        tilt_startup_delay: null,
-        tilt_mode: "none",
-        // Clear dual-motor fields
-        safe_tilt_position: null,
-        max_tilt_allowed_position: null,
-        tilt_open_switch: null,
-        tilt_close_switch: null,
-        tilt_stop_switch: null,
-        // Clear close_includes_tilt (not applicable when tilt is none)
-        close_includes_tilt: null,
-      });
+      this._updateLocal(clearedTiltConfig());
     } else {
       const updates = { tilt_mode: mode };
       if (mode === "sequential_close" || mode === "sequential_open") {
@@ -1033,6 +1056,20 @@ class CoverTimeBasedCard extends LitElement {
             label=${this._t("entities.cover_entity")}
             @value-changed=${this._onCoverEntityChange}
           ></ha-entity-picker>
+          <div class="inline-field">
+            <ha-formfield .label=${this._t("entities.ignore_reported_position")}>
+              <ha-switch
+                .checked=${!!c.ignore_reported_position}
+                @change=${(e) =>
+                  this._updateLocal({
+                    ignore_reported_position: e.target.checked,
+                  })}
+              ></ha-switch>
+            </ha-formfield>
+          </div>
+          <div class="helper-text">
+            ${this._t("entities.ignore_reported_position_helper")}
+          </div>
         </div>
       `;
     }
@@ -1073,13 +1110,21 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _renderTiltSupport(c) {
-    if (c.control_mode === "wrapped" && c.cover_entity_id) {
-      const stateObj = this.hass?.states?.[c.cover_entity_id];
-      const features = stateObj?.attributes?.supported_features || 0;
-      // CoverEntityFeature: OPEN_TILT=16, CLOSE_TILT=32
-      if (!(features & (16 | 32))) return "";
-    }
     const tiltMode = c.tilt_mode || "none";
+
+    // Dual-motor tilt on a wrapped cover delegates the tilt commands to the
+    // underlying entity, so it requires that cover to support tilt natively.
+    // Inline and sequential modes drive the main open/close motor, so they
+    // work on any wrapped cover and stay available regardless.
+    const allowDualMotor =
+      c.control_mode !== "wrapped" ||
+      this._coverSupportsNativeTilt(c.cover_entity_id);
+    // The handlers reset dual_motor when it stops being backable, so in normal
+    // UI flow allowDualMotor already covers it. Keep showing it when it is the
+    // stored mode as a safety net for hand-edited configs or a wrapped cover
+    // that is momentarily unavailable (features read as 0) — otherwise the
+    // select would have a selected value missing from its options.
+    const showDualMotor = allowDualMotor || tiltMode === "dual_motor";
 
     return html`
       <div class="section">
@@ -1094,9 +1139,13 @@ class CoverTimeBasedCard extends LitElement {
           <option value="sequential_open" ?selected=${tiltMode === "sequential_open"}>
             ${this._t("tilt.sequential_open")}
           </option>
-          <option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
-            ${this._t("tilt.dual_motor")}
-          </option>
+          ${showDualMotor
+            ? html`
+                <option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
+                  ${this._t("tilt.dual_motor")}
+                </option>
+              `
+            : ""}
           <option value="inline" ?selected=${tiltMode === "inline"}>
             ${this._t("tilt.inline")}
           </option>

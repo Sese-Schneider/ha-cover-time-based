@@ -48,6 +48,24 @@ export function switchLabelKey(baseKey, controlMode) {
   return controlMode === "pulse" ? `${baseKey}_pulse` : baseKey;
 }
 
+// Full reset of every tilt-related config field back to "no tilt". Used when
+// the user picks tilt mode "none", and when a context change (control mode or
+// wrapped cover entity) invalidates the current tilt selection.
+export function clearedTiltConfig() {
+  return {
+    tilt_mode: "none",
+    tilt_time_close: null,
+    tilt_time_open: null,
+    tilt_startup_delay: null,
+    safe_tilt_position: null,
+    max_tilt_allowed_position: null,
+    tilt_open_switch: null,
+    tilt_close_switch: null,
+    tilt_stop_switch: null,
+    close_includes_tilt: null,
+  };
+}
+
 /**
  * Entity fields to null out when the control mode changes, so entities from
  * the previous mode don't linger as stale config.
