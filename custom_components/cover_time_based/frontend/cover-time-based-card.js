@@ -1948,11 +1948,14 @@ if (!customElements.get("cover-time-based-card")) {
   customElements.define("cover-time-based-card", CoverTimeBasedCard);
 }
 
-// Register with Lovelace card picker
+// Register with Lovelace card picker, guarded against double-evaluation so the
+// picker doesn't list the card twice.
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "cover-time-based-card",
-  name: "Cover Time Based Configuration",
-  description:
-    "Configure device type, input entities, timing, and run calibration tests for cover_time_based entities.",
-});
+if (!window.customCards.some((c) => c.type === "cover-time-based-card")) {
+  window.customCards.push({
+    type: "cover-time-based-card",
+    name: "Cover Time Based Configuration",
+    description:
+      "Configure device type, input entities, timing, and run calibration tests for cover_time_based entities.",
+  });
+}
