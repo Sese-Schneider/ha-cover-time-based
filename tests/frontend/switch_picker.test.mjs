@@ -11,6 +11,8 @@ import {
   switchLabelKey,
   clearedEntitiesForMode,
   clearedTiltConfig,
+  coverHasNativeTilt,
+  coverConfirmedWithoutTilt,
 } from "../../custom_components/cover_time_based/frontend/entity-filter.js";
 
 test("pulse mode allows switch and script domains", () => {
@@ -81,4 +83,38 @@ test("clearedTiltConfig resets tilt mode and every tilt field", () => {
     tilt_stop_switch: null,
     close_includes_tilt: null,
   });
+});
+
+// OPEN_TILT=16, CLOSE_TILT=32
+test("coverHasNativeTilt reads the tilt feature bits", () => {
+  assert.equal(coverHasNativeTilt({ attributes: { supported_features: 16 } }), true);
+  assert.equal(coverHasNativeTilt({ attributes: { supported_features: 32 } }), true);
+  assert.equal(
+    coverHasNativeTilt({ attributes: { supported_features: 1 | 2 | 8 } }),
+    false
+  );
+  assert.equal(coverHasNativeTilt({ attributes: {} }), false);
+  assert.equal(coverHasNativeTilt(null), false);
+  assert.equal(coverHasNativeTilt(undefined), false);
+});
+
+test("coverConfirmedWithoutTilt only confirms for an available, tilt-less cover", () => {
+  // Positively lacks tilt and is available → safe to reset dual_motor.
+  assert.equal(
+    coverConfirmedWithoutTilt({ state: "open", attributes: { supported_features: 11 } }),
+    true
+  );
+  // Has tilt → not "without tilt".
+  assert.equal(
+    coverConfirmedWithoutTilt({ state: "open", attributes: { supported_features: 16 } }),
+    false
+  );
+  // Unavailable / unknown / missing → can't confirm; must NOT reset a valid config.
+  assert.equal(
+    coverConfirmedWithoutTilt({ state: "unavailable", attributes: {} }),
+    false
+  );
+  assert.equal(coverConfirmedWithoutTilt({ state: "unknown", attributes: {} }), false);
+  assert.equal(coverConfirmedWithoutTilt(null), false);
+  assert.equal(coverConfirmedWithoutTilt(undefined), false);
 });

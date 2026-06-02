@@ -19,6 +19,8 @@ import {
   switchLabelKey,
   clearedEntitiesForMode,
   clearedTiltConfig,
+  coverHasNativeTilt,
+  coverConfirmedWithoutTilt,
 } from "./entity-filter.js";
 import { renderTextfield } from "./textfield-render.js";
 
@@ -674,21 +676,20 @@ class CoverTimeBasedCard extends LitElement {
   };
 
   _coverSupportsNativeTilt(entityId) {
-    const features =
-      (entityId && this.hass?.states?.[entityId]?.attributes?.supported_features) ||
-      0;
-    // CoverEntityFeature: OPEN_TILT=16, CLOSE_TILT=32
-    return !!(features & (16 | 32));
+    return coverHasNativeTilt(entityId ? this.hass?.states?.[entityId] : null);
   }
 
   _onCoverEntityChange(e) {
     const value = e.detail?.value || e.target?.value || null;
     const updates = { cover_entity_id: value || null };
-    // If dual_motor tilt is selected but the newly chosen cover doesn't support
-    // tilt natively, dual_motor can no longer be backed — reset it.
+    // If dual_motor tilt is selected but the newly chosen cover is available and
+    // doesn't support tilt natively, dual_motor can no longer be backed — reset
+    // it. We only reset when the cover's tilt support can be positively
+    // confirmed: an unavailable cover reports no features, and clearing then
+    // would destroy a valid config while it is momentarily offline.
     if (
       this._config?.tilt_mode === "dual_motor" &&
-      !this._coverSupportsNativeTilt(value)
+      coverConfirmedWithoutTilt(value ? this.hass?.states?.[value] : null)
     ) {
       Object.assign(updates, clearedTiltConfig());
     }
