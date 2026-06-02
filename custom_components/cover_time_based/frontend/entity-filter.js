@@ -48,6 +48,26 @@ export function switchLabelKey(baseKey, controlMode) {
   return controlMode === "pulse" ? `${baseKey}_pulse` : baseKey;
 }
 
+// CoverEntityFeature bit flags.
+const OPEN_TILT = 16;
+const CLOSE_TILT = 32;
+
+// Whether a cover state object advertises native tilt support.
+export function coverHasNativeTilt(stateObj) {
+  const features = stateObj?.attributes?.supported_features || 0;
+  return !!(features & (OPEN_TILT | CLOSE_TILT));
+}
+
+// Whether we can positively confirm a cover lacks native tilt — it must be
+// present and available. An unavailable/unknown cover reports no features, so
+// we must NOT treat it as tilt-less (that would wipe a valid dual_motor config
+// while the cover is momentarily offline).
+export function coverConfirmedWithoutTilt(stateObj) {
+  if (!stateObj) return false;
+  if (stateObj.state === "unavailable" || stateObj.state === "unknown") return false;
+  return !coverHasNativeTilt(stateObj);
+}
+
 // Full reset of every tilt-related config field back to "no tilt". Used when
 // the user picks tilt mode "none", and when a context change (control mode or
 // wrapped cover entity) invalidates the current tilt selection.

@@ -3,8 +3,16 @@
 import logging
 import time
 
-from homeassistant.components.cover import ATTR_CURRENT_POSITION
-from homeassistant.const import STATE_CLOSED, STATE_CLOSING, STATE_OPEN, STATE_OPENING
+from homeassistant.components.cover import ATTR_CURRENT_POSITION, CoverEntityFeature
+from homeassistant.const import (
+    ATTR_SUPPORTED_FEATURES,
+    STATE_CLOSED,
+    STATE_CLOSING,
+    STATE_OPEN,
+    STATE_OPENING,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .cover_base import CoverTimeBased
@@ -178,11 +186,48 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Wrapped covers use the cover entity for tilt commands."""
         return self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor
 
+    def _wrapped_supports_tilt(self) -> bool:
+        """Return True if the wrapped cover advertises native tilt support.
+
+        Dual-motor tilt delegates open/close/stop_cover_tilt to the wrapped
+        entity, which only works if that entity exposes tilt. A config may pair
+        dual_motor with a cover that doesn't support tilt (hand-edited options,
+        or a cover that dropped tilt support after a device/firmware change);
+        firing tilt services at it would error. When the wrapped cover is
+        unavailable its features read as 0 — treat that as "unknown, don't
+        delegate" rather than firing a doomed command.
+        """
+        state = self.hass.states.get(self._cover_entity_id)
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return False
+        features = state.attributes.get(ATTR_SUPPORTED_FEATURES) or 0
+        return bool(
+            features & (CoverEntityFeature.OPEN_TILT | CoverEntityFeature.CLOSE_TILT)
+        )
+
+    def _skip_tilt_command(self, service: str) -> None:
+        _LOGGER.warning(
+            "%s: wrapped cover %s does not support tilt; skipping %s. Change the"
+            " tilt mode away from 'separate tilt motor' for this cover.",
+            self.entity_id,
+            self._cover_entity_id,
+            service,
+        )
+
     async def _send_tilt_open(self) -> None:
+        if not self._wrapped_supports_tilt():
+            self._skip_tilt_command("open_cover_tilt")
+            return
         await self._call_cover_service("open_cover_tilt")
 
     async def _send_tilt_close(self) -> None:
+        if not self._wrapped_supports_tilt():
+            self._skip_tilt_command("close_cover_tilt")
+            return
         await self._call_cover_service("close_cover_tilt")
 
     async def _send_tilt_stop(self) -> None:
+        if not self._wrapped_supports_tilt():
+            self._skip_tilt_command("stop_cover_tilt")
+            return
         await self._call_cover_service("stop_cover_tilt")

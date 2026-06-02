@@ -50,6 +50,23 @@ async def _drain_tasks(cover):
     cover.hass._test_tasks.clear()
 
 
+# CoverEntityFeature: OPEN=1, CLOSE=2, STOP=8, OPEN_TILT=16, CLOSE_TILT=32
+_FEATURES_WITH_TILT = 1 | 2 | 8 | 16 | 32
+_FEATURES_WITHOUT_TILT = 1 | 2 | 8
+
+
+def _set_wrapped_tilt_support(cover, *, supported):
+    """Make the wrapped cover entity advertise (or not) native tilt support."""
+    state = MagicMock()
+    state.state = "open"
+    state.attributes = {
+        "supported_features": _FEATURES_WITH_TILT
+        if supported
+        else _FEATURES_WITHOUT_TILT
+    }
+    cover.hass.states.get = lambda eid: state if eid == cover._cover_entity_id else None
+
+
 # ===================================================================
 # Switch mode
 # ===================================================================
@@ -404,6 +421,7 @@ class TestWrappedCoverTiltMotor:
             tilt_time_open=5.0,
             tilt_mode="dual_motor",
         )
+        _set_wrapped_tilt_support(cover, supported=True)
         await cover._send_tilt_open()
 
         assert _calls(cover.hass.services.async_call) == [
@@ -418,6 +436,7 @@ class TestWrappedCoverTiltMotor:
             tilt_time_open=5.0,
             tilt_mode="dual_motor",
         )
+        _set_wrapped_tilt_support(cover, supported=True)
         await cover._send_tilt_close()
 
         assert _calls(cover.hass.services.async_call) == [
@@ -432,11 +451,60 @@ class TestWrappedCoverTiltMotor:
             tilt_time_open=5.0,
             tilt_mode="dual_motor",
         )
+        _set_wrapped_tilt_support(cover, supported=True)
         await cover._send_tilt_stop()
 
         assert _calls(cover.hass.services.async_call) == [
             _cover_svc("stop_cover_tilt", "cover.inner"),
         ]
+
+    @pytest.mark.asyncio
+    async def test_tilt_open_skipped_when_wrapped_cover_lacks_native_tilt(
+        self, make_cover
+    ):
+        """A wrapped cover configured dual_motor but whose underlying entity
+        does not support tilt must not fire open_cover_tilt at it (the service
+        would error / no-op). Guards stored or hand-edited misconfigurations."""
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+        )
+        _set_wrapped_tilt_support(cover, supported=False)
+        await cover._send_tilt_open()
+
+        assert _calls(cover.hass.services.async_call) == []
+
+    @pytest.mark.asyncio
+    async def test_tilt_close_skipped_when_wrapped_cover_lacks_native_tilt(
+        self, make_cover
+    ):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+        )
+        _set_wrapped_tilt_support(cover, supported=False)
+        await cover._send_tilt_close()
+
+        assert _calls(cover.hass.services.async_call) == []
+
+    @pytest.mark.asyncio
+    async def test_tilt_stop_skipped_when_wrapped_cover_lacks_native_tilt(
+        self, make_cover
+    ):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+        )
+        _set_wrapped_tilt_support(cover, supported=False)
+        await cover._send_tilt_stop()
+
+        assert _calls(cover.hass.services.async_call) == []
 
 
 # ===================================================================
