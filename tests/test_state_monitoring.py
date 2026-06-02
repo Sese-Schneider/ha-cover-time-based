@@ -1933,9 +1933,7 @@ class TestWrappedCoverIgnoreReportedPosition:
 
     @pytest.mark.asyncio
     async def test_stopped_state_does_not_snap_to_reported_position(self, make_cover):
-        cover = make_cover(
-            cover_entity_id="cover.inner", ignore_reported_position=True
-        )
+        cover = make_cover(cover_entity_id="cover.inner", ignore_reported_position=True)
         cover.travel_calc.set_position(52)
         cover._last_command = SERVICE_OPEN_COVER
         _set_wrapped_state(cover, "open", current_position=100)
@@ -1948,9 +1946,7 @@ class TestWrappedCoverIgnoreReportedPosition:
 
     @pytest.mark.asyncio
     async def test_attribute_only_update_does_not_snap(self, make_cover):
-        cover = make_cover(
-            cover_entity_id="cover.inner", ignore_reported_position=True
-        )
+        cover = make_cover(cover_entity_id="cover.inner", ignore_reported_position=True)
         cover.travel_calc.set_position(52)
         cover._last_command = None
         _set_wrapped_state(cover, "open", current_position=100)
@@ -1963,16 +1959,16 @@ class TestWrappedCoverIgnoreReportedPosition:
 
     @pytest.mark.asyncio
     async def test_still_snaps_to_zero_on_closed_state(self, make_cover):
-        cover = make_cover(
-            cover_entity_id="cover.inner", ignore_reported_position=True
-        )
+        cover = make_cover(cover_entity_id="cover.inner", ignore_reported_position=True)
         cover.travel_calc.set_position(52)
         cover._last_command = SERVICE_CLOSE_COVER
         # Reported 80 is bogus, but the closed *state* is trusted.
         _set_wrapped_state(cover, "closed", current_position=80)
 
         with patch.object(cover, "async_write_ha_state"):
-            await cover._handle_external_state_change("cover.inner", "closing", "closed")
+            await cover._handle_external_state_change(
+                "cover.inner", "closing", "closed"
+            )
 
         assert cover.travel_calc.current_position() == 0
 
