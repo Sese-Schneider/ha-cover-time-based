@@ -62,6 +62,21 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Return True if the wrapped cover entity is configured."""
         return bool(self._cover_entity_id)
 
+    def _target_entity_ids(self) -> list[str]:
+        """Wrapped mode drives the wrapped cover entity."""
+        ids = super()._target_entity_ids()
+        if self._cover_entity_id:
+            ids.append(self._cover_entity_id)
+        return ids
+
+    def _movement_target(self, closing: bool) -> str | None:
+        """Wrapped mode drives the wrapped cover entity for all travel."""
+        return self._cover_entity_id
+
+    def _tilt_movement_target(self, command: str) -> str | None:
+        """Wrapped mode drives the wrapped cover entity for all tilt."""
+        return self._cover_entity_id
+
     def _start_bounce_grace_window(self) -> None:
         self._last_self_command_time = time.monotonic()
 

@@ -18,6 +18,7 @@ from homeassistant.const import (
     SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
     SERVICE_STOP_COVER,
+    STATE_UNAVAILABLE,
 )
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
@@ -183,6 +184,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # Lifecycle
     # -----------------------------------------------------------------------
 
+    # Single source of truth for the switch-target attribute names. Used both
+    # to register state-change listeners and to enumerate configured targets.
+    _SWITCH_TARGET_ATTRS = (
+        "_open_switch_entity_id",
+        "_close_switch_entity_id",
+        "_stop_switch_entity_id",
+        "_tilt_open_switch_id",
+        "_tilt_close_switch_id",
+        "_tilt_stop_switch_id",
+    )
+
     async def async_added_to_hass(self):
         """Only cover's position and tilt matters."""
         pos, tilt_pos = await self._async_load_restored_positions()
@@ -192,14 +204,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self.tilt_calc.set_position(int(tilt_pos))
 
         # Register state change listeners for switch entities
-        for attr in (
-            "_open_switch_entity_id",
-            "_close_switch_entity_id",
-            "_stop_switch_entity_id",
-            "_tilt_open_switch_id",
-            "_tilt_close_switch_id",
-            "_tilt_stop_switch_id",
-        ):
+        for attr in self._SWITCH_TARGET_ATTRS:
             entity_id = getattr(self, attr, None)
             if entity_id:
                 self._state_listener_unsubs.append(
@@ -253,8 +258,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     @property
     def available(self) -> bool:
-        """Return True if the cover is properly configured and available."""
-        return len(self._get_missing_configuration()) == 0
+        """Return True if the cover is configured and its targets are available."""
+        return (
+            not self._get_missing_configuration() and not self._any_target_unavailable()
+        )
 
     @property
     def assumed_state(self):
@@ -642,12 +649,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         current_tilt = (
             self.tilt_calc.current_position() if self._tilt_strategy else None
         )
+        # A tilt pre-step started here returns before the gate below — see
+        # _require_movement_target_available.
         tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
             target, command, current, current_tilt
         )
         if started:
             return
 
+        self._require_movement_target_available(self._movement_target(closing))
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
         self._begin_movement(
@@ -736,6 +746,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             needs_travel_pre_step,
         )
 
+        self._require_movement_target_available(self._tilt_movement_target(command))
+        # The travel pre-step below isn't covered by the tilt gate above — see
+        # _require_movement_target_available.
         if needs_travel_pre_step and travel_target is not None:
             await self._start_travel_pre_step(travel_target, target, command)
             return
@@ -828,6 +841,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         current_tilt = (
             self.tilt_calc.current_position() if self._tilt_strategy else None
         )
+        # A tilt pre-step started here returns before the gate below — see
+        # _require_movement_target_available.
         tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
             target, command, current, current_tilt
         )
@@ -851,6 +866,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
             return
 
+        self._require_movement_target_available(self._movement_target(closing))
         await self._async_handle_command(command)
         self._begin_movement(
             target,
@@ -939,6 +955,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         ):
             return
 
+        self._require_movement_target_available(self._tilt_movement_target(command))
+        # The travel pre-step below isn't covered by the tilt gate above — see
+        # _require_movement_target_available.
         if needs_travel_pre_step and travel_target is not None:
             await self._start_travel_pre_step(travel_target, target, command)
             return
@@ -1102,6 +1121,75 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._travel_time_close is None and self._travel_time_open is None:
             missing.append("travel times")
         return missing
+
+    def _target_entity_ids(self) -> list[str]:
+        """Return the configured target entity IDs this cover drives.
+
+        These are the switch/button/script entities that actually move the
+        device. Subclasses (e.g. wrapped mode) extend this with their own
+        targets.
+        """
+        return [
+            entity_id
+            for attr in self._SWITCH_TARGET_ATTRS
+            if (entity_id := getattr(self, attr, None))
+        ]
+
+    @staticmethod
+    def _entity_unavailable(state) -> bool:
+        """Return True if a target entity is unavailable.
+
+        Unavailable means the entity is missing (state is None) or its state is
+        STATE_UNAVAILABLE. STATE_UNKNOWN is treated as available (a connected
+        entity whose value isn't known yet, e.g. a button after a restart).
+        """
+        return state is None or state.state == STATE_UNAVAILABLE
+
+    def _any_target_unavailable(self) -> bool:
+        """Short-circuiting check used by the hot-path `available` property."""
+        if self.hass is None:
+            return False
+        return any(
+            self._entity_unavailable(self.hass.states.get(entity_id))
+            for entity_id in self._target_entity_ids()
+        )
+
+    def _movement_target(self, closing: bool) -> str | None:
+        """Entity driven to move the cover in the given travel direction."""
+        return self._close_switch_entity_id if closing else self._open_switch_entity_id
+
+    def _tilt_movement_target(self, command: str) -> str | None:
+        """Entity driven for a resolved tilt command.
+
+        ``command`` is what the funnel already computed via ``tilt_command_for``
+        (which some strategies, e.g. sequential_open, invert). Dual-motor tilt
+        uses dedicated tilt switches; shared-motor tilt drives the main travel
+        switch.
+        """
+        closing = command == SERVICE_CLOSE_COVER
+        if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
+            return self._tilt_close_switch_id if closing else self._tilt_open_switch_id
+        return self._movement_target(closing)
+
+    def _require_movement_target_available(self, target: str | None) -> None:
+        """Reject a fresh, self-initiated movement whose target is unavailable.
+
+        Only fresh user/automation movement is gated (`_self_initiated_movement`).
+        Stops, reverses, external reactions, retargets, and internal
+        continuations never reach here (or have `_self_initiated_movement` False),
+        so the cover can always be halted regardless of target availability.
+
+        Movement that runs via a pre-step (dual-motor / sequential) returns from
+        the funnel before reaching this per-direction gate; that drive is covered
+        instead by the all-targets `available` flag (the cover reports
+        unavailable whenever any target is down).
+        """
+        if not self._self_initiated_movement or self.hass is None:
+            return
+        if target and self._entity_unavailable(self.hass.states.get(target)):
+            raise HomeAssistantError(
+                f"Cover target '{target}' is unavailable; cannot start movement."
+            )
 
     def _has_tilt_support(self):
         """Return if cover has tilt support."""
@@ -1766,6 +1854,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         entity_id = event.data.get("entity_id")
         new_state = event.data.get("new_state")
         old_state = event.data.get("old_state")
+
+        # Availability transition: push a state write so `available` updates
+        # live in the UI. Done before the None-guard below so entity
+        # removal/re-appearance is also reflected. An "unavailable" transition
+        # drives no movement (it matches no opening/closing/stopped branch).
+        was_unavailable = self._entity_unavailable(old_state)
+        now_unavailable = self._entity_unavailable(new_state)
+        if was_unavailable != now_unavailable:
+            self.async_write_ha_state()
 
         if new_state is None or old_state is None:
             return
