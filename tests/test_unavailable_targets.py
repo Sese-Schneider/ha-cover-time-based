@@ -373,3 +373,106 @@ class TestSequentialOpenTiltGating:
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover_tilt()  # must NOT raise
         assert cover.tilt_calc.is_traveling()
+
+
+class TestPreStepGating:
+    """Dual-motor pre-step paths must honour the movement-target gate.
+
+    These exercise the two cases the per-direction gate could be bypassed by
+    a pre-step that starts a relay before the gate is reached.
+    """
+
+    # GAP 1: dual-motor travel that needs a tilt pre-step must check the tilt target
+    @pytest.mark.asyncio
+    async def test_travel_with_tilt_prestep_raises_when_tilt_target_unavailable(
+        self, make_cover
+    ):
+        cover = make_cover(
+            open_switch="switch.open",
+            close_switch="switch.close",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_mode="dual_motor",
+            tilt_time_open=5,
+            tilt_time_close=5,
+        )
+        # safe_tilt_position defaults to 100. Tilt at 30 (not safe) + a real
+        # travel move (50 -> 100) forces the dual-motor tilt-to-safe pre-step:
+        # _plan_tilt_for_travel appends TiltTo(100) and starts _start_tilt_pre_step.
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+        # Tilt opens 30 -> 100, so the gated tilt target is switch.tilt_open;
+        # kill both tilt switches. Travel targets stay available.
+        _set_target_states(
+            cover,
+            {
+                "switch.tilt_open": STATE_UNAVAILABLE,
+                "switch.tilt_close": STATE_UNAVAILABLE,
+            },
+        )
+        with patch.object(cover, "async_write_ha_state"):
+            with pytest.raises(HomeAssistantError):
+                await cover.async_open_cover()
+        assert not cover.tilt_calc.is_traveling()
+        assert not cover.travel_calc.is_traveling()
+
+    # GAP 1b: same path must also check the travel target up front
+    @pytest.mark.asyncio
+    async def test_travel_with_tilt_prestep_raises_when_travel_target_unavailable(
+        self, make_cover
+    ):
+        cover = make_cover(
+            open_switch="switch.open",
+            close_switch="switch.close",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_mode="dual_motor",
+            tilt_time_open=5,
+            tilt_time_close=5,
+        )
+        # Same tilt pre-step trigger as above (tilt 30 -> safe 100, travel 50 -> 100).
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+        # Tilt targets fine; the OPEN travel relay (fired after the pre-step) is dead.
+        _set_target_states(cover, {"switch.open": STATE_UNAVAILABLE})
+        with patch.object(cover, "async_write_ha_state"):
+            with pytest.raises(HomeAssistantError):
+                await cover.async_open_cover()
+        assert not cover.tilt_calc.is_traveling()
+        assert not cover.travel_calc.is_traveling()
+
+    # GAP 2: dual-motor tilt that needs a travel pre-step must check the travel target
+    @pytest.mark.asyncio
+    async def test_tilt_with_travel_prestep_raises_when_travel_target_unavailable(
+        self, make_cover
+    ):
+        cover = make_cover(
+            open_switch="switch.open",
+            close_switch="switch.close",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+            tilt_mode="dual_motor",
+            tilt_time_open=5,
+            tilt_time_close=5,
+            safe_tilt_position=100,
+            max_tilt_allowed_position=0,
+        )
+        # Travel at 50 (above max_tilt_allowed_position=0) forces the travel
+        # pre-step: plan_move_tilt appends TravelTo(0) before TiltTo, and
+        # _start_travel_pre_step closes the cover to 0 first.
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+        # Tilt targets fine; both travel relays dead (travel pre-step closes -> switch.close).
+        _set_target_states(
+            cover,
+            {
+                "switch.open": STATE_UNAVAILABLE,
+                "switch.close": STATE_UNAVAILABLE,
+            },
+        )
+        with patch.object(cover, "async_write_ha_state"):
+            with pytest.raises(HomeAssistantError):
+                await cover.async_set_cover_tilt_position(tilt_position=50)
+        assert not cover.travel_calc.is_traveling()
+        assert not cover.tilt_calc.is_traveling()
