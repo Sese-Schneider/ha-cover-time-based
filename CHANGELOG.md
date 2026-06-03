@@ -4,6 +4,7 @@
 
 - **Tilt support for wrapped covers without native tilt** ([#85](https://github.com/Sese-Schneider/ha-cover-time-based/issues/85)): the **Inline** and **Sequential** tilt modes are now available when wrapping an existing cover, even if that cover only exposes open/close/stop. These modes drive the wrapped cover's normal open/close commands, so they work on any cover — previously the tilt options were hidden unless the wrapped cover reported native tilt support. The **Separate tilt motor** mode still requires native tilt support (it delegates the tilt commands to the wrapped entity), so it remains hidden until the selected cover advertises it.
 - **Ignore reported position (wrapped covers)**: a new option to track position purely by time and ignore the `current_position` the wrapped cover reports. Enable it for covers that report an unreliable position (the fully-closed endpoint is still trusted).
+- **Detect unavailable relays / targets** ([#89](https://github.com/Sese-Schneider/ha-cover-time-based/issues/89)): the cover now reports as **unavailable** whenever any of its underlying target entities (the switches, buttons, scripts, or wrapped cover that drive it) is unavailable — for example an MQTT relay going offline. Commands that would *start* movement in a direction whose target is unavailable are rejected instead of silently running the time-based simulation and drifting the reported position. Stopping is always allowed, so a cover can still be halted even while a target is offline.
 
 ### Fixes
 
