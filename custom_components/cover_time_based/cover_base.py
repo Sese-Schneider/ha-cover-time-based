@@ -649,15 +649,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         current_tilt = (
             self.tilt_calc.current_position() if self._tilt_strategy else None
         )
-        # A tilt pre-step started here returns before the gate below — see
-        # _require_movement_target_available.
+        self._require_movement_target_available(self._movement_target(closing))
         tilt_target, pre_step_delay, started = await self._plan_tilt_for_travel(
             target, command, current, current_tilt
         )
         if started:
             return
 
-        self._require_movement_target_available(self._movement_target(closing))
         await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
         self._begin_movement(
@@ -1502,11 +1500,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             travel_target,
             travel_command,
         )
+        closing_tilt = tilt_target < current_tilt
+        self._require_movement_target_available(
+            self._tilt_movement_target(
+                SERVICE_CLOSE_COVER if closing_tilt else SERVICE_OPEN_COVER
+            )
+        )
         self._pending_travel_target = travel_target
         self._pending_travel_command = travel_command
         self._tilt_restore_target = restore_target
 
-        closing_tilt = tilt_target < current_tilt
         if not self._triggered_externally:
             if closing_tilt:
                 await self._send_tilt_close()
@@ -1565,11 +1568,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             tilt_target,
             tilt_command,
         )
-        self._pending_tilt_target = tilt_target
-        self._pending_tilt_command = tilt_command
-
         closing = travel_target < current_pos
         command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
+        self._require_movement_target_available(self._movement_target(closing))
+        self._pending_tilt_target = tilt_target
+        self._pending_tilt_command = tilt_command
         self._last_command = command
         await self._async_handle_command(command)
 
