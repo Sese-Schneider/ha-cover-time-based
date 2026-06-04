@@ -60,7 +60,10 @@ The configuration card provides a visual interface for all settings and supports
 5. Click the new dashboard icon in the Home Assistant side bar.
 6. Click the **Edit dashboard** icon in the top right corner.
 7. Under **New section** click the **+** icon to add a new card.
-8. Search for and select the **Cover time based configuration** card and click **Save**.
+8. Select the **By card** tab (in Home Assistant 2026.6+ the card picker
+   opens on the **By entity** tab, where this configuration card does not
+   appear), then search for and select the **Cover time based
+   configuration** card and click **Save**.
 9. Click **Done** to stop editing the dashboard.
 
 ### Configuration and Calibration Card
