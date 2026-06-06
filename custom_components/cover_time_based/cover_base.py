@@ -1178,9 +1178,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         so the cover can always be halted regardless of target availability.
 
         Movement that runs via a pre-step (dual-motor / sequential) returns from
-        the funnel before reaching this per-direction gate; that drive is covered
-        instead by the all-targets `available` flag (the cover reports
-        unavailable whenever any target is down).
+        the funnel before reaching the funnel's own per-direction gate, so each
+        pre-step phase calls this directly for its target (in
+        `_start_tilt_pre_step` / `_start_travel_pre_step`). The all-targets
+        `available` flag (the cover reports unavailable whenever any target is
+        down) is the backstop covering both paths.
         """
         if not self._self_initiated_movement or self.hass is None:
             return
