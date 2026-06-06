@@ -207,8 +207,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
 
     def _skip_tilt_command(self, service: str) -> None:
         _LOGGER.warning(
-            "%s: wrapped cover %s does not support tilt; skipping %s. Change the"
-            " tilt mode away from 'separate tilt motor' for this cover.",
+            "%s: wrapped cover %s does not report tilt support (it may not"
+            " support tilt, or be unavailable); skipping %s. If this cover never"
+            " supports tilt, change the tilt mode away from 'separate tilt"
+            " motor' for it.",
             self.entity_id,
             self._cover_entity_id,
             service,
