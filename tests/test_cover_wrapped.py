@@ -8,7 +8,16 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
+from homeassistant.const import STATE_UNAVAILABLE
+
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
+
+
+# CoverEntityFeature bit values (OPEN=1, CLOSE=2, SET_POSITION=4, STOP=8).
+_F_OPEN = 1
+_F_CLOSE = 2
+_F_SET_POSITION = 4
+_F_STOP = 8
 
 
 # ---------------------------------------------------------------------------
@@ -16,7 +25,7 @@ from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBas
 # ---------------------------------------------------------------------------
 
 
-def _make_wrapped_cover(cover_entity_id="cover.inner"):
+def _make_wrapped_cover(cover_entity_id="cover.inner", force_time_based_position=False):
     """Create a WrappedCoverTimeBased wired to a mock hass."""
     cover = WrappedCoverTimeBased(
         device_id="test_wrapped",
@@ -31,12 +40,25 @@ def _make_wrapped_cover(cover_entity_id="cover.inner"):
         endpoint_runon_time=None,
         min_movement_time=None,
         cover_entity_id=cover_entity_id,
+        force_time_based_position=force_time_based_position,
     )
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
     hass.async_create_task = lambda coro: asyncio.ensure_future(coro)
     cover.hass = hass
     return cover
+
+
+def _set_wrapped_features(cover, features, *, state="open", current_position=None):
+    """Make the wrapped cover entity advertise the given supported_features."""
+    st = MagicMock()
+    st.state = state
+    attrs = {"supported_features": features}
+    if current_position is not None:
+        attrs["current_position"] = current_position
+    st.attributes = attrs
+    cover.hass.states.get = lambda eid: st if eid == cover._cover_entity_id else None
+    return st
 
 
 # ---------------------------------------------------------------------------
@@ -193,3 +215,324 @@ class TestWrappedSameDirectionRetarget:
             await cover.set_position(30)
             assert send_close.call_count == 1
             assert cover.travel_calc._travel_to_position == 30
+
+
+class TestWrappedCapabilityDetection:
+    """Detect the wrapped entity's SET_POSITION / STOP support from
+    supported_features, treating unavailable/unknown as 'no support'.
+    """
+
+    def test_supports_set_position_true(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION)
+        assert cover._wrapped_supports_set_position() is True
+
+    def test_supports_set_position_false_when_absent(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)
+        assert cover._wrapped_supports_set_position() is False
+
+    def test_supports_stop_true(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)
+        assert cover._wrapped_supports_stop() is True
+
+    def test_issue93_features_7_means_set_position_no_stop(self):
+        # supported_features = 7 == OPEN|CLOSE|SET_POSITION, no STOP (bit 8).
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)
+        assert cover._wrapped_supports_set_position() is True
+        assert cover._wrapped_supports_stop() is False
+
+    def test_detection_false_when_unavailable(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7, state=STATE_UNAVAILABLE)
+        assert cover._wrapped_supports_set_position() is False
+        assert cover._wrapped_supports_stop() is False
+
+    def test_detection_false_when_state_missing(self):
+        cover = _make_wrapped_cover()
+        cover.hass.states.get = lambda eid: None
+        assert cover._wrapped_supports_set_position() is False
+        assert cover._wrapped_supports_stop() is False
+
+
+class TestUseNativeSetPosition:
+    """_use_native_set_position auto-detects SET_POSITION support, but the
+    force_time_based_position override forces the legacy time-based path.
+    """
+
+    def test_native_when_set_position_supported(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)
+        assert cover._use_native_set_position() is True
+
+    def test_legacy_when_force_time_based(self):
+        cover = _make_wrapped_cover(force_time_based_position=True)
+        _set_wrapped_features(cover, 7)
+        assert cover._use_native_set_position() is False
+
+    def test_legacy_when_set_position_unsupported(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)
+        assert cover._use_native_set_position() is False
+
+
+class TestWrappedNativeSetPosition:
+    """When the wrapped entity supports SET_POSITION, set_position forwards
+    cover.set_cover_position directly (the device stops itself), while the
+    time-based tracker still animates so the integration reports live motion.
+    """
+
+    def _prep(self, cover):
+        # Avoid scheduling a real auto-updater / writing state on the mock hass.
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_forwards_set_cover_position_directly(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)  # OPEN|CLOSE|SET_POSITION, no STOP
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+
+        await cover.set_position(60)
+
+        assert _calls(cover.hass.services.async_call) == [
+            call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.inner", "position": 60},
+                False,
+            ),
+        ]
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 60
+
+    @pytest.mark.asyncio
+    async def test_does_not_call_open_close_or_stop(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        with (
+            patch.object(cover, "_send_open", wraps=cover._send_open) as so,
+            patch.object(cover, "_send_close", wraps=cover._send_close) as sc,
+            patch.object(cover, "_send_stop", wraps=cover._send_stop) as ss,
+        ):
+            await cover.set_position(40)
+
+        so.assert_not_called()
+        sc.assert_not_called()
+        ss.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_force_time_based_uses_legacy_path(self):
+        cover = _make_wrapped_cover(force_time_based_position=True)
+        _set_wrapped_features(cover, 7)
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+
+        await cover.set_position(60)
+
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "set_cover_position" not in services
+        assert "close_cover" in services
+
+    @pytest.mark.asyncio
+    async def test_no_native_support_uses_legacy_path(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+
+        await cover.set_position(60)
+
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "set_cover_position" not in services
+        assert "close_cover" in services
+
+
+class TestWrappedNativeMoveNoHijack:
+    """While the tracker animates a native set_position move, the wrapped
+    cover's own opening/closing state (a side effect of our forwarded
+    command) must not hijack the move into a full open/close. Once the
+    tracker is idle, a genuine external opening/closing is honored again.
+    """
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_opening_during_native_move_is_not_hijacked(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+        await cover.set_position(60)  # native; tracker now travelling up
+        assert cover.travel_calc.is_traveling()
+
+        # Disable the bounce grace window so we exercise the is_traveling guard.
+        cover._last_self_command_time = None
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "opening"
+            )
+
+        open_mock.assert_not_awaited()
+        assert cover.travel_calc._travel_to_position == 60
+
+    @pytest.mark.asyncio
+    async def test_opening_when_idle_is_honored(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)
+        self._prep(cover)
+        cover.travel_calc.set_position(0)  # idle, not travelling
+        cover._last_self_command_time = None
+
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "opening"
+            )
+
+        open_mock.assert_awaited_once()
+
+
+class TestWrappedSendStopCapabilityAware:
+    """_send_stop adapts to the wrapped cover's capabilities:
+    - native STOP supported            -> cover.stop_cover
+    - no STOP but SET_POSITION         -> freeze via set_cover_position(calc)
+    - capabilities unknown / neither   -> legacy cover.stop_cover fallback
+    """
+
+    @pytest.mark.asyncio
+    async def test_uses_native_stop_when_supported(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)
+        await cover._send_stop()
+
+        assert _cover_svc("stop_cover", "cover.inner") in _calls(
+            cover.hass.services.async_call
+        )
+
+    @pytest.mark.asyncio
+    async def test_freezes_via_set_position_when_no_native_stop(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)  # SET_POSITION, no STOP
+        cover.travel_calc.set_position(43)
+
+        await cover._send_stop()
+
+        assert _calls(cover.hass.services.async_call) == [
+            call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.inner", "position": 43},
+                False,
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_stop_cover_when_features_unknown(self):
+        cover = _make_wrapped_cover()
+        cover.hass.states.get = lambda eid: None  # unknown capabilities
+        await cover._send_stop()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("stop_cover", "cover.inner"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_async_stop_cover_midmove_freezes_at_calculated_position(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+        cover.travel_calc.set_position(55)  # frozen estimate
+
+        await cover.async_stop_cover()
+
+        assert call(
+            "cover",
+            "set_cover_position",
+            {"entity_id": "cover.inner", "position": 55},
+            False,
+        ) in _calls(cover.hass.services.async_call)
+
+
+class TestWrappedNativeInheritsBaseCeremony:
+    """Native forwarding now runs through the base set_position, so it inherits
+    min_movement_time suppression, startup-delay conflict handling, and the
+    self-stopping auto-stop guard. It is also gated to travel-only covers (no
+    tilt strategy) so tilt covers keep the full tilt-aware time-based path.
+    """
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_min_movement_time_suppresses_tiny_native_move(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)
+        self._prep(cover)
+        cover._min_movement_time = 2.0
+        cover.travel_calc.set_position(100)
+
+        await cover.set_position(99)  # 1% * 30s = 0.3s < 2s → suppressed
+
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "set_cover_position" not in services
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_startup_delay_pending_does_not_double_forward(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+        cover._travel_startup_delay = 2.0
+        cover.travel_calc.set_position(100)
+
+        await cover.set_position(60)  # forwards once, startup-delay task pending
+        await cover.set_position(60)  # same dir while pending → base skips
+
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert services.count("set_cover_position") == 1
+        cover._cancel_startup_delay_task()
+
+    def test_native_disabled_when_tilt_strategy_present(self):
+        cover = _make_wrapped_cover()
+        cover._tilt_strategy = object()  # any configured tilt strategy
+        _set_wrapped_features(cover, 7 | 16 | 32)
+        assert cover._use_native_set_position() is False
+
+    def test_motor_stops_itself_true_for_native(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)
+        assert cover._motor_stops_itself() is True
+
+    def test_motor_stops_itself_false_for_legacy(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)
+        assert cover._motor_stops_itself() is False
+
+    @pytest.mark.asyncio
+    async def test_auto_stop_sends_no_relay_stop_for_native(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7)
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+        await cover.set_position(60)  # one set_cover_position so far
+        # Tracker arrives at target; auto-stop must not re-command the device.
+        cover.travel_calc.set_position(60)
+        await cover.auto_stop_if_necessary()
+
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert services == ["set_cover_position"]  # no extra stop_cover / re-set

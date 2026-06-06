@@ -849,31 +849,39 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         coupled_calc = self.tilt_calc if tilt_target is not None else None
 
+        # Drive the motor toward the target, then begin tracking. When already
+        # moving the right way the motor is left running and only the tracker is
+        # retargeted (no startup delay re-applied). _command_position_move is the
+        # seam subclasses override when the device has native position control.
         if already_moving_same_dir:
-            # Retarget the running calculators without re-commanding the motor
-            # and without re-applying the startup delay (the motor is already
-            # up to speed). Otherwise mirrors the normal start below.
             self._log("set_position :: retargeting active movement to %d", target)
-            self._begin_movement(
-                target,
-                tilt_target,
-                self.travel_calc,
-                coupled_calc,
-                None,
-                pre_step_delay,
-            )
-            return
-
-        self._require_movement_target_available(self._movement_target(closing))
-        await self._async_handle_command(command)
+        await self._command_position_move(target, command, already_moving_same_dir)
+        startup_delay = None if already_moving_same_dir else self._travel_startup_delay
         self._begin_movement(
             target,
             tilt_target,
             self.travel_calc,
             coupled_calc,
-            self._travel_startup_delay,
+            startup_delay,
             pre_step_delay,
         )
+
+    async def _command_position_move(self, target, command, already_moving_same_dir):
+        """Drive the travel motor for a mid-position ``set_position`` move.
+
+        Base behavior: when already travelling the right way, leave the motor
+        running (the caller only retargets the tracker); otherwise check target
+        availability and latch the directional relay, relying on the tracker to
+        stop it on arrival. Subclasses whose device has native position control
+        (e.g. a wrapped cover exposing ``set_cover_position``) override this to
+        forward the target straight to the device instead.
+        """
+        if already_moving_same_dir:
+            return
+        self._require_movement_target_available(
+            self._movement_target(command == SERVICE_CLOSE_COVER)
+        )
+        await self._async_handle_command(command)
 
     async def set_tilt_position(self, position):
         """Move cover tilt to a designated position."""
@@ -1377,7 +1385,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 return
 
             current_travel = self.travel_calc.current_position()
-            if (
+            if self._motor_stops_itself():
+                # The device drives to the target and holds there on its own
+                # (e.g. a wrapped cover commanded via set_cover_position). Any
+                # stop we issue here is at best redundant and at worst nudges it
+                # off the exact target (a freeze re-commands the calculated, not
+                # requested, position). Just settle the tracker.
+                self._log("auto_stop_if_necessary :: device self-stops, no relay stop")
+            elif (
                 self._endpoint_runon_time is not None
                 and self._endpoint_runon_time > 0
                 and current_travel is not None
@@ -1400,6 +1415,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 await self._async_handle_command(SERVICE_STOP_COVER)
             self._last_command = None
             await self._async_persist_position()
+
+    def _motor_stops_itself(self) -> bool:
+        """Return True if the device halts at the target without a stop command.
+
+        Relay-driven covers (the default) must be told to stop when the tracker
+        reaches the target, so this is False. Subclasses whose device has native
+        position control and stops itself at the commanded position override this
+        to True so auto-stop skips the redundant (and potentially target-nudging)
+        relay stop.
+        """
+        return False
 
     async def _delayed_stop(self, delay):
         """Stop the relay after a delay."""

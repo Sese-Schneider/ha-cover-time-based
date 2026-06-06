@@ -39,11 +39,13 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self,
         cover_entity_id,
         ignore_reported_position=False,
+        force_time_based_position=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._cover_entity_id = cover_entity_id
         self._ignore_reported_position = ignore_reported_position
+        self._force_time_based_position = force_time_based_position
         self._last_self_command_time: float | None = None
 
     async def async_added_to_hass(self):
@@ -77,6 +79,51 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Wrapped mode drives the wrapped cover entity for all tilt."""
         return self._cover_entity_id
 
+    def _wrapped_features(self) -> int | None:
+        """Return the wrapped entity's supported_features bitmask, or None.
+
+        None means "unknown" — the entity is missing, unavailable, or reports
+        no integer feature bitmask. Mirrors _wrapped_supports_tilt's treatment
+        of an offline entity as "don't assume capabilities".
+        """
+        state = self.hass.states.get(self._cover_entity_id)
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return None
+        features = state.attributes.get(ATTR_SUPPORTED_FEATURES)
+        if not isinstance(features, int):
+            return None
+        return features
+
+    def _wrapped_supports_set_position(self) -> bool:
+        """Return True if the wrapped cover advertises native SET_POSITION."""
+        features = self._wrapped_features()
+        return features is not None and bool(features & CoverEntityFeature.SET_POSITION)
+
+    def _wrapped_supports_stop(self) -> bool:
+        """Return True if the wrapped cover advertises native STOP."""
+        features = self._wrapped_features()
+        return features is not None and bool(features & CoverEntityFeature.STOP)
+
+    def _use_native_set_position(self) -> bool:
+        """Return True if set_cover_position should be forwarded natively.
+
+        Auto-detected from the wrapped entity's SET_POSITION support, with two
+        opt-outs:
+          - the force_time_based_position override (always legacy tracking), and
+          - a configured tilt strategy: native forwarding drives travel only and
+            can't express the tilt coupling/pre-steps the time-based path plans,
+            so tilt covers keep the full tilt-aware open/close/stop tracking.
+        """
+        if self._force_time_based_position:
+            return False
+        if self._tilt_strategy is not None:
+            return False
+        return self._wrapped_supports_set_position()
+
+    def _motor_stops_itself(self) -> bool:
+        """Native covers drive to and hold the target position themselves."""
+        return self._use_native_set_position()
+
     def _start_bounce_grace_window(self) -> None:
         self._last_self_command_time = time.monotonic()
 
@@ -98,6 +145,23 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 "_handle_external_state_change :: ignoring %s -> %s"
                 " within bounce grace window",
                 old_val,
+                new_val,
+            )
+            return
+
+        # While we animate a native set_position move, the wrapped cover's own
+        # opening/closing state is a side effect of the command we forwarded —
+        # not an external open/close. Don't let it hijack the move into a full
+        # travel. The settle (stopped) state below is still honored so we snap
+        # to the wrapped cover's reported position when it arrives.
+        if (
+            new_val in _MOVING_STATES
+            and self._use_native_set_position()
+            and self.travel_calc.is_traveling()
+        ):
+            self._log(
+                "_handle_external_state_change :: ignoring self-driven %s"
+                " during native set_position move",
                 new_val,
             )
             return
@@ -171,6 +235,37 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return 0
         return None
 
+    async def _command_position_move(self, target, command, already_moving_same_dir):
+        """Drive a mid-position move for the wrapped cover.
+
+        When the wrapped entity supports native SET_POSITION, forward
+        ``cover.set_cover_position`` straight to it (including on a same-direction
+        retarget — the device changes course): the device drives to the target
+        and holds there itself, so we never depend on its ``stop_cover`` and
+        ``_motor_stops_itself`` keeps auto-stop from re-commanding it. Everything
+        else — direction handling, min-movement, startup delay, tracker
+        animation — is the base set_position ceremony. Without native support we
+        fall back to the base relay drive (latched open/close + timed stop).
+        """
+        if not self._use_native_set_position():
+            await super()._command_position_move(
+                target, command, already_moving_same_dir
+            )
+            return
+        self._require_movement_target_available(self._cover_entity_id)
+        self._log("_command_position_move :: forwarding set_cover_position(%d)", target)
+        await self._call_set_cover_position(int(round(target)))
+
+    async def _call_set_cover_position(self, position: int) -> None:
+        """Forward a set_cover_position command to the wrapped entity."""
+        self._start_bounce_grace_window()
+        await self.hass.services.async_call(
+            "cover",
+            "set_cover_position",
+            {"entity_id": self._cover_entity_id, "position": position},
+            False,
+        )
+
     async def _call_cover_service(self, service: str, expected: int = 1) -> None:
         self._mark_switch_pending(self._cover_entity_id, expected)
         self._start_bounce_grace_window()
@@ -193,6 +288,28 @@ class WrappedCoverTimeBased(CoverTimeBased):
         await self._call_cover_service("close_cover", expected)
 
     async def _send_stop(self) -> None:
+        # A cover that lacks native stop_cover but supports set_cover_position
+        # is stopped by re-issuing its current (time-based) position as a
+        # target: the device runs to where it already is and halts there. Only
+        # do this when we positively know stop is unsupported and set position
+        # is — otherwise keep the legacy stop_cover (covers an entity whose
+        # capabilities are momentarily unknown, e.g. while unavailable).
+        features = self._wrapped_features()
+        supports_stop = features is not None and bool(
+            features & CoverEntityFeature.STOP
+        )
+        supports_set_position = features is not None and bool(
+            features & CoverEntityFeature.SET_POSITION
+        )
+        if not supports_stop and supports_set_position:
+            pos = self.travel_calc.current_position()
+            if pos is not None:
+                self._log(
+                    "_send_stop :: no native stop; freezing via set_cover_position(%d)",
+                    int(round(pos)),
+                )
+                await self._call_set_cover_position(int(round(pos)))
+                return
         await self._call_cover_service("stop_cover")
 
     # --- Tilt motor relay commands ---

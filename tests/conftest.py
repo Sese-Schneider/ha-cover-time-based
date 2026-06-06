@@ -33,6 +33,7 @@ from custom_components.cover_time_based.cover import (
 )
 from custom_components.cover_time_based.const import (
     CONF_CLOSE_INCLUDES_TILT,
+    CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
 )
 
@@ -102,6 +103,7 @@ def make_cover(make_hass, _mock_position_store):
         max_tilt_allowed_position=None,
         close_includes_tilt=None,
         ignore_reported_position=None,
+        force_time_based_position=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -157,6 +159,8 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_CLOSE_INCLUDES_TILT] = close_includes_tilt
         if ignore_reported_position is not None:
             options[CONF_IGNORE_REPORTED_POSITION] = ignore_reported_position
+        if force_time_based_position is not None:
+            options[CONF_FORCE_TIME_BASED_POSITION] = force_time_based_position
 
         cover = _create_cover_from_options(
             options,
