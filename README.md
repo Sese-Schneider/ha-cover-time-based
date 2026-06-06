@@ -103,6 +103,8 @@ Specify the **Cover entity**.
 
 **Ignore reported position.** Enable this option when the wrapped cover reports an unreliable position. The integration then tracks the position purely by time and ignores the `current_position` the wrapped entity reports (the fully-closed endpoint is still trusted). This is also what lets time-based tilt work cleanly on a wrapped cover whose reported position would otherwise interfere.
 
+**Setting a position.** If the wrapped cover natively supports `set_cover_position`, the integration forwards the set-position command straight to it, so the cover stops at the requested position even if the underlying device has no `stop` service. The time-based tracker still animates the position live during the move (handy for covers that only report their position once they finish moving). On such a cover, the integration's **Stop** is implemented by setting the wrapped cover to the current calculated position. If the wrapped cover doesn't support `set_cover_position`, the integration falls back to driving it with timed open / close / stop. The **Force time-based positioning** option forces that timed behaviour even when native set-position is available — use it if the wrapped cover's own set-position is unreliable.
+
 **Tilt on a wrapped cover.** The **Inline** and **Sequential** tilt modes drive the wrapped cover's normal open / close commands, so they work on any wrapped cover regardless of whether it reports tilt support. Only the **Separate tilt motor** mode requires the wrapped cover to expose its own tilt commands, so it is offered only when the wrapped entity reports native tilt support.
 
 ### Switch-based covers

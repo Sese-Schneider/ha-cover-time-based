@@ -102,6 +102,25 @@ class TestCreateCoverFromOptions:
             name="Test",
         )
         assert isinstance(cover, WrappedCoverTimeBased)
+        # Defaults: native set_position auto-detected (override off).
+        assert cover._force_time_based_position is False
+
+    def test_wrapped_cover_force_time_based_position(self):
+        from custom_components.cover_time_based.const import (
+            CONF_FORCE_TIME_BASED_POSITION,
+        )
+
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+                CONF_COVER_ENTITY_ID: "cover.inner",
+                CONF_FORCE_TIME_BASED_POSITION: True,
+            },
+            device_id="test",
+            name="Test",
+        )
+        assert isinstance(cover, WrappedCoverTimeBased)
+        assert cover._force_time_based_position is True
 
     def test_defaults_to_switch_mode(self):
         """When control_mode is not specified, defaults to switch."""

@@ -48,6 +48,9 @@ const EN = {
   "entities.ignore_reported_position": "Ignore reported position",
   "entities.ignore_reported_position_helper":
     "Track position by time only and ignore the position the wrapped cover reports. Enable this if the underlying cover reports an unreliable position.",
+  "entities.force_time_based_position": "Force time-based positioning",
+  "entities.force_time_based_position_helper":
+    "By default, if the wrapped cover supports setting a position, the set-position command is sent straight to it. Enable this to instead drive it with timed open/close/stop, ignoring its native set-position support.",
   "entities.switch_entities": "Switch Entities",
   "entities.open_switch": "Open switch",
   "entities.close_switch": "Close switch",
@@ -156,6 +159,9 @@ const TRANSLATIONS = {
     "entities.ignore_reported_position": "Ignorar posição reportada",
     "entities.ignore_reported_position_helper":
       "Rastrear a posição apenas pelo tempo e ignorar a posição reportada pelo estore. Ative isto se o estore subjacente reportar uma posição não fiável.",
+    "entities.force_time_based_position": "Forçar posicionamento por tempo",
+    "entities.force_time_based_position_helper":
+      "Por predefinição, se o estore envolvido suportar definir a posição, o comando de definir posição é enviado diretamente para ele. Ative isto para o controlar com abrir/fechar/parar temporizados, ignorando o suporte nativo de definir posição.",
     "entities.switch_entities": "Entidades de Interruptor",
     "entities.open_switch": "Interruptor de abrir",
     "entities.close_switch": "Interruptor de fechar",
@@ -261,6 +267,9 @@ const TRANSLATIONS = {
     "entities.ignore_reported_position": "Ignoruj zgłaszaną pozycję",
     "entities.ignore_reported_position_helper":
       "Śledź pozycję wyłącznie na podstawie czasu i ignoruj pozycję zgłaszaną przez roletę. Włącz tę opcję, jeśli roleta zgłasza niewiarygodną pozycję.",
+    "entities.force_time_based_position": "Wymuś pozycjonowanie czasowe",
+    "entities.force_time_based_position_helper":
+      "Domyślnie, jeśli opakowana roleta obsługuje ustawianie pozycji, polecenie ustawienia pozycji jest wysyłane bezpośrednio do niej. Włącz tę opcję, aby zamiast tego sterować nią za pomocą czasowego otwierania/zamykania/zatrzymywania, ignorując natywną obsługę ustawiania pozycji.",
     "entities.switch_entities": "Encje przełączników",
     "entities.open_switch": "Przełącznik otwierania",
     "entities.close_switch": "Przełącznik zamykania",
@@ -1070,6 +1079,22 @@ class CoverTimeBasedCard extends LitElement {
           </div>
           <div class="helper-text">
             ${this._t("entities.ignore_reported_position_helper")}
+          </div>
+          <div class="inline-field">
+            <ha-formfield
+              .label=${this._t("entities.force_time_based_position")}
+            >
+              <ha-switch
+                .checked=${!!c.force_time_based_position}
+                @change=${(e) =>
+                  this._updateLocal({
+                    force_time_based_position: e.target.checked,
+                  })}
+              ></ha-switch>
+            </ha-formfield>
+          </div>
+          <div class="helper-text">
+            ${this._t("entities.force_time_based_position_helper")}
           </div>
         </div>
       `;
