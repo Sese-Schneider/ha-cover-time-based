@@ -1,0 +1,99 @@
+name: Release
+
+# Publishes a GitHub Release when a v* tag is pushed (HACS reads GitHub
+# releases), then — for final releases only — rolls main forward to the next
+# minor so unreleased work no longer carries the just-released version.
+#
+# Release flow:
+#   1. bin/release.sh <version>  -> opens the chore/release PR (bumps manifest)
+#   2. merge the PR
+#   3. git tag v<version> && git push origin v<version>  -> triggers this workflow
+#
+# No secret or repo setup is required: main is unprotected, so the next-minor
+# bump is pushed directly to main using the default GITHUB_TOKEN.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    name: Publish GitHub Release
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract and validate version from tag
+        id: version
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          VERSION="${REF#refs/tags/v}"
+          # Reject off-spec tags (the same semver contract bin/release.sh
+          # enforces), so a hand-pushed bad tag can't slip through.
+          bin/bump-version.sh --validate "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # Any semver pre-release (a hyphen) is a pre-release; the regex only
+          # permits -alpha/-beta/-rc.
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate manifest version matches tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          MANIFEST_VER=$(python3 -c "import json; print(json.load(open('custom_components/cover_time_based/manifest.json'))['version'])")
+          if [ "$VERSION" != "$MANIFEST_VER" ]; then
+            echo "::error::Tag v$VERSION does not match manifest.json version $MANIFEST_VER"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          # Pre-releases (alpha/beta/rc) stay off "latest" until promoted via:
+          #   gh release edit v<version> --prerelease=false --latest=true
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          make_latest: ${{ steps.version.outputs.prerelease == 'true' && 'false' || 'true' }}
+
+  bump:
+    needs: publish
+    # Only final releases roll main forward; pre-releases leave the version alone.
+    if: needs.publish.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    name: Bump main to next minor
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Compute next minor and bump version files
+        id: bump
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          NEXT=$(python3 -c "import os; mj, mn, _ = os.environ['VERSION'].split('-')[0].split('.'); print(f'{mj}.{int(mn)+1}.0')")
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          # Same verified bump bin/release.sh uses, so the two can't drift.
+          bin/bump-version.sh "$NEXT"
+
+      - name: Commit and push the bump directly to main
+        env:
+          NEXT: ${{ steps.bump.outputs.next }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: bump version to $NEXT for development"
+          # main is unprotected, so the default GITHUB_TOKEN can push directly.
+          git push origin HEAD:main
