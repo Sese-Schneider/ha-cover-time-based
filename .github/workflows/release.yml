@@ -94,6 +94,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
+          # No-op guard: if the manifest is already at $NEXT (e.g. a re-run, or
+          # main was hand-bumped), there's nothing to commit — exit cleanly
+          # rather than letting `git commit` fail the job under `set -e`.
+          if git diff --cached --quiet; then
+            echo "manifest already at $NEXT — nothing to bump; skipping commit/push."
+            exit 0
+          fi
           git commit -m "chore: bump version to $NEXT for development"
           # main is unprotected, so the default GITHUB_TOKEN can push directly.
           git push origin HEAD:main

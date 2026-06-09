@@ -234,7 +234,10 @@ def test_does_not_leak_to_parent_git_dir_via_env(tmp_path: Path, monkeypatch):
     main repo's config during a pre-push hook run."""
     parent = tmp_path / "parent_repo"
     parent.mkdir()
-    subprocess.run(["git", "init", "-q", "-b", "main", str(parent)], check=True)
+    # Scrub GIT_* from this init too: if the runner already has GIT_DIR set
+    # (the very leakage this test guards against), an unscrubbed init could
+    # itself be redirected. Keeps the test self-consistent.
+    subprocess.run(["git", "init", "-q", "-b", "main", str(parent)], check=True, env=_clean_env())
     parent_git = parent / ".git"
     config_before = (parent_git / "config").read_text()
 
