@@ -72,6 +72,7 @@ class TestBasicProperties:
         """
         from custom_components.cover_time_based.cover import (
             _create_cover_from_options,
+            CONF_ASSUMED_STATE,
             CONF_CLOSE_SWITCH_ENTITY_ID,
             CONF_CONTROL_MODE,
             CONF_COVER_ENTITY_ID,
@@ -88,7 +89,7 @@ class TestBasicProperties:
             "toggle": CONTROL_MODE_TOGGLE,
             "wrapped": CONTROL_MODE_WRAPPED,
         }
-        options = {CONF_CONTROL_MODE: mode_map[mode], "assumed_state": False}
+        options = {CONF_CONTROL_MODE: mode_map[mode], CONF_ASSUMED_STATE: False}
         if mode == "wrapped":
             options[CONF_COVER_ENTITY_ID] = "cover.inner"
         else:
