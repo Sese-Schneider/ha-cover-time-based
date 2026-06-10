@@ -129,6 +129,10 @@ Three input modes are available to describe how the switch entities for switch-b
 
 With the **Pulse** and **Toggle** input modes, the **Pulse time** configures how long the switch should send the ON signal before it turns OFF. Defaults to **1s**.
 
+### Assumed state
+
+Available for every device type. A time-based cover calculates its position from travel time without feedback, so by default it reports an _assumed_ state and Home Assistant keeps both the open and close buttons active at all times. Turn **Assumed state** off if you trust the time-based calculation and want the UI to behave like a position-aware cover — greying out actions that can't apply (for example the close button once the cover is already fully closed). Leave it on if the calculation can drift (motor slip, manual operation, power loss mid-travel), since the always-active buttons let you re-issue a command to re-converge.
+
 ## Tilt Mode
 
 The **Tilt Mode** setting controls how tilt and travel interact:
