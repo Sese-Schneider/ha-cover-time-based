@@ -82,6 +82,7 @@ const EN = {
   "assumed_state.label": "Assumed state",
   "assumed_state.helper":
     "When on, Home Assistant treats the position as estimated and keeps both open and close controls active. Turn off if you trust the time-based calculation and want the UI to grey out unavailable actions (e.g. close when already closed).",
+  "more_info": "More info",
   "timing.attribute_header": "Attribute",
   "timing.travel_attribute_header": "Travel Attribute",
   "timing.tilt_attribute_header": "Tilt Attribute",
@@ -196,6 +197,7 @@ const TRANSLATIONS = {
     "assumed_state.label": "Estado assumido",
     "assumed_state.helper":
       "Quando ativo, o Home Assistant trata a posição como estimada e mantém ativos os controlos de abrir e fechar. Desative se confiar no cálculo por tempo e quiser que a interface desative as ações indisponíveis (por exemplo, fechar quando já está fechado).",
+    "more_info": "Mais informação",
     "timing.attribute_header": "Atributo",
     "timing.travel_attribute_header": "Atributo",
     "timing.tilt_attribute_header": "Atributo",
@@ -307,6 +309,7 @@ const TRANSLATIONS = {
     "assumed_state.label": "Stan zakładany",
     "assumed_state.helper":
       "Gdy włączone, Home Assistant traktuje pozycję jako szacowaną i pozostawia aktywne przyciski otwierania i zamykania. Wyłącz, jeśli ufasz obliczeniom czasowym i chcesz, aby interfejs wyszarzał niedostępne akcje (np. zamknięcie, gdy roleta jest już zamknięta).",
+    "more_info": "Więcej informacji",
     "timing.attribute_header": "Atrybut",
     "timing.travel_attribute_header": "Atrybut",
     "timing.tilt_attribute_header": "Atrybut",
@@ -400,6 +403,7 @@ class CoverTimeBasedCard extends LitElement {
       _knownPosition: { type: String },
       _loadError: { type: String },
       _saveError: { type: Boolean },
+      _openHelp: { type: String },
     };
   }
 
@@ -413,6 +417,7 @@ class CoverTimeBasedCard extends LitElement {
     this._activeTab = "device";
     this._knownPosition = "unknown";
     this._helpersLoaded = false;
+    this._openHelp = null;
   }
 
   // --- Translation support ---
@@ -922,6 +927,12 @@ class CoverTimeBasedCard extends LitElement {
               </div>`
             : ""}
         </div>
+        ${this._openHelp
+          ? html`<div
+              class="popover-backdrop"
+              @click=${this._closeHelp}
+            ></div>`
+          : ""}
       </ha-card>
     `;
   }
@@ -1005,7 +1016,6 @@ class CoverTimeBasedCard extends LitElement {
               ${this._renderControlMode(c)} ${this._renderInputEntities(c)}
               ${this._renderTiltSupport(c)}
               ${this._renderTiltMotorSection(c)}
-              ${this._renderAssumedState(c)}
             </fieldset>
           `
         : html`
@@ -1064,19 +1074,51 @@ class CoverTimeBasedCard extends LitElement {
     `;
   }
 
-  _renderAssumedState(c) {
+  _toggleHelp(helperKey) {
+    this._openHelp = this._openHelp === helperKey ? null : helperKey;
+  }
+
+  _closeHelp() {
+    this._openHelp = null;
+  }
+
+  _renderToggleWithHelp(labelKey, helperKey, checked, onChange) {
+    const open = this._openHelp === helperKey;
     return html`
-      <div class="section">
-        <div class="inline-field">
-          <ha-formfield .label=${this._t("assumed_state.label")}>
-            <ha-switch
-              .checked=${c.assumed_state !== false}
-              @change=${(e) =>
-                this._updateLocal({ assumed_state: e.target.checked })}
-            ></ha-switch>
-          </ha-formfield>
-        </div>
-        <div class="helper-text">${this._t("assumed_state.helper")}</div>
+      <div class="toggle-with-help">
+        <span class="toggle-label">${this._t(labelKey)}</span>
+        <span class="help-anchor">
+          <ha-icon
+            class="help-icon"
+            icon="mdi:help-circle-outline"
+            role="button"
+            tabindex="0"
+            aria-label=${this._t("more_info")}
+            aria-expanded=${open ? "true" : "false"}
+            @click=${(e) => {
+              e.stopPropagation();
+              this._toggleHelp(helperKey);
+            }}
+            @keydown=${(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                this._toggleHelp(helperKey);
+              } else if (e.key === "Escape") {
+                this._closeHelp();
+              }
+            }}
+          ></ha-icon>
+          ${open
+            ? html`<div class="info-popover" role="tooltip">
+                ${this._t(helperKey)}
+              </div>`
+            : ""}
+        </span>
+        <ha-switch
+          class="toggle-switch"
+          .checked=${checked}
+          @change=${onChange}
+        ></ha-switch>
       </div>
     `;
   }
@@ -1093,36 +1135,26 @@ class CoverTimeBasedCard extends LitElement {
             label=${this._t("entities.cover_entity")}
             @value-changed=${this._onCoverEntityChange}
           ></ha-entity-picker>
-          <div class="inline-field">
-            <ha-formfield .label=${this._t("entities.ignore_reported_position")}>
-              <ha-switch
-                .checked=${!!c.ignore_reported_position}
-                @change=${(e) =>
-                  this._updateLocal({
-                    ignore_reported_position: e.target.checked,
-                  })}
-              ></ha-switch>
-            </ha-formfield>
-          </div>
-          <div class="helper-text">
-            ${this._t("entities.ignore_reported_position_helper")}
-          </div>
-          <div class="inline-field">
-            <ha-formfield
-              .label=${this._t("entities.force_time_based_position")}
-            >
-              <ha-switch
-                .checked=${!!c.force_time_based_position}
-                @change=${(e) =>
-                  this._updateLocal({
-                    force_time_based_position: e.target.checked,
-                  })}
-              ></ha-switch>
-            </ha-formfield>
-          </div>
-          <div class="helper-text">
-            ${this._t("entities.force_time_based_position_helper")}
-          </div>
+          ${this._renderToggleWithHelp(
+            "entities.ignore_reported_position",
+            "entities.ignore_reported_position_helper",
+            !!c.ignore_reported_position,
+            (e) =>
+              this._updateLocal({ ignore_reported_position: e.target.checked }),
+          )}
+          ${this._renderToggleWithHelp(
+            "entities.force_time_based_position",
+            "entities.force_time_based_position_helper",
+            !!c.force_time_based_position,
+            (e) =>
+              this._updateLocal({ force_time_based_position: e.target.checked }),
+          )}
+          ${this._renderToggleWithHelp(
+            "assumed_state.label",
+            "assumed_state.helper",
+            c.assumed_state !== false,
+            (e) => this._updateLocal({ assumed_state: e.target.checked }),
+          )}
         </div>
       `;
     }
@@ -1158,6 +1190,12 @@ class CoverTimeBasedCard extends LitElement {
           ></ha-entity-picker>
           ` : ""}
         </div>
+        ${this._renderToggleWithHelp(
+          "assumed_state.label",
+          "assumed_state.helper",
+          c.assumed_state !== false,
+          (e) => this._updateLocal({ assumed_state: e.target.checked }),
+        )}
       </div>
     `;
   }
@@ -1610,6 +1648,63 @@ class CoverTimeBasedCard extends LitElement {
         font-size: 12px;
         color: var(--secondary-text-color, #727272);
         margin: -4px 0 8px;
+      }
+
+      .toggle-with-help {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .toggle-label {
+        font-size: 14px;
+        color: var(--primary-text-color);
+      }
+
+      .toggle-with-help .toggle-switch {
+        margin-left: auto;
+      }
+
+      .help-anchor {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .help-icon {
+        cursor: pointer;
+        color: var(--secondary-text-color, #727272);
+        --mdc-icon-size: 18px;
+      }
+
+      .help-icon:hover {
+        color: var(--primary-color);
+      }
+
+      /* Transparent full-screen catcher so any outside tap dismisses the
+         popover (works on touch devices, which have no hover/blur). */
+      .popover-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 8;
+      }
+
+      .info-popover {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 9;
+        width: max-content;
+        max-width: 260px;
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color);
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 13px;
+        line-height: 1.4;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       }
 
       .sub-label {
