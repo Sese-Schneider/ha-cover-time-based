@@ -12,6 +12,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .calibration import CALIBRATABLE_ATTRIBUTES
 from .cover import (
+    CONF_ASSUMED_STATE,
     CONF_CLOSE_INCLUDES_TILT,
     CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_CONTROL_MODE,
@@ -39,6 +40,7 @@ from .cover import (
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_WRAPPED,
+    DEFAULT_ASSUMED_STATE,
     DEFAULT_CLOSE_INCLUDES_TILT,
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_TIME_BASED_POSITION,
@@ -75,6 +77,7 @@ _FIELD_MAP = {
     "tilt_close_switch": CONF_TILT_CLOSE_SWITCH,
     "tilt_stop_switch": CONF_TILT_STOP_SWITCH,
     "close_includes_tilt": CONF_CLOSE_INCLUDES_TILT,
+    "assumed_state": CONF_ASSUMED_STATE,
 }
 
 
@@ -195,6 +198,7 @@ async def ws_get_config(
             "close_includes_tilt": options.get(
                 CONF_CLOSE_INCLUDES_TILT, DEFAULT_CLOSE_INCLUDES_TILT
             ),
+            "assumed_state": options.get(CONF_ASSUMED_STATE, DEFAULT_ASSUMED_STATE),
         },
     )
 
@@ -220,6 +224,7 @@ async def ws_get_config(
         vol.Optional("cover_entity_id"): vol.Any(str, None),
         vol.Optional("ignore_reported_position"): vol.Any(None, bool),
         vol.Optional("force_time_based_position"): vol.Any(None, bool),
+        vol.Optional("assumed_state"): vol.Any(None, bool),
         vol.Optional("tilt_mode"): vol.In(
             [
                 "none",

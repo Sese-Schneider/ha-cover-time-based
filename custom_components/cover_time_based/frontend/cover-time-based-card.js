@@ -79,6 +79,9 @@ const EN = {
   "tilt_motor.max_allowed_helper": "Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)",
   "tilt.close_includes_tilt": "Close cover also closes slats",
   "tilt.close_includes_tilt_helper": "When closing, slats tilt closed at the end of travel",
+  "assumed_state.label": "Assumed state",
+  "assumed_state.helper":
+    "When on, Home Assistant treats the position as estimated and keeps both open and close controls active. Turn off if you trust the time-based calculation and want the UI to grey out unavailable actions (e.g. close when already closed).",
   "timing.attribute_header": "Attribute",
   "timing.travel_attribute_header": "Travel Attribute",
   "timing.tilt_attribute_header": "Tilt Attribute",
@@ -190,6 +193,9 @@ const TRANSLATIONS = {
     "tilt_motor.max_allowed_helper": "A inclinação só é permitida quando a posição do estore está neste valor ou abaixo (0 = fechado, 100 = aberto)",
     "tilt.close_includes_tilt": "Fechar estore também fecha lâminas",
     "tilt.close_includes_tilt_helper": "Ao fechar, as lâminas inclinam para fechado no fim do percurso",
+    "assumed_state.label": "Estado assumido",
+    "assumed_state.helper":
+      "Quando ativo, o Home Assistant trata a posição como estimada e mantém ativos os controlos de abrir e fechar. Desative se confiar no cálculo por tempo e quiser que a interface desative as ações indisponíveis (por exemplo, fechar quando já está fechado).",
     "timing.attribute_header": "Atributo",
     "timing.travel_attribute_header": "Atributo",
     "timing.tilt_attribute_header": "Atributo",
@@ -298,6 +304,9 @@ const TRANSLATIONS = {
     "tilt_motor.max_allowed_helper": "Nachylenie dozwolone tylko gdy pozycja rolety wynosi tyle lub mniej (0 = zamknięta, 100 = otwarta)",
     "tilt.close_includes_tilt": "Zamknięcie rolety zamyka również lamele",
     "tilt.close_includes_tilt_helper": "Podczas zamykania lamele nachylają się do pozycji zamkniętej na końcu ruchu",
+    "assumed_state.label": "Stan zakładany",
+    "assumed_state.helper":
+      "Gdy włączone, Home Assistant traktuje pozycję jako szacowaną i pozostawia aktywne przyciski otwierania i zamykania. Wyłącz, jeśli ufasz obliczeniom czasowym i chcesz, aby interfejs wyszarzał niedostępne akcje (np. zamknięcie, gdy roleta jest już zamknięta).",
     "timing.attribute_header": "Atrybut",
     "timing.travel_attribute_header": "Atrybut",
     "timing.tilt_attribute_header": "Atrybut",
@@ -996,6 +1005,7 @@ class CoverTimeBasedCard extends LitElement {
               ${this._renderControlMode(c)} ${this._renderInputEntities(c)}
               ${this._renderTiltSupport(c)}
               ${this._renderTiltMotorSection(c)}
+              ${this._renderAssumedState(c)}
             </fieldset>
           `
         : html`
@@ -1050,6 +1060,23 @@ class CoverTimeBasedCard extends LitElement {
               </div>
             `
           : ""}
+      </div>
+    `;
+  }
+
+  _renderAssumedState(c) {
+    return html`
+      <div class="section">
+        <div class="inline-field">
+          <ha-formfield .label=${this._t("assumed_state.label")}>
+            <ha-switch
+              .checked=${c.assumed_state !== false}
+              @change=${(e) =>
+                this._updateLocal({ assumed_state: e.target.checked })}
+            ></ha-switch>
+          </ha-formfield>
+        </div>
+        <div class="helper-text">${this._t("assumed_state.helper")}</div>
       </div>
     `;
   }

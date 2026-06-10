@@ -59,9 +59,44 @@ class TestBasicProperties:
         cover = make_cover()
         assert cover.device_class is None
 
-    def test_assumed_state_is_true(self, make_cover):
+    def test_assumed_state_defaults_to_true(self, make_cover):
         cover = make_cover()
         assert cover.assumed_state is True
+
+    @pytest.mark.parametrize("mode", ["switch", "pulse", "toggle", "wrapped"])
+    def test_assumed_state_configurable_false_all_modes(self, mode):
+        """A configured assumed_state=False reaches the entity in every mode.
+
+        The kwarg flows through the shared `common` dict to each subclass, so
+        this guards against any mode dropping it in its **kwargs chain.
+        """
+        from custom_components.cover_time_based.cover import (
+            _create_cover_from_options,
+            CONF_CLOSE_SWITCH_ENTITY_ID,
+            CONF_CONTROL_MODE,
+            CONF_COVER_ENTITY_ID,
+            CONF_OPEN_SWITCH_ENTITY_ID,
+            CONTROL_MODE_PULSE,
+            CONTROL_MODE_SWITCH,
+            CONTROL_MODE_TOGGLE,
+            CONTROL_MODE_WRAPPED,
+        )
+
+        mode_map = {
+            "switch": CONTROL_MODE_SWITCH,
+            "pulse": CONTROL_MODE_PULSE,
+            "toggle": CONTROL_MODE_TOGGLE,
+            "wrapped": CONTROL_MODE_WRAPPED,
+        }
+        options = {CONF_CONTROL_MODE: mode_map[mode], "assumed_state": False}
+        if mode == "wrapped":
+            options[CONF_COVER_ENTITY_ID] = "cover.inner"
+        else:
+            options[CONF_OPEN_SWITCH_ENTITY_ID] = "switch.open"
+            options[CONF_CLOSE_SWITCH_ENTITY_ID] = "switch.close"
+
+        cover = _create_cover_from_options(options, device_id="my_device", name="")
+        assert cover.assumed_state is False
 
 
 # ===================================================================

@@ -76,9 +76,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt_stop_switch=None,
         tilt_mode_str="none",
         close_includes_tilt=True,
+        assumed_state=True,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
+        self._assumed_state = assumed_state
 
         self._tilt_strategy = tilt_strategy
         # Keep the raw configured mode so calibration can still pick the right
@@ -265,8 +267,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     @property
     def assumed_state(self):
-        """Return True because covers can be stopped midway."""
-        return True
+        """Return whether Home Assistant should treat the position as assumed.
+
+        Defaults to True because a time-based cover's position is calculated
+        from travel time with no feedback. Users who trust the calculation can
+        set this False so the UI greys out unavailable actions (e.g. close when
+        already closed).
+        """
+        return self._assumed_state
 
     @property
     def supported_features(self) -> CoverEntityFeature:
