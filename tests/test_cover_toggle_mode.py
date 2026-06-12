@@ -11,6 +11,7 @@ await those tasks to verify the full call sequence.
 """
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
@@ -101,6 +102,28 @@ def _calls(mock: AsyncMock):
 
 def _ha(service, entity_id):
     return call("homeassistant", service, {"entity_id": entity_id}, False)
+
+
+def _hold_relay_on(cover, entity_id):
+    """Make hass report ``entity_id`` as currently ON, every other relay OFF.
+
+    Simulates a relay still held ON by a previous pulse whose background
+    ``_complete_pulse`` (turn_off) has not fired yet.
+    """
+    on = SimpleNamespace(state="on")
+    off = SimpleNamespace(state="off")
+    cover.hass.states.get = MagicMock(
+        side_effect=lambda eid: on if eid == entity_id else off
+    )
+
+
+def _calls_for(cover, entity_id):
+    """Recorded service calls whose target is ``entity_id``, in order."""
+    return [
+        c
+        for c in _calls(cover.hass.services.async_call)
+        if c.args[2].get("entity_id") == entity_id
+    ]
 
 
 # ===================================================================
@@ -1086,4 +1109,203 @@ class TestToggleExternalTravelWhileTraveling:
 
         assert cover.travel_calc.is_traveling()
         assert cover.travel_calc._travel_to_position == 100
+        await _cancel_tasks(cover)
+
+
+# ===================================================================
+# Rising-edge guarantee: re-pulsing a still-held relay
+# ===================================================================
+
+
+class TestToggleEdgeGuaranteeOnHeldRelay:
+    """A fresh pulse on a relay still held ON must produce a real rising edge.
+
+    Toggle motor controllers act on the relay's OFF→ON edge. The OFF half of
+    a pulse is deferred to a background ``_complete_pulse`` task, so a second
+    command can land while the relay is still held ON. A bare ``turn_on`` on
+    an already-on relay produces no edge — the motor misses the pulse while
+    the position tracker advances, desyncing the entity from the physical
+    cover. The send methods must release the relay (turn_off) first so the
+    motor sees a genuine edge.
+    """
+
+    @pytest.mark.asyncio
+    async def test_close_while_close_relay_held_releases_first(self):
+        cover = _make_toggle_cover()
+        _hold_relay_on(cover, "switch.close")
+
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_close()
+            await _drain_tasks(cover)
+
+        close_calls = _calls_for(cover, "switch.close")
+        assert close_calls[0] == _ha("turn_off", "switch.close")
+        assert close_calls[1] == _ha("turn_on", "switch.close")
+
+    @pytest.mark.asyncio
+    async def test_open_while_open_relay_held_releases_first(self):
+        cover = _make_toggle_cover()
+        _hold_relay_on(cover, "switch.open")
+
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_open()
+            await _drain_tasks(cover)
+
+        open_calls = _calls_for(cover, "switch.open")
+        assert open_calls[0] == _ha("turn_off", "switch.open")
+        assert open_calls[1] == _ha("turn_on", "switch.open")
+
+    @pytest.mark.asyncio
+    async def test_stop_while_relay_held_releases_first(self):
+        cover = _make_toggle_cover()
+        cover._last_command = SERVICE_CLOSE_COVER
+        _hold_relay_on(cover, "switch.close")
+
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_stop()
+            await _drain_tasks(cover)
+
+        close_calls = _calls_for(cover, "switch.close")
+        assert close_calls[0] == _ha("turn_off", "switch.close")
+        assert close_calls[1] == _ha("turn_on", "switch.close")
+
+    @pytest.mark.asyncio
+    async def test_idle_relay_pulse_unchanged(self):
+        """When the relay is OFF, no redundant release is issued."""
+        cover = _make_toggle_cover()
+        _hold_relay_on(cover, "switch.nothing")  # close + open both report OFF
+
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_close()
+            await _drain_tasks(cover)
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_off", "switch.open"),
+            _ha("turn_on", "switch.close"),
+            _ha("turn_off", "switch.close"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_repulse_within_pulse_releases_despite_state_lag(self):
+        """The reported desync: a second pulse arrives within pulse_time, before
+        HA's switch state reflects the first turn_on (a real switch confirms
+        state only after a device round-trip — ~76 ms in the field log, vs the
+        2 ms between presses). The in-flight pulse *task*, not the laggy reported
+        switch state, must trigger the release so the motor gets a real edge.
+        """
+        cover = _make_toggle_cover()
+        # hass keeps reporting every relay OFF for the whole test — simulating
+        # switch-state commit lag (the turn_on hasn't been confirmed yet).
+        cover.hass.states.get = MagicMock(
+            side_effect=lambda eid: SimpleNamespace(state="off")
+        )
+
+        # First pulse: schedules a live completion (relay is commanded on).
+        await cover._send_close()
+        assert not cover._pulse_tasks["switch.close"].done()
+
+        # Second pulse lands while the first is still in flight.
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_close()
+
+        close_calls = _calls_for(cover, "switch.close")
+        # pulse 1 -> turn_on; pulse 2 must release (turn_off) then re-pulse,
+        # despite the reported relay state still being "off".
+        assert close_calls[0] == _ha("turn_on", "switch.close")
+        assert close_calls[1] == _ha("turn_off", "switch.close")
+        assert close_calls[2] == _ha("turn_on", "switch.close")
+        await _cancel_tasks(cover)
+
+    @pytest.mark.asyncio
+    async def test_superseded_completion_does_not_release_relay(self):
+        """A completion whose registration was replaced by a newer pulse must
+        not issue turn_off, even if cancellation didn't stop it in time.
+
+        asyncio cancellation is cooperative: a _complete_pulse already past its
+        sleep and into the turn_off call can finish. Keying the release on the
+        registered task (not on cancellation) makes "a stale completion can't
+        release a fresh pulse" deterministic.
+        """
+        cover = _make_toggle_cover()
+        with patch(
+            "custom_components.cover_time_based.cover_toggle_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            task = cover.hass.async_create_task(cover._complete_pulse("switch.close"))
+            # A newer pulse has since claimed the relay (different registration).
+            cover._pulse_tasks["switch.close"] = object()
+            await task
+
+        assert _ha("turn_off", "switch.close") not in _calls(
+            cover.hass.services.async_call
+        )
+        await _cancel_tasks(cover)
+
+    @pytest.mark.asyncio
+    async def test_concurrent_same_relay_pulses_serialize_and_release(self):
+        """Two _send_close calls that interleave at their awaits must each get a
+        real edge. Cover service calls aren't serialized (no PARALLEL_UPDATES),
+        so without a lock both could pop the pulse task before either stores it,
+        both see no in-flight pulse, neither releases, and the second turn_on is
+        a no-op — the original desync, under true concurrency. _pulse_relay must
+        serialize so the second pulse sees the first's in-flight pulse.
+        """
+        cover = _make_toggle_cover()
+        # Relays report OFF (state lag) and each service call yields control,
+        # forcing the two pulses to interleave under asyncio.gather.
+        cover.hass.states.get = MagicMock(
+            side_effect=lambda eid: SimpleNamespace(state="off")
+        )
+
+        async def _yielding_call(*args, **kwargs):
+            await asyncio.sleep(0)
+
+        cover.hass.services.async_call = AsyncMock(side_effect=_yielding_call)
+
+        # Do NOT patch sleep: the first pulse's completion stays in flight, so
+        # the second must detect it and release the relay.
+        await asyncio.gather(cover._send_close(), cover._send_close())
+
+        close_calls = _calls_for(cover, "switch.close")
+        # One turn_on per pulse, plus a release turn_off for the second.
+        assert close_calls.count(_ha("turn_on", "switch.close")) == 2
+        assert _ha("turn_off", "switch.close") in close_calls
+        first_on = close_calls.index(_ha("turn_on", "switch.close"))
+        release = close_calls.index(_ha("turn_off", "switch.close"))
+        assert release > first_on  # a release, not a leading opposite turn_off
+        await _cancel_tasks(cover)
+
+    @pytest.mark.asyncio
+    async def test_new_pulse_cancels_stale_completion(self):
+        """A new pulse cancels the previous pulse's pending completion so it
+        cannot release the new pulse's relay mid-flight."""
+        cover = _make_toggle_cover()
+
+        # First pulse: completion task scheduled, relay left ON until it fires.
+        await cover._send_close()
+        stale = cover._pulse_tasks["switch.close"]
+        assert not stale.done()
+
+        # Second pulse arrives while the relay is still held ON.
+        _hold_relay_on(cover, "switch.close")
+        await cover._send_close()
+        await asyncio.sleep(0)  # let the cancellation propagate
+
+        assert stale.cancelled()
+        assert cover._pulse_tasks["switch.close"] is not stale
         await _cancel_tasks(cover)
