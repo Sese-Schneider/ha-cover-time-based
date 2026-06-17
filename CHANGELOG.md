@@ -1,3 +1,13 @@
+## 4.3.0 (2026-06-17)
+
+### Features
+
+- **Configurable assumed state per cover** ([#97](https://github.com/Sese-Schneider/ha-cover-time-based/issues/97)): a time-based cover dead-reckons its position from travel time with no feedback from the hardware, so Home Assistant treated it as an *assumed state* device — keeping both the open and close controls active at all times. A new device-level **Assumed state** option lets you turn that off when you trust your calibration (for example a wrapped Shelly that reports no position), so Home Assistant greys out actions that can't apply, such as *close* when the cover is already closed. It defaults to **on** for every existing cover, so there's no change unless you opt out, and it's configurable from the config card in all control modes (switch, pulse, toggle, and wrapped). The device-tab toggles also gained click-to-open info tooltips (touch-friendly) behind a `(?)` icon.
+
+### Fixes
+
+- **Rapid toggle presses no longer desync the position** ([#100](https://github.com/Sese-Schneider/ha-cover-time-based/issues/100)): on toggle-mode covers, pressing open/close/stop faster than the configured pulse time apart could leave the physical motor untouched while the integration began tracking a movement — the reported position then drifted away from where the cover actually was. Each pulse now guarantees a real relay edge (briefly driving the relay off first when a previous pulse is still in flight) so the motor reliably acts on every press.
+
 ## 4.2.0 (2026-06-02)
 
 ### Features
