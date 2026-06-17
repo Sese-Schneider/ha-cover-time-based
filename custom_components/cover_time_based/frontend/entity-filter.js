@@ -48,6 +48,17 @@ export function switchLabelKey(baseKey, controlMode) {
   return controlMode === "pulse" ? `${baseKey}_pulse` : baseKey;
 }
 
+/**
+ * Whether the control mode exposes the "Pulse time" field.
+ *
+ * Only pulse mode holds the relay ON for a configured duration. Toggle relays
+ * are momentary/self-releasing — the integration sends a single turn_on and
+ * never holds the relay — so pulse_time is irrelevant there.
+ */
+export function showsPulseTime(controlMode) {
+  return controlMode === "pulse";
+}
+
 // CoverEntityFeature bit flags.
 const OPEN_TILT = 16;
 const CLOSE_TILT = 32;

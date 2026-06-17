@@ -17,6 +17,7 @@ import {
   filterEntitiesByValidEntries,
   switchPickerDomains,
   switchLabelKey,
+  showsPulseTime,
   clearedEntitiesForMode,
   clearedTiltConfig,
   coverHasNativeTilt,
@@ -1035,7 +1036,7 @@ class CoverTimeBasedCard extends LitElement {
 
   _renderControlMode(c) {
     const mode = c.control_mode || "switch";
-    const showPulseTime = mode === "pulse" || mode === "toggle";
+    const showPulseTime = showsPulseTime(mode);
 
     return html`
       <div class="section">

@@ -478,10 +478,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         await self._async_move_to_endpoint(target=100)
 
     async def _direction_change_delay(self):
-        """Pause between stop and direction change to let the motor settle.
-
-        Toggle mode overrides this with pulse_time (the relay pulse duration).
-        """
+        """Pause between stop and direction change to let the motor settle."""
         await sleep(1.0)
 
     async def async_stop_cover(self, **kwargs):

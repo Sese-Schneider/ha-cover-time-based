@@ -127,7 +127,7 @@ Three input modes are available to describe how the switch entities for switch-b
 
 #### Pulse time
 
-With the **Pulse** and **Toggle** input modes, the **Pulse time** configures how long the switch should send the ON signal before it turns OFF. Defaults to **1s**.
+With the **Pulse** input mode, the **Pulse time** configures how long the switch should send the ON signal before it turns OFF. Defaults to **1s**. **Toggle** mode does not use it — toggle relays are momentary, so the integration sends a single ON pulse and lets the relay release itself.
 
 ### Assumed state
 

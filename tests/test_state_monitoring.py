@@ -405,9 +405,9 @@ class TestToggleModeExternalStateChange:
                 assert cover._last_command == SERVICE_OPEN_COVER
                 assert cover.is_opening
 
-                # Simulate time passing (beyond debounce window)
+                # Simulate time passing (well beyond the debounce window)
                 cover._last_external_toggle_time["switch.open"] = (
-                    time_module.monotonic() - cover._pulse_time - 0.5 - 0.1
+                    time_module.monotonic() - 2.0
                 )
 
                 # Click 2: same direction stops the motor (matches toggle
@@ -1773,14 +1773,12 @@ class TestRawDirectionChangeEchoFiltering:
 
         with (
             patch.object(cover, "async_write_ha_state"),
-            patch(
-                "custom_components.cover_time_based.cover_toggle_mode.sleep",
-                new_callable=AsyncMock,
-            ),
+            patch.object(cover, "_direction_change_delay", new_callable=AsyncMock),
         ):
-            # Raw close: pulse on close switch -> 2 echoes (ON + OFF)
+            # Raw close: single turn_on on the close switch -> one commanded
+            # echo. A self-releasing relay then reports OFF on its own (a
+            # falling edge, which the toggle handler ignores).
             await cover._raw_direction_command("close")
-            await _drain_bg_tasks(cover)
 
             await cover._async_switch_state_changed(
                 _make_state_event("switch.close", "off", "on")
@@ -1792,9 +1790,8 @@ class TestRawDirectionChangeEchoFiltering:
 
             # Raw open (direction change): stop-pulse on close + open-pulse on open
             await cover._raw_direction_command("open")
-            await _drain_bg_tasks(cover)
 
-            # Stop pulse echoes on close switch
+            # Stop re-pulse on close: turn_on echo, then the relay self-releases
             await cover._async_switch_state_changed(
                 _make_state_event("switch.close", "off", "on")
             )
@@ -1803,7 +1800,7 @@ class TestRawDirectionChangeEchoFiltering:
             )
             assert not cover.travel_calc.is_traveling()
 
-            # Open pulse echoes on open switch
+            # Open pulse on open: turn_on echo, then the relay self-releases
             await cover._async_switch_state_changed(
                 _make_state_event("switch.open", "off", "on")
             )
