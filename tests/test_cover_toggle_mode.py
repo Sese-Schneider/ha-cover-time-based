@@ -6,8 +6,11 @@ Tests cover:
 - Stop guard: idle cover should not send relay commands
 - Direction change: closing while opening stops first
 
-Pulse completion (sleep + turn_off) now runs in background tasks. Tests
-await those tasks to verify the full call sequence.
+Toggle mode pulses a relay with a single ``turn_on`` and never holds it ON:
+self-releasing/momentary toggle relays return to OFF on their own, so the next
+command is naturally a clean rising edge. The relay is only driven OFF first
+when it still *reports* ON (a non-self-releasing relay, or one left ON across a
+restart), to guarantee the motor sees a genuine OFF->ON edge.
 """
 
 import asyncio
@@ -33,7 +36,6 @@ def _make_toggle_cover(
     open_switch="switch.open",
     close_switch="switch.close",
     stop_switch=None,
-    pulse_time=1.0,
     tilt_open_switch=None,
     tilt_close_switch=None,
     tilt_stop_switch=None,
@@ -54,7 +56,6 @@ def _make_toggle_cover(
         open_switch_entity_id=open_switch,
         close_switch_entity_id=close_switch,
         stop_switch_entity_id=stop_switch,
-        pulse_time=pulse_time,
         tilt_open_switch=tilt_open_switch,
         tilt_close_switch=tilt_close_switch,
         tilt_stop_switch=tilt_stop_switch,
@@ -74,15 +75,8 @@ def _make_toggle_cover(
     return cover
 
 
-async def _drain_tasks(cover):
-    """Await all background tasks created during a send call."""
-    for task in cover._test_tasks:
-        await task
-    cover._test_tasks.clear()
-
-
 async def _cancel_tasks(cover):
-    """Cancel all pending background tasks (for tests that don't drain)."""
+    """Cancel all pending background tasks (lifecycle auto-updater etc.)."""
     for task in cover._test_tasks:
         if not task.done():
             task.cancel()
@@ -107,13 +101,20 @@ def _ha(service, entity_id):
 def _hold_relay_on(cover, entity_id):
     """Make hass report ``entity_id`` as currently ON, every other relay OFF.
 
-    Simulates a relay still held ON by a previous pulse whose background
-    ``_complete_pulse`` (turn_off) has not fired yet.
+    Simulates a non-self-releasing relay still latched ON (or one left ON
+    across a restart) when the next command arrives.
     """
     on = SimpleNamespace(state="on")
     off = SimpleNamespace(state="off")
     cover.hass.states.get = MagicMock(
         side_effect=lambda eid: on if eid == entity_id else off
+    )
+
+
+def _all_relays_off(cover):
+    """Make hass report every relay as currently OFF (idle, self-released)."""
+    cover.hass.states.get = MagicMock(
+        side_effect=lambda eid: SimpleNamespace(state="off")
     )
 
 
@@ -135,36 +136,24 @@ class TestToggleModeSendOpen:
     @pytest.mark.asyncio
     async def test_open_pulses_open_switch(self):
         cover = _make_toggle_cover()
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_open()
-            await _drain_tasks(cover)
+        _all_relays_off(cover)
+        await cover._send_open()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_on", "switch.open"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.open"),
         ]
 
     @pytest.mark.asyncio
     async def test_open_with_stop_switch(self):
         """Stop switch is not valid in toggle mode; it must be ignored."""
         cover = _make_toggle_cover(stop_switch="switch.stop")
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_open()
-            await _drain_tasks(cover)
+        _all_relays_off(cover)
+        await cover._send_open()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.close"),
             _ha("turn_on", "switch.open"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.open"),
         ]
 
 
@@ -177,36 +166,24 @@ class TestToggleModeSendClose:
     @pytest.mark.asyncio
     async def test_close_pulses_close_switch(self):
         cover = _make_toggle_cover()
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_close()
-            await _drain_tasks(cover)
+        _all_relays_off(cover)
+        await cover._send_close()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.close"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.close"),
         ]
 
     @pytest.mark.asyncio
     async def test_close_with_stop_switch(self):
         """Stop switch is not valid in toggle mode; it must be ignored."""
         cover = _make_toggle_cover(stop_switch="switch.stop")
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_close()
-            await _drain_tasks(cover)
+        _all_relays_off(cover)
+        await cover._send_close()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.open"),
             _ha("turn_on", "switch.close"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.close"),
         ]
 
 
@@ -219,35 +196,23 @@ class TestToggleModeSendStop:
     @pytest.mark.asyncio
     async def test_stop_after_close_pulses_close_switch(self):
         cover = _make_toggle_cover()
+        _all_relays_off(cover)
         cover._last_command = SERVICE_CLOSE_COVER
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_stop()
-            await _drain_tasks(cover)
+        await cover._send_stop()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_on", "switch.close"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.close"),
         ]
 
     @pytest.mark.asyncio
     async def test_stop_after_open_pulses_open_switch(self):
         cover = _make_toggle_cover()
+        _all_relays_off(cover)
         cover._last_command = SERVICE_OPEN_COVER
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_stop()
-            await _drain_tasks(cover)
+        await cover._send_stop()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_on", "switch.open"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.open"),
         ]
 
     @pytest.mark.asyncio
@@ -338,10 +303,6 @@ class TestToggleDirectionChange:
             patch.object(
                 cover, "async_stop_cover", new_callable=AsyncMock
             ) as mock_stop,
-            patch(
-                "custom_components.cover_time_based.cover_toggle_mode.sleep",
-                new_callable=AsyncMock,
-            ),
         ):
             await cover.async_close_cover()
 
@@ -362,10 +323,6 @@ class TestToggleDirectionChange:
             patch.object(
                 cover, "async_stop_cover", new_callable=AsyncMock
             ) as mock_stop,
-            patch(
-                "custom_components.cover_time_based.cover_toggle_mode.sleep",
-                new_callable=AsyncMock,
-            ),
         ):
             await cover.async_open_cover()
 
@@ -406,7 +363,6 @@ class TestToggleStopWithTilt:
             open_switch_entity_id="switch.open",
             close_switch_entity_id="switch.close",
             stop_switch_entity_id=None,
-            pulse_time=1.0,
         )
         hass = MagicMock()
         hass.services.async_call = AsyncMock()
@@ -446,18 +402,12 @@ class TestToggleModeSendTiltOpen:
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
         )
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_tilt_open()
-            await _drain_tasks(cover)
+        _all_relays_off(cover)
+        await cover._send_tilt_open()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.tilt_close"),
             _ha("turn_on", "switch.tilt_open"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.tilt_open"),
         ]
         assert cover._last_tilt_direction == "open"
 
@@ -469,18 +419,12 @@ class TestToggleModeSendTiltClose:
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
         )
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_tilt_close()
-            await _drain_tasks(cover)
+        _all_relays_off(cover)
+        await cover._send_tilt_close()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_off", "switch.tilt_open"),
             _ha("turn_on", "switch.tilt_close"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.tilt_close"),
         ]
         assert cover._last_tilt_direction == "close"
 
@@ -492,18 +436,12 @@ class TestToggleModeSendTiltStop:
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
         )
+        _all_relays_off(cover)
         cover._last_tilt_direction = "open"
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_tilt_stop()
-            await _drain_tasks(cover)
+        await cover._send_tilt_stop()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_on", "switch.tilt_open"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.tilt_open"),
         ]
         assert cover._last_tilt_direction is None
 
@@ -513,18 +451,12 @@ class TestToggleModeSendTiltStop:
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
         )
+        _all_relays_off(cover)
         cover._last_tilt_direction = "close"
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_tilt_stop()
-            await _drain_tasks(cover)
+        await cover._send_tilt_stop()
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_on", "switch.tilt_close"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.tilt_close"),
         ]
         assert cover._last_tilt_direction is None
 
@@ -558,15 +490,10 @@ class TestToggleHandleCommandSetsLastCommand:
     @pytest.mark.asyncio
     async def test_handle_open_sets_last_command(self):
         cover = _make_toggle_cover()
+        _all_relays_off(cover)
         assert cover._last_command is None
 
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch(
-                "custom_components.cover_time_based.cover_toggle_mode.sleep",
-                new_callable=AsyncMock,
-            ),
-        ):
+        with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
 
         assert cover._last_command == SERVICE_OPEN_COVER
@@ -575,15 +502,10 @@ class TestToggleHandleCommandSetsLastCommand:
     @pytest.mark.asyncio
     async def test_handle_close_sets_last_command(self):
         cover = _make_toggle_cover()
+        _all_relays_off(cover)
         assert cover._last_command is None
 
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch(
-                "custom_components.cover_time_based.cover_toggle_mode.sleep",
-                new_callable=AsyncMock,
-            ),
-        ):
+        with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
         assert cover._last_command == SERVICE_CLOSE_COVER
@@ -598,50 +520,34 @@ class TestToggleHandleCommandSetsLastCommand:
         async_open_cover), as the calibration code does.
         """
         cover = _make_toggle_cover()
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch(
-                "custom_components.cover_time_based.cover_toggle_mode.sleep",
-                new_callable=AsyncMock,
-            ),
-        ):
+        _all_relays_off(cover)
+        with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_OPEN_COVER)
-            await _drain_tasks(cover)
             cover.hass.services.async_call.reset_mock()
 
             await cover._send_stop()
-            await _drain_tasks(cover)
 
         # _send_stop should re-pulse the open switch to toggle the motor off
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_on", "switch.open"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.open"),
         ]
+        await _cancel_tasks(cover)
 
     @pytest.mark.asyncio
     async def test_calibration_pattern_close_then_stop(self):
         """Same pattern for close direction."""
         cover = _make_toggle_cover()
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch(
-                "custom_components.cover_time_based.cover_toggle_mode.sleep",
-                new_callable=AsyncMock,
-            ),
-        ):
+        _all_relays_off(cover)
+        with patch.object(cover, "async_write_ha_state"):
             await cover._async_handle_command(SERVICE_CLOSE_COVER)
-            await _drain_tasks(cover)
             cover.hass.services.async_call.reset_mock()
 
             await cover._send_stop()
-            await _drain_tasks(cover)
 
         assert _calls(cover.hass.services.async_call) == [
             _ha("turn_on", "switch.close"),
-            # pulse completion (background)
-            _ha("turn_off", "switch.close"),
         ]
+        await _cancel_tasks(cover)
 
 
 # ===================================================================
@@ -653,59 +559,45 @@ class TestToggleRawDirectionCommand:
     """Test _raw_direction_command override in toggle mode.
 
     In toggle mode, opposite-direction = stop (not reverse). The override
-    must send stop + wait pulse_time before sending the new direction.
+    must send stop + a direction-change settle delay before the new direction.
     """
 
     @pytest.mark.asyncio
     async def test_open_sets_last_command(self):
         cover = _make_toggle_cover()
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._raw_direction_command("open")
-            await _drain_tasks(cover)
+        _all_relays_off(cover)
+        await cover._raw_direction_command("open")
         assert cover._last_command == SERVICE_OPEN_COVER
 
     @pytest.mark.asyncio
     async def test_close_sets_last_command(self):
         cover = _make_toggle_cover()
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._raw_direction_command("close")
-            await _drain_tasks(cover)
+        _all_relays_off(cover)
+        await cover._raw_direction_command("close")
         assert cover._last_command == SERVICE_CLOSE_COVER
 
     @pytest.mark.asyncio
     async def test_stop_clears_last_command(self):
         cover = _make_toggle_cover()
+        _all_relays_off(cover)
         cover._last_command = SERVICE_OPEN_COVER
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._raw_direction_command("stop")
-            await _drain_tasks(cover)
+        await cover._raw_direction_command("stop")
         assert cover._last_command is None
 
     @pytest.mark.asyncio
     async def test_direction_change_sends_stop_first(self):
-        """Close while _last_command=OPEN → stop pulse, wait, then close."""
+        """Close while _last_command=OPEN -> stop pulse, settle, then close."""
         cover = _make_toggle_cover()
+        _all_relays_off(cover)
         cover._last_command = SERVICE_OPEN_COVER
 
-        sleep_mock = AsyncMock()
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            sleep_mock,
-        ):
+        with patch.object(
+            cover, "_direction_change_delay", new_callable=AsyncMock
+        ) as delay_mock:
             await cover._raw_direction_command("close")
-            await _drain_tasks(cover)
 
-        # Sleep called with pulse_time (includes stop-before-reverse + pulse completions)
-        sleep_mock.assert_any_await(cover._pulse_time)
+        # A direction change inserts a settle delay between stop and reverse.
+        delay_mock.assert_awaited()
 
         calls = _calls(cover.hass.services.async_call)
         # First: stop pulse on open switch (re-pulse same direction to stop)
@@ -717,19 +609,17 @@ class TestToggleRawDirectionCommand:
 
     @pytest.mark.asyncio
     async def test_reverse_direction_open_while_closing(self):
-        """Open while _last_command=CLOSE → stop pulse, wait, then open."""
+        """Open while _last_command=CLOSE -> stop pulse, settle, then open."""
         cover = _make_toggle_cover()
+        _all_relays_off(cover)
         cover._last_command = SERVICE_CLOSE_COVER
 
-        sleep_mock = AsyncMock()
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            sleep_mock,
-        ):
+        with patch.object(
+            cover, "_direction_change_delay", new_callable=AsyncMock
+        ) as delay_mock:
             await cover._raw_direction_command("open")
-            await _drain_tasks(cover)
 
-        sleep_mock.assert_any_await(cover._pulse_time)
+        delay_mock.assert_awaited()
 
         calls = _calls(cover.hass.services.async_call)
         # First: stop pulse on close switch
@@ -741,18 +631,18 @@ class TestToggleRawDirectionCommand:
 
     @pytest.mark.asyncio
     async def test_same_direction_no_extra_stop(self):
-        """Open while _last_command=OPEN → no stop-before-reverse needed."""
+        """Open while _last_command=OPEN -> no stop-before-reverse needed."""
         cover = _make_toggle_cover()
+        _all_relays_off(cover)
         cover._last_command = SERVICE_OPEN_COVER
 
-        sleep_mock = AsyncMock()
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            sleep_mock,
-        ):
+        with patch.object(
+            cover, "_direction_change_delay", new_callable=AsyncMock
+        ) as delay_mock:
             await cover._raw_direction_command("open")
-            await _drain_tasks(cover)
 
+        # No direction change -> no settle delay
+        delay_mock.assert_not_awaited()
         calls = _calls(cover.hass.services.async_call)
         # First relay call should be _send_open (not a stop pulse)
         # _send_open turns off close switch first, then turns on open switch
@@ -760,18 +650,17 @@ class TestToggleRawDirectionCommand:
 
     @pytest.mark.asyncio
     async def test_no_last_command_no_stop(self):
-        """Open with _last_command=None → no stop needed."""
+        """Open with _last_command=None -> no stop needed."""
         cover = _make_toggle_cover()
+        _all_relays_off(cover)
         assert cover._last_command is None
 
-        sleep_mock = AsyncMock()
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            sleep_mock,
-        ):
+        with patch.object(
+            cover, "_direction_change_delay", new_callable=AsyncMock
+        ) as delay_mock:
             await cover._raw_direction_command("open")
-            await _drain_tasks(cover)
 
+        delay_mock.assert_not_awaited()
         calls = _calls(cover.hass.services.async_call)
         # First relay call is _send_open (turn_off close, then turn_on open)
         assert calls[0] == _ha("turn_off", "switch.close")
@@ -779,23 +668,20 @@ class TestToggleRawDirectionCommand:
 
     @pytest.mark.asyncio
     async def test_tilt_direction_change_sends_tilt_stop_first(self):
-        """tilt_close while _last_tilt_direction=open → tilt stop, wait, then tilt close."""
+        """tilt_close while _last_tilt_direction=open -> tilt stop, settle, then tilt close."""
         cover = _make_toggle_cover(
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
         )
+        _all_relays_off(cover)
         cover._last_tilt_direction = "open"
 
-        sleep_mock = AsyncMock()
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            sleep_mock,
-        ):
+        with patch.object(
+            cover, "_direction_change_delay", new_callable=AsyncMock
+        ) as delay_mock:
             await cover._raw_direction_command("tilt_close")
-            await _drain_tasks(cover)
 
-        # Sleep called for tilt stop-before-reverse + pulse completions
-        sleep_mock.assert_any_await(cover._pulse_time)
+        delay_mock.assert_awaited()
 
         calls = _calls(cover.hass.services.async_call)
         # First: tilt stop pulse on tilt_open switch
@@ -843,7 +729,6 @@ class TestToggleTiltRestoreStop:
             open_switch_entity_id="switch.open",
             close_switch_entity_id="switch.close",
             stop_switch_entity_id=None,
-            pulse_time=1.0,
         )
         hass = MagicMock()
         hass.services.async_call = AsyncMock()
@@ -865,17 +750,10 @@ class TestToggleTiltRestoreStop:
         cover._tilt_restore_active = True
         cover._last_command = SERVICE_OPEN_COVER
 
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch(
-                "custom_components.cover_time_based.cover_toggle_mode.sleep",
-                new_callable=AsyncMock,
-            ),
-        ):
+        with patch.object(cover, "async_write_ha_state"):
             # Tilt restore reaches target
             cover.tilt_calc.set_position(50)
             await cover.auto_stop_if_necessary()
-            await _drain_tasks(cover)
 
         assert cover._tilt_restore_active is False
 
@@ -893,8 +771,6 @@ class TestToggleTiltRestoreStop:
 class TestToggleStopSendsTiltStopOnTiltRestore:
     """Verify async_stop_cover calls _send_tilt_stop when tilt_restore was active
     and cover has a dual motor tilt (i.e. _has_tilt_motor() returns True).
-
-    Covers cover_toggle_mode.py line 109.
     """
 
     @pytest.mark.asyncio
@@ -921,7 +797,6 @@ class TestToggleStopSendsTiltStopOnTiltRestore:
             open_switch_entity_id="switch.open",
             close_switch_entity_id="switch.close",
             stop_switch_entity_id=None,
-            pulse_time=1.0,
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
             tilt_stop_switch="switch.tilt_stop",
@@ -948,15 +823,8 @@ class TestToggleStopSendsTiltStopOnTiltRestore:
         cover._last_command = SERVICE_OPEN_COVER
         cover._last_tilt_direction = "open"
 
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch(
-                "custom_components.cover_time_based.cover_toggle_mode.sleep",
-                new_callable=AsyncMock,
-            ),
-        ):
+        with patch.object(cover, "async_write_ha_state"):
             await cover.async_stop_cover()
-            await _drain_tasks(cover)
 
         # Verify _send_stop re-pulsed the open switch (main motor stop)
         calls = _calls(cover.hass.services.async_call)
@@ -975,8 +843,6 @@ class TestToggleStopSendsTiltStopOnTiltRestore:
 class TestToggleExternalTiltCloseWhileTraveling:
     """Verify _handle_external_tilt_state_change with the tilt close switch
     while tilt_calc is traveling triggers async_stop_cover.
-
-    Covers cover_toggle_mode.py lines 177-180.
     """
 
     @pytest.mark.asyncio
@@ -1003,7 +869,6 @@ class TestToggleExternalTiltCloseWhileTraveling:
             open_switch_entity_id="switch.open",
             close_switch_entity_id="switch.close",
             stop_switch_entity_id=None,
-            pulse_time=1.0,
             tilt_open_switch="switch.tilt_open",
             tilt_close_switch="switch.tilt_close",
             tilt_stop_switch="switch.tilt_stop",
@@ -1053,9 +918,7 @@ class TestToggleExternalTravelWhileTraveling:
     Parity with the existing tilt-while-traveling handler: a second pulse on
     the same direction button (or any travel button) while the motor is
     running is interpreted as a stop, matching how toggle-style motor
-    controllers physically behave. Previously the travel handler unconditionally
-    re-issued the direction command, which on real hardware was ignored while
-    the motor was already running in that direction — the cover would not stop.
+    controllers physically behave.
     """
 
     @pytest.mark.asyncio
@@ -1113,199 +976,89 @@ class TestToggleExternalTravelWhileTraveling:
 
 
 # ===================================================================
-# Rising-edge guarantee: re-pulsing a still-held relay
+# Rising-edge guarantee: single turn_on, release-first only when held ON
 # ===================================================================
 
 
-class TestToggleEdgeGuaranteeOnHeldRelay:
-    """A fresh pulse on a relay still held ON must produce a real rising edge.
+class TestTogglePulseEdge:
+    """A toggle pulse is a single ``turn_on`` and never holds the relay ON.
 
-    Toggle motor controllers act on the relay's OFF→ON edge. The OFF half of
-    a pulse is deferred to a background ``_complete_pulse`` task, so a second
-    command can land while the relay is still held ON. A bare ``turn_on`` on
-    an already-on relay produces no edge — the motor misses the pulse while
-    the position tracker advances, desyncing the entity from the physical
-    cover. The send methods must release the relay (turn_off) first so the
-    motor sees a genuine edge.
+    Self-releasing/momentary toggle relays return to OFF on their own, so the
+    next command is naturally a clean rising edge — no deferred ``turn_off`` is
+    issued. The relay is only driven OFF first when it still *reports* ON (a
+    non-self-releasing relay, or one left ON across a restart), so the motor is
+    guaranteed a genuine OFF->ON edge rather than a no-op ``turn_on``.
     """
 
     @pytest.mark.asyncio
-    async def test_close_while_close_relay_held_releases_first(self):
+    async def test_idle_pulse_is_single_turn_on(self):
+        """Relay reported OFF: the pulse is one turn_on, no deferred turn_off."""
+        cover = _make_toggle_cover()
+        _all_relays_off(cover)
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        await cover._send_stop()
+
+        assert _calls_for(cover, "switch.close") == [_ha("turn_on", "switch.close")]
+
+    @pytest.mark.asyncio
+    async def test_held_relay_releases_first_then_pulses(self):
+        """Relay reported ON: drive it OFF first, then turn_on (a real edge)."""
         cover = _make_toggle_cover()
         _hold_relay_on(cover, "switch.close")
+        cover._last_command = SERVICE_CLOSE_COVER
 
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_close()
-            await _drain_tasks(cover)
+        await cover._send_stop()
 
-        close_calls = _calls_for(cover, "switch.close")
-        assert close_calls[0] == _ha("turn_off", "switch.close")
-        assert close_calls[1] == _ha("turn_on", "switch.close")
+        assert _calls_for(cover, "switch.close") == [
+            _ha("turn_off", "switch.close"),
+            _ha("turn_on", "switch.close"),
+        ]
 
     @pytest.mark.asyncio
     async def test_open_while_open_relay_held_releases_first(self):
         cover = _make_toggle_cover()
         _hold_relay_on(cover, "switch.open")
 
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_open()
-            await _drain_tasks(cover)
+        await cover._send_open()
 
         open_calls = _calls_for(cover, "switch.open")
         assert open_calls[0] == _ha("turn_off", "switch.open")
         assert open_calls[1] == _ha("turn_on", "switch.open")
 
     @pytest.mark.asyncio
-    async def test_stop_while_relay_held_releases_first(self):
+    async def test_idle_pulse_marks_single_echo(self):
+        """An idle pulse emits ONE state change, so exactly one echo is pending.
+
+        Marking two (as the old deferred-turn_off design did) would leave a
+        stale pending count that swallows the user's next genuine press until
+        the safety timeout clears it.
+        """
         cover = _make_toggle_cover()
+        _all_relays_off(cover)
         cover._last_command = SERVICE_CLOSE_COVER
+
+        await cover._send_stop()
+
+        assert cover._pending_switch.get("switch.close") == 1
+
+    @pytest.mark.asyncio
+    async def test_held_relay_pulse_marks_two_echoes(self):
+        """A held relay emits turn_off + turn_on, so two echoes are pending."""
+        cover = _make_toggle_cover()
         _hold_relay_on(cover, "switch.close")
+        cover._last_command = SERVICE_CLOSE_COVER
 
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_stop()
-            await _drain_tasks(cover)
+        await cover._send_stop()
 
-        close_calls = _calls_for(cover, "switch.close")
-        assert close_calls[0] == _ha("turn_off", "switch.close")
-        assert close_calls[1] == _ha("turn_on", "switch.close")
+        assert cover._pending_switch.get("switch.close") == 2
 
     @pytest.mark.asyncio
-    async def test_idle_relay_pulse_unchanged(self):
-        """When the relay is OFF, no redundant release is issued."""
+    async def test_no_pulse_completion_tasks_created(self):
+        """A pulse schedules no background task (no deferred turn_off)."""
         cover = _make_toggle_cover()
-        _hold_relay_on(cover, "switch.nothing")  # close + open both report OFF
+        _all_relays_off(cover)
 
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_close()
-            await _drain_tasks(cover)
-
-        assert _calls(cover.hass.services.async_call) == [
-            _ha("turn_off", "switch.open"),
-            _ha("turn_on", "switch.close"),
-            _ha("turn_off", "switch.close"),
-        ]
-
-    @pytest.mark.asyncio
-    async def test_repulse_within_pulse_releases_despite_state_lag(self):
-        """The reported desync: a second pulse arrives within pulse_time, before
-        HA's switch state reflects the first turn_on (a real switch confirms
-        state only after a device round-trip — ~76 ms in the field log, vs the
-        2 ms between presses). The in-flight pulse *task*, not the laggy reported
-        switch state, must trigger the release so the motor gets a real edge.
-        """
-        cover = _make_toggle_cover()
-        # hass keeps reporting every relay OFF for the whole test — simulating
-        # switch-state commit lag (the turn_on hasn't been confirmed yet).
-        cover.hass.states.get = MagicMock(
-            side_effect=lambda eid: SimpleNamespace(state="off")
-        )
-
-        # First pulse: schedules a live completion (relay is commanded on).
         await cover._send_close()
-        assert not cover._pulse_tasks["switch.close"].done()
 
-        # Second pulse lands while the first is still in flight.
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            await cover._send_close()
-
-        close_calls = _calls_for(cover, "switch.close")
-        # pulse 1 -> turn_on; pulse 2 must release (turn_off) then re-pulse,
-        # despite the reported relay state still being "off".
-        assert close_calls[0] == _ha("turn_on", "switch.close")
-        assert close_calls[1] == _ha("turn_off", "switch.close")
-        assert close_calls[2] == _ha("turn_on", "switch.close")
-        await _cancel_tasks(cover)
-
-    @pytest.mark.asyncio
-    async def test_superseded_completion_does_not_release_relay(self):
-        """A completion whose registration was replaced by a newer pulse must
-        not issue turn_off, even if cancellation didn't stop it in time.
-
-        asyncio cancellation is cooperative: a _complete_pulse already past its
-        sleep and into the turn_off call can finish. Keying the release on the
-        registered task (not on cancellation) makes "a stale completion can't
-        release a fresh pulse" deterministic.
-        """
-        cover = _make_toggle_cover()
-        with patch(
-            "custom_components.cover_time_based.cover_toggle_mode.sleep",
-            new_callable=AsyncMock,
-        ):
-            task = cover.hass.async_create_task(cover._complete_pulse("switch.close"))
-            # A newer pulse has since claimed the relay (different registration).
-            cover._pulse_tasks["switch.close"] = object()
-            await task
-
-        assert _ha("turn_off", "switch.close") not in _calls(
-            cover.hass.services.async_call
-        )
-        await _cancel_tasks(cover)
-
-    @pytest.mark.asyncio
-    async def test_concurrent_same_relay_pulses_serialize_and_release(self):
-        """Two _send_close calls that interleave at their awaits must each get a
-        real edge. Cover service calls aren't serialized (no PARALLEL_UPDATES),
-        so without a lock both could pop the pulse task before either stores it,
-        both see no in-flight pulse, neither releases, and the second turn_on is
-        a no-op — the original desync, under true concurrency. _pulse_relay must
-        serialize so the second pulse sees the first's in-flight pulse.
-        """
-        cover = _make_toggle_cover()
-        # Relays report OFF (state lag) and each service call yields control,
-        # forcing the two pulses to interleave under asyncio.gather.
-        cover.hass.states.get = MagicMock(
-            side_effect=lambda eid: SimpleNamespace(state="off")
-        )
-
-        async def _yielding_call(*args, **kwargs):
-            await asyncio.sleep(0)
-
-        cover.hass.services.async_call = AsyncMock(side_effect=_yielding_call)
-
-        # Do NOT patch sleep: the first pulse's completion stays in flight, so
-        # the second must detect it and release the relay.
-        await asyncio.gather(cover._send_close(), cover._send_close())
-
-        close_calls = _calls_for(cover, "switch.close")
-        # One turn_on per pulse, plus a release turn_off for the second.
-        assert close_calls.count(_ha("turn_on", "switch.close")) == 2
-        assert _ha("turn_off", "switch.close") in close_calls
-        first_on = close_calls.index(_ha("turn_on", "switch.close"))
-        release = close_calls.index(_ha("turn_off", "switch.close"))
-        assert release > first_on  # a release, not a leading opposite turn_off
-        await _cancel_tasks(cover)
-
-    @pytest.mark.asyncio
-    async def test_new_pulse_cancels_stale_completion(self):
-        """A new pulse cancels the previous pulse's pending completion so it
-        cannot release the new pulse's relay mid-flight."""
-        cover = _make_toggle_cover()
-
-        # First pulse: completion task scheduled, relay left ON until it fires.
-        await cover._send_close()
-        stale = cover._pulse_tasks["switch.close"]
-        assert not stale.done()
-
-        # Second pulse arrives while the relay is still held ON.
-        _hold_relay_on(cover, "switch.close")
-        await cover._send_close()
-        await asyncio.sleep(0)  # let the cancellation propagate
-
-        assert stale.cancelled()
-        assert cover._pulse_tasks["switch.close"] is not stale
-        await _cancel_tasks(cover)
+        assert cover._test_tasks == []

@@ -13,6 +13,7 @@
 ### Fixes
 
 - **Separate tilt motor no longer nudges the travel motor** ([#105](https://github.com/Sese-Schneider/ha-cover-time-based/issues/105)): completing a tilt-only move on a separate-tilt-motor cover previously fell through to the travel stop and re-pulsed the *travel* relay (off a stale last-command), while never issuing a proper tilt stop. Tilt completions now settle the tilt motor directly.
+- **Toggle mode no longer uses Pulse time** ([#105](https://github.com/Sese-Schneider/ha-cover-time-based/issues/105)): toggle-style relays are momentary — a brief press latches the motor and the relay releases itself — so holding the relay ON for the configured **Pulse time** served no purpose. Toggle covers now send a single switch-on per command (briefly switching the relay off first only when it is still reported ON, to guarantee a clean rising edge) and the **Pulse time** option is hidden for toggle mode. **Pulse** mode is unchanged and still uses Pulse time. If you had set a pulse time on a toggle cover it was doing nothing useful, so no action is needed.
 
 ## 4.3.0 (2026-06-17)
 

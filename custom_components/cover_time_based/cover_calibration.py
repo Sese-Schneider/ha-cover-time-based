@@ -427,9 +427,11 @@ class CalibrationMixin:
                 )
                 return 0.0
             continuous_time = time.monotonic() - continuous_start
-            # Subtract pulse overhead from continuous phase start for
-            # pulse/toggle modes (the ON command includes a relay pulse
-            # that doesn't contribute to motor travel time).
+            # Subtract pulse overhead from the continuous phase for pulse mode
+            # (the ON command holds the relay for pulse_time, which doesn't
+            # contribute to motor travel time). Toggle mode no longer sets
+            # _pulse_time — it sends a momentary edge with no hold — so getattr
+            # yields None and nothing is subtracted.
             pulse_time = getattr(self, "_pulse_time", None)
             if pulse_time:
                 continuous_time -= pulse_time

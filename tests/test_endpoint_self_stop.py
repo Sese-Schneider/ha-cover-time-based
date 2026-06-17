@@ -233,10 +233,7 @@ async def test_mid_tilt_at_travel_endpoint_still_stops_tilt(make_cover):
     cover.travel_calc.set_position(100)  # cover at a travel endpoint
     cover.tilt_calc.set_position(0)
 
-    with (
-        patch.object(cover, "async_write_ha_state"),
-        patch("custom_components.cover_time_based.cover_toggle_mode.sleep"),
-    ):
+    with patch.object(cover, "async_write_ha_state"):
         await cover.set_tilt_position(50)  # mid-tilt
         cover.hass.services.async_call.reset_mock()
         cover.tilt_calc.set_position(50)  # tilt reaches its mid target
@@ -306,10 +303,7 @@ def _make_dual_motor(make_cover, control_mode=CONTROL_MODE_TOGGLE):
 
 async def _run_tilt_move(cover, target):
     """Drive a real dual-motor tilt move to `target` and complete it."""
-    with (
-        patch.object(cover, "async_write_ha_state"),
-        patch("custom_components.cover_time_based.cover_toggle_mode.sleep"),
-    ):
+    with patch.object(cover, "async_write_ha_state"):
         await cover.set_tilt_position(target)
         cover.hass.services.async_call.reset_mock()
         cover.tilt_calc.set_position(target)

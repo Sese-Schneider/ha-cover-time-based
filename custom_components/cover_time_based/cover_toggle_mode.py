@@ -1,9 +1,7 @@
 """Toggle mode cover."""
 
-import asyncio
 import logging
 import time
-from asyncio import sleep
 
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
@@ -29,101 +27,51 @@ class ToggleModeCover(SwitchCoverTimeBased):
     A second pulse on the same direction button stops the motor.
     _send_stop therefore re-presses the last-used direction button.
 
-    The send methods return immediately after the ON edge so that position
-    tracking starts from the moment the motor begins moving. The pulse
-    completion (sleep + turn_off) runs in the background.
+    The send methods pulse a relay with a single ``turn_on`` and never hold it
+    ON: toggle relays are momentary/self-releasing, so the next command is
+    naturally a clean rising edge. Position tracking starts from the moment the
+    motor begins moving (the ON edge).
     """
 
-    def __init__(self, pulse_time, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._pulse_time = pulse_time
         self._last_external_toggle_time = {}
         self._last_tilt_direction = None
-        # In-flight _complete_pulse tasks, keyed by relay entity_id. Tracked so
-        # a new pulse on the same relay can cancel the stale completion before
-        # it releases the fresh pulse mid-flight (see _pulse_relay).
-        self._pulse_tasks = {}
-        # Serializes _pulse_relay: cover service calls aren't serialized by HA
-        # (no PARALLEL_UPDATES), so concurrent pulses on the same relay could
-        # otherwise interleave between the task pop and the task store, each
-        # missing the other's in-flight pulse.
-        self._pulse_lock = asyncio.Lock()
 
-    async def _complete_pulse(self, entity_id):
-        """Complete a relay pulse by turning OFF after pulse_time.
+    async def _pulse_relay(self, entity_id):
+        """Pulse a relay ON with a guaranteed rising edge.
 
-        Only releases the relay if this task is still the one registered for it.
-        A newer pulse replaces the registration (and cancels this task), but
-        asyncio cancellation is cooperative — a task already past the sleep and
-        into the turn_off call could otherwise still fire it and release the
-        fresh pulse. Keying off the registration makes that impossible
-        regardless of cancellation timing.
+        A toggle motor controller acts on the relay's OFF→ON edge, so a plain
+        ``turn_on`` is enough when the relay is already OFF (the momentary relay
+        released itself — see the class docstring); no deferred ``turn_off`` is
+        scheduled. Only when the relay still *reports* ON (a non-self-releasing
+        relay, or one left ON across a restart) is it driven OFF first, so the
+        ``turn_on`` is a genuine edge rather than a no-op on an already-on relay
+        (which the motor would miss while the position tracker keeps advancing,
+        desyncing the entity from the physical cover).
+
+        Mark the echo(es) this pulse produces so the integration ignores its
+        own state changes: one for the lone ``turn_on``, or two when a release
+        ``turn_off`` precedes it. Marking more echoes than are emitted would
+        leave a stale pending count that swallows the user's next genuine press
+        until the safety timeout clears it.
         """
-        try:
-            await sleep(self._pulse_time)
-            if self._pulse_tasks.get(entity_id) is not asyncio.current_task():
-                return
+        if self._switch_is_on(entity_id):
+            self._mark_switch_pending(entity_id, 2)
             await self.hass.services.async_call(
                 "homeassistant",
                 "turn_off",
                 {"entity_id": entity_id},
                 False,
             )
-        except asyncio.CancelledError:
-            pass
-
-    async def _pulse_relay(self, entity_id):
-        """Pulse a relay ON with a guaranteed edge, then schedule its release.
-
-        A toggle motor controller acts on the relay's rising edge. The OFF half
-        of a pulse is deferred to a background ``_complete_pulse`` task, so a
-        new command can arrive while the relay is still held ON. A bare
-        ``turn_on`` on an already-on relay produces no edge — the motor misses
-        the pulse while the position tracker keeps advancing, desyncing the
-        entity from the physical cover.
-
-        Cancel any stale completion for this relay (so it can't release the
-        fresh pulse mid-flight) and, if the relay is still held ON, drive it OFF
-        first so the ``turn_on`` is a genuine edge. The release OFF echo is
-        absorbed by the pending count the caller already marked for this relay's
-        own completion turn_off, so no extra echo bookkeeping is needed. Finally
-        schedule (and track) the OFF half so the next pulse can cancel it.
-
-        "Still held ON" is decided by the in-flight pulse *task*, not by
-        ``_switch_is_on``: a real switch confirms its state only after a device
-        round-trip (tens of ms), which is far longer than the gap between rapid
-        presses, so the reported state still reads OFF while our own pulse holds
-        the relay ON. ``_switch_is_on`` is kept as a secondary trigger for the
-        relay being ON for some other reason (e.g. left ON across a restart);
-        that path emits one extra OFF echo over the caller's pending budget, but
-        a stray OFF is harmless — external handlers act only on the rising edge.
-
-        The whole body runs under ``_pulse_lock`` so the pop/cancel/turn_on/
-        store sequence is atomic: HA does not serialize cover service calls, so
-        two concurrent pulses on the same relay would otherwise both pop before
-        either stored, both miss the in-flight pulse, and skip the release.
-        """
-        async with self._pulse_lock:
-            stale = self._pulse_tasks.pop(entity_id, None)
-            pulse_in_flight = stale is not None and not stale.done()
-            if pulse_in_flight:
-                stale.cancel()
-            if pulse_in_flight or self._switch_is_on(entity_id):
-                await self.hass.services.async_call(
-                    "homeassistant",
-                    "turn_off",
-                    {"entity_id": entity_id},
-                    False,
-                )
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_on",
-                {"entity_id": entity_id},
-                False,
-            )
-            self._pulse_tasks[entity_id] = self.hass.async_create_task(
-                self._complete_pulse(entity_id)
-            )
+        else:
+            self._mark_switch_pending(entity_id, 1)
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_on",
+            {"entity_id": entity_id},
+            False,
+        )
 
     async def async_stop_cover(self, **kwargs):
         """Stop the cover, only sending relay command if it was active."""
@@ -260,12 +208,12 @@ class ToggleModeCover(SwitchCoverTimeBased):
             opposite = SERVICE_CLOSE_COVER if command == "open" else SERVICE_OPEN_COVER
             if self._last_command == opposite:
                 await self._send_stop()
-                await sleep(self._pulse_time)
+                await self._direction_change_delay()
         elif command in ("tilt_open", "tilt_close"):
             opposite_dir = "close" if command == "tilt_open" else "open"
             if self._last_tilt_direction == opposite_dir:
                 await self._send_tilt_stop()
-                await sleep(self._pulse_time)
+                await self._direction_change_delay()
         await super()._raw_direction_command(command)
 
     # --- Internal relay commands ---
@@ -273,37 +221,33 @@ class ToggleModeCover(SwitchCoverTimeBased):
     async def _send_open(self) -> None:
         if self._switch_is_on(self._close_switch_entity_id):
             self._mark_switch_pending(self._close_switch_entity_id, 1)
-        self._mark_switch_pending(self._open_switch_entity_id, 2)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._close_switch_entity_id},
             False,
         )
-        # Motor controller acts on ON edge; complete pulse in background
+        # Motor controller acts on the ON edge (_pulse_relay marks its echoes)
         await self._pulse_relay(self._open_switch_entity_id)
 
     async def _send_close(self) -> None:
         if self._switch_is_on(self._open_switch_entity_id):
             self._mark_switch_pending(self._open_switch_entity_id, 1)
-        self._mark_switch_pending(self._close_switch_entity_id, 2)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._open_switch_entity_id},
             False,
         )
-        # Motor controller acts on ON edge; complete pulse in background
+        # Motor controller acts on the ON edge (_pulse_relay marks its echoes)
         await self._pulse_relay(self._close_switch_entity_id)
 
     async def _send_stop(self) -> None:
+        # Stop re-pulses the last-used direction relay; the motor toggles on
+        # the ON edge (_pulse_relay marks its own echoes).
         if self._last_command == SERVICE_CLOSE_COVER:
-            self._mark_switch_pending(self._close_switch_entity_id, 2)
-            # Motor toggles on ON edge; complete pulse in background
             await self._pulse_relay(self._close_switch_entity_id)
         elif self._last_command == SERVICE_OPEN_COVER:
-            self._mark_switch_pending(self._open_switch_entity_id, 2)
-            # Motor toggles on ON edge; complete pulse in background
             await self._pulse_relay(self._open_switch_entity_id)
         else:
             self._log("_send_stop :: toggle mode with no last command, skipping")
@@ -313,7 +257,6 @@ class ToggleModeCover(SwitchCoverTimeBased):
     async def _send_tilt_open(self) -> None:
         if self._switch_is_on(self._tilt_close_switch_id):
             self._mark_switch_pending(self._tilt_close_switch_id, 1)
-        self._mark_switch_pending(self._tilt_open_switch_id, 2)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -326,7 +269,6 @@ class ToggleModeCover(SwitchCoverTimeBased):
     async def _send_tilt_close(self) -> None:
         if self._switch_is_on(self._tilt_open_switch_id):
             self._mark_switch_pending(self._tilt_open_switch_id, 1)
-        self._mark_switch_pending(self._tilt_close_switch_id, 2)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -338,10 +280,8 @@ class ToggleModeCover(SwitchCoverTimeBased):
 
     async def _send_tilt_stop(self) -> None:
         if self._last_tilt_direction == "close":
-            self._mark_switch_pending(self._tilt_close_switch_id, 2)
             await self._pulse_relay(self._tilt_close_switch_id)
         elif self._last_tilt_direction == "open":
-            self._mark_switch_pending(self._tilt_open_switch_id, 2)
             await self._pulse_relay(self._tilt_open_switch_id)
         else:
             self._log(

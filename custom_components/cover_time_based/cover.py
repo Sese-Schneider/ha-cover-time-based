@@ -351,7 +351,7 @@ def _create_cover_from_options(options, device_id="", name=""):
     if control_mode == CONTROL_MODE_PULSE:
         return PulseModeCover(pulse_time=pulse_time, **switch_args)
     elif control_mode == CONTROL_MODE_TOGGLE:
-        return ToggleModeCover(pulse_time=pulse_time, **switch_args)
+        return ToggleModeCover(**switch_args)
     else:
         return SwitchModeCover(**switch_args)
 

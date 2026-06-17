@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   switchPickerDomains,
   switchLabelKey,
+  showsPulseTime,
   clearedEntitiesForMode,
   clearedTiltConfig,
   coverHasNativeTilt,
@@ -17,6 +18,16 @@ import {
 
 test("pulse mode allows switch and script domains", () => {
   assert.deepEqual(switchPickerDomains("pulse"), ["switch", "script"]);
+});
+
+test("the pulse-time field shows only for pulse mode", () => {
+  // Toggle relays are momentary/self-releasing and no longer use pulse_time,
+  // so only pulse mode configures it.
+  assert.equal(showsPulseTime("pulse"), true);
+  assert.equal(showsPulseTime("toggle"), false);
+  assert.equal(showsPulseTime("switch"), false);
+  assert.equal(showsPulseTime("wrapped"), false);
+  assert.equal(showsPulseTime(undefined), false);
 });
 
 test("non-pulse modes allow only the switch domain", () => {
