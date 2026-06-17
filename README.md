@@ -22,7 +22,7 @@ It improves the original integration by adding tilt control, synchronized travel
 - **Wrap an existing cover:** Add time-based position tracking to any cover entity.
 - **Control the tilt of your cover based on time** with four tilt modes: inline, sequential closes-then-tilts-closed, sequential closes-then-tilts-open, or separate tilt motor.
 - **Built-in configuration and calibration:** Calibrate travel times directly from the UI, including finer parameters to compensate for the time it takes the motor to startup.
-- **Resyncs position at endpoints:** The motor can be configured to run-on at the 0%/100% endpoints to resync the position tracker with the physical cover.
+- **Resyncs position at endpoints:** Motors with internal limit switches self-stop at the 0%/100% endpoints, which resyncs the position tracker with the physical cover. For latching (Switch-mode) relays a configurable run-on keeps the relay energized until the motor reaches the endpoint.
 
 ## Install
 
@@ -188,7 +188,7 @@ Select the attribute that you wish to calibrate. The available attributes depend
 | Travel time (close)  | Time in seconds for the cover to fully close                          |         |
 | Travel time (open)   | Time in seconds for the cover to fully open                           |         |
 | Travel startup delay | Motor startup compensation for travel (see below)                     | None    |
-| Endpoint run-on time | Extra relay time at endpoints (0%/100%) to reset position             | 2.0     |
+| Endpoint run-on time | Extra relay time at endpoints to reset position (Switch mode only)    | 2.0     |
 | Min movement time    | Minimum movement duration - blocks shorter movements to prevent drift | None    |
 
 ### Calibration Attributes for Tilt
@@ -216,7 +216,13 @@ Recommended values: 0.05 - 0.15 seconds. Can be configured separately for travel
 
 #### Endpoint Run-on Time
 
-Position tracking is not exact and can drift over time. To reduce drift, the position tracker resyncs itself whenever the cover is sent to the 0% or 100% endpoints. The motor continues running for the number of seconds specified in the **Endpoint Run-on Time** in case the physical cover hasn't quite reached the endpoint. Defaults to 2s.
+Position tracking is not exact and can drift over time, so the tracker resyncs itself whenever the cover is sent fully to the 0% or 100% endpoint.
+
+Most cover motors have internal limit switches and stop themselves at the endpoints. In **Pulse**, **Toggle** and wrapped-cover modes the integration therefore sends **no stop command at an endpoint** — it lets the motor run into its own limit. This avoids an unwanted extra movement (in Toggle mode a stop pulse on an already-stopped motor would restart it) and resyncs the tracker for free, as the motor always reaches its true endpoint.
+
+In **Switch** mode the direction relay is latched ON for the whole movement, so it must be actively switched off at the endpoint. Because tracking is approximate, the relay is held on for an extra **Endpoint Run-on Time** (default 2s) so the motor reaches the physical endpoint before power is cut. **This setting applies only to Switch mode.**
+
+The same self-stop handling applies to a **separate tilt motor** (separate-tilt-motor mode): no stop is sent when tilt reaches its 0%/100% endpoints — the tilt motor self-stops on its own limit — except in **Switch** mode, which de-energizes the latched tilt relay. Mid-tilt positions are always stopped (nothing self-stops there).
 
 Under the **sequential closes-then-tilts-closed** and **sequential closes-then-tilts-open** tilt modes, run-on is skipped at the closed (0%) endpoint, because the motor is already driven past cover-closed for the tilt phase. Run-on still applies at the open (100%) endpoint.
 

@@ -126,6 +126,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_tilt_command: str | None = None
         self._triggered_externally = False
         self._self_initiated_movement = True
+        # True while the active movement drives a dedicated tilt motor (dual
+        # motor), so auto-stop settles the tilt motor instead of travel.
+        self._moving_tilt_motor = False
         self._state = True
         self._pending_switch = {}
         self._pending_switch_timers = {}
@@ -614,7 +617,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._cancel_delay_task()
             self._last_command = command
             await self._async_handle_command(command)
-            if self._endpoint_runon_time is not None and self._endpoint_runon_time > 0:
+            if self._self_stops_at_endpoints() and self._at_endpoint(target):
+                # The re-drive above resyncs the cover physically; the motor
+                # self-stops at its limit. A stop here is redundant (and for
+                # toggle re-pulses → restart), so skip it and any run-on.
+                self._log(
+                    "_async_move_to_endpoint :: motor self-stops at endpoint,"
+                    " no relay stop"
+                )
+            elif (
+                self._endpoint_runon_time is not None and self._endpoint_runon_time > 0
+            ):
                 self._delay_task = self.hass.async_create_task(
                     self._delayed_stop(self._endpoint_runon_time)
                 )
@@ -761,6 +774,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         self._last_command = command
         if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
+            self._moving_tilt_motor = True
             if closing:
                 await self._send_tilt_close()
             else:
@@ -979,6 +993,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._last_command = command
 
         if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
+            self._moving_tilt_motor = True
             if closing:
                 await self._send_tilt_close()
             else:
@@ -1352,6 +1367,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                         self.travel_calc, self.tilt_calc
                     )
                 self._last_command = None
+                self._moving_tilt_motor = False
                 await self._async_persist_position()
                 return
 
@@ -1359,7 +1375,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._log("auto_stop_if_necessary :: tilt restore complete")
                 self._tilt_restore_active = False
                 if self._has_tilt_motor():
-                    await self._send_tilt_stop()
+                    await self._tilt_settle()
                 else:
                     await self._async_handle_command(SERVICE_STOP_COVER)
                 if self._tilt_strategy is not None:
@@ -1367,6 +1383,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                         self.travel_calc, self.tilt_calc
                     )
                 self._last_command = None
+                self._moving_tilt_motor = False
                 await self._async_persist_position()
                 return
 
@@ -1400,15 +1417,27 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 # off the exact target (a freeze re-commands the calculated, not
                 # requested, position). Just settle the tracker.
                 self._log("auto_stop_if_necessary :: device self-stops, no relay stop")
-            elif (
-                self._endpoint_runon_time is not None
-                and self._endpoint_runon_time > 0
-                and current_travel is not None
-                and current_travel in (0, 100)
-                and (
-                    self._tilt_strategy is None
-                    or self._tilt_strategy.allows_endpoint_runon(current_travel)
+            elif self._has_tilt_motor() and self._moving_tilt_motor:
+                # The completed movement drove the dedicated tilt motor — settle
+                # that motor (skipping the stop at the tilt endpoints), not
+                # travel. Without this a tilt move would fall through to the
+                # travel stop below and re-pulse the travel relay off a stale
+                # _last_command.
+                await self._tilt_settle()
+            elif self._at_endpoint(current_travel) and self._self_stops_at_endpoints():
+                # The motor self-stops at its physical limit switch. Sending a
+                # stop here is redundant (and for toggle re-pulses → restart),
+                # so skip the relay stop and any run-on; just settle the
+                # tracker. Run-on (below) is therefore switch-mode only.
+                self._log(
+                    "auto_stop_if_necessary :: motor self-stops at endpoint"
+                    " (position=%d), no relay stop",
+                    current_travel,
                 )
+            elif (
+                self._at_endpoint(current_travel)
+                and self._endpoint_runon_time is not None
+                and self._endpoint_runon_time > 0
             ):
                 self._log(
                     "auto_stop_if_necessary :: at endpoint (position=%d),"
@@ -1422,6 +1451,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
             self._last_command = None
+            self._moving_tilt_motor = False
             await self._async_persist_position()
 
     def _motor_stops_itself(self) -> bool:
@@ -1434,6 +1464,61 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         relay stop.
         """
         return False
+
+    def _self_stops_at_endpoints(self) -> bool:
+        """Return True if the motor self-stops at the physical endpoints.
+
+        Roller-shutter motors have internal limit switches that halt the motor
+        at fully-open/closed on their own. For modes whose relays are momentary
+        or delegated (toggle, pulse, wrapped), the stop we would otherwise send
+        at 0%/100% is therefore redundant — and for toggle actively harmful, as
+        re-pulsing the direction relay restarts the already-stopped motor. Such
+        modes return True so auto-stop skips the relay stop (and run-on) at an
+        endpoint while still stopping mid-travel, where nothing self-stops.
+
+        Switch mode overrides this to False: its direction relay is latched ON
+        for the whole travel, so reaching an endpoint must still de-energize it.
+        """
+        return True
+
+    def _at_endpoint(self, position) -> bool:
+        """Return True at a travel endpoint (0/100) where endpoint handling
+        (self-stop skip or run-on) applies.
+
+        Sequential tilt drives the motor past cover-closed to articulate the
+        slats, so it disallows endpoint handling at 0 (``allows_endpoint_runon``).
+        """
+        return (
+            position is not None
+            and position in (0, 100)
+            and (
+                self._tilt_strategy is None
+                or self._tilt_strategy.allows_endpoint_runon(position)
+            )
+        )
+
+    async def _tilt_settle(self) -> None:
+        """Stop the dedicated tilt motor at the end of a tilt-motor movement.
+
+        Mirrors the travel endpoint logic: at the tilt endpoints (0%/100%) the
+        tilt motor self-stops on its own limit, so the stop is skipped (and for
+        toggle a re-pulse would restart it) — except in switch mode, whose
+        latched tilt relay must still be de-energized. Mid-tilt always stops.
+        """
+        current_tilt = (
+            self.tilt_calc.current_position() if self._has_tilt_support() else None
+        )
+        if (
+            current_tilt is not None
+            and current_tilt in (0, 100)
+            and self._self_stops_at_endpoints()
+        ):
+            self._log(
+                "_tilt_settle :: tilt motor self-stops at endpoint (%d), no relay stop",
+                current_tilt,
+            )
+        else:
+            await self._send_tilt_stop()
 
     async def _delayed_stop(self, delay):
         """Stop the relay after a delay."""
@@ -1470,6 +1555,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_travel_command = None
         self._pending_tilt_target = None
         self._pending_tilt_command = None
+        # Each movement entry point funnels through here; default to a travel
+        # move and let the tilt-motor paths below opt in.
+        self._moving_tilt_motor = False
 
         if not was_restoring and not was_pre_stepping:
             return
@@ -1576,6 +1664,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             command,
         )
 
+        self._moving_tilt_motor = False
         if not self._triggered_externally:
             # Stop tilt motor and send travel command.
             await self._send_tilt_stop()
@@ -1643,6 +1732,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         await self._async_handle_command(SERVICE_STOP_COVER)
 
         # Send tilt command and start tracking
+        self._moving_tilt_motor = True
         closing_tilt = command == SERVICE_CLOSE_COVER
         if closing_tilt:
             await self._send_tilt_close()

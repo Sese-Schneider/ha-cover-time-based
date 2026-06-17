@@ -14,6 +14,15 @@ class SwitchModeCover(SwitchCoverTimeBased):
     of the movement. _send_stop turns both direction switches OFF.
     """
 
+    def _self_stops_at_endpoints(self) -> bool:
+        """Switch mode latches the direction relay ON for the whole travel.
+
+        Unlike the momentary modes, reaching an endpoint must still de-energize
+        that relay, so the endpoint stop (and run-on) are kept rather than
+        skipped.
+        """
+        return False
+
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle external state change in switch (latching) mode.
 
