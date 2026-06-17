@@ -1,3 +1,15 @@
+## Unreleased
+
+### ⚠ Breaking changes
+
+- **No endpoint stop or run-on for self-stopping motors** ([#105](https://github.com/Sese-Schneider/ha-cover-time-based/issues/105)): in **Pulse**, **Toggle** and **wrapped-cover** modes the integration no longer sends a relay stop — nor applies endpoint run-on — when a cover reaches the 0%/100% endpoints. These motors stop themselves at their internal limit switches, so the stop was redundant; in **Toggle** mode it was actively wrong, re-pulsing the direction relay and restarting the just-stopped motor (the movement-after-every-full-open/close some users saw). The same now applies to a **separate tilt motor** at its tilt endpoints. **Switch** mode is unchanged — its direction relay is latched ON for the whole movement, so it is still switched off (with run-on) at the endpoint.
+
+  **Migration:** no action is required and no settings are lost. The **Endpoint run-on time** option now applies to **Switch mode only**; it is hidden in the config card for the other modes, and any value previously set on a pulse/toggle/wrapped cover is simply ignored. Mid-travel and mid-tilt stops are unaffected. Sequential closes-then-tilts modes still stop at the closed (0%) endpoint, where the motor is deliberately driven past cover-closed to articulate the slats.
+
+### Fixes
+
+- **Separate tilt motor no longer nudges the travel motor** ([#105](https://github.com/Sese-Schneider/ha-cover-time-based/issues/105)): completing a tilt-only move on a separate-tilt-motor cover previously fell through to the travel stop and re-pulsed the *travel* relay (off a stale last-command), while never issuing a proper tilt stop. Tilt completions now settle the tilt motor directly.
+
 ## 4.3.0 (2026-06-17)
 
 ### Features
