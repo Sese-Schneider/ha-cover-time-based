@@ -1364,8 +1364,17 @@ class CoverTimeBasedCard extends LitElement {
       ["timing.travel_time_open", "travel_time_open", c.travel_time_open, 0.1],
       ["timing.travel_startup_delay", "travel_startup_delay", c.travel_startup_delay],
       ["timing.min_movement_time", "min_movement_time", c.min_movement_time],
-      ["timing.endpoint_runon_time", "endpoint_runon_time", c.endpoint_runon_time],
     ];
+    // Endpoint run-on only applies to switch mode (its latched relay must be
+    // de-energized at the endpoint). Pulse/toggle/wrapped covers self-stop at
+    // their limit switches, so the setting has no effect there.
+    if ((c.control_mode || "switch") === "switch") {
+      travelRows.push([
+        "timing.endpoint_runon_time",
+        "endpoint_runon_time",
+        c.endpoint_runon_time,
+      ]);
+    }
 
     const tiltRows = [
       ["timing.tilt_time_close", "tilt_time_close", c.tilt_time_close, 0.1],
