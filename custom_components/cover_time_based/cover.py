@@ -25,6 +25,7 @@ from .calibration import (
     SERVICE_STOP_CALIBRATION,
 )
 from .const import (
+    CONF_ASSUMED_STATE,
     CONF_CLOSE_INCLUDES_TILT,
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_TIME_BASED_POSITION,
@@ -37,6 +38,7 @@ from .const import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    DEFAULT_ASSUMED_STATE,
     DEFAULT_CLOSE_INCLUDES_TILT,
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_TIME_BASED_POSITION,
@@ -322,6 +324,7 @@ def _create_cover_from_options(options, device_id="", name=""):
         close_includes_tilt=options.get(
             CONF_CLOSE_INCLUDES_TILT, DEFAULT_CLOSE_INCLUDES_TILT
         ),
+        assumed_state=options.get(CONF_ASSUMED_STATE, DEFAULT_ASSUMED_STATE),
     )
 
     if control_mode == CONTROL_MODE_WRAPPED:
