@@ -6,6 +6,10 @@
 
   **Migration:** no action is required and no settings are lost. The **Endpoint run-on time** option now applies to **Switch mode only**; it is hidden in the config card for the other modes, and any value previously set on a pulse/toggle/wrapped cover is simply ignored. Mid-travel and mid-tilt stops are unaffected. Sequential closes-then-tilts modes still stop at the closed (0%) endpoint, where the motor is deliberately driven past cover-closed to articulate the slats.
 
+### Features
+
+- **Up/down interlock for switch mode** ([#99](https://github.com/Sese-Schneider/ha-cover-time-based/issues/99)): in switch (latching relay) mode, when the integration observes one direction relay turn ON from outside Home Assistant — for example a decoupled wall switch, or the physical switch wired straight to the relays — it now turns the opposite direction relay OFF. This covers both the travel (up/down) relays and, on dual-motor covers, the tilt relays, so two opposing relays are never energized at once even on motors with no hardware interlock. The integration already did this when *it* drove the relays; this extends the same protection to externally-triggered changes. Pulse and toggle modes are unaffected, since they don't hold a direction relay on.
+
 ### Fixes
 
 - **Separate tilt motor no longer nudges the travel motor** ([#105](https://github.com/Sese-Schneider/ha-cover-time-based/issues/105)): completing a tilt-only move on a separate-tilt-motor cover previously fell through to the travel stop and re-pulsed the *travel* relay (off a stale last-command), while never issuing a proper tilt stop. Tilt completions now settle the tilt motor directly.
