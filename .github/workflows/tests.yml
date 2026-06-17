@@ -8,13 +8,23 @@ on:
 
 jobs:
   test:
+    name: test (${{ matrix.ha-channel }}, py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13"]
-        ha-version: ["stable", "dev"]
-    continue-on-error: ${{ matrix.ha-version == 'dev' }}
+        # Each HA channel runs on the lowest Python its HA pin supports.
+        # stable + dev track current HA, which (2026.3+) requires Python 3.14.
+        # minimum pins our declared floor (HA 2025.2.0); its pytest-homeassistant-
+        # custom-component only supports 3.13, so that leg stays on 3.13 to keep
+        # proving the floor still works. (pytest-homeassistant-custom-component
+        # capped at 3.13 can't resolve HA past 2026.2.x, which is why stable must
+        # run on 3.14 to actually exercise the latest HA.)
+        include:
+          - { ha-channel: stable, python-version: "3.14" }
+          - { ha-channel: dev, python-version: "3.14" }
+          - { ha-channel: minimum, python-version: "3.13" }
+    continue-on-error: ${{ matrix.ha-channel == 'dev' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,16 +33,29 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Install dependencies (stable)
+        if: matrix.ha-channel == 'stable'
         run: |
           python -m pip install --upgrade pip
-          if [ "${{ matrix.ha-version }}" = "dev" ]; then
-            python -m pip install pytest pytest-asyncio
-            python -m pip install --pre pytest-homeassistant-custom-component
-          else
-            python -m pip install homeassistant
-            python -m pip install pytest pytest-asyncio pytest-homeassistant-custom-component
-          fi
+          # pytest-homeassistant-custom-component pins the latest stable HA it
+          # supports (2026.6.x on Python 3.14) along with its whole pytest stack,
+          # so this single install is sufficient.
+          python -m pip install pytest-homeassistant-custom-component
+
+      - name: Install dependencies (dev)
+        if: matrix.ha-channel == 'dev'
+        run: |
+          python -m pip install --upgrade pip
+          # Newest release including prereleases -> dev/beta HA.
+          python -m pip install --pre pytest-homeassistant-custom-component
+
+      - name: Install dependencies (minimum)
+        if: matrix.ha-channel == 'minimum'
+        run: |
+          python -m pip install --upgrade pip
+          # Our declared floor: this pin resolves HA 2025.2.0 (matches hacs.json),
+          # the oldest HA we commit to supporting. Supports Python 3.13.
+          python -m pip install "pytest-homeassistant-custom-component==0.13.210"
 
       - name: Run tests
         run: pytest tests/ -v
@@ -58,7 +81,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Install ruff
         run: python -m pip install ruff
