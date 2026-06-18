@@ -79,6 +79,23 @@ class SwitchModeCover(SwitchCoverTimeBased):
                 False,
             )
 
+    async def _settle_external_endpoint(self) -> None:
+        """De-energize the latched relay at the end of an externally-triggered move.
+
+        An external trigger (a wall switch wired straight to the relay) leaves
+        the direction relay latched ON; auto-stop's external-skip path tracks
+        the move but never turns it off, so it would stay energized at the
+        endpoint forever. Turn off whichever relay is still on — the move may
+        already have been released externally, and we must not touch the
+        opposite relay — reusing the interlock's guarded, echo-marked turn_off.
+        Dual-motor tilt relays latch the same way, so settle them too.
+        """
+        await self._interlock_off(self._open_switch_entity_id)
+        await self._interlock_off(self._close_switch_entity_id)
+        if self._has_tilt_motor():
+            await self._interlock_off(self._tilt_open_switch_id)
+            await self._interlock_off(self._tilt_close_switch_id)
+
     async def _handle_external_tilt_state_change(self, entity_id, old_val, new_val):
         """Handle external tilt state change in switch (latching) mode.
 
@@ -122,9 +139,15 @@ class SwitchModeCover(SwitchCoverTimeBased):
                 await self.async_stop_cover()
 
     async def _send_open(self) -> None:
+        # Mark a pending echo only when the relay call will actually flip state
+        # (matching _send_tilt_open). Marking unconditionally orphans the count
+        # when the relay is already ON — e.g. a continuation re-driving the
+        # user's still-latched relay — and that orphan then swallows the next
+        # real event (such as the user switching it off to stop).
         if self._switch_is_on(self._close_switch_entity_id):
             self._mark_switch_pending(self._close_switch_entity_id, 1)
-        self._mark_switch_pending(self._open_switch_entity_id, 1)
+        if not self._switch_is_on(self._open_switch_entity_id):
+            self._mark_switch_pending(self._open_switch_entity_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -139,9 +162,11 @@ class SwitchModeCover(SwitchCoverTimeBased):
         )
 
     async def _send_close(self) -> None:
+        # See _send_open: mark only when the relay will actually flip state.
         if self._switch_is_on(self._open_switch_entity_id):
             self._mark_switch_pending(self._open_switch_entity_id, 1)
-        self._mark_switch_pending(self._close_switch_entity_id, 1)
+        if not self._switch_is_on(self._close_switch_entity_id):
+            self._mark_switch_pending(self._close_switch_entity_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",

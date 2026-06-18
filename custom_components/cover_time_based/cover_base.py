@@ -772,10 +772,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._last_command = command
         if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
             self._moving_tilt_motor = True
-            if closing:
-                await self._send_tilt_close()
-            else:
-                await self._send_tilt_open()
+            # Externally triggered moves only track — the relay is already
+            # driven from outside HA, and re-firing it here would turn the
+            # opposite relay off a second time (the observe-path interlock in
+            # _handle_external_tilt_state_change already did), double-marking
+            # its pending echo and swallowing the user's next press. Mirrors
+            # the _async_handle_command guard the non-tilt-motor branch uses.
+            if not self._triggered_externally:
+                if closing:
+                    await self._send_tilt_close()
+                else:
+                    await self._send_tilt_open()
         else:
             await self._async_handle_command(command)
         self._begin_movement(
@@ -1354,11 +1361,28 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self.tilt_calc.stop()
 
             if not self._self_initiated_movement:
-                # Movement was triggered externally — just stop tracking,
-                # don't send relay commands.
-                self._log(
-                    "auto_stop_if_necessary :: external movement, skipping relay stop"
-                )
+                # Movement was triggered externally. A multi-phase move still
+                # has to chain its phases (dual-motor tilt pre-step → travel, or
+                # travel pre-step → tilt); only the final endpoint relay handling
+                # is special-cased below. Without continuing here the cover would
+                # tilt-to-safe and then stall, needing a second press to travel.
+                self._log("auto_stop_if_necessary :: external movement")
+                if self._pending_travel_target is not None:
+                    self._log(
+                        "auto_stop_if_necessary :: external tilt pre-step complete"
+                    )
+                    await self._start_pending_travel()
+                    return
+                if self._pending_tilt_target is not None:
+                    self._log(
+                        "auto_stop_if_necessary :: external travel pre-step complete"
+                    )
+                    await self._start_pending_tilt()
+                    return
+                # Move complete: don't re-drive the relay, but a latched relay
+                # (switch mode) must still be de-energized; momentary modes
+                # self-released and no-op in _settle_external_endpoint.
+                await self._settle_external_endpoint()
                 if self._tilt_strategy is not None:
                     self._tilt_strategy.snap_trackers_to_physical(
                         self.travel_calc, self.tilt_calc
@@ -1516,6 +1540,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
         else:
             await self._send_tilt_stop()
+
+    async def _settle_external_endpoint(self) -> None:
+        """De-energize any latched relay after an externally-triggered move
+        reaches its endpoint.
+
+        Auto-stop skips the relay stop for externally-triggered movements
+        (``_self_initiated_movement`` False): the trigger came from outside HA,
+        and for momentary modes (pulse/toggle/wrapped) the relay was a brief
+        pulse that has already self-released — there is nothing to de-energize,
+        so they keep this no-op. Switch mode latches its direction relay ON for
+        the whole travel, so it overrides this to turn the relay off (only if
+        still on); otherwise the relay stays energized at the endpoint forever.
+        """
+        return
 
     async def _delayed_stop(self, delay):
         """Stop the relay after a delay."""
