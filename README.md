@@ -18,6 +18,7 @@ It improves the original integration by adding tilt control, synchronized travel
 
 - **Control the position of your cover based on time**.
 - **External state monitoring:** Detects physical switch presses and keeps the position tracker in sync.
+- **Up/down interlock (Switch mode):** Never energizes both direction relays at once — when one direction relay turns on, even from outside Home Assistant (a wall switch wired straight to the relays), the opposite relay is switched off — protecting motors with no hardware interlock.
 - **Multiple input modes:** Latching switches, momentary pulse buttons, or toggle-style relays.
 - **Wrap an existing cover:** Add time-based position tracking to any cover entity.
 - **Control the tilt of your cover based on time** with four tilt modes: inline, sequential closes-then-tilts-closed, sequential closes-then-tilts-open, or separate tilt motor.
