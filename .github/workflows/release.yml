@@ -1,16 +1,22 @@
 name: Release
 
 # Publishes a GitHub Release when a v* tag is pushed (HACS reads GitHub
-# releases), then — for final releases only — rolls main forward to the next
-# minor so unreleased work no longer carries the just-released version.
+# releases). Every release is published as a PRE-RELEASE (and off "latest") so a
+# new version is never served to the default / HACS channel before it has been
+# tested — promote it to a full release later (step 4). For final-version tags
+# (no -alpha/-beta/-rc suffix) it then rolls main forward to the next minor so
+# unreleased work no longer carries the just-released version.
 #
 # Release flow:
 #   1. bin/release.sh <version>  -> opens the chore/release PR (bumps manifest)
 #   2. merge the PR
-#   3. git tag v<version> && git push origin v<version>  -> triggers this workflow
+#   3. git tag v<version> && git push <remote> v<version>  -> triggers this workflow
+#   4. test the pre-release, then promote it to the latest full release:
+#        gh release edit v<version> --prerelease=false --latest=true
 #
-# No secret or repo setup is required: main is unprotected, so the next-minor
-# bump is pushed directly to main using the default GITHUB_TOKEN.
+# The next-minor bump is pushed directly to main with the default GITHUB_TOKEN;
+# where main is protected that push is rejected — run bin/bump-dev.sh to land the
+# same bump via a PR instead.
 
 on:
   push:
@@ -39,8 +45,9 @@ jobs:
           # enforces), so a hand-pushed bad tag can't slip through.
           bin/bump-version.sh --validate "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          # Any semver pre-release (a hyphen) is a pre-release; the regex only
-          # permits -alpha/-beta/-rc.
+          # Whether the tag itself is a semver pre-release (-alpha/-beta/-rc).
+          # The GitHub Release is always published as a pre-release regardless
+          # (see below); this output only gates the main-forward bump.
           if [[ "$VERSION" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
@@ -61,14 +68,17 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
-          # Pre-releases (alpha/beta/rc) stay off "latest" until promoted via:
+          # Every release is created as a pre-release and off "latest", so a new
+          # version is never pushed straight to users on the default / HACS
+          # channel. Test it, then promote to the full latest release with:
           #   gh release edit v<version> --prerelease=false --latest=true
-          prerelease: ${{ steps.version.outputs.prerelease }}
-          make_latest: ${{ steps.version.outputs.prerelease == 'true' && 'false' || 'true' }}
+          prerelease: true
+          make_latest: false
 
   bump:
     needs: publish
-    # Only final releases roll main forward; pre-releases leave the version alone.
+    # Only final-version tags (no pre-release suffix) roll main forward; an
+    # -alpha/-beta/-rc tag leaves the version alone.
     if: needs.publish.outputs.prerelease == 'false'
     runs-on: ubuntu-latest
     name: Bump main to next minor
