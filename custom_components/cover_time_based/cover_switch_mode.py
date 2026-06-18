@@ -79,6 +79,23 @@ class SwitchModeCover(SwitchCoverTimeBased):
                 False,
             )
 
+    async def _settle_external_endpoint(self) -> None:
+        """De-energize the latched relay at the end of an externally-triggered move.
+
+        An external trigger (a wall switch wired straight to the relay) leaves
+        the direction relay latched ON; auto-stop's external-skip path tracks
+        the move but never turns it off, so it would stay energized at the
+        endpoint forever. Turn off whichever relay is still on — the move may
+        already have been released externally, and we must not touch the
+        opposite relay — reusing the interlock's guarded, echo-marked turn_off.
+        Dual-motor tilt relays latch the same way, so settle them too.
+        """
+        await self._interlock_off(self._open_switch_entity_id)
+        await self._interlock_off(self._close_switch_entity_id)
+        if self._has_tilt_motor():
+            await self._interlock_off(self._tilt_open_switch_id)
+            await self._interlock_off(self._tilt_close_switch_id)
+
     async def _handle_external_tilt_state_change(self, entity_id, old_val, new_val):
         """Handle external tilt state change in switch (latching) mode.
 

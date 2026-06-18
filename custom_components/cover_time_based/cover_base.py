@@ -1354,11 +1354,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self.tilt_calc.stop()
 
             if not self._self_initiated_movement:
-                # Movement was triggered externally — just stop tracking,
-                # don't send relay commands.
+                # Movement was triggered externally — don't re-drive the relay,
+                # but a latched relay (switch mode) must still be de-energized at
+                # the endpoint; momentary modes self-released and no-op here.
                 self._log(
-                    "auto_stop_if_necessary :: external movement, skipping relay stop"
+                    "auto_stop_if_necessary :: external movement, settling relays"
                 )
+                await self._settle_external_endpoint()
                 if self._tilt_strategy is not None:
                     self._tilt_strategy.snap_trackers_to_physical(
                         self.travel_calc, self.tilt_calc
@@ -1516,6 +1518,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
         else:
             await self._send_tilt_stop()
+
+    async def _settle_external_endpoint(self) -> None:
+        """De-energize any latched relay after an externally-triggered move
+        reaches its endpoint.
+
+        Auto-stop skips the relay stop for externally-triggered movements
+        (``_self_initiated_movement`` False): the trigger came from outside HA,
+        and for momentary modes (pulse/toggle/wrapped) the relay was a brief
+        pulse that has already self-released — there is nothing to de-energize,
+        so they keep this no-op. Switch mode latches its direction relay ON for
+        the whole travel, so it overrides this to turn the relay off (only if
+        still on); otherwise the relay stays energized at the endpoint forever.
+        """
+        return
 
     async def _delayed_stop(self, delay):
         """Stop the relay after a delay."""

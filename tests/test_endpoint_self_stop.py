@@ -17,9 +17,9 @@ self-stops there, so the timed stop is essential.
 import asyncio
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from homeassistant.const import SERVICE_CLOSE_COVER
+from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
@@ -99,6 +99,57 @@ async def test_switch_keeps_endpoint_runon(make_cover):
         await cover.auto_stop_if_necessary()
 
     assert cover._delay_task is not None
+    await _cancel_tasks(cover)
+
+
+def _stub_switch_on(cover, on_entity):
+    """Make ``_switch_is_on`` report only ``on_entity`` as ON."""
+
+    def _get(entity_id):
+        state = MagicMock()
+        state.state = "on" if entity_id == on_entity else "off"
+        return state
+
+    cover.hass.states.get.side_effect = _get
+
+
+@pytest.mark.asyncio
+async def test_switch_external_open_de_energizes_at_endpoint(make_cover):
+    """An externally-triggered switch-mode open must still de-energize at the
+    endpoint.
+
+    When the direction relay is energized outside HA (a wall switch wired to
+    the relay), the observe path tracks the move with ``_self_initiated_movement``
+    False, so auto-stop takes its external-skip branch. For momentary modes that
+    is correct — the pulse already self-released — but switch mode latches the
+    relay ON for the whole travel, so skipping the stop leaves it energized at
+    the endpoint forever. The latched relay must be turned off (only if still
+    on, mirroring the interlock), exactly as the self-initiated path does.
+    """
+    cover = make_cover(control_mode=CONTROL_MODE_SWITCH, endpoint_runon_time=0)
+    cover._self_initiated_movement = False  # externally triggered move
+    cover._last_command = SERVICE_OPEN_COVER
+    cover.travel_calc.set_position(100)  # reached the open endpoint
+    _stub_switch_on(cover, "switch.open")  # relay still latched ON
+
+    cover.hass.services.async_call.reset_mock()
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.auto_stop_if_necessary()
+
+    off_calls = [
+        c
+        for c in _ha_calls(cover)
+        if c.args[1] == "turn_off" and c.args[2].get("entity_id") == "switch.open"
+    ]
+    assert off_calls, (
+        "external switch-mode open must de-energize the latched relay at the endpoint"
+    )
+    close_off = [
+        c
+        for c in _ha_calls(cover)
+        if c.args[1] == "turn_off" and c.args[2].get("entity_id") == "switch.close"
+    ]
+    assert not close_off, "must not de-energize the opposite (already-off) relay"
     await _cancel_tasks(cover)
 
 
@@ -356,4 +407,25 @@ async def test_switch_dual_motor_tilt_to_endpoint_de_energizes(make_cover):
 
     off = [c for c in _tilt_calls(cover) if c.args[1] == "turn_off"]
     assert off, "switch mode must de-energize the tilt relay at a tilt endpoint"
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_switch_dual_motor_external_tilt_de_energizes_at_endpoint(make_cover):
+    """The latched tilt relay must also be de-energized after an *externally*
+    triggered tilt move reaches its endpoint (mirrors the travel case)."""
+    cover = _make_dual_motor(make_cover, control_mode=CONTROL_MODE_SWITCH)
+    cover._self_initiated_movement = False  # externally triggered tilt move
+    cover._last_command = SERVICE_OPEN_COVER
+    cover.travel_calc.set_position(50)  # mid-travel: isolate tilt behaviour
+    cover.tilt_calc.set_position(100)  # tilt reached its open endpoint
+    _stub_switch_on(cover, "switch.tilt_open")  # tilt relay still latched ON
+
+    cover.hass.services.async_call.reset_mock()
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.auto_stop_if_necessary()
+
+    tilt_off = [c for c in _tilt_calls(cover) if c.args[1] == "turn_off"]
+    assert tilt_off, "external tilt move must de-energize the latched tilt relay"
+    assert _travel_calls(cover) == [], "must not touch the (off) travel relays"
     await _cancel_tasks(cover)
