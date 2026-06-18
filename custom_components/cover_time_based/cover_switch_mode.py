@@ -139,9 +139,15 @@ class SwitchModeCover(SwitchCoverTimeBased):
                 await self.async_stop_cover()
 
     async def _send_open(self) -> None:
+        # Mark a pending echo only when the relay call will actually flip state
+        # (matching _send_tilt_open). Marking unconditionally orphans the count
+        # when the relay is already ON — e.g. a continuation re-driving the
+        # user's still-latched relay — and that orphan then swallows the next
+        # real event (such as the user switching it off to stop).
         if self._switch_is_on(self._close_switch_entity_id):
             self._mark_switch_pending(self._close_switch_entity_id, 1)
-        self._mark_switch_pending(self._open_switch_entity_id, 1)
+        if not self._switch_is_on(self._open_switch_entity_id):
+            self._mark_switch_pending(self._open_switch_entity_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -156,9 +162,11 @@ class SwitchModeCover(SwitchCoverTimeBased):
         )
 
     async def _send_close(self) -> None:
+        # See _send_open: mark only when the relay will actually flip state.
         if self._switch_is_on(self._open_switch_entity_id):
             self._mark_switch_pending(self._open_switch_entity_id, 1)
-        self._mark_switch_pending(self._close_switch_entity_id, 1)
+        if not self._switch_is_on(self._close_switch_entity_id):
+            self._mark_switch_pending(self._close_switch_entity_id, 1)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",

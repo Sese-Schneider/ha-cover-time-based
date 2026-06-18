@@ -540,3 +540,60 @@ async def test_switch_dual_motor_external_open_continues_into_travel(make_cover)
     ]
     assert open_on, "the travel phase must drive the cover-open relay"
     await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_send_open_does_not_mark_pending_when_already_on(make_cover):
+    """_send_open must not queue a pending echo for a relay that is already ON.
+
+    The relay won't actually flip, so no state-change event arrives to consume
+    the echo — the orphan count would then swallow the next real event (e.g. the
+    user switching the relay back off to stop). Mirrors _send_tilt_open's guard.
+    """
+    cover = make_cover(control_mode=CONTROL_MODE_SWITCH)
+    _stub_switch_states(cover, {"switch.open": "on", "switch.close": "off"})
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover._send_open()
+
+    assert cover._pending_switch.get("switch.open", 0) == 0, (
+        "no pending echo should be queued for an already-on relay"
+    )
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_switch_dual_motor_external_open_can_be_stopped(make_cover):
+    """After an external cover-open continues into travel, switching the
+    cover-open relay back OFF must stop the cover.
+
+    Continuing the pre-step re-drives _send_open on the already-on relay; the
+    relay doesn't flip so no echo arrives. If _send_open had queued a pending
+    echo, the user's OFF (stop) event would be filtered and the cover would
+    keep opening.
+    """
+    cover = _make_dual_motor(make_cover, control_mode=CONTROL_MODE_SWITCH)
+    cover._self_initiated_movement = False  # externally triggered move
+    cover.travel_calc.set_position(0)  # cover closed (pre-step start)
+    cover.tilt_calc.set_position(100)  # tilt reached its safe/pre-step target
+    cover._pending_travel_target = 100
+    cover._pending_travel_command = SERVICE_OPEN_COVER
+    # The user's open relay is latched ON the whole time.
+    states = {"switch.open": "on", "switch.close": "off"}
+    _stub_switch_states(cover, states)
+
+    with patch.object(cover, "async_write_ha_state"):
+        # Tilt pre-step completes → external branch continues into travel.
+        await cover.auto_stop_if_necessary()
+        assert cover.travel_calc.is_traveling(), "travel phase should be running"
+
+        # User switches the open relay OFF to stop the cover.
+        states["switch.open"] = "off"
+        await cover._async_switch_state_changed(
+            _switch_event("switch.open", "on", "off")
+        )
+
+    assert not cover.travel_calc.is_traveling(), (
+        "switching the open relay off must stop the cover, not be filtered as an echo"
+    )
+    await _cancel_tasks(cover)
