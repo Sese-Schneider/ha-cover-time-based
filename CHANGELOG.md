@@ -1,4 +1,4 @@
-## Unreleased
+## 4.4.0 (2026-06-18)
 
 ### ⚠ Breaking changes
 
