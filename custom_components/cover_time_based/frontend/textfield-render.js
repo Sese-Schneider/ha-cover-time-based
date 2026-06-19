@@ -22,10 +22,7 @@ export function renderTextfield({
   value,
   onChange,
 }) {
-  /* v8 ignore start -- ha-input is always registered in happy-dom tests; the ha-textfield
-     else-branch (HA <2026.4 fallback) is unreachable in this environment. */
   if (textfieldTagName() === "ha-input") {
-    /* v8 ignore stop */
     return html`
       <ha-input
         type=${type}
@@ -42,7 +39,6 @@ export function renderTextfield({
       </ha-input>
     `;
   }
-  /* v8 ignore start -- ha-textfield fallback for HA <2026.4; unreachable in happy-dom tests */
   return html`
     <ha-textfield
       type=${type}
@@ -58,4 +54,3 @@ export function renderTextfield({
     ></ha-textfield>
   `;
 }
-/* v8 ignore stop */

@@ -33,3 +33,11 @@ test("falls back to ha-textfield when neither is registered", () => {
   // older HA versions where ha-input does not exist yet.
   assert.equal(textfieldTagName(registry([])), "ha-textfield");
 });
+
+test("uses real customElements when called with no argument (default parameter)", () => {
+  // This test file registers no ha-* elements, so customElements.get("ha-input")
+  // returns undefined → textfieldTagName() falls back to "ha-textfield".
+  // Calling with no argument exercises the `= typeof customElements !== "undefined"
+  // ? customElements : null` default parameter, covering that branch.
+  assert.equal(textfieldTagName(), "ha-textfield");
+});
