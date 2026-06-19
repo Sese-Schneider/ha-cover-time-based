@@ -11,6 +11,7 @@
  */
 
 export function textfieldTagName(
+  /* v8 ignore next -- null branch (customElements undefined) unreachable in browser/happy-dom */
   registry = typeof customElements !== "undefined" ? customElements : null,
 ) {
   if (registry && registry.get("ha-input")) return "ha-input";

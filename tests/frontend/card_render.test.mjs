@@ -7,7 +7,7 @@
  * Run: npm run test:fe -- tests/frontend/card_render.test.mjs
  */
 
-import { test, expect, afterEach } from "vitest";
+import { test, expect, afterEach, vi } from "vitest";
 import { makeHass } from "./helpers/hass.mjs";
 import { mountCard, defineHaStubs } from "./helpers/mount.mjs";
 
@@ -317,8 +317,8 @@ test("wrapped mode: _openHelp=ignore_reported_position_helper shows the popover"
 test("wrapped mode renders cover entity-picker (with includeDomains cover)", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
   const pickers = card.shadowRoot.querySelectorAll("ha-entity-picker");
-  // At least: top entity-picker + cover entity picker
-  expect(pickers.length).toBeGreaterThanOrEqual(2);
+  // Exactly: top entity-picker + cover entity picker
+  expect(pickers.length).toBe(2);
   // At least one picker has includeDomains containing "cover" (check property)
   const coverPicker = [...pickers].find((p) => {
     const domains = p.includeDomains;
@@ -329,9 +329,9 @@ test("wrapped mode renders cover entity-picker (with includeDomains cover)", asy
 
 test("wrapped mode renders ha-switch toggles (ignore-reported-position, force-time-based, assumed-state)", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
-  const toggles = card.shadowRoot.querySelectorAll("ha-switch");
-  // At least 3 toggles for the three wrapped-mode options
-  expect(toggles.length).toBeGreaterThanOrEqual(3);
+  const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
+  // Exactly 3 toggles: ignore_reported_position, force_time_based_position, assumed_state
+  expect(toggles.length).toBe(3);
 });
 
 test("switch mode renders open + close switch pickers (no stop switch)", async () => {
@@ -368,8 +368,8 @@ test("wrapped mode has no .entity-grid", async () => {
 test("switch mode shows assumed-state toggle", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // At least one toggle (assumed-state)
-  expect(toggles.length).toBeGreaterThanOrEqual(1);
+  // Exactly 1 toggle: assumed-state only (switch mode has no other toggle-with-help)
+  expect(toggles.length).toBe(1);
 });
 
 // ---------------------------------------------------------------------------
@@ -482,9 +482,9 @@ test("tilt_mode=dual_motor renders tilt motor pickers for non-wrapped mode", asy
     config: switchCfg({ tilt_mode: "dual_motor" }),
     activeTab: "device",
   });
-  // entity-grid exists inside tilt motor section
+  // Two entity-grids: one for the main switch entities, one for tilt motor entities
   const grids = card.shadowRoot.querySelectorAll(".entity-grid");
-  expect(grids.length).toBeGreaterThanOrEqual(1);
+  expect(grids.length).toBe(2);
   // Should have more pickers: top + open + close + tilt_open + tilt_close = 5
   const pickers = card.shadowRoot.querySelectorAll("ha-entity-picker");
   expect(pickers.length).toBe(5);
@@ -535,7 +535,8 @@ test("timing table travel rows: travel_time_close, travel_time_open, travel_star
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
   // Grab timing input values (placeholder "Not set" when no value)
   const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
-  expect(inputs.length).toBeGreaterThanOrEqual(4); // travel rows + endpoint_runon
+  // switch mode: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time, endpoint_runon_time
+  expect(inputs.length).toBe(5);
 });
 
 test("switch mode timing table includes endpoint_runon_time row (5 travel rows)", async () => {
@@ -1019,4 +1020,148 @@ test("cal-attribute options: knownPosition=closed_tilt_closed with sequential_op
   // For sequential_open, travel_time_open is measurable from closed_tilt_closed
   const travelOpenOpt = opts.find((o) => o.value === "travel_time_open");
   expect(travelOpenOpt?.hasAttribute("disabled")).toBe(false);
+});
+
+// ---------------------------------------------------------------------------
+// _renderTiltSupport — wrapped cover without native tilt omits dual_motor option
+// ---------------------------------------------------------------------------
+
+test("tilt select omits dual_motor option for wrapped mode when cover lacks native tilt bits", async () => {
+  // cover.real has supported_features=3 (no OPEN_TILT=16 or CLOSE_TILT=32 bits)
+  // and state="open" (available), so _coverSupportsNativeTilt returns false.
+  const hass = makeHass({
+    states: {
+      "cover.real": { state: "open", attributes: { supported_features: 3 } },
+    },
+  });
+  card = await mountCard(hass, {
+    selectedEntity: "cover.x",
+    config: wrappedCfg({ tilt_mode: "none" }),
+    activeTab: "device",
+  });
+  const selects = card.shadowRoot.querySelectorAll("select.ha-select");
+  const tiltSelect = selects[1];
+  const values = [...tiltSelect.options].map((o) => o.value);
+  // allowDualMotor is false (wrapped + cover has no tilt bits) → dual_motor absent
+  expect(values).not.toContain("dual_motor");
+  // Other options are still present
+  expect(values).toContain("none");
+  expect(values).toContain("sequential_close");
+  expect(values).toContain("inline");
+});
+
+test("tilt select shows dual_motor for wrapped mode when cover HAS native tilt bits", async () => {
+  // cover.real has OPEN_TILT=16 + CLOSE_TILT=32 → supported_features=48
+  const hass = makeHass({
+    states: {
+      "cover.real": { state: "open", attributes: { supported_features: 48 } },
+    },
+  });
+  card = await mountCard(hass, {
+    selectedEntity: "cover.x",
+    config: wrappedCfg({ tilt_mode: "none" }),
+    activeTab: "device",
+  });
+  const selects = card.shadowRoot.querySelectorAll("select.ha-select");
+  const tiltSelect = selects[1];
+  const values = [...tiltSelect.options].map((o) => o.value);
+  // allowDualMotor is true (wrapped + cover has tilt bits) → dual_motor present
+  expect(values).toContain("dual_motor");
+});
+
+// ---------------------------------------------------------------------------
+// Inline event handler coverage: timing-input @change (L1350-1351)
+// ---------------------------------------------------------------------------
+
+test("timing input @change updates config via _updateLocal (covers L1350-1351 inline lambda)", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
+  const updates = [];
+  vi.spyOn(card, "_updateLocal").mockImplementation((u) => {
+    updates.push(u);
+    card._config = { ...card._config, ...u };
+  });
+
+  const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
+  // First input = travel_time_close (min=0.1); set a value then fire change
+  const input = inputs[0];
+  input.value = "25.5";
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+
+  // The lambda: const v = e.target.value.trim(); _updateLocal({ [key]: parseFloat(v) })
+  expect(updates.length).toBeGreaterThan(0);
+  expect(updates[0]).toMatchObject({ travel_time_close: 25.5 });
+});
+
+test("timing input @change with empty value sets field to null", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg({ travel_time_close: 30 }),
+    activeTab: "timing",
+  });
+  const updates = [];
+  vi.spyOn(card, "_updateLocal").mockImplementation((u) => {
+    updates.push(u);
+    card._config = { ...card._config, ...u };
+  });
+
+  const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
+  const input = inputs[0];
+  input.value = "";
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+
+  expect(updates.length).toBeGreaterThan(0);
+  expect(updates[0]).toMatchObject({ travel_time_close: null });
+});
+
+// ---------------------------------------------------------------------------
+// Inline event handler coverage: max_tilt_allowed_position onChange (L1325-1328)
+// ---------------------------------------------------------------------------
+
+test("max_tilt_allowed_position ha-input @change updates config via _updateLocal (covers L1325-1328)", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg({ tilt_mode: "dual_motor", max_tilt_allowed_position: 0 }),
+    activeTab: "device",
+  });
+  const updates = [];
+  vi.spyOn(card, "_updateLocal").mockImplementation((u) => {
+    updates.push(u);
+    card._config = { ...card._config, ...u };
+  });
+
+  // The dual-motor-config section renders two ha-input elements:
+  // [0] = safe_tilt_position, [1] = max_tilt_allowed_position
+  const haInputs = card.shadowRoot.querySelectorAll(".dual-motor-config ha-input");
+  expect(haInputs.length).toBe(2);
+  const maxTiltInput = haInputs[1];
+  maxTiltInput.value = "80";
+  maxTiltInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+  expect(updates.length).toBeGreaterThan(0);
+  expect(updates[0]).toMatchObject({ max_tilt_allowed_position: 80 });
+});
+
+test("max_tilt_allowed_position ha-input @change with empty string sets field to null", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg({ tilt_mode: "dual_motor", max_tilt_allowed_position: 50 }),
+    activeTab: "device",
+  });
+  const updates = [];
+  vi.spyOn(card, "_updateLocal").mockImplementation((u) => {
+    updates.push(u);
+    card._config = { ...card._config, ...u };
+  });
+
+  const haInputs = card.shadowRoot.querySelectorAll(".dual-motor-config ha-input");
+  const maxTiltInput = haInputs[1];
+  maxTiltInput.value = "  ";  // whitespace-only → trims to ""
+  maxTiltInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+  expect(updates.length).toBeGreaterThan(0);
+  expect(updates[0]).toMatchObject({ max_tilt_allowed_position: null });
 });

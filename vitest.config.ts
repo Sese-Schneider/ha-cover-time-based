@@ -21,7 +21,7 @@ export default defineConfig({
       provider: "v8",
       include: [`${FRONTEND}/*.js`],
       reporter: ["text", "html"],
-      // thresholds added in Task 9
+      thresholds: { lines: 90, functions: 90, statements: 90, branches: 90 },
     },
   },
 });
