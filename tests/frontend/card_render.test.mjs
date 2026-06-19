@@ -531,15 +531,7 @@ test("timing tab renders .timing-table", async () => {
   expect(card.shadowRoot.querySelector(".timing-table")).not.toBeNull();
 });
 
-test("timing table travel rows: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time present for switch mode", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
-  // Grab timing input values (placeholder "Not set" when no value)
-  const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
-  // switch mode: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time, endpoint_runon_time
-  expect(inputs.length).toBe(5);
-});
-
-test("switch mode timing table includes endpoint_runon_time row (5 travel rows)", async () => {
+test("switch mode timing table includes endpoint_runon_time row (5 travel rows: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time, endpoint_runon_time)", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
   const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
   // switch mode: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time, endpoint_runon_time

@@ -15,6 +15,7 @@ import { mountCard } from "./helpers/mount.mjs";   // NOTE: no defineHaStubs in 
 
 let card;
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   card?.remove();
   card = null;
@@ -140,10 +141,11 @@ test("_loadConfig returns early without calling callWS when _selectedEntity is e
 // ---------------------------------------------------------------------------
 
 test("disconnectedCallback clears autoSaveTimer and calls _onStopCalibration(true) when calibrating", async () => {
+  vi.useFakeTimers();
   const hass = makeHass();
   card = await mountCard(hass);
 
-  // Plant a real timer so clearTimeout has something to find
+  // Plant a fake timer so clearTimeout has something to find
   const timer = setTimeout(() => {}, 9999);
   card._autoSaveTimer = timer;
 
@@ -158,9 +160,6 @@ test("disconnectedCallback clears autoSaveTimer and calls _onStopCalibration(tru
 
   expect(clearTimeoutSpy).toHaveBeenCalledWith(timer);
   expect(stopCalSpy).toHaveBeenCalledWith(true);
-
-  // Clean up the real timer
-  clearTimeout(timer);
 });
 
 // ---------------------------------------------------------------------------

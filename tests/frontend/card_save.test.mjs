@@ -9,8 +9,8 @@
  *   - _autoSave on failure sets _saveError, calls _loadConfig (reload), then clears after 3s
  *   - _autoSave early-returns when _selectedEntity or _config is missing
  *
- * Note: the failure-path test triggers card._autoSave()'s own console.error("Failed to save
- * config:", err) — this is expected by design and not suppressed here.
+ * Note: the failure-path tests silence console.error via a vi.spyOn() mock AND assert it
+ * was called (i.e. the card's own console.error("Failed to save config:", err) is expected).
  *
  * Run: npm run test:fe -- tests/frontend/card_save.test.mjs
  */

@@ -4,8 +4,9 @@ const HA_STUBS = [
   "ha-card", "ha-entity-picker", "ha-switch", "ha-icon", "ha-input", "ha-textfield",
 ];
 
-export function defineHaStubs() {
+export function defineHaStubs({ exclude = [] } = {}) {
   for (const tag of HA_STUBS) {
+    if (exclude.includes(tag)) continue;
     if (!customElements.get(tag)) {
       customElements.define(tag, class extends HTMLElement {});
     }

@@ -11,15 +11,12 @@
  * Run: npm run test:fe -- tests/frontend/textfield_render_fallback.test.mjs
  */
 
-// Register ha-* stubs that cover-time-based-card.js / textfield-render.js need,
-// but deliberately OMIT ha-input so textfieldTagName() falls back to ha-textfield.
-for (const tag of ["ha-card", "ha-entity-picker", "ha-switch", "ha-icon", "ha-textfield"]) {
-  if (!customElements.get(tag)) {
-    customElements.define(tag, class extends HTMLElement {});
-  }
-}
-
 import { test, expect } from "vitest";
+import { defineHaStubs } from "./helpers/mount.mjs";
+
+// Register ha-* stubs but deliberately OMIT ha-input so textfieldTagName()
+// falls back to ha-textfield and the else-branch of renderTextfield is exercised.
+defineHaStubs({ exclude: ["ha-input"] });
 import { render } from "lit-html";
 import { renderTextfield } from "../../custom_components/cover_time_based/frontend/textfield-render.js";
 
