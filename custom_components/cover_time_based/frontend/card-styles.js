@@ -10,7 +10,7 @@ export const cardStyles = css`
         font-weight: 400;
         padding: 24px 16px 16px;
         line-height: 32px;
-        color: var(--ha-card-header-color, --primary-text-color);
+        color: var(--ha-card-header-color, var(--primary-text-color));
       }
 
       .card-content {
