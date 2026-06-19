@@ -24,8 +24,11 @@ import {
   coverConfirmedWithoutTilt,
 } from "./entity-filter.js";
 import { renderTextfield } from "./textfield-render.js";
-
-const DOMAIN = "cover_time_based";
+import {
+  DOMAIN,
+  TIMING_ATTRIBUTES,
+  ATTRIBUTE_TO_CONFIG,
+} from "./constants.js";
 
 // Embedded translations — keys are flattened dotted paths.
 // English is the default; other languages override specific keys.
@@ -368,28 +371,6 @@ const TRANSLATIONS = {
     "hints.none.travel_time_open": "Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
     "hints.min_movement_time": "Kliknij Zakończ, gdy tylko zauważysz ruch rolety.",
   },
-};
-
-// Timing attributes shown in calibration dropdown and timing table.
-// Keys are config attribute names; values are translation keys.
-const TIMING_ATTRIBUTES = [
-  ["travel_time_close", "timing.travel_time_close"],
-  ["travel_time_open", "timing.travel_time_open"],
-  ["travel_startup_delay", "timing.travel_startup_delay"],
-  ["tilt_time_close", "timing.tilt_time_close"],
-  ["tilt_time_open", "timing.tilt_time_open"],
-  ["tilt_startup_delay", "timing.tilt_startup_delay"],
-  ["min_movement_time", "timing.min_movement_time"],
-];
-
-const ATTRIBUTE_TO_CONFIG = {
-  travel_time_close: "travel_time_close",
-  travel_time_open: "travel_time_open",
-  tilt_time_close: "tilt_time_close",
-  tilt_time_open: "tilt_time_open",
-  travel_startup_delay: "travel_startup_delay",
-  tilt_startup_delay: "tilt_startup_delay",
-  min_movement_time: "min_movement_time",
 };
 
 class CoverTimeBasedCard extends LitElement {
