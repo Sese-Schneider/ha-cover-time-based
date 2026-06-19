@@ -24,6 +24,7 @@ defineHaStubs();
 let card;
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   card?.remove();
   card = null;
 });
@@ -73,6 +74,7 @@ test("_autoSave leaves _saveError false on success", async () => {
 
 test("_autoSave on failure sets _saveError, reloads config, then clears _saveError after 3s", async () => {
   vi.useFakeTimers();
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   let getConfigCalls = 0;
 
   const hass = makeHass({
@@ -92,13 +94,16 @@ test("_autoSave on failure sets _saveError, reloads config, then clears _saveErr
     config: { control_mode: "switch" },
   });
 
-  // _loadConfig is called once during mountCard (via hass setter / entity change).
-  // We reset the counter here so we only count the reload triggered by the failure.
+  // Capture baseline: mountCard may already have triggered get_config calls
+  // (connectedCallback calls _loadEntityList(), not _loadConfig directly, but
+  // rendering with a pre-set _selectedEntity can trigger _loadConfig).
+  // We record the count here so we only count the reload triggered by the failure.
   const callsBefore = getConfigCalls;
 
   await card._autoSave();
 
   expect(card._saveError).toBe(true);
+  expect(errSpy).toHaveBeenCalled();
   // Exactly one get_config call should have occurred since before the _autoSave call
   expect(getConfigCalls - callsBefore).toBe(1);
 
@@ -109,6 +114,7 @@ test("_autoSave on failure sets _saveError, reloads config, then clears _saveErr
 
 test("_autoSave on failure still ends with _saving false", async () => {
   vi.useFakeTimers();
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
   const hass = makeHass({
     ws: {
@@ -126,6 +132,7 @@ test("_autoSave on failure still ends with _saving false", async () => {
   await card._autoSave();
 
   expect(card._saving).toBe(false);
+  expect(errSpy).toHaveBeenCalled();
 });
 
 // ---------------------------------------------------------------------------

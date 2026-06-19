@@ -67,6 +67,7 @@ test("_onStartCalibration sends the attribute from the #cal-attribute select", a
 });
 
 test("_onStartCalibration alerts on WS failure (window.alert is expected behavior)", async () => {
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     ws: {
       "cover_time_based/start_calibration": () => {
@@ -78,11 +79,13 @@ test("_onStartCalibration alerts on WS failure (window.alert is expected behavio
   card.shadowRoot.querySelector = () => ({ value: "travel_time_close" });
   await card._onStartCalibration();
   expect(window.alert).toHaveBeenCalled();
+  expect(errSpy).toHaveBeenCalled();
   // _calibratingOverride must NOT be set to true on failure
   expect(card._calibratingOverride).not.toBe(true);
 });
 
 test("_onStartCalibration alert message contains the error text", async () => {
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     ws: {
       "cover_time_based/start_calibration": () => {
@@ -94,6 +97,7 @@ test("_onStartCalibration alert message contains the error text", async () => {
   card.shadowRoot.querySelector = () => ({ value: "travel_time_close" });
   await card._onStartCalibration();
   expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("calibration refused"));
+  expect(errSpy).toHaveBeenCalled();
 });
 
 // ---------------------------------------------------------------------------
@@ -131,6 +135,29 @@ test("_onStopCalibration(false) applies tilt_time_open correctly via ATTRIBUTE_T
   // ATTRIBUTE_TO_CONFIG["tilt_time_open"] === "tilt_time_open"
   expect(spy).toHaveBeenCalledWith(expect.objectContaining({ tilt_time_open: 4.5 }));
 });
+
+// Remaining 5 ATTRIBUTE_TO_CONFIG entries not yet covered above:
+for (const [attr, key] of [
+  ["travel_time_open",     "travel_time_open"],
+  ["tilt_time_close",      "tilt_time_close"],
+  ["travel_startup_delay", "travel_startup_delay"],
+  ["tilt_startup_delay",   "tilt_startup_delay"],
+  ["min_movement_time",    "min_movement_time"],
+]) {
+  test(`_onStopCalibration(false) applies ${attr} → _config.${key} via ATTRIBUTE_TO_CONFIG`, async () => {
+    const hass = makeHass({
+      ws: {
+        "cover_time_based/stop_calibration": () => ({ attribute: attr, value: 7.7 }),
+      },
+    });
+    card = await mountCard(hass, { selectedEntity: "cover.x", config: { control_mode: "switch" } });
+    const spy = vi.spyOn(card, "_updateLocal").mockImplementation(() => {});
+    await card._onStopCalibration(false);
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ [key]: 7.7 }));
+    card.remove();
+    card = null;
+  });
+}
 
 test("_onStopCalibration(false) sets _calibratingOverride to false", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x" });
@@ -179,6 +206,7 @@ test("_onStopCalibration(true) does NOT apply value even when WS returns one", a
 });
 
 test("_onStopCalibration error path swallows the error (console.error is expected)", async () => {
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     ws: {
       "cover_time_based/stop_calibration": () => {
@@ -189,6 +217,7 @@ test("_onStopCalibration error path swallows the error (console.error is expecte
   card = await mountCard(hass, { selectedEntity: "cover.x" });
   // Must NOT throw
   await expect(card._onStopCalibration(false)).resolves.toBeUndefined();
+  expect(errSpy).toHaveBeenCalled();
 });
 
 // ---------------------------------------------------------------------------
@@ -269,6 +298,7 @@ test("_onCoverCommand sets _knownPosition to 'unknown'", async () => {
 });
 
 test("_onCoverCommand error path swallows the error (console.error is expected)", async () => {
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     ws: {
       "cover_time_based/raw_command": () => {
@@ -279,6 +309,7 @@ test("_onCoverCommand error path swallows the error (console.error is expected)"
   card = await mountCard(hass, { selectedEntity: "cover.x" });
   // Must NOT throw
   await expect(card._onCoverCommand("open_cover")).resolves.toBeUndefined();
+  expect(errSpy).toHaveBeenCalled();
 });
 
 // ---------------------------------------------------------------------------
@@ -437,10 +468,12 @@ test("_onPositionPresetChange sets _knownPosition to the preset value", async ()
 });
 
 test("_onPositionPresetChange error path swallows the error (console.error is expected)", async () => {
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     service: async () => { throw new Error("service failed"); },
   });
   card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "none" } });
   // Must NOT throw
   await expect(card._onPositionPresetChange("open")).resolves.toBeUndefined();
+  expect(errSpy).toHaveBeenCalled();
 });

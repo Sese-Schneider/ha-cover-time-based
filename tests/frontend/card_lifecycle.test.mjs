@@ -62,6 +62,7 @@ test("_loadEntityList filters to entities whose config_entry_id is in live confi
 
 test("_loadEntityList swallows errors and sets _configEntryEntities to []", async () => {
   // The card intentionally calls console.error on this path — that is expected behavior.
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     ws: {
       "config/entity_registry/list": () => { throw new Error("boom"); },
@@ -71,6 +72,7 @@ test("_loadEntityList swallows errors and sets _configEntryEntities to []", asyn
   card._configEntryEntities = undefined;
   await card._loadEntityList();
   expect(card._configEntryEntities).toEqual([]);
+  expect(errSpy).toHaveBeenCalled();
 });
 
 // ---------------------------------------------------------------------------
@@ -99,6 +101,7 @@ test("_loadConfig sets _config and clears _loading/_loadError on success", async
 
 test("_loadConfig sets _loadError to yaml_warning string and nulls _config on failure", async () => {
   // The card intentionally calls console.error on this path — that is expected behavior.
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     ws: {
       "cover_time_based/get_config": () => { throw new Error("network fail"); },
@@ -111,6 +114,7 @@ test("_loadConfig sets _loadError to yaml_warning string and nulls _config on fa
   expect(card._config).toBeNull();
   expect(card._loadError).toBe(card._t("yaml_warning"));
   expect(card._loading).toBe(false);
+  expect(errSpy).toHaveBeenCalled();
 });
 
 // ---------------------------------------------------------------------------
