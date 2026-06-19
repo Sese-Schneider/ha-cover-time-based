@@ -2102,9 +2102,6 @@ class CoverTimeBasedCard extends LitElement {
 // swaps in the scoped-custom-element-registry polyfill) a double-evaluation
 // would otherwise throw "already defined".
 if (!customElements.get("cover-time-based-card")) {
-  /* v8 ignore next 2 -- the guard is always true after the first test file imports
-     this module; the define() line inside is unreachable in subsequent test files
-     because custom elements cannot be un-defined between tests. */
   customElements.define("cover-time-based-card", CoverTimeBasedCard);
 }
 
@@ -2112,9 +2109,6 @@ if (!customElements.get("cover-time-based-card")) {
 // picker doesn't list the card twice.
 window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === "cover-time-based-card")) {
-  /* v8 ignore next 6 -- window.customCards is populated on first module import;
-     in all subsequent test-file environments the guard short-circuits and the
-     push() is never executed. */
   window.customCards.push({
     type: "cover-time-based-card",
     name: "Cover Time Based Configuration",
