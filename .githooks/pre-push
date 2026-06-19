@@ -94,8 +94,7 @@ fi
 # --- Step 5: frontend tests (only if frontend changed) ---
 if [ -n "$fe_changed" ]; then
   step "Frontend tests"
-  if need node && node --test tests/frontend/*.test.mjs; then pass "Frontend tests"
-  else fail "Frontend tests"; fi
+  if need node && need npm && npm ci --silent && npm run test:fe:cov; then pass "Frontend tests"; else fail "Frontend tests"; fi
 fi
 
 # --- Result ---

@@ -1,0 +1,17 @@
+{
+  "name": "cover-time-based-frontend-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:fe": "vitest run",
+    "test:fe:watch": "vitest",
+    "test:fe:cov": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.0",
+    "happy-dom": "^15.0.0",
+    "lit-element": "2.4.0",
+    "lit-html": "1.4.1",
+    "vitest": "^2.1.0"
+  }
+}

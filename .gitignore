@@ -8,6 +8,7 @@ __pycache__/
 
 *.iml
 .coverage
+coverage/
 docs/plans/
 docs/superpowers/
 .ha-changes-state.json
