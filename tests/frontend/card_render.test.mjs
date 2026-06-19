@@ -14,6 +14,7 @@ import { mountCard, defineHaStubs } from "./helpers/mount.mjs";
 defineHaStubs();
 let card;
 afterEach(() => {
+  vi.restoreAllMocks();
   card?.remove();
   card = null;
 });

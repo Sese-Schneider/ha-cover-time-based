@@ -154,7 +154,7 @@ test("disconnectedCallback clears autoSaveTimer and calls _onStopCalibration(tru
 
   // Spy on the methods we want to assert
   const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
-  const stopCalSpy = vi.spyOn(card, "_onStopCalibration");
+  const stopCalSpy = vi.spyOn(card, "_onStopCalibration").mockResolvedValue(undefined);
 
   card.disconnectedCallback();
 

@@ -49,7 +49,7 @@ test("_onStartCalibration sends start_calibration and flips _calibratingOverride
 
 test("_onStartCalibration sets _knownPosition to 'unknown' on success", async () => {
   const hass = makeHass();
-  card = await mountCard(hass, { selectedEntity: "cover.x" });
+  card = await mountCard(hass, { selectedEntity: "cover.x", knownPosition: "open" });
   card.shadowRoot.querySelector = () => ({ value: "travel_time_open" });
   await card._onStartCalibration();
   expect(card._knownPosition).toBe("unknown");
@@ -133,7 +133,7 @@ test("_onStopCalibration(false) sets _calibratingOverride to false", async () =>
 });
 
 test("_onStopCalibration(false) sets _knownPosition to 'unknown'", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x" });
+  card = await mountCard(makeHass(), { selectedEntity: "cover.x", knownPosition: "open" });
   await card._onStopCalibration(false);
   expect(card._knownPosition).toBe("unknown");
 });
@@ -210,7 +210,7 @@ test.each([
 
 test("_onCoverCommand sets _knownPosition to 'unknown'", async () => {
   const hass = makeHass();
-  card = await mountCard(hass, { selectedEntity: "cover.x" });
+  card = await mountCard(hass, { selectedEntity: "cover.x", knownPosition: "open" });
   await card._onCoverCommand("open_cover");
   expect(card._knownPosition).toBe("unknown");
 });
@@ -236,7 +236,7 @@ test("_onCoverCommand error path swallows the error (console.error is expected)"
 
 test("_onPositionPresetChange='unknown' sets _knownPosition and makes no service calls", async () => {
   const hass = makeHass();
-  card = await mountCard(hass, { selectedEntity: "cover.x" });
+  card = await mountCard(hass, { selectedEntity: "cover.x", knownPosition: "open" });
   await card._onPositionPresetChange("unknown");
   expect(card._knownPosition).toBe("unknown");
   expect(hass.callService).not.toHaveBeenCalled();
