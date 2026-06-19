@@ -1,7 +1,7 @@
 /**
  * Tests for entity-filter.js — the cover-time-based-card's entity filter.
  *
- * Run: node --test tests/frontend/entity_filter.test.mjs
+ * Run: npm run test:fe
  */
 
 import { test } from "vitest";

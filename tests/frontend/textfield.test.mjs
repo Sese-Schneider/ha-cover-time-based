@@ -2,7 +2,7 @@
  * Tests for textfield.js — picks ha-input (HA 2026.4+) or falls back to
  * ha-textfield (removed in 2026.5).
  *
- * Run: node --test tests/frontend/textfield.test.mjs
+ * Run: npm run test:fe
  */
 
 import { test } from "vitest";

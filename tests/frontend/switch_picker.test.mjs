@@ -1,7 +1,7 @@
 /**
  * Tests for switchPickerDomains / switchLabelKey — pulse-mode picker helpers.
  *
- * Run: node --test tests/frontend/switch_picker.test.mjs
+ * Run: npm run test:fe
  */
 
 import { test } from "vitest";
