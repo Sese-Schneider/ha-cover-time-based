@@ -14,6 +14,7 @@ export default defineConfig({
     ],
   },
   test: {
+    isolate: true, // per-file isolation (default, but explicit: lazy-load branch tests depend on it)
     environment: "happy-dom",
     include: ["tests/frontend/**/*.test.mjs"],
     setupFiles: ["tests/frontend/helpers/setup.mjs"],
