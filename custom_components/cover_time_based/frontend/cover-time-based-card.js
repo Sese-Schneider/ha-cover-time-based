@@ -5,7 +5,10 @@
  * Uses HA built-in elements (ha-entity-picker, ha-input/ha-textfield, ha-checkbox,
  * ha-button) for consistent look and feel.
  *
- * All user-visible strings are translatable. Translations are embedded below.
+ * This element holds the card's logic (lifecycle, data fetching, event handlers).
+ * Its presentation, styles, translations, and constants live in sibling modules:
+ * card-render.js, card-styles.js, translations.js, and constants.js. All
+ * user-visible strings are translatable (see translations.js).
  */
 
 import { LitElement } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
@@ -534,8 +537,6 @@ class CoverTimeBasedCard extends LitElement {
   render() {
     return renderCard(this);
   }
-
-
 
   _toggleHelp(helperKey) {
     this._openHelp = this._openHelp === helperKey ? null : helperKey;
