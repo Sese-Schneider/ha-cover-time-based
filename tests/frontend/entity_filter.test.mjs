@@ -4,7 +4,7 @@
  * Run: node --test tests/frontend/entity_filter.test.mjs
  */
 
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { filterEntitiesByValidEntries } from "../../custom_components/cover_time_based/frontend/entity-filter.js";
 

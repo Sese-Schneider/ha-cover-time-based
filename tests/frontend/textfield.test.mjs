@@ -5,7 +5,7 @@
  * Run: node --test tests/frontend/textfield.test.mjs
  */
 
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { textfieldTagName } from "../../custom_components/cover_time_based/frontend/textfield.js";
 

@@ -4,7 +4,7 @@
  * Run: node --test tests/frontend/switch_picker.test.mjs
  */
 
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import {
   switchPickerDomains,
