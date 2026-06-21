@@ -280,6 +280,15 @@ export function renderInputEntities(card, c) {
         ></ha-entity-picker>
         ` : ""}
       </div>
+      ${c.control_mode === "toggle"
+        ? renderToggleWithHelp(
+            card,
+            "relay_reports_off.label",
+            "relay_reports_off.helper",
+            c.relay_reports_off !== false,
+            (e) => card._updateLocal({ relay_reports_off: e.target.checked }),
+          )
+        : ""}
       ${renderToggleWithHelp(
         card,
         "assumed_state.label",
