@@ -64,10 +64,43 @@ jobs:
             exit 1
           fi
 
+      - name: Build release notes from CHANGELOG
+        id: notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          # Use the hand-written, user-facing CHANGELOG section as the release
+          # notes. changelog-section.sh exits 0 (found), 1 (no section for this
+          # version), or >=2 (its own error, e.g. CHANGELOG.md missing):
+          #   - found              -> use the section as the release body
+          #   - exit 1, pre-release -> auto-generated notes (-alpha/-beta/-rc may
+          #                            legitimately have no entry yet)
+          #   - exit 1, final tag   -> fail: a shipped release must have notes
+          #                            (matches the repo's block-on-drift posture)
+          #   - exit >=2            -> a real error; fail regardless of tag
+          rc=0
+          bin/changelog-section.sh "$VERSION" > release-notes.md || rc=$?
+          if [ "$rc" -eq 0 ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          elif [ "$rc" -eq 1 ] && [ "$PRERELEASE" = "true" ]; then
+            echo "No CHANGELOG.md section for pre-release $VERSION; using auto-generated notes."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          elif [ "$rc" -eq 1 ]; then
+            echo "::error::No CHANGELOG.md section for final release $VERSION — add the entry before tagging."
+            exit 1
+          else
+            echo "::error::changelog-section.sh failed (exit $rc) for $VERSION — see its message above."
+            exit "$rc"
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          generate_release_notes: true
+          # The CHANGELOG section when present, otherwise GitHub's auto-generated
+          # notes (see the previous step).
+          body_path: ${{ steps.notes.outputs.found == 'true' && 'release-notes.md' || '' }}
+          generate_release_notes: ${{ steps.notes.outputs.found != 'true' }}
           # Every release is created as a pre-release and off "latest", so a new
           # version is never pushed straight to users on the default / HACS
           # channel. Test it, then promote to the full latest release with:
