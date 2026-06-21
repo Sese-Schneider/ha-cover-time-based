@@ -13,6 +13,7 @@ from custom_components.cover_time_based.cover import (
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
+    CONF_RELAY_REPORTS_OFF,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILTING_TIME_DOWN,
@@ -91,6 +92,22 @@ class TestCreateCoverFromOptions:
             name="Test",
         )
         assert isinstance(cover, ToggleModeCover)
+        # Default: relay is trusted to report its own OFF.
+        assert cover._relay_reports_off is True
+
+    def test_toggle_mode_relay_reports_off_from_options(self):
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_TOGGLE,
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                CONF_RELAY_REPORTS_OFF: False,
+            },
+            device_id="test",
+            name="Test",
+        )
+        assert isinstance(cover, ToggleModeCover)
+        assert cover._relay_reports_off is False
 
     def test_creates_wrapped_cover(self):
         cover = _create_cover_from_options(
@@ -224,6 +241,25 @@ class TestDevicesFromConfig:
         }
         devices = devices_from_config(config)
         assert isinstance(devices[0], ToggleModeCover)
+        # Default: relay is trusted to report its own OFF.
+        assert devices[0]._relay_reports_off is True
+
+    def test_toggle_relay_reports_off_from_yaml(self):
+        config = {
+            CONF_DEFAULTS: {},
+            CONF_DEVICES: {
+                "blind1": {
+                    "name": "Kitchen",
+                    CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                    CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                    "input_mode": "toggle",
+                    CONF_RELAY_REPORTS_OFF: False,
+                },
+            },
+        }
+        devices = devices_from_config(config)
+        assert isinstance(devices[0], ToggleModeCover)
+        assert devices[0]._relay_reports_off is False
 
     def test_defaults_applied(self):
         """Old YAML keys in defaults are migrated to new names."""

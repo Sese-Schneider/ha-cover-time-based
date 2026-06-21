@@ -31,10 +31,20 @@ class ToggleModeCover(SwitchCoverTimeBased):
     ON: toggle relays are momentary/self-releasing, so the next command is
     naturally a clean rising edge. Position tracking starts from the moment the
     motor begins moving (the ON edge).
+
+    ``relay_reports_off`` (default ``True``) controls how a relay's OFF state is
+    treated. When ``True``, the relay is trusted to report its own OFF, so a
+    relay still *reporting* ON is driven OFF first to force a clean edge. When
+    ``False`` (hardware-managed pulse modules such as the Aqara T2, issue #105),
+    the relay self-releases physically but never reports the OFF to HA — the
+    entity stays stuck ``on`` — and a ``turn_off`` is itself an activation pulse
+    on that hardware. In that case the send methods only ever issue ``turn_on``
+    and never a ``turn_off``, so each command is exactly one clean activation.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, relay_reports_off=True, **kwargs):
         super().__init__(**kwargs)
+        self._relay_reports_off = relay_reports_off
         self._last_external_toggle_time = {}
         self._last_tilt_direction = None
 
@@ -50,28 +60,82 @@ class ToggleModeCover(SwitchCoverTimeBased):
         (which the motor would miss while the position tracker keeps advancing,
         desyncing the entity from the physical cover).
 
-        Mark the echo(es) this pulse produces so the integration ignores its
-        own state changes: one for the lone ``turn_on``, or two when a release
-        ``turn_off`` precedes it. Marking more echoes than are emitted would
-        leave a stale pending count that swallows the user's next genuine press
-        until the safety timeout clears it.
+        With ``relay_reports_off`` disabled the OFF→ON-edge release is skipped
+        entirely: the relay never reports its OFF (so a reported ON is stale,
+        not the real state) and a ``turn_off`` would fire a spurious activation
+        pulse. A lone ``turn_on`` still pulses the motor on such hardware.
+
+        Mark only the echoes this pulse actually emits, so the integration
+        ignores its own state changes without over-counting. Marking more echoes
+        than are emitted would leave a stale pending count that swallows the
+        user's next genuine press until the safety timeout clears it. A service
+        call that doesn't change the entity's state (``turn_off`` on an
+        already-off relay, ``turn_on`` on an already-on one) fires no event and
+        so produces no echo to mark.
         """
-        if self._switch_is_on(entity_id):
+        is_on = self._switch_is_on(entity_id)
+        if self._relay_reports_off and is_on:
+            # Relay reports ON and we trust that report: release it first so the
+            # following turn_on is a genuine OFF->ON edge. Two state changes
+            # (off, then on) → two echoes.
             self._mark_switch_pending(entity_id, 2)
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": entity_id},
-                False,
-            )
-        else:
+            await self._turn_off_relay(entity_id)
+        elif not is_on:
+            # Relay reports OFF: the turn_on produces a real OFF->ON edge → one
+            # echo.
             self._mark_switch_pending(entity_id, 1)
+        # else: relay_reports_off is disabled and the relay still *reports* ON
+        # (it never announced its self-release). The turn_on lands on an
+        # already-on entity, so HA emits no state change and no echo — marking
+        # one would orphan a pending count that could swallow the user's next
+        # genuine press until the safety timeout clears it.
         await self.hass.services.async_call(
             "homeassistant",
             "turn_on",
             {"entity_id": entity_id},
             False,
         )
+
+    async def _turn_off_relay(self, entity_id):
+        """The single, gated path for every toggle-mode ``turn_off``.
+
+        Funnelling all OFF commands through here keeps one invariant enforceable
+        in one place: when ``relay_reports_off`` is disabled the relay never
+        receives a ``turn_off`` at all, because that hardware treats a
+        ``turn_off`` as an activation pulse rather than an idempotent "off"
+        (issue #105). A new relay path can't reintroduce the bug by forgetting
+        the gate as long as it issues its OFF through this method.
+
+        Echo-marking stays with the caller: how many echoes a command emits
+        depends on whether a ``turn_on`` follows the OFF, which only the caller
+        knows.
+        """
+        if not self._relay_reports_off:
+            return
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": entity_id},
+            False,
+        )
+
+    async def _release_relay(self, entity_id):
+        """Drive the opposite-direction relay OFF before pulsing a direction.
+
+        Clears a direction relay that may still be latched (or reporting ON
+        across a restart) so the two directions are never energised together.
+
+        Delegates the actual OFF to :meth:`_turn_off_relay`, so it is skipped
+        entirely when ``relay_reports_off`` is disabled (that hardware
+        self-releases physically — the opposite direction is already clear — and
+        a ``turn_off`` there is a spurious extra activation). An echo is marked
+        only when the relay both reports OFF *and* actually reports ON now, since
+        a ``turn_off`` on a relay already reporting OFF produces no state change
+        to filter.
+        """
+        if self._relay_reports_off and self._switch_is_on(entity_id):
+            self._mark_switch_pending(entity_id, 1)
+        await self._turn_off_relay(entity_id)
 
     async def async_stop_cover(self, **kwargs):
         """Stop the cover, only sending relay command if it was active."""
@@ -219,26 +283,12 @@ class ToggleModeCover(SwitchCoverTimeBased):
     # --- Internal relay commands ---
 
     async def _send_open(self) -> None:
-        if self._switch_is_on(self._close_switch_entity_id):
-            self._mark_switch_pending(self._close_switch_entity_id, 1)
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._close_switch_entity_id},
-            False,
-        )
+        await self._release_relay(self._close_switch_entity_id)
         # Motor controller acts on the ON edge (_pulse_relay marks its echoes)
         await self._pulse_relay(self._open_switch_entity_id)
 
     async def _send_close(self) -> None:
-        if self._switch_is_on(self._open_switch_entity_id):
-            self._mark_switch_pending(self._open_switch_entity_id, 1)
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._open_switch_entity_id},
-            False,
-        )
+        await self._release_relay(self._open_switch_entity_id)
         # Motor controller acts on the ON edge (_pulse_relay marks its echoes)
         await self._pulse_relay(self._close_switch_entity_id)
 
@@ -255,26 +305,12 @@ class ToggleModeCover(SwitchCoverTimeBased):
     # --- Tilt motor relay commands ---
 
     async def _send_tilt_open(self) -> None:
-        if self._switch_is_on(self._tilt_close_switch_id):
-            self._mark_switch_pending(self._tilt_close_switch_id, 1)
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._tilt_close_switch_id},
-            False,
-        )
+        await self._release_relay(self._tilt_close_switch_id)
         await self._pulse_relay(self._tilt_open_switch_id)
         self._last_tilt_direction = "open"
 
     async def _send_tilt_close(self) -> None:
-        if self._switch_is_on(self._tilt_open_switch_id):
-            self._mark_switch_pending(self._tilt_open_switch_id, 1)
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._tilt_open_switch_id},
-            False,
-        )
+        await self._release_relay(self._tilt_open_switch_id)
         await self._pulse_relay(self._tilt_close_switch_id)
         self._last_tilt_direction = "close"
 

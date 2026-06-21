@@ -23,6 +23,7 @@ from .cover import (
     CONF_MAX_TILT_ALLOWED_POSITION,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
+    CONF_RELAY_REPORTS_OFF,
     CONF_SAFE_TILT_POSITION,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_ENDPOINT_RUNON_TIME,
@@ -46,6 +47,7 @@ from .cover import (
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_IGNORE_REPORTED_POSITION,
     DEFAULT_PULSE_TIME,
+    DEFAULT_RELAY_REPORTS_OFF,
 )
 from .const import DOMAIN
 from .helpers import resolve_entity_or_none
@@ -56,6 +58,7 @@ _LOGGER = logging.getLogger(__name__)
 _FIELD_MAP = {
     "control_mode": CONF_CONTROL_MODE,
     "pulse_time": CONF_PULSE_TIME,
+    "relay_reports_off": CONF_RELAY_REPORTS_OFF,
     "open_switch_entity_id": CONF_OPEN_SWITCH_ENTITY_ID,
     "close_switch_entity_id": CONF_CLOSE_SWITCH_ENTITY_ID,
     "stop_switch_entity_id": CONF_STOP_SWITCH_ENTITY_ID,
@@ -169,6 +172,9 @@ async def ws_get_config(
             "entry_id": config_entry.entry_id,
             "control_mode": options.get(CONF_CONTROL_MODE, CONTROL_MODE_SWITCH),
             "pulse_time": options.get(CONF_PULSE_TIME, DEFAULT_PULSE_TIME),
+            "relay_reports_off": options.get(
+                CONF_RELAY_REPORTS_OFF, DEFAULT_RELAY_REPORTS_OFF
+            ),
             "open_switch_entity_id": options.get(CONF_OPEN_SWITCH_ENTITY_ID),
             "close_switch_entity_id": options.get(CONF_CLOSE_SWITCH_ENTITY_ID),
             "stop_switch_entity_id": options.get(CONF_STOP_SWITCH_ENTITY_ID),
@@ -218,6 +224,7 @@ async def ws_get_config(
         vol.Optional("pulse_time"): vol.All(
             vol.Coerce(float), vol.Range(min=0.1, max=10)
         ),
+        vol.Optional("relay_reports_off"): vol.Any(None, bool),
         vol.Optional("open_switch_entity_id"): vol.Any(str, None),
         vol.Optional("close_switch_entity_id"): vol.Any(str, None),
         vol.Optional("stop_switch_entity_id"): vol.Any(str, None),

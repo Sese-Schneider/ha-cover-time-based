@@ -31,6 +31,7 @@ from .const import (
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
     CONF_MIN_MOVEMENT_TIME,
+    CONF_RELAY_REPORTS_OFF,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILT_TIME_CLOSE,
@@ -43,6 +44,7 @@ from .const import (
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_IGNORE_REPORTED_POSITION,
+    DEFAULT_RELAY_REPORTS_OFF,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
 from .helpers import resolve_entity
@@ -121,6 +123,7 @@ SWITCH_COVER_SCHEMA = {
     vol.Optional(CONF_STOP_SWITCH_ENTITY_ID, default=None): vol.Any(cv.entity_id, None),
     vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
     vol.Optional(CONF_PULSE_TIME): cv.positive_float,
+    vol.Optional(CONF_RELAY_REPORTS_OFF): cv.boolean,
     **TRAVEL_TIME_SCHEMA,
 }
 
@@ -351,7 +354,12 @@ def _create_cover_from_options(options, device_id="", name=""):
     if control_mode == CONTROL_MODE_PULSE:
         return PulseModeCover(pulse_time=pulse_time, **switch_args)
     elif control_mode == CONTROL_MODE_TOGGLE:
-        return ToggleModeCover(**switch_args)
+        return ToggleModeCover(
+            relay_reports_off=options.get(
+                CONF_RELAY_REPORTS_OFF, DEFAULT_RELAY_REPORTS_OFF
+            ),
+            **switch_args,
+        )
     else:
         return SwitchModeCover(**switch_args)
 
@@ -390,9 +398,14 @@ def devices_from_config(domain_config):
         control_mode = _resolve_control_mode(config, defaults, bool(cover_entity_id))
         pulse_time = _get_value(CONF_PULSE_TIME, config, defaults, DEFAULT_PULSE_TIME)
         config.pop(CONF_PULSE_TIME, None)
+        relay_reports_off = _get_value(
+            CONF_RELAY_REPORTS_OFF, config, defaults, DEFAULT_RELAY_REPORTS_OFF
+        )
+        config.pop(CONF_RELAY_REPORTS_OFF, None)
 
         options[CONF_CONTROL_MODE] = control_mode
         options[CONF_PULSE_TIME] = pulse_time
+        options[CONF_RELAY_REPORTS_OFF] = relay_reports_off
 
         if open_switch:
             options[CONF_OPEN_SWITCH_ENTITY_ID] = open_switch

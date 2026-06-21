@@ -24,3 +24,11 @@ DEFAULT_FORCE_TIME_BASED_POSITION = False
 
 CONF_ASSUMED_STATE = "assumed_state"
 DEFAULT_ASSUMED_STATE = True
+
+# Toggle mode only. When True (default) the relay is trusted to report its own
+# OFF, so a relay still reporting ON is driven OFF first to force a clean edge.
+# When False (hardware-managed pulse modules that self-release but never report
+# the OFF, e.g. Aqara T2 — see issue #105), toggle mode only ever sends turn_on
+# and never turn_off, since a turn_off is itself an activation pulse there.
+CONF_RELAY_REPORTS_OFF = "relay_reports_off"
+DEFAULT_RELAY_REPORTS_OFF = True
