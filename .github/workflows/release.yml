@@ -33,7 +33,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Extract and validate version from tag
         id: version
@@ -116,7 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Bump main to next minor
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: main
 
