@@ -1226,6 +1226,34 @@ class TestStartupReappearanceNotTreatedAsPress:
         handler.assert_awaited_once_with("switch.open", "off", "on")
 
     @pytest.mark.asyncio
+    async def test_dual_relay_reappearance_no_phantom_reverse(self, make_cover):
+        """Canonical repro from the reporter's restart log (issue #105).
+
+        On restart BOTH stuck-on relays reappear as ``unknown -> on`` a few ms
+        apart: the close relay first (which read as an external close), then the
+        open relay (an external open "while closing, reversing") — driving the
+        cover to an endpoint with no relay ever fired. Neither edge may start
+        movement.
+        """
+        cover = self._toggle_no_off_report(make_cover)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_open_cover", new_callable=AsyncMock) as op,
+            patch.object(cover, "async_close_cover", new_callable=AsyncMock) as cl,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.close", "unknown", "on")
+            )
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "unknown", "on")
+            )
+
+        op.assert_not_awaited()
+        cl.assert_not_awaited()
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
     async def test_default_toggle_reappearance_still_dispatched(self, make_cover):
         """Scope check: a relay that DOES report its OFF (the default) is not
         guarded — its reappearance still reaches the handler unchanged."""
