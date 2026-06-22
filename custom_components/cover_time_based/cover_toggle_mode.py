@@ -6,6 +6,8 @@ import time
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
 )
 
 from .cover_switch import SwitchCoverTimeBased
@@ -165,6 +167,24 @@ class ToggleModeCover(SwitchCoverTimeBased):
         self._last_tilt_direction = None
 
     # --- External state change handlers ---
+
+    def _is_stale_reappearance(self, old_val, new_val) -> bool:
+        """A non-self-reporting relay coming back online is not a press.
+
+        When ``relay_reports_off`` is disabled the relay pulses and physically
+        releases but never reports its OFF (e.g. an Aqara T2 in hardware-pulse
+        mode — see issue #105), so its HA entity stays stuck ``on``. After a
+        restart or Zigbee reconnect the entity reappears as
+        ``unavailable``/``unknown`` → ``on``: that is the stale retained state
+        resurfacing, not a button press. Treating it as one would start a
+        phantom movement with no relay fired and desync the tracker. Relays
+        that report their OFF (the default) come back ``off``, so there is
+        nothing to guard and a genuine ``off`` → ``on`` press is unambiguous.
+        """
+        return not self._relay_reports_off and old_val in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        )
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle external state change in toggle mode.

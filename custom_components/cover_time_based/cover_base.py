@@ -2078,6 +2078,24 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("_async_switch_state_changed :: calibration active, skipping")
             return
 
+        # A relay that does not report its own OFF stays stuck reporting 'on'
+        # across a restart/reconnect (it pulsed and physically released but
+        # never told HA). The entity (re)appearing — unavailable/unknown -> on —
+        # is then that stale retained state resurfacing, NOT a fresh button
+        # press; replaying it as one would start a phantom movement (tracked,
+        # but with no relay fired since _triggered_externally) and desync the
+        # tracker from the physical cover. Modes that know their relay is
+        # unreliable this way opt in via _is_stale_reappearance.
+        if self._is_stale_reappearance(old_val, new_val):
+            self._log(
+                "_async_switch_state_changed :: %s came online (%s -> %s),"
+                " not treating as a command",
+                entity_id,
+                old_val,
+                new_val,
+            )
+            return
+
         # External state change (physical button / remote / HA button).
         # Delegate to mode-specific handlers which start/stop position
         # tracking normally via async_open_cover / async_close_cover etc.
@@ -2100,6 +2118,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # -----------------------------------------------------------------------
     # External state change handlers
     # -----------------------------------------------------------------------
+
+    def _is_stale_reappearance(self, old_val, new_val) -> bool:
+        """Whether this transition is an unreliable relay (re)appearing.
+
+        Default ``False`` — most relays report their own OFF, so they come back
+        ``off`` after a restart and a real ``off->on`` press is unambiguous.
+        Overridden by modes whose relay's reported state can't be trusted
+        across a restart/reconnect (see ToggleModeCover with
+        ``relay_reports_off`` disabled), so the dispatcher skips treating the
+        reappearance as a command.
+        """
+        return False
 
     async def _handle_external_tilt_state_change(self, entity_id, old_val, new_val):
         """Handle external state change on tilt switches (dual_motor).
