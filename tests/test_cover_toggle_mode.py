@@ -39,6 +39,7 @@ def _make_toggle_cover(
     tilt_open_switch=None,
     tilt_close_switch=None,
     tilt_stop_switch=None,
+    relay_reports_off=True,
 ):
     """Create a ToggleModeCover wired to a mock hass."""
     cover = ToggleModeCover(
@@ -59,6 +60,7 @@ def _make_toggle_cover(
         tilt_open_switch=tilt_open_switch,
         tilt_close_switch=tilt_close_switch,
         tilt_stop_switch=tilt_stop_switch,
+        relay_reports_off=relay_reports_off,
     )
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
@@ -1062,3 +1064,142 @@ class TestTogglePulseEdge:
         await cover._send_close()
 
         assert cover._test_tasks == []
+
+
+# ===================================================================
+# relay_reports_off=False: never send turn_off (hardware-pulse modules)
+# ===================================================================
+
+
+class TestToggleRelayDoesNotReportOff:
+    """Hardware-managed pulse relays (e.g. Aqara T2, issue #105).
+
+    Such a relay self-releases physically after its own internal pulse but
+    never reports the OFF back to HA, so the entity stays stuck ``on``. On
+    that hardware a ``turn_off`` is itself an activation pulse, not an
+    idempotent 'off' — so when the option is disabled, toggle mode must send
+    *only* ``turn_on`` and never a ``turn_off``, giving exactly one clean
+    activation per command. A repeated ``turn_on`` still pulses the motor even
+    while HA reports the entity ``on``.
+    """
+
+    @pytest.mark.asyncio
+    async def test_pulse_held_relay_is_single_turn_on(self):
+        """Relay reports ON (stuck): pulse is one turn_on, no release turn_off."""
+        cover = _make_toggle_cover(relay_reports_off=False)
+        _hold_relay_on(cover, "switch.close")
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        await cover._send_stop()
+
+        assert _calls_for(cover, "switch.close") == [_ha("turn_on", "switch.close")]
+
+    @pytest.mark.asyncio
+    async def test_pulse_held_relay_marks_no_echo(self):
+        """turn_on on an already-on relay changes nothing → no echo to mark.
+
+        Marking a pending echo here would orphan the count (no state change ever
+        arrives to consume it), risking swallowing the user's next genuine press
+        until the 5s safety timeout clears it.
+        """
+        cover = _make_toggle_cover(relay_reports_off=False)
+        _hold_relay_on(cover, "switch.close")
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        await cover._send_stop()
+
+        assert "switch.close" not in cover._pending_switch
+
+    @pytest.mark.asyncio
+    async def test_idle_pulse_marks_single_echo(self):
+        """turn_on on an off relay produces a real OFF->ON edge → one echo."""
+        cover = _make_toggle_cover(relay_reports_off=False)
+        _all_relays_off(cover)
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        await cover._send_stop()
+
+        assert cover._pending_switch.get("switch.close") == 1
+
+    @pytest.mark.asyncio
+    async def test_send_open_only_turn_on_no_opposite_turn_off(self):
+        """_send_open sends one turn_on and no turn_off on the opposite relay."""
+        cover = _make_toggle_cover(relay_reports_off=False)
+        _all_relays_off(cover)
+
+        await cover._send_open()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_on", "switch.open"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_open_no_turn_off_even_when_opposite_held_on(self):
+        """The opposite relay reading ON must NOT trigger a turn_off.
+
+        On hardware-pulse modules the opposite relay self-releases physically;
+        a turn_off would be a spurious extra activation.
+        """
+        cover = _make_toggle_cover(relay_reports_off=False)
+        _hold_relay_on(cover, "switch.close")
+
+        await cover._send_open()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_on", "switch.open"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_close_only_turn_on_no_opposite_turn_off(self):
+        cover = _make_toggle_cover(relay_reports_off=False)
+        _all_relays_off(cover)
+
+        await cover._send_close()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_on", "switch.close"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_close_no_turn_off_even_when_opposite_held_on(self):
+        """Opposite (open) relay reading ON must NOT trigger a turn_off."""
+        cover = _make_toggle_cover(relay_reports_off=False)
+        _hold_relay_on(cover, "switch.open")
+
+        await cover._send_close()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_on", "switch.close"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_tilt_open_only_turn_on_no_opposite_turn_off(self):
+        cover = _make_toggle_cover(
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            relay_reports_off=False,
+        )
+        _all_relays_off(cover)
+
+        await cover._send_tilt_open()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_on", "switch.tilt_open"),
+        ]
+        assert cover._last_tilt_direction == "open"
+
+    @pytest.mark.asyncio
+    async def test_send_tilt_close_only_turn_on_no_opposite_turn_off(self):
+        cover = _make_toggle_cover(
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            relay_reports_off=False,
+        )
+        _all_relays_off(cover)
+
+        await cover._send_tilt_close()
+
+        assert _calls(cover.hass.services.async_call) == [
+            _ha("turn_on", "switch.tilt_close"),
+        ]
+        assert cover._last_tilt_direction == "close"

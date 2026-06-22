@@ -11,6 +11,7 @@ from custom_components.cover_time_based.cover import (
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
+    CONF_RELAY_REPORTS_OFF,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_TILT_CLOSE_SWITCH,
     CONF_TILT_MODE,
@@ -453,6 +454,84 @@ class TestForceTimeBasedPositionRoundTrip:
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_options[CONF_FORCE_TIME_BASED_POSITION] is True
+
+
+class TestRelayReportsOffRoundTrip:
+    """relay_reports_off is returned in get_config and saved in update_config."""
+
+    @pytest.mark.asyncio
+    async def test_get_config_defaults_to_true(self):
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["relay_reports_off"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_stored_false(self):
+        hass, _, entity_reg = _make_hass(
+            options={
+                CONF_CONTROL_MODE: CONTROL_MODE_TOGGLE,
+                CONF_RELAY_REPORTS_OFF: False,
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["relay_reports_off"] is False
+
+    @pytest.mark.asyncio
+    async def test_update_config_saves_false(self):
+        hass, _, entity_reg = _make_hass(
+            options={CONF_CONTROL_MODE: CONTROL_MODE_TOGGLE}
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "relay_reports_off": False,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_options[CONF_RELAY_REPORTS_OFF] is False
 
 
 class TestAssumedStateRoundTrip:

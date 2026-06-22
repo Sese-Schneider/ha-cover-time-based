@@ -130,6 +130,12 @@ Three input modes are available to describe how the switch entities for switch-b
 
 With the **Pulse** input mode, the **Pulse time** configures how long the switch should send the ON signal before it turns OFF. Defaults to **1s**. **Toggle** mode does not use it — toggle relays are momentary, so the integration sends a single ON pulse and lets the relay release itself.
 
+#### Relay reports its own OFF (Toggle mode)
+
+Toggle mode only. Leave it **on** (the default) for normal toggle relays — they switch themselves off after the pulse and report that OFF back to Home Assistant, so the integration can drive a still-ON relay OFF first to guarantee a clean ON edge.
+
+Turn it **off** for hardware-managed pulse modules — for example an **Aqara T2** in its 200 ms internal-pulse mode — that pulse the contact themselves but **never report the OFF** to Home Assistant, leaving the switch entity stuck `on`. On such hardware a `turn_off` is not an idempotent "off" but another activation pulse, so the integration's attempt to force a clean edge (`turn_off` then `turn_on`) lands as a doubled command and the motor's toggle counter drifts — the symptom is Stop reversing the cover and Up driving it down. With the option off, toggle mode only ever sends a **single `turn_on` per command and never a `turn_off`**, giving exactly one clean activation per press. A repeated `turn_on` still pulses the motor even while the entity reads `on`.
+
 ### Assumed state
 
 Available for every device type. A time-based cover calculates its position from travel time without feedback, so by default it reports an _assumed_ state and Home Assistant keeps both the open and close buttons active at all times. Turn **Assumed state** off if you trust the time-based calculation and want the UI to behave like a position-aware cover — greying out actions that can't apply (for example the close button once the cover is already fully closed). Leave it on if the calculation can drift (motor slip, manual operation, power loss mid-travel), since the always-active buttons let you re-issue a command to re-converge.
@@ -357,6 +363,7 @@ cover:
 | travel_startup_delay   | float   | _Optional_                                      | Motor startup time compensation (seconds) for travel movements          | None    |
 | tilt_startup_delay     | float   | _Optional_                                      | Motor startup time compensation (seconds) for tilt movements            | None    |
 | pulse_time             | float   | _Optional_                                      | Duration in seconds for button press in pulse mode                      | 1.0     |
+| relay_reports_off      | boolean | _Optional_                                      | Toggle mode: set false for pulse modules that never report their OFF    | true    |
 
 </details>
 

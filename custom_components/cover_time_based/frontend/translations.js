@@ -52,6 +52,9 @@ export const EN = {
   "assumed_state.label": "Assumed state",
   "assumed_state.helper":
     "When on, Home Assistant treats the position as estimated and keeps both open and close controls active. Turn off if you trust the time-based calculation and want the UI to grey out unavailable actions (e.g. close when already closed).",
+  "relay_reports_off.label": "Relay reports its own OFF",
+  "relay_reports_off.helper":
+    "Leave on for normal toggle relays, which switch themselves off after the pulse and report it. Turn off for hardware-managed pulse modules (e.g. Aqara T2) that pulse internally but never report when they switch off, leaving the switch entity stuck on. With it off, the integration only ever sends a single ON command per press and never an OFF — so each press is exactly one clean activation, with no doubled commands.",
   "more_info": "More info",
   "timing.attribute_header": "Attribute",
   "timing.travel_attribute_header": "Travel Attribute",
@@ -167,6 +170,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Estado assumido",
     "assumed_state.helper":
       "Quando ativo, o Home Assistant trata a posição como estimada e mantém ativos os controlos de abrir e fechar. Desative se confiar no cálculo por tempo e quiser que a interface desative as ações indisponíveis (por exemplo, fechar quando já está fechado).",
+    "relay_reports_off.label": "O relé reporta o seu próprio OFF",
+    "relay_reports_off.helper":
+      "Deixe ativo para relés de alternância normais, que se desligam após o pulso e o reportam. Desative para módulos de pulso geridos por hardware (por exemplo, Aqara T2) que pulsam internamente mas nunca reportam quando se desligam, deixando a entidade de interruptor presa em ligado. Com a opção desativada, a integração envia apenas um único comando LIGAR por toque e nunca DESLIGAR — por isso cada toque é exatamente uma ativação limpa, sem comandos duplicados.",
     "more_info": "Mais informação",
     "timing.attribute_header": "Atributo",
     "timing.travel_attribute_header": "Atributo",
@@ -279,6 +285,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Stan zakładany",
     "assumed_state.helper":
       "Gdy włączone, Home Assistant traktuje pozycję jako szacowaną i pozostawia aktywne przyciski otwierania i zamykania. Wyłącz, jeśli ufasz obliczeniom czasowym i chcesz, aby interfejs wyszarzał niedostępne akcje (np. zamknięcie, gdy roleta jest już zamknięta).",
+    "relay_reports_off.label": "Przekaźnik zgłasza własne wyłączenie",
+    "relay_reports_off.helper":
+      "Pozostaw włączone dla zwykłych przekaźników przełączających, które same się wyłączają po impulsie i to zgłaszają. Wyłącz dla modułów impulsowych zarządzanych sprzętowo (np. Aqara T2), które pulsują wewnętrznie, ale nigdy nie zgłaszają wyłączenia, pozostawiając encję przełącznika zablokowaną w stanie włączonym. Po wyłączeniu integracja wysyła tylko jedno polecenie WŁĄCZ na naciśnięcie i nigdy WYŁĄCZ — dzięki czemu każde naciśnięcie to dokładnie jedna czysta aktywacja, bez podwojonych poleceń.",
     "more_info": "Więcej informacji",
     "timing.attribute_header": "Atrybut",
     "timing.travel_attribute_header": "Atrybut",
