@@ -11,5 +11,6 @@ __pycache__/
 coverage/
 docs/plans/
 docs/superpowers/
+docs/handoffs/
 .ha-changes-state.json
 HA_CHANGES_REPORT.md
