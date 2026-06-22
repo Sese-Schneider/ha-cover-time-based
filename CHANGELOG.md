@@ -1,3 +1,9 @@
+## 4.5.0 (2026-06-22)
+
+### Features
+
+- **Toggle mode: option for relays that pulse but never report their OFF** ([#105](https://github.com/Sese-Schneider/ha-cover-time-based/issues/105)): the 4.4.0 toggle-mode change drives a still-reported-ON relay OFF before pulsing it ON, to guarantee a clean rising edge. On hardware-managed pulse modules — for example an **Aqara T2** in its 200 ms internal-pulse mode — that pulse the contact themselves but never report the OFF back to Home Assistant, the switch entity stays stuck `on`, so a `turn_off` is not an idempotent "off" but another activation pulse. The integration's clean-edge attempt then lands as a doubled command and the motor's toggle counter drifts — the symptom is Stop reversing the cover and Up driving it down. A new per-cover toggle-mode option, **Relay reports its own OFF** (default **on**, the unchanged 4.4.0 behaviour), can be turned **off** for such modules: toggle mode then only ever sends a single `turn_on` per command and never a `turn_off`, giving exactly one clean activation per press. Configurable from the config card (EN/PT/PL) and as the `relay_reports_off` YAML option.
+
 ## 4.4.0 (2026-06-18)
 
 ### ⚠ Breaking changes
