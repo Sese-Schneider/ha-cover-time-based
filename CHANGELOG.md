@@ -1,3 +1,9 @@
+## 4.5.1 (2026-06-22)
+
+### Fixes
+
+- **Toggle mode with “Relay reports its own OFF” off: restart no longer phantom-opens the cover** ([#105](https://github.com/Sese-Schneider/ha-cover-time-based/issues/105)): a relay configured as not self-reporting its OFF (an **Aqara T2** in hardware-pulse mode, the case the 4.5.0 option addresses) pulses and physically releases but never tells Home Assistant, so its switch entity stays stuck `on`. On a restart — or a Zigbee/Z2M reconnect — the entity reappeared as `unavailable → on`, which the integration mistook for a fresh button press and started a phantom movement: tracked all the way to an endpoint but with **no relay actually fired**, so the reported position silently diverged from the physical cover (for example showing fully open while the cover is closed). That stale-reappearance edge is no longer treated as a command for these relays, since there is no way to reconstruct whether or when a real press happened while Home Assistant was down. Only this configuration is affected — relays that report their OFF come back `off` on restart, so every other mode and the default toggle behaviour are unchanged.
+
 ## 4.5.0 (2026-06-22)
 
 ### Features
