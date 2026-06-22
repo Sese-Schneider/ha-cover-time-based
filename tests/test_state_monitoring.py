@@ -1132,6 +1132,121 @@ class TestToggleE2EThroughStateListener:
 
 
 # ===================================================================
+# Startup / reconnect: a switch (re)appearing must not look like a press
+# ===================================================================
+
+
+class TestStartupReappearanceNotTreatedAsPress:
+    """Toggle mode with ``relay_reports_off`` disabled.
+
+    Such a relay (e.g. an Aqara T2 in hardware-pulse mode) pulses and releases
+    itself but never reports the OFF, so its HA entity stays stuck ``on``. On a
+    restart / Zigbee reconnect it reappears as ``unavailable``/``unknown`` ->
+    ``on`` — the stale retained state resurfacing, NOT a genuine ``off -> on``
+    press. Replaying it as a command starts a phantom movement (tracked, but
+    with no relay fired because it's "external") and desyncs the tracker.
+
+    The guard is scoped to exactly this case: relays that report their OFF (the
+    default, and every other mode) come back ``off``, so there is nothing to
+    guard there and their behaviour is unchanged.
+    """
+
+    @staticmethod
+    def _toggle_no_off_report(make_cover):
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover._relay_reports_off = False
+        cover.travel_calc.set_position(25)
+        return cover
+
+    @pytest.mark.asyncio
+    async def test_unavailable_to_on_does_not_trigger(self, make_cover):
+        cover = self._toggle_no_off_report(make_cover)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "unavailable", "on")
+            )
+
+        handler.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unknown_to_on_does_not_trigger(self, make_cover):
+        cover = self._toggle_no_off_report(make_cover)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "unknown", "on")
+            )
+
+        handler.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unavailable_to_on_starts_no_movement(self, make_cover):
+        """Symptom-level: the cover must not start opening on reappearance."""
+        cover = self._toggle_no_off_report(make_cover)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_open_cover", new_callable=AsyncMock) as op,
+            patch.object(cover, "async_close_cover", new_callable=AsyncMock) as cl,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "unavailable", "on")
+            )
+
+        op.assert_not_awaited()
+        cl.assert_not_awaited()
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_genuine_off_to_on_still_triggers(self, make_cover):
+        """Regression: a real off->on press must still reach the handler."""
+        cover = self._toggle_no_off_report(make_cover)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "off", "on")
+            )
+
+        handler.assert_awaited_once_with("switch.open", "off", "on")
+
+    @pytest.mark.asyncio
+    async def test_default_toggle_reappearance_still_dispatched(self, make_cover):
+        """Scope check: a relay that DOES report its OFF (the default) is not
+        guarded — its reappearance still reaches the handler unchanged."""
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        assert cover._relay_reports_off is True
+        cover.travel_calc.set_position(25)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_handle_external_state_change", new_callable=AsyncMock
+            ) as handler,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "unavailable", "on")
+            )
+
+        handler.assert_awaited_once_with("switch.open", "unavailable", "on")
+
+
+# ===================================================================
 # External tilt state changes (pulse mode — base class handler)
 # Covers cover_base.py lines 1664-1688
 # ===================================================================
