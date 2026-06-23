@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixes
+
+- **Inline tilt no longer overshoots when the cover is parked at an endpoint** ([#125](https://github.com/Sese-Schneider/ha-cover-time-based/issues/125)): in **inline** tilt mode the slats are articulated by the main travel motor, so a tilt move drives the same relay as travel. When the cover was parked at a travel endpoint (fully open or fully closed) — the usual case when adjusting slats — a tilt move that finished there was wrongly given the **endpoint run-on**, a *travel* concept that keeps a latched relay energized so the shutter seats against its physical limit. The result: a 50% tilt that should take 0.75s (half of a 1.5s tilt time) ran for ~2s, the run-on default, overdriving the slats and starting to move the cover off the endpoint. Run-on is now suppressed for tilt moves, so the relay de-energizes as soon as the tilt target is reached. **Switch** mode is the only mode affected (it is the only one that runs on at an endpoint); travel moves to an endpoint still run on as before so the shutter seats correctly.
+
 ## 4.5.1 (2026-06-22)
 
 ### Fixes
