@@ -597,3 +597,148 @@ async def test_switch_dual_motor_external_open_can_be_stopped(make_cover):
         "switching the open relay off must stop the cover, not be filtered as an echo"
     )
     await _cancel_tasks(cover)
+
+
+# ===================================================================
+# Inline tilt at a travel endpoint (issue #125)
+#
+# Inline tilt drives the *travel* motor to articulate the slats. Endpoint
+# run-on is a travel concept — it keeps a latched relay energized so the
+# shutter seats against its physical limit. A tilt move that merely finishes
+# while the cover is parked at a travel endpoint (0/100) is NOT at a limit;
+# applying run-on overdrives the tilt well past its target (a 50% tilt that
+# should take 0.75s ran for ~2s, the run-on default).
+# ===================================================================
+
+
+def _make_inline(make_cover, control_mode=CONTROL_MODE_SWITCH):
+    return make_cover(
+        control_mode=control_mode,
+        tilt_time_close=1.5,
+        tilt_time_open=1.5,
+        tilt_mode="inline",
+        endpoint_runon_time=2.0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_inline_tilt_at_closed_endpoint_no_runon(make_cover):
+    """Switch + inline: tilting while parked fully closed must not run on past
+    the tilt target — the relay de-energizes immediately (issue #125)."""
+    cover = _make_inline(make_cover)
+    cover.travel_calc.set_position(0)  # parked fully closed
+    cover.tilt_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(50)
+        cover.hass.services.async_call.reset_mock()
+        cover.tilt_calc.set_position(50)  # tilt reaches its 50% target
+        await cover.auto_stop_if_necessary()
+
+    assert cover._delay_task is None, "a tilt move must not schedule endpoint run-on"
+    off_calls = [c for c in _ha_calls(cover) if c.args[1] == "turn_off"]
+    assert off_calls, "switch mode must de-energize the relay when tilt completes"
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_inline_tilt_at_open_endpoint_no_runon(make_cover):
+    """Switch + inline: the overshoot bites at the open endpoint too — tilting
+    while parked fully open must not run on either (issue #125)."""
+    cover = _make_inline(make_cover)
+    cover.travel_calc.set_position(100)  # parked fully open
+    cover.tilt_calc.set_position(100)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(50)
+        cover.hass.services.async_call.reset_mock()
+        cover.tilt_calc.set_position(50)
+        await cover.auto_stop_if_necessary()
+
+    assert cover._delay_task is None, "a tilt move must not schedule endpoint run-on"
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_inline_open_tilt_at_closed_endpoint_no_runon(make_cover):
+    """`open_cover_tilt` is a tilt move too (it routes through a different
+    method than set_tilt_position): tilting open from the closed endpoint must
+    not run on and start lifting the cover off the endpoint (issue #125)."""
+    cover = _make_inline(make_cover)
+    cover.travel_calc.set_position(0)  # cover fully closed
+    cover.tilt_calc.set_position(0)  # slats closed
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover_tilt()  # tilt fully open
+        cover.hass.services.async_call.reset_mock()
+        cover.tilt_calc.set_position(100)  # tilt reaches its open endpoint
+        await cover.auto_stop_if_necessary()
+
+    assert cover._delay_task is None, "open_cover_tilt must not schedule run-on"
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_inline_travel_to_endpoint_keeps_runon(make_cover):
+    """The fix must suppress run-on for tilt moves only: a real *travel* move to
+    an endpoint must still run on so the shutter seats against its limit."""
+    cover = _make_inline(make_cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(0)  # already at the closing tilt endpoint
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(0)  # travel to fully closed
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+        await cover.auto_stop_if_necessary()
+
+    assert cover._delay_task is not None, "travel to an endpoint must still run on"
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_noop_tilt_during_travel_does_not_suppress_travel_runon(make_cover):
+    """A redundant (no-op) tilt command arriving mid-travel must not leak the
+    tilt-move flag onto the in-flight TRAVEL move and suppress its endpoint
+    run-on. E.g. a "close cover AND set tilt to 0" automation where tilt is
+    already 0: the tilt command is a no-op but must not de-fang the close's
+    run-on at the closed endpoint."""
+    cover = _make_inline(make_cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(0)  # tilt already at the closing endpoint
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(0)  # start a travel move to fully closed
+        await cover.set_tilt_position(0)  # no-op: target == current tilt
+        # The travel move (still in flight) reaches the closed endpoint:
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+        await cover.auto_stop_if_necessary()
+
+    assert cover._delay_task is not None, (
+        "a no-op tilt command must not suppress the travel move's endpoint run-on"
+    )
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_stop_during_tilt_then_travel_still_runs_on(make_cover):
+    """A committed tilt move interrupted by STOP must not de-fang the next
+    travel move's endpoint run-on. The next move clears the tilt-move flag via
+    _abandon_active_lifecycle, so this guards that reset staying load-bearing."""
+    cover = _make_inline(make_cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(50)  # commit a tilt move (sets the flag)
+        await cover.async_stop_cover()  # STOP mid-tilt
+        cover.tilt_calc.set_position(0)  # park tilt so the close is pure travel
+        await cover.set_position(0)  # travel to the closed endpoint
+        cover.travel_calc.set_position(0)
+        await cover.auto_stop_if_necessary()
+
+    assert cover._delay_task is not None, (
+        "travel run-on must fire after a tilt move was committed then stopped"
+    )
+    await _cancel_tasks(cover)

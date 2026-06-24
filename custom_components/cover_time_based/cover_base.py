@@ -129,6 +129,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # True while the active movement drives a dedicated tilt motor (dual
         # motor), so auto-stop settles the tilt motor instead of travel.
         self._moving_tilt_motor = False
+        # True while the active movement is a tilt move (any tilt mode). The
+        # endpoint run-on is a *travel* concept — it keeps a latched relay
+        # energized so the shutter seats against its physical limit. A tilt
+        # move that finishes while the cover is parked at a travel endpoint is
+        # not at a limit, so it must not run on (issue #125).
+        self._moving_tilt = False
         self._state = True
         self._pending_switch = {}
         self._pending_switch_timers = {}
@@ -770,6 +776,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
 
         self._last_command = command
+        # Committed past the no-op return above — mark this as a tilt move so it
+        # doesn't run on at a travel endpoint (#125); see set_tilt_position.
+        self._moving_tilt = True
         if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
             self._moving_tilt_motor = True
             # Externally triggered moves only track — the relay is already
@@ -995,6 +1004,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
 
         self._last_command = command
+        # Set only now that the move is committed (past every no-op/too-short
+        # early return) — a tilt move must not run on at a travel endpoint, but
+        # leaking this onto a bailed-out call would wrongly suppress an
+        # in-flight travel move's run-on (issue #125).
+        self._moving_tilt = True
 
         if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
             self._moving_tilt_motor = True
@@ -1389,6 +1403,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     )
                 self._last_command = None
                 self._moving_tilt_motor = False
+                self._moving_tilt = False
                 await self._async_persist_position()
                 return
 
@@ -1405,6 +1420,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     )
                 self._last_command = None
                 self._moving_tilt_motor = False
+                self._moving_tilt = False
                 await self._async_persist_position()
                 return
 
@@ -1457,6 +1473,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
             elif (
                 self._at_endpoint(current_travel)
+                and not self._moving_tilt
                 and self._endpoint_runon_time is not None
                 and self._endpoint_runon_time > 0
             ):
@@ -1473,6 +1490,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 await self._async_handle_command(SERVICE_STOP_COVER)
             self._last_command = None
             self._moving_tilt_motor = False
+            self._moving_tilt = False
             await self._async_persist_position()
 
     def _motor_stops_itself(self) -> bool:
@@ -1591,8 +1609,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_tilt_target = None
         self._pending_tilt_command = None
         # Each movement entry point funnels through here; default to a travel
-        # move and let the tilt-motor paths below opt in.
+        # move and let the tilt paths below opt in.
         self._moving_tilt_motor = False
+        self._moving_tilt = False
 
         if not was_restoring and not was_pre_stepping:
             return
