@@ -31,6 +31,25 @@ class PulseModeCover(SwitchCoverTimeBased):
             missing.append("tilt stop switch")
         return missing
 
+    def _self_stops_at_endpoints(self) -> bool:
+        """Pulse mode must still pulse its dedicated stop relay at an endpoint.
+
+        The base default (True) skips the endpoint stop because, for toggle mode,
+        re-pulsing the *direction* relay there would restart the motor. Pulse
+        mode is different: its stop is a *separate* relay (a stop switch is
+        required), so the endpoint stop can never restart the motor. The
+        momentary controller latches the direction command and keeps running
+        until it receives that stop pulse — skipping it leaves the controller
+        stuck "moving", blocking the next press and external buttons (issue
+        #129). Returning False restores the 4.3.0 behaviour: endpoint stop pulse,
+        deferred by endpoint_runon_time if configured.
+
+        The same reasoning covers a dedicated tilt motor: this flag also gates
+        ``_tilt_settle``, so a pulse dual-motor cover likewise pulses its
+        (required) tilt-stop relay at the tilt endpoints.
+        """
+        return False
+
     async def _complete_pulse(self, entity_id):
         """Complete a relay pulse by turning OFF after pulse_time."""
         try:

@@ -154,9 +154,21 @@ async def test_switch_external_open_de_energizes_at_endpoint(make_cover):
 
 
 @pytest.mark.asyncio
-async def test_pulse_reaching_endpoint_sends_no_relay_stop(make_cover):
-    """Pulse mode at an endpoint sends no stop pulse and schedules no run-on."""
-    cover = make_cover(control_mode=CONTROL_MODE_PULSE, stop_switch="switch.stop")
+async def test_pulse_reaching_endpoint_sends_stop_pulse(make_cover):
+    """Pulse mode at an endpoint MUST pulse its dedicated stop relay (issue #129).
+
+    Unlike toggle (whose "stop" re-pulses the direction relay and restarts the
+    motor), pulse mode has a separate stop switch. The momentary controller
+    latches the direction command and keeps running until it gets that stop
+    pulse — so skipping it leaves the controller stuck "moving", blocking the
+    next press and external buttons. Run-on disabled here so the stop is
+    immediate.
+    """
+    cover = make_cover(
+        control_mode=CONTROL_MODE_PULSE,
+        stop_switch="switch.stop",
+        endpoint_runon_time=0,
+    )
     cover._self_initiated_movement = True
     cover._last_command = SERVICE_CLOSE_COVER
     cover.travel_calc.set_position(0)
@@ -165,8 +177,64 @@ async def test_pulse_reaching_endpoint_sends_no_relay_stop(make_cover):
     with patch.object(cover, "async_write_ha_state"):
         await cover.auto_stop_if_necessary()
 
-    assert _ha_calls(cover) == []
-    assert cover._delay_task is None
+    stop_on = [
+        c
+        for c in _ha_calls(cover)
+        if c.args[1] == "turn_on" and c.args[2].get("entity_id") == "switch.stop"
+    ]
+    assert stop_on, "pulse mode must pulse its stop relay at an endpoint (issue #129)"
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_pulse_keeps_endpoint_runon(make_cover):
+    """Pulse mode keeps run-on: an endpoint defers the stop pulse to the run-on
+    timer, exactly as 4.3.0 did and as switch mode does (issue #129)."""
+    cover = make_cover(
+        control_mode=CONTROL_MODE_PULSE,
+        stop_switch="switch.stop",
+        endpoint_runon_time=2.0,
+    )
+    cover._self_initiated_movement = True
+    cover._last_command = SERVICE_CLOSE_COVER
+    cover.travel_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.auto_stop_if_necessary()
+
+    assert cover._delay_task is not None
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_pulse_resync_at_endpoint_schedules_stop(make_cover):
+    """Commanding to the endpoint we already sit at (resync) must re-drive the
+    motor AND schedule the stop pulse for pulse mode — the dedicated stop relay
+    can't restart the motor, so the run-on/stop is safe (issue #129).
+
+    This is the _async_move_to_endpoint resync path (open-at-100), distinct from
+    the auto-stop path. (close-at-0 is a deliberate no-op — see async_close_cover.)
+    """
+    cover = make_cover(
+        control_mode=CONTROL_MODE_PULSE,
+        stop_switch="switch.stop",
+        endpoint_runon_time=2.0,
+    )
+    cover.travel_calc.set_position(100)
+
+    cover.hass.services.async_call.reset_mock()
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover()
+
+    # Resync re-pulses the open relay to drive physically to the limit...
+    open_on = [
+        c
+        for c in _ha_calls(cover)
+        if c.args[1] == "turn_on" and c.args[2].get("entity_id") == "switch.open"
+    ]
+    assert open_on, "resync should re-pulse the direction relay"
+    # ...and schedules the stop pulse (the stop relay can't restart the motor).
+    assert cover._delay_task is not None
     await _cancel_tasks(cover)
 
 
@@ -309,13 +377,15 @@ async def test_mid_tilt_at_travel_endpoint_still_stops_tilt(make_cover):
     "kwargs,expected",
     [
         ({"control_mode": CONTROL_MODE_TOGGLE}, True),
-        ({"control_mode": CONTROL_MODE_PULSE, "stop_switch": "switch.stop"}, True),
+        ({"control_mode": CONTROL_MODE_PULSE, "stop_switch": "switch.stop"}, False),
         ({"cover_entity_id": "cover.inner"}, True),
         ({"control_mode": CONTROL_MODE_SWITCH}, False),
     ],
 )
 def test_self_stops_at_endpoints_per_mode(make_cover, kwargs, expected):
-    """Only switch mode (latched relay) must stop at endpoints."""
+    """Modes with a dedicated stop relay (switch, pulse) stop at endpoints; modes
+    whose only "stop" re-pulses a direction relay (toggle) or whose device
+    self-stops (wrapped) skip it."""
     cover = make_cover(**kwargs)
     assert cover._self_stops_at_endpoints() is expected
 
@@ -372,6 +442,39 @@ async def test_dual_motor_tilt_to_endpoint_sends_no_stop(make_cover):
     await _run_tilt_move(cover, 100)  # tilt to its open endpoint
 
     assert _tilt_calls(cover) == [], "tilt motor self-stops at its endpoint"
+    assert _travel_calls(cover) == [], "tilt move must not drive the travel motor"
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_pulse_dual_motor_tilt_to_endpoint_pulses_stop(make_cover):
+    """Pulse dual-motor: a tilt move reaching a tilt endpoint must pulse the
+    dedicated tilt-stop relay — the tilt-motor twin of #129. Toggle skips it
+    (a re-pulse would restart the motor); pulse's separate stop relay can't, so
+    the controller must be told to stop or it stays latched 'moving'."""
+    cover = make_cover(
+        control_mode=CONTROL_MODE_PULSE,
+        stop_switch="switch.stop",
+        tilt_time_close=2.0,
+        tilt_time_open=2.0,
+        tilt_mode="dual_motor",
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        tilt_stop_switch="switch.tilt_stop",
+    )
+    cover.travel_calc.set_position(50)  # mid-travel: isolate tilt behaviour
+    cover.tilt_calc.set_position(0)
+
+    await _run_tilt_move(cover, 100)  # tilt to its open endpoint
+
+    tilt_stop_on = [
+        c
+        for c in _ha_calls(cover)
+        if c.args[1] == "turn_on" and c.args[2].get("entity_id") == "switch.tilt_stop"
+    ]
+    assert tilt_stop_on, (
+        "pulse dual-motor must pulse its tilt-stop relay at a tilt endpoint (#129)"
+    )
     assert _travel_calls(cover) == [], "tilt move must not drive the travel motor"
     await _cancel_tasks(cover)
 

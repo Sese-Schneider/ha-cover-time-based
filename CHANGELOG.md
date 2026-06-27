@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixes
+
+- **Pulse mode sends the endpoint stop again** ([#129](https://github.com/Sese-Schneider/ha-cover-time-based/issues/129)): the 4.4.0 "no endpoint stop for self-stopping motors" change was too broad — it lumped **Pulse** mode in with Toggle, but the two are not the same. Toggle's "stop" re-pulses the *direction* relay (which would restart the motor), so skipping it there is correct; Pulse mode has a **dedicated stop relay** (a stop switch is required), and its momentary controller *latches* the direction command and keeps running until it receives that stop pulse. With the stop skipped at 0%/100%, the controller was left stuck "moving" — the cover only responded after several clicks, the Stop was never delivered, and the physical wall/PLC buttons appeared blocked while the controller thought it was still running. Pulse mode now pulses its stop relay at the endpoints again (deferred by **Endpoint run-on time** if configured), exactly as it did in 4.3.0; because the stop is a separate relay, it can never restart the motor. The same applies to a **separate tilt motor** — its tilt-stop relay is pulsed at the tilt endpoints too. **Toggle** and **wrapped-cover** modes are unchanged.
+
 ## 4.5.2 (2026-06-24)
 
 ### Fixes
