@@ -136,6 +136,12 @@ Toggle mode only. Leave it **on** (the default) for normal toggle relays — the
 
 Turn it **off** for hardware-managed pulse modules — for example an **Aqara T2** in its 200 ms internal-pulse mode — that pulse the contact themselves but **never report the OFF** to Home Assistant, leaving the switch entity stuck `on`. On such hardware a `turn_off` is not an idempotent "off" but another activation pulse, so the integration's attempt to force a clean edge (`turn_off` then `turn_on`) lands as a doubled command and the motor's toggle counter drifts — the symptom is Stop reversing the cover and Up driving it down. With the option off, toggle mode only ever sends a **single `turn_on` per command and never a `turn_off`**, giving exactly one clean activation per press. A repeated `turn_on` still pulses the motor even while the entity reads `on`.
 
+#### Send stop signal at endpoints (Pulse mode)
+
+Pulse mode only. Leave it **on** (the default) for controllers that **latch** the direction command and keep running until they receive a separate stop pulse. Without the endpoint stop they stay stuck "moving" — the cover only responds after several clicks and the physical wall/PLC buttons appear blocked. With the option on, the integration pulses the dedicated stop relay when the cover reaches an endpoint (deferred by the **Endpoint run-on time**, see below); because the stop is a separate relay it can never restart the motor.
+
+Turn it **off** for controllers with **automatic end-stop detection**: the motor halts itself at its 0%/100% limit switches, and a stop pulse received _while it is already stopped_ is read as "go to favourite/preset position" (the classic Somfy _my_ behaviour), repositioning the cover on every limit hit. With the option off, no stop is sent at the endpoints. The same flag governs a **separate tilt motor**'s tilt-stop relay at the tilt endpoints. **Switch**, **Toggle** and wrapped-cover modes are unaffected.
+
 ### Assumed state
 
 Available for every device type. A time-based cover calculates its position from travel time without feedback, so by default it reports an _assumed_ state and Home Assistant keeps both the open and close buttons active at all times. Turn **Assumed state** off if you trust the time-based calculation and want the UI to behave like a position-aware cover — greying out actions that can't apply (for example the close button once the cover is already fully closed). Leave it on if the calculation can drift (motor slip, manual operation, power loss mid-travel), since the always-active buttons let you re-issue a command to re-converge.
@@ -195,7 +201,7 @@ Select the attribute that you wish to calibrate. The available attributes depend
 | Travel time (close)  | Time in seconds for the cover to fully close                          |         |
 | Travel time (open)   | Time in seconds for the cover to fully open                           |         |
 | Travel startup delay | Motor startup compensation for travel (see below)                     | None    |
-| Endpoint run-on time | Extra relay time at endpoints to reset position (Switch mode only)    | 2.0     |
+| Endpoint run-on time | Extra relay time at endpoints to reset position (Switch mode; Pulse when it sends the stop) | 2.0     |
 | Min movement time    | Minimum movement duration - blocks shorter movements to prevent drift | None    |
 
 ### Calibration Attributes for Tilt
@@ -225,11 +231,11 @@ Recommended values: 0.05 - 0.15 seconds. Can be configured separately for travel
 
 Position tracking is not exact and can drift over time, so the tracker resyncs itself whenever the cover is sent fully to the 0% or 100% endpoint.
 
-Most cover motors have internal limit switches and stop themselves at the endpoints. In **Pulse**, **Toggle** and wrapped-cover modes the integration therefore sends **no stop command at an endpoint** — it lets the motor run into its own limit. This avoids an unwanted extra movement (in Toggle mode a stop pulse on an already-stopped motor would restart it) and resyncs the tracker for free, as the motor always reaches its true endpoint.
+Most cover motors have internal limit switches and stop themselves at the endpoints. In **Toggle** and wrapped-cover modes the integration therefore sends **no stop command at an endpoint** — it lets the motor run into its own limit. This avoids an unwanted extra movement (in Toggle mode a stop pulse on an already-stopped motor would restart it) and resyncs the tracker for free, as the motor always reaches its true endpoint. **Pulse** mode is configurable (see [Send stop signal at endpoints](#send-stop-signal-at-endpoints-pulse-mode) above): by default it pulses its dedicated stop relay at the endpoint, which a latching controller needs, but that can be turned off for controllers that self-stop at their own limits.
 
-In **Switch** mode the direction relay is latched ON for the whole movement, so it must be actively switched off at the endpoint. Because tracking is approximate, the relay is held on for an extra **Endpoint Run-on Time** (default 2s) so the motor reaches the physical endpoint before power is cut. **This setting applies only to Switch mode.**
+In **Switch** mode the direction relay is latched ON for the whole movement, so it must be actively switched off at the endpoint. Because tracking is approximate, the relay is held on for an extra **Endpoint Run-on Time** (default 2s) so the motor reaches the physical endpoint before power is cut. **This setting applies to Switch mode, and to Pulse mode when it sends the endpoint stop** (it defers that stop pulse by the run-on so the motor seats against its limit first).
 
-The same self-stop handling applies to a **separate tilt motor** (separate-tilt-motor mode): no stop is sent when tilt reaches its 0%/100% endpoints — the tilt motor self-stops on its own limit — except in **Switch** mode, which de-energizes the latched tilt relay. Mid-tilt positions are always stopped (nothing self-stops there).
+The same self-stop handling applies to a **separate tilt motor** (separate-tilt-motor mode): no stop is sent when tilt reaches its 0%/100% endpoints — the tilt motor self-stops on its own limit — except in **Switch** mode (which de-energizes the latched tilt relay) and in **Pulse** mode when _Send stop signal at endpoints_ is on (which pulses the tilt-stop relay). Mid-tilt positions are always stopped (nothing self-stops there).
 
 Under the **sequential closes-then-tilts-closed** and **sequential closes-then-tilts-open** tilt modes, run-on is skipped at the closed (0%) endpoint, because the motor is already driven past cover-closed for the tilt phase. Run-on still applies at the open (100%) endpoint.
 
@@ -364,6 +370,7 @@ cover:
 | tilt_startup_delay     | float   | _Optional_                                      | Motor startup time compensation (seconds) for tilt movements            | None    |
 | pulse_time             | float   | _Optional_                                      | Duration in seconds for button press in pulse mode                      | 1.0     |
 | relay_reports_off      | boolean | _Optional_                                      | Toggle mode: set false for pulse modules that never report their OFF    | true    |
+| send_endpoint_stop     | boolean | _Optional_                                      | Pulse mode: set false for auto-stop controllers that reposition on a stop received while stopped | true    |
 
 </details>
 
