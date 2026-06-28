@@ -35,6 +35,7 @@ from custom_components.cover_time_based.const import (
     CONF_CLOSE_INCLUDES_TILT,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
+    CONF_SEND_ENDPOINT_STOP,
 )
 
 DEFAULT_TRAVEL_TIME = 30
@@ -87,6 +88,7 @@ def make_cover(make_hass, _mock_position_store):
         close_switch="switch.close",
         stop_switch=None,
         pulse_time=DEFAULT_PULSE_TIME,
+        send_endpoint_stop=None,
         travel_time_close=DEFAULT_TRAVEL_TIME,
         travel_time_open=DEFAULT_TRAVEL_TIME,
         tilt_time_close=None,
@@ -155,6 +157,8 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_SAFE_TILT_POSITION] = safe_tilt_position
         if max_tilt_allowed_position is not None:
             options[CONF_MAX_TILT_ALLOWED_POSITION] = max_tilt_allowed_position
+        if send_endpoint_stop is not None:
+            options[CONF_SEND_ENDPOINT_STOP] = send_endpoint_stop
         if close_includes_tilt is not None:
             options[CONF_CLOSE_INCLUDES_TILT] = close_includes_tilt
         if ignore_reported_position is not None:

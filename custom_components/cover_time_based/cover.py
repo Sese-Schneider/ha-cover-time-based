@@ -32,6 +32,7 @@ from .const import (
     CONF_IGNORE_REPORTED_POSITION,
     CONF_MIN_MOVEMENT_TIME,
     CONF_RELAY_REPORTS_OFF,
+    CONF_SEND_ENDPOINT_STOP,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILT_TIME_CLOSE,
@@ -45,6 +46,7 @@ from .const import (
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_IGNORE_REPORTED_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
+    DEFAULT_SEND_ENDPOINT_STOP,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
 from .helpers import resolve_entity
@@ -124,6 +126,7 @@ SWITCH_COVER_SCHEMA = {
     vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
     vol.Optional(CONF_PULSE_TIME): cv.positive_float,
     vol.Optional(CONF_RELAY_REPORTS_OFF): cv.boolean,
+    vol.Optional(CONF_SEND_ENDPOINT_STOP): cv.boolean,
     **TRAVEL_TIME_SCHEMA,
 }
 
@@ -352,7 +355,13 @@ def _create_cover_from_options(options, device_id="", name=""):
     pulse_time = options.get(CONF_PULSE_TIME, DEFAULT_PULSE_TIME)
 
     if control_mode == CONTROL_MODE_PULSE:
-        return PulseModeCover(pulse_time=pulse_time, **switch_args)
+        return PulseModeCover(
+            pulse_time=pulse_time,
+            send_endpoint_stop=options.get(
+                CONF_SEND_ENDPOINT_STOP, DEFAULT_SEND_ENDPOINT_STOP
+            ),
+            **switch_args,
+        )
     elif control_mode == CONTROL_MODE_TOGGLE:
         return ToggleModeCover(
             relay_reports_off=options.get(
@@ -402,10 +411,15 @@ def devices_from_config(domain_config):
             CONF_RELAY_REPORTS_OFF, config, defaults, DEFAULT_RELAY_REPORTS_OFF
         )
         config.pop(CONF_RELAY_REPORTS_OFF, None)
+        send_endpoint_stop = _get_value(
+            CONF_SEND_ENDPOINT_STOP, config, defaults, DEFAULT_SEND_ENDPOINT_STOP
+        )
+        config.pop(CONF_SEND_ENDPOINT_STOP, None)
 
         options[CONF_CONTROL_MODE] = control_mode
         options[CONF_PULSE_TIME] = pulse_time
         options[CONF_RELAY_REPORTS_OFF] = relay_reports_off
+        options[CONF_SEND_ENDPOINT_STOP] = send_endpoint_stop
 
         if open_switch:
             options[CONF_OPEN_SWITCH_ENTITY_ID] = open_switch

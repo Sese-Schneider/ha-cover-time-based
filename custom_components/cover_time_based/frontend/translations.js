@@ -55,6 +55,9 @@ export const EN = {
   "relay_reports_off.label": "Relay reports its own OFF",
   "relay_reports_off.helper":
     "Leave on for normal toggle relays, which switch themselves off after the pulse and report it. Turn off for hardware-managed pulse modules (e.g. Aqara T2) that pulse internally but never report when they switch off, leaving the switch entity stuck on. With it off, the integration only ever sends a single ON command per press and never an OFF — so each press is exactly one clean activation, with no doubled commands.",
+  "send_endpoint_stop.label": "Send stop signal at endpoints",
+  "send_endpoint_stop.helper":
+    "When your cover reaches fully open or closed, send the stop pulse. Keep this on for controllers that keep running until they receive a stop (the cover otherwise gets stuck and physical buttons stop responding). Turn it off if your motor stops itself at its limits and an extra stop makes it move to a preset/favourite position.",
   "more_info": "More info",
   "timing.attribute_header": "Attribute",
   "timing.travel_attribute_header": "Travel Attribute",
@@ -173,6 +176,9 @@ export const TRANSLATIONS = {
     "relay_reports_off.label": "O relé reporta o seu próprio OFF",
     "relay_reports_off.helper":
       "Deixe ativo para relés de alternância normais, que se desligam após o pulso e o reportam. Desative para módulos de pulso geridos por hardware (por exemplo, Aqara T2) que pulsam internamente mas nunca reportam quando se desligam, deixando a entidade de interruptor presa em ligado. Com a opção desativada, a integração envia apenas um único comando LIGAR por toque e nunca DESLIGAR — por isso cada toque é exatamente uma ativação limpa, sem comandos duplicados.",
+    "send_endpoint_stop.label": "Enviar sinal de paragem nos extremos",
+    "send_endpoint_stop.helper":
+      "Quando a cobertura chega totalmente aberta ou fechada, envia o pulso de paragem. Mantenha ativo para controladores que continuam a funcionar até receberem uma paragem (caso contrário a cobertura fica presa e os botões físicos deixam de responder). Desative se o seu motor para sozinho nos limites e um pulso de paragem adicional o faz mover para uma posição predefinida/favorita.",
     "more_info": "Mais informação",
     "timing.attribute_header": "Atributo",
     "timing.travel_attribute_header": "Atributo",
@@ -288,6 +294,9 @@ export const TRANSLATIONS = {
     "relay_reports_off.label": "Przekaźnik zgłasza własne wyłączenie",
     "relay_reports_off.helper":
       "Pozostaw włączone dla zwykłych przekaźników przełączających, które same się wyłączają po impulsie i to zgłaszają. Wyłącz dla modułów impulsowych zarządzanych sprzętowo (np. Aqara T2), które pulsują wewnętrznie, ale nigdy nie zgłaszają wyłączenia, pozostawiając encję przełącznika zablokowaną w stanie włączonym. Po wyłączeniu integracja wysyła tylko jedno polecenie WŁĄCZ na naciśnięcie i nigdy WYŁĄCZ — dzięki czemu każde naciśnięcie to dokładnie jedna czysta aktywacja, bez podwojonych poleceń.",
+    "send_endpoint_stop.label": "Wysyłaj sygnał zatrzymania na krańcach",
+    "send_endpoint_stop.helper":
+      "Gdy roleta osiągnie pełne otwarcie lub zamknięcie, wyślij impuls zatrzymania. Pozostaw włączone dla sterowników, które działają, dopóki nie otrzymają zatrzymania (w przeciwnym razie roleta blokuje się, a fizyczne przyciski przestają reagować). Wyłącz, jeśli silnik sam zatrzymuje się na krańcach, a dodatkowe zatrzymanie powoduje przejście do zaprogramowanej/ulubionej pozycji.",
     "more_info": "Więcej informacji",
     "timing.attribute_header": "Atrybut",
     "timing.travel_attribute_header": "Atrybut",

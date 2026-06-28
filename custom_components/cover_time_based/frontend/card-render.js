@@ -289,6 +289,15 @@ export function renderInputEntities(card, c) {
             (e) => card._updateLocal({ relay_reports_off: e.target.checked }),
           )
         : ""}
+      ${c.control_mode === "pulse"
+        ? renderToggleWithHelp(
+            card,
+            "send_endpoint_stop.label",
+            "send_endpoint_stop.helper",
+            c.send_endpoint_stop !== false,
+            (e) => card._updateLocal({ send_endpoint_stop: e.target.checked }),
+          )
+        : ""}
       ${renderToggleWithHelp(
         card,
         "assumed_state.label",
@@ -465,10 +474,16 @@ export function renderTimingTable(card, c) {
     ["timing.travel_startup_delay", "travel_startup_delay", c.travel_startup_delay],
     ["timing.min_movement_time", "min_movement_time", c.min_movement_time],
   ];
-  // Endpoint run-on only applies to switch mode (its latched relay must be
-  // de-energized at the endpoint). Pulse/toggle/wrapped covers self-stop at
-  // their limit switches, so the setting has no effect there.
-  if ((c.control_mode || "switch") === "switch") {
+  // Endpoint run-on applies to modes that send a relay stop at the endpoint:
+  // switch mode (its latched relay must be de-energized) and pulse mode when it
+  // sends the endpoint stop (send_endpoint_stop, default on — it pulses a
+  // dedicated stop relay, deferred by run-on). Toggle/wrapped covers — and pulse
+  // covers with the endpoint stop turned off — self-stop at their limit
+  // switches, so the setting has no effect there.
+  const mode = c.control_mode || "switch";
+  const sendsEndpointStop =
+    mode === "switch" || (mode === "pulse" && c.send_endpoint_stop !== false);
+  if (sendsEndpointStop) {
     travelRows.push([
       "timing.endpoint_runon_time",
       "endpoint_runon_time",

@@ -18,9 +18,10 @@ class PulseModeCover(SwitchCoverTimeBased):
     completion (sleep + turn_off) runs in the background.
     """
 
-    def __init__(self, pulse_time, **kwargs):
+    def __init__(self, pulse_time, send_endpoint_stop=True, **kwargs):
         super().__init__(**kwargs)
         self._pulse_time = pulse_time
+        self._send_endpoint_stop = send_endpoint_stop
 
     def _get_missing_configuration(self) -> list[str]:
         """Return list of missing configuration items."""
@@ -32,23 +33,29 @@ class PulseModeCover(SwitchCoverTimeBased):
         return missing
 
     def _self_stops_at_endpoints(self) -> bool:
-        """Pulse mode must still pulse its dedicated stop relay at an endpoint.
+        """Whether to treat a pulse cover's motor as self-stopping at endpoints.
 
-        The base default (True) skips the endpoint stop because, for toggle mode,
-        re-pulsing the *direction* relay there would restart the motor. Pulse
-        mode is different: its stop is a *separate* relay (a stop switch is
-        required), so the endpoint stop can never restart the motor. The
-        momentary controller latches the direction command and keeps running
-        until it receives that stop pulse — skipping it leaves the controller
-        stuck "moving", blocking the next press and external buttons (issue
-        #129). Returning False restores the 4.3.0 behaviour: endpoint stop pulse,
-        deferred by endpoint_runon_time if configured.
+        Pulse mode serves two opposite momentary controllers, selected by the
+        per-cover ``send_endpoint_stop`` option:
 
-        The same reasoning covers a dedicated tilt motor: this flag also gates
-        ``_tilt_settle``, so a pulse dual-motor cover likewise pulses its
-        (required) tilt-stop relay at the tilt endpoints.
+        - ``send_endpoint_stop=True`` (default) → return False. The endpoint stop
+          IS sent. Pulse mode's stop is a *separate* relay (a stop switch is
+          required), so it can never restart the motor. A latching controller
+          keeps running until it receives that stop pulse — skipping it leaves
+          the controller stuck "moving", blocking the next press and external
+          buttons (issue #129). This restores the 4.3.0 / v4.5.3 behaviour:
+          endpoint stop pulse, deferred by endpoint_runon_time if configured.
+
+        - ``send_endpoint_stop=False`` → return True. The endpoint stop is
+          SKIPPED (the self-stopping path). An auto-stop controller has already
+          halted at its limit switch, and a stop pulse received "while stopped"
+          is read as go-to-favourite, repositioning the cover (issue #133), so
+          the stop must not be sent at all.
+
+        The same flag gates ``_tilt_settle``, so a pulse dual-motor cover's
+        (required) tilt-stop relay follows the option at the tilt endpoints too.
         """
-        return False
+        return not self._send_endpoint_stop
 
     async def _complete_pulse(self, entity_id):
         """Complete a relay pulse by turning OFF after pulse_time."""
