@@ -539,10 +539,17 @@ test("switch mode timing table includes endpoint_runon_time row (5 travel rows: 
   expect(inputs.length).toBe(5);
 });
 
-test("non-switch mode (pulse) timing table does NOT include endpoint_runon_time (4 travel rows)", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: pulseCfg(), activeTab: "timing" });
+test("pulse mode with send_endpoint_stop off timing table does NOT include endpoint_runon_time (4 travel rows)", async () => {
+  // Pulse covers that send the endpoint stop (default) DO show the run-on row;
+  // only when send_endpoint_stop is off does pulse self-stop at endpoints and
+  // hide it. See send_endpoint_stop.test.mjs for the full gating matrix.
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: pulseCfg({ send_endpoint_stop: false }),
+    activeTab: "timing",
+  });
   const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
-  // pulse mode: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time (no endpoint_runon)
+  // pulse w/stop-off: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time (no endpoint_runon)
   expect(inputs.length).toBe(4);
 });
 

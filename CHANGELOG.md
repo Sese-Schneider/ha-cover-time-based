@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixes
+
+- **Pulse mode: the endpoint stop is now configurable** ([#133](https://github.com/Sese-Schneider/ha-cover-time-based/issues/133)): "Pulse" mode actually serves two physically opposite momentary controllers, and the 4.5.3 fix for [#129](https://github.com/Sese-Schneider/ha-cover-time-based/issues/129) — which made the endpoint stop **unconditional** — is right for one and wrong for the other. A **latching** controller keeps running until it receives a dedicated stop pulse, so it *needs* the endpoint stop or it gets stuck "moving" (the #129 case). An **auto-stop** controller halts itself at its 0%/100% limit switches, and a stop pulse received *while already stopped* is read as "go to favourite/preset position" (classic Somfy "my" behaviour) — so for that hardware every limit hit silently repositioned the cover (the #133 regression). Tuning the run-on delay can't help: the motor has already self-stopped, so *any* stop pulse arrives "while stopped". A new per-cover option, **Send stop signal at endpoints** (default **on**, the unchanged 4.5.3 behaviour), can be turned **off** for auto-stop controllers so the endpoint stop pulse is not sent at all; the same flag also governs a separate **tilt motor**'s endpoint stop. Configurable from the config card (EN/PT/PL) and as the `send_endpoint_stop` YAML option. As a related cleanup, the **Endpoint run-on time** field is now also shown for pulse covers that send the endpoint stop (it was silently using the 2.0s default and was unconfigurable from the card). **Switch**, **Toggle** and **wrapped-cover** modes are unchanged; the default keeps #129 fixed out of the box.
+
 ## 4.5.3 (2026-06-27)
 
 ### Fixes

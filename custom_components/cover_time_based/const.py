@@ -32,3 +32,13 @@ DEFAULT_ASSUMED_STATE = True
 # and never turn_off, since a turn_off is itself an activation pulse there.
 CONF_RELAY_REPORTS_OFF = "relay_reports_off"
 DEFAULT_RELAY_REPORTS_OFF = True
+
+# Pulse mode only. When True (default) the integration sends the dedicated stop
+# pulse when the cover reaches an endpoint (0%/100%) — required by latching
+# controllers that keep running until they receive a stop (issue #129).
+# When False, the endpoint stop is skipped: for auto-stop controllers that have
+# already halted at their limit switch, a stop pulse received "while stopped"
+# triggers a go-to-favourite reposition (classic Somfy "my" behaviour, issue
+# #133), so the stop must not be sent at all.
+CONF_SEND_ENDPOINT_STOP = "send_endpoint_stop"
+DEFAULT_SEND_ENDPOINT_STOP = True
