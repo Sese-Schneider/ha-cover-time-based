@@ -19,7 +19,7 @@ import asyncio
 import pytest
 from unittest.mock import patch
 
-from homeassistant.const import SERVICE_CLOSE_COVER
+from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
@@ -44,6 +44,15 @@ def _ha_calls(cover):
         c
         for c in cover.hass.services.async_call.call_args_list
         if c.args[0] == "homeassistant"
+    ]
+
+
+def _relay_turn_on(cover, entity_id):
+    """homeassistant.turn_on calls targeting a specific relay entity."""
+    return [
+        c
+        for c in _ha_calls(cover)
+        if c.args[1] == "turn_on" and c.args[2].get("entity_id") == entity_id
     ]
 
 
@@ -106,6 +115,28 @@ async def test_option_off_pulse_skips_endpoint_stop(make_cover):
 
 
 @pytest.mark.asyncio
+async def test_option_off_pulse_skips_endpoint_stop_at_open(make_cover):
+    """The #133 fix applies at the open (100%) endpoint too, not only close (0%) —
+    both 0/100 go through the same self-stop path."""
+    cover = _make_pulse(make_cover, send_endpoint_stop=False, endpoint_runon_time=2.0)
+    cover._self_initiated_movement = True
+    cover._last_command = SERVICE_OPEN_COVER
+    cover.travel_calc.set_position(100)
+
+    cover.hass.services.async_call.reset_mock()
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.auto_stop_if_necessary()
+
+    assert _ha_calls(cover) == [], (
+        "option off must skip the open-endpoint stop too (#133)"
+    )
+    assert cover._delay_task is None, (
+        "option off must not schedule run-on at the open endpoint"
+    )
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
 async def test_option_off_pulse_mid_travel_still_stops(make_cover):
     """send_endpoint_stop=False only suppresses the stop AT an endpoint — a
     mid-travel stop (nothing self-stops there) must still pulse the stop relay."""
@@ -118,11 +149,7 @@ async def test_option_off_pulse_mid_travel_still_stops(make_cover):
     with patch.object(cover, "async_write_ha_state"):
         await cover.auto_stop_if_necessary()
 
-    stop_on = [
-        c
-        for c in _ha_calls(cover)
-        if c.args[1] == "turn_on" and c.args[2].get("entity_id") == "switch.stop"
-    ]
+    stop_on = _relay_turn_on(cover, "switch.stop")
     assert stop_on, "mid-travel stop must still pulse the stop relay"
     await _cancel_tasks(cover)
 
@@ -164,11 +191,7 @@ async def test_option_off_pulse_dual_motor_skips_tilt_endpoint_stop(make_cover):
 
     await _run_tilt_move(cover, 100)  # tilt to its open endpoint
 
-    tilt_stop_on = [
-        c
-        for c in _ha_calls(cover)
-        if c.args[1] == "turn_on" and c.args[2].get("entity_id") == "switch.tilt_stop"
-    ]
+    tilt_stop_on = _relay_turn_on(cover, "switch.tilt_stop")
     assert tilt_stop_on == [], "option off must skip the tilt endpoint stop (#133)"
     await _cancel_tasks(cover)
 
@@ -183,11 +206,7 @@ async def test_default_pulse_dual_motor_pulses_tilt_endpoint_stop(make_cover):
 
     await _run_tilt_move(cover, 100)  # tilt to its open endpoint
 
-    tilt_stop_on = [
-        c
-        for c in _ha_calls(cover)
-        if c.args[1] == "turn_on" and c.args[2].get("entity_id") == "switch.tilt_stop"
-    ]
+    tilt_stop_on = _relay_turn_on(cover, "switch.tilt_stop")
     assert tilt_stop_on, "default pulse must pulse the tilt endpoint stop (#129)"
     await _cancel_tasks(cover)
 
@@ -214,11 +233,7 @@ async def test_option_on_pulse_defers_endpoint_stop_by_runon(make_cover):
         "option on must defer the endpoint stop by the run-on time"
     )
     # The immediate stop relay must NOT have fired yet (it is deferred).
-    stop_on = [
-        c
-        for c in _ha_calls(cover)
-        if c.args[1] == "turn_on" and c.args[2].get("entity_id") == "switch.stop"
-    ]
+    stop_on = _relay_turn_on(cover, "switch.stop")
     assert stop_on == [], "the deferred stop must not fire immediately"
     await _cancel_tasks(cover)
 
@@ -232,7 +247,9 @@ async def test_option_on_pulse_defers_endpoint_stop_by_runon(make_cover):
 async def test_toggle_ignores_send_endpoint_stop(make_cover):
     """Toggle mode always self-stops at endpoints regardless of the option, which
     it does not even accept."""
-    cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+    # Pass the option explicitly to prove non-pulse modes ignore it even when set
+    # (e.g. a stale value left in options after switching away from pulse mode).
+    cover = make_cover(control_mode=CONTROL_MODE_TOGGLE, send_endpoint_stop=False)
     assert cover._self_stops_at_endpoints() is True
 
 
@@ -240,7 +257,7 @@ async def test_toggle_ignores_send_endpoint_stop(make_cover):
 async def test_wrapped_ignores_send_endpoint_stop(make_cover):
     """A wrapped (non-native-position) cover self-stops at endpoints regardless
     of the option."""
-    cover = make_cover(cover_entity_id="cover.inner")
+    cover = make_cover(cover_entity_id="cover.inner", send_endpoint_stop=False)
     assert cover._self_stops_at_endpoints() is True
 
 
@@ -248,5 +265,5 @@ async def test_wrapped_ignores_send_endpoint_stop(make_cover):
 async def test_switch_ignores_send_endpoint_stop(make_cover):
     """Switch mode never self-stops at endpoints (latched relay) regardless of
     the option."""
-    cover = make_cover(control_mode=CONTROL_MODE_SWITCH)
+    cover = make_cover(control_mode=CONTROL_MODE_SWITCH, send_endpoint_stop=False)
     assert cover._self_stops_at_endpoints() is False
