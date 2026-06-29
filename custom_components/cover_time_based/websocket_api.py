@@ -24,6 +24,7 @@ from .cover import (
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_RELAY_REPORTS_OFF,
+    CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SAFE_TILT_POSITION,
     CONF_SEND_ENDPOINT_STOP,
     CONF_STOP_SWITCH_ENTITY_ID,
@@ -49,6 +50,7 @@ from .cover import (
     DEFAULT_IGNORE_REPORTED_POSITION,
     DEFAULT_PULSE_TIME,
     DEFAULT_RELAY_REPORTS_OFF,
+    DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
 )
 from .const import DOMAIN
@@ -68,6 +70,7 @@ _FIELD_MAP = {
     "cover_entity_id": CONF_COVER_ENTITY_ID,
     "ignore_reported_position": CONF_IGNORE_REPORTED_POSITION,
     "force_time_based_position": CONF_FORCE_TIME_BASED_POSITION,
+    "reports_command_not_endpoint": CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     "tilt_mode": CONF_TILT_MODE,
     "travel_time_close": CONF_TRAVEL_TIME_CLOSE,
     "travel_time_open": CONF_TRAVEL_TIME_OPEN,
@@ -191,6 +194,10 @@ async def ws_get_config(
             "force_time_based_position": options.get(
                 CONF_FORCE_TIME_BASED_POSITION, DEFAULT_FORCE_TIME_BASED_POSITION
             ),
+            "reports_command_not_endpoint": options.get(
+                CONF_REPORTS_COMMAND_NOT_ENDPOINT,
+                DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
+            ),
             "tilt_mode": tilt_mode,
             "travel_time_close": options.get(CONF_TRAVEL_TIME_CLOSE),
             "travel_time_open": options.get(CONF_TRAVEL_TIME_OPEN),
@@ -238,6 +245,7 @@ async def ws_get_config(
         vol.Optional("cover_entity_id"): vol.Any(str, None),
         vol.Optional("ignore_reported_position"): vol.Any(None, bool),
         vol.Optional("force_time_based_position"): vol.Any(None, bool),
+        vol.Optional("reports_command_not_endpoint"): vol.Any(None, bool),
         vol.Optional("assumed_state"): vol.Any(None, bool),
         vol.Optional("tilt_mode"): vol.In(
             [
