@@ -240,6 +240,16 @@ export function renderInputEntities(card, c) {
         )}
         ${renderToggleWithHelp(
           card,
+          "entities.reports_command_not_endpoint",
+          "entities.reports_command_not_endpoint_helper",
+          !!c.reports_command_not_endpoint,
+          (e) =>
+            card._updateLocal({
+              reports_command_not_endpoint: e.target.checked,
+            }),
+        )}
+        ${renderToggleWithHelp(
+          card,
           "assumed_state.label",
           "assumed_state.helper",
           c.assumed_state !== false,
