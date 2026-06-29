@@ -119,8 +119,10 @@ class TestCreateCoverFromOptions:
             name="Test",
         )
         assert isinstance(cover, WrappedCoverTimeBased)
-        # Defaults: native set_position auto-detected (override off).
+        # Defaults: native set_position auto-detected (override off);
+        # command-echo interpretation off.
         assert cover._force_time_based_position is False
+        assert cover._reports_command_not_endpoint is False
 
     def test_wrapped_cover_force_time_based_position(self):
         from custom_components.cover_time_based.const import (
@@ -138,18 +140,6 @@ class TestCreateCoverFromOptions:
         )
         assert isinstance(cover, WrappedCoverTimeBased)
         assert cover._force_time_based_position is True
-
-    def test_wrapped_cover_reports_command_not_endpoint_default_false(self):
-        cover = _create_cover_from_options(
-            {
-                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
-                CONF_COVER_ENTITY_ID: "cover.inner",
-            },
-            device_id="test",
-            name="Test",
-        )
-        assert isinstance(cover, WrappedCoverTimeBased)
-        assert cover._reports_command_not_endpoint is False
 
     def test_wrapped_cover_reports_command_not_endpoint_true(self):
         from custom_components.cover_time_based.const import (
