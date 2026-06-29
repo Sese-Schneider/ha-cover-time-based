@@ -1,3 +1,9 @@
+## 4.7.0 (2026-06-29)
+
+### Features
+
+- **Wrapped covers: new "Reports commands, not endpoints" option for command-echo devices** ([#137](https://github.com/Sese-Schneider/ha-cover-time-based/issues/137)): some underlying covers report their state as the *last command* rather than the actual position — notably single-DP Tuya roller-shutter modules (a `control` enum of open/close/stop, with no `current_position` and no `opening`/`closing` transition). They report `open` when open was commanded, `closed` when close was commanded, and `unknown` when stopped. The integration read that `closed` as the 0% endpoint and snapped the position to 0 on the close *press*, so a manual stop mid-travel was recorded as fully closed — a cover parked at ~70% jumped to closed (the issue's symptom). A new per-cover wrapped-cover option, **Reports commands, not endpoints** (default **off**, the unchanged behaviour), treats the wrapped entity's reported state as an open/close/stop *command* and tracks position purely by time, never snapping to an endpoint: `open`/`opening` → timed open, `closed`/`closing` → timed close, `unknown` → stop (freeze at the current time-based position), and `unavailable`/other → ignored. So a close press starts a timed close and a stop press freezes the cover where it is instead of snapping to 0. It is a deliberate opt-in rather than auto-detected: whether a device reports real transient moving states cannot be read from `supported_features`, and a runtime heuristic can't tell a command-echo device from an honest binary cover that only reports `closed` at the end of travel. Configurable from the config card (EN/PT/PL) and as the `reports_command_not_endpoint` YAML option.
+
 ## 4.6.0 (2026-06-28)
 
 ### Features
