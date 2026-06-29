@@ -40,12 +40,14 @@ class WrappedCoverTimeBased(CoverTimeBased):
         cover_entity_id,
         ignore_reported_position=False,
         force_time_based_position=False,
+        reports_command_not_endpoint=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._cover_entity_id = cover_entity_id
         self._ignore_reported_position = ignore_reported_position
         self._force_time_based_position = force_time_based_position
+        self._reports_command_not_endpoint = reports_command_not_endpoint
         self._last_self_command_time: float | None = None
 
     async def async_added_to_hass(self):
@@ -107,14 +109,21 @@ class WrappedCoverTimeBased(CoverTimeBased):
     def _use_native_set_position(self) -> bool:
         """Return True if set_cover_position should be forwarded natively.
 
-        Auto-detected from the wrapped entity's SET_POSITION support, with two
+        Auto-detected from the wrapped entity's SET_POSITION support, with three
         opt-outs:
-          - the force_time_based_position override (always legacy tracking), and
+          - the force_time_based_position override (always legacy tracking),
+          - reports_command_not_endpoint (the wrapped entity's state/position is
+            a command echo, so it's tracked purely by time — never forward a
+            native position to it; this also keeps the command-echo
+            reinterpretation in _handle_external_state_change from ever racing a
+            self-driven native move), and
           - a configured tilt strategy: native forwarding drives travel only and
             can't express the tilt coupling/pre-steps the time-based path plans,
             so tilt covers keep the full tilt-aware open/close/stop tracking.
         """
         if self._force_time_based_position:
+            return False
+        if self._reports_command_not_endpoint:
             return False
         if self._tilt_strategy is not None:
             return False
@@ -147,6 +156,15 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 old_val,
                 new_val,
             )
+            return
+
+        # Command-echo covers report no position and never settle to a snap
+        # target: every reported state is a command. Short-circuit here, before
+        # the endpoint and native-set-position logic below — neither applies to
+        # them (they have no set_position, so the native-move guard is a no-op
+        # for them anyway, and we never snap).
+        if self._reports_command_not_endpoint:
+            await self._handle_command_state(new_val)
             return
 
         # While we animate a native set_position move, the wrapped cover's own
@@ -183,6 +201,33 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 )
                 await self.async_stop_cover()
 
+    async def _handle_command_state(self, new_val: str) -> None:
+        """Reinterpret the wrapped entity's state as a command echo.
+
+        Some covers (e.g. single-DP Tuya shutters, issue #137) report no
+        position and no opening/closing transition — their state mirrors the
+        last command (open/close/stop) rather than a real endpoint. With this
+        opt-in, map each reported state straight to a time-based command and
+        never snap to an endpoint. A genuine command-echo device never reports
+        opening/closing; if one ever does, it is treated as the matching
+        open/close command — a harmless same-direction continuation. The
+        async_* paths run with _triggered_externally set (the dispatcher sets
+        it before calling us), so they update the tracker without bouncing a
+        command back to the wrapped cover.
+        """
+        if new_val in (STATE_OPEN, STATE_OPENING):
+            self._log("_handle_command_state :: open command")
+            await self.async_open_cover()
+        elif new_val in (STATE_CLOSED, STATE_CLOSING):
+            self._log("_handle_command_state :: close command")
+            await self.async_close_cover()
+        elif new_val == STATE_UNKNOWN:
+            self._log("_handle_command_state :: stop command")
+            await self.async_stop_cover()
+        else:
+            # STATE_UNAVAILABLE / anything else: not a command, ignore.
+            self._log("_handle_command_state :: ignoring non-command state %s", new_val)
+
     async def _handle_external_attribute_change(self, event):
         """Handle attribute-only updates on the wrapped cover.
 
@@ -190,8 +235,17 @@ class WrappedCoverTimeBased(CoverTimeBased):
         current_position attribute changes, trust the new position.
         Mid-travel attribute updates (state opening/closing) are ignored
         because their values may be stale or live depending on the device.
+
+        Command-echo covers (reports_command_not_endpoint) report no
+        trustworthy position or endpoint, so we ignore their attribute-only
+        updates entirely — mirroring the short-circuit in
+        _handle_external_state_change. Without this, an attribute update while
+        the device sits in 'closed' would snap us to 0% via the
+        state==closed -> 0 shortcut, the very snap this option exists to avoid.
         """
         if event.data.get("entity_id") != self._cover_entity_id:
+            return
+        if self._reports_command_not_endpoint:
             return
         if self._in_bounce_grace_window():
             return

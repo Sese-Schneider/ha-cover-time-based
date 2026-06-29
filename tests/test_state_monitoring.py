@@ -2124,3 +2124,90 @@ class TestWrappedCoverIgnoreReportedPosition:
             await cover._handle_external_state_change("cover.inner", "opening", "open")
 
         assert cover.travel_calc.current_position() == 100
+
+
+class TestWrappedCoverReportsCommandNotEndpoint:
+    """With reports_command_not_endpoint, the wrapped entity's state is a
+    command echo, never an endpoint. The attribute-only update path must be
+    suppressed too — otherwise an attribute update while the device sits in
+    'closed' would snap to 0% via the state==closed shortcut, the very snap
+    this option exists to prevent (issue #137).
+    """
+
+    @pytest.mark.asyncio
+    async def test_attribute_only_update_in_closed_state_does_not_snap(
+        self, make_cover
+    ):
+        cover = make_cover(
+            cover_entity_id="cover.inner", reports_command_not_endpoint=True
+        )
+        # Tracker is mid-close at 70% (a timed close started by a 'closed'
+        # command echo); the device still reports its 'closed' command state.
+        cover.travel_calc.set_position(70)
+        _set_wrapped_state(cover, "closed", current_position=None)
+
+        event = _make_attribute_event("cover.inner", "closed", None)
+        with patch.object(cover, "_snap_to_position") as snap:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_attribute_change(event)
+
+        snap.assert_not_called()
+        assert cover.travel_calc.current_position() == 70
+
+    @pytest.mark.asyncio
+    async def test_default_attribute_update_still_snaps(self, make_cover):
+        """Sanity: without the flag, the attribute-change snap is unchanged."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(52)
+        cover._last_command = None
+        _set_wrapped_state(cover, "open", current_position=100)
+
+        event = _make_attribute_event("cover.inner", "open", 100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_attribute_change(event)
+
+        assert cover.travel_calc.current_position() == 100
+
+    @pytest.mark.asyncio
+    async def test_external_close_command_sends_no_service_call(self, make_cover):
+        """End-to-end through the dispatcher: an external 'closed' command-echo
+        starts a timed close but bounces NO cover.* service call back to the
+        wrapped entity. The async_* path runs with _triggered_externally set by
+        the dispatcher, so it tracks by time without re-commanding the device.
+        """
+        cover = make_cover(
+            cover_entity_id="cover.inner", reports_command_not_endpoint=True
+        )
+        cover.travel_calc.set_position(100)
+        cover.start_auto_updater = MagicMock()  # don't schedule real timers
+        _set_wrapped_state(cover, "closed", current_position=None)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_schedule_update_ha_state"),
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "open", "closed")
+            )
+
+        # A timed close started...
+        assert cover.travel_calc.is_closing()
+        # ...and nothing was bounced back to the wrapped cover entity.
+        cover.hass.services.async_call.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reconnect_unknown_routes_to_stop(self, make_cover):
+        """A reconnect surfacing through the dispatcher as 'unavailable ->
+        unknown' is treated as the stop command (freeze), not ignored."""
+        cover = make_cover(
+            cover_entity_id="cover.inner", reports_command_not_endpoint=True
+        )
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_stop_cover", new=AsyncMock()) as stop_mock,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "unavailable", "unknown")
+            )
+
+        stop_mock.assert_awaited_once()

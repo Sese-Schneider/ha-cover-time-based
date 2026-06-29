@@ -32,6 +32,7 @@ from .const import (
     CONF_IGNORE_REPORTED_POSITION,
     CONF_MIN_MOVEMENT_TIME,
     CONF_RELAY_REPORTS_OFF,
+    CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SEND_ENDPOINT_STOP,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
@@ -46,6 +47,7 @@ from .const import (
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_IGNORE_REPORTED_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
+    DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
@@ -341,6 +343,10 @@ def _create_cover_from_options(options, device_id="", name=""):
             ),
             force_time_based_position=options.get(
                 CONF_FORCE_TIME_BASED_POSITION, DEFAULT_FORCE_TIME_BASED_POSITION
+            ),
+            reports_command_not_endpoint=options.get(
+                CONF_REPORTS_COMMAND_NOT_ENDPOINT,
+                DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
             ),
             **common,
         )

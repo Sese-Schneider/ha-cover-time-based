@@ -21,6 +21,9 @@ export const EN = {
   "entities.force_time_based_position": "Force time-based positioning",
   "entities.force_time_based_position_helper":
     "By default, if the wrapped cover supports setting a position, the set-position command is sent straight to it. Enable this to instead drive it with timed open/close/stop, ignoring its native set-position support.",
+  "entities.reports_command_not_endpoint": "Reports commands, not endpoints",
+  "entities.reports_command_not_endpoint_helper":
+    "Enable for covers (e.g. some Tuya shutters) whose open/closed/unknown state is a command echo rather than a real endpoint — they report no opening/closing transition and no position. The state is treated as an open/close/stop command and the position is tracked by time.",
   "entities.switch_entities": "Switch Entities",
   "entities.open_switch": "Open switch",
   "entities.close_switch": "Close switch",
@@ -142,6 +145,9 @@ export const TRANSLATIONS = {
     "entities.force_time_based_position": "Forçar posicionamento por tempo",
     "entities.force_time_based_position_helper":
       "Por predefinição, se o estore envolvido suportar definir a posição, o comando de definir posição é enviado diretamente para ele. Ative isto para o controlar com abrir/fechar/parar temporizados, ignorando o suporte nativo de definir posição.",
+    "entities.reports_command_not_endpoint": "Reporta comandos, não posições finais",
+    "entities.reports_command_not_endpoint_helper":
+      "Ative para estores (por exemplo, alguns estores Tuya) cujo estado aberto/fechado/desconhecido é um eco do comando em vez de uma posição final real — não reportam transição de abertura/fecho nem posição. O estado é tratado como um comando abrir/fechar/parar e a posição é rastreada pelo tempo.",
     "entities.switch_entities": "Entidades de Interruptor",
     "entities.open_switch": "Interruptor de abrir",
     "entities.close_switch": "Interruptor de fechar",
@@ -260,6 +266,9 @@ export const TRANSLATIONS = {
     "entities.force_time_based_position": "Wymuś pozycjonowanie czasowe",
     "entities.force_time_based_position_helper":
       "Domyślnie, jeśli opakowana roleta obsługuje ustawianie pozycji, polecenie ustawienia pozycji jest wysyłane bezpośrednio do niej. Włącz tę opcję, aby zamiast tego sterować nią za pomocą czasowego otwierania/zamykania/zatrzymywania, ignorując natywną obsługę ustawiania pozycji.",
+    "entities.reports_command_not_endpoint": "Zgłasza polecenia, a nie pozycje końcowe",
+    "entities.reports_command_not_endpoint_helper":
+      "Włącz dla rolet (np. niektórych rolet Tuya), których stan otwarta/zamknięta/nieznana jest echem polecenia, a nie rzeczywistą pozycją końcową — nie zgłaszają przejścia otwierania/zamykania ani pozycji. Stan jest traktowany jako polecenie otwórz/zamknij/zatrzymaj, a pozycja jest śledzona na podstawie czasu.",
     "entities.switch_entities": "Encje przełączników",
     "entities.open_switch": "Przełącznik otwierania",
     "entities.close_switch": "Przełącznik zamykania",
