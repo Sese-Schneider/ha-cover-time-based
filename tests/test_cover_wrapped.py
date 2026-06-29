@@ -282,6 +282,15 @@ class TestUseNativeSetPosition:
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)
         assert cover._use_native_set_position() is False
 
+    def test_legacy_when_reports_command_not_endpoint(self):
+        # Command-echo mode tracks purely by time, so native set_position must
+        # never be forwarded even if the (misconfigured) wrapped cover advertises
+        # SET_POSITION — otherwise a self-driven native move could be
+        # reinterpreted as an open/close command by _handle_command_state.
+        cover = _make_wrapped_cover(reports_command_not_endpoint=True)
+        _set_wrapped_features(cover, 7)  # SET_POSITION supported
+        assert cover._use_native_set_position() is False
+
 
 class TestWrappedNativeSetPosition:
     """When the wrapped entity supports SET_POSITION, set_position forwards

@@ -109,14 +109,21 @@ class WrappedCoverTimeBased(CoverTimeBased):
     def _use_native_set_position(self) -> bool:
         """Return True if set_cover_position should be forwarded natively.
 
-        Auto-detected from the wrapped entity's SET_POSITION support, with two
+        Auto-detected from the wrapped entity's SET_POSITION support, with three
         opt-outs:
-          - the force_time_based_position override (always legacy tracking), and
+          - the force_time_based_position override (always legacy tracking),
+          - reports_command_not_endpoint (the wrapped entity's state/position is
+            a command echo, so it's tracked purely by time — never forward a
+            native position to it; this also keeps the command-echo
+            reinterpretation in _handle_external_state_change from ever racing a
+            self-driven native move), and
           - a configured tilt strategy: native forwarding drives travel only and
             can't express the tilt coupling/pre-steps the time-based path plans,
             so tilt covers keep the full tilt-aware open/close/stop tracking.
         """
         if self._force_time_based_position:
+            return False
+        if self._reports_command_not_endpoint:
             return False
         if self._tilt_strategy is not None:
             return False
