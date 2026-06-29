@@ -558,8 +558,10 @@ class TestWrappedCommandEchoMode:
     async def test_closed_is_close_command_not_snap(self):
         # The headline bug: open -> closed must start a timed close, not snap to 0.
         cover = _make_wrapped_cover(reports_command_not_endpoint=True)
-        with patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock, \
-             patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock:
+        with (
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+            patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock,
+        ):
             await cover._handle_external_state_change("cover.inner", "open", "closed")
         close_mock.assert_awaited_once()
         snap_mock.assert_not_awaited()
@@ -568,7 +570,9 @@ class TestWrappedCommandEchoMode:
     async def test_unknown_is_stop_command(self):
         cover = _make_wrapped_cover(reports_command_not_endpoint=True)
         with patch.object(cover, "async_stop_cover", new=AsyncMock()) as stop_mock:
-            await cover._handle_external_state_change("cover.inner", "closed", "unknown")
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "unknown"
+            )
         stop_mock.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -583,19 +587,27 @@ class TestWrappedCommandEchoMode:
         # No old_val inspection: closing -> closed is still a close command,
         # never a snap-to-0.
         cover = _make_wrapped_cover(reports_command_not_endpoint=True)
-        with patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock, \
-             patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock:
-            await cover._handle_external_state_change("cover.inner", "closing", "closed")
+        with (
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+            patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock,
+        ):
+            await cover._handle_external_state_change(
+                "cover.inner", "closing", "closed"
+            )
         close_mock.assert_awaited_once()
         snap_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_unavailable_is_noop(self):
         cover = _make_wrapped_cover(reports_command_not_endpoint=True)
-        with patch.object(cover, "async_open_cover", new=AsyncMock()) as o, \
-             patch.object(cover, "async_close_cover", new=AsyncMock()) as c, \
-             patch.object(cover, "async_stop_cover", new=AsyncMock()) as s:
-            await cover._handle_external_state_change("cover.inner", "closed", "unavailable")
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as o,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as c,
+            patch.object(cover, "async_stop_cover", new=AsyncMock()) as s,
+        ):
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "unavailable"
+            )
         o.assert_not_awaited()
         c.assert_not_awaited()
         s.assert_not_awaited()
@@ -604,7 +616,9 @@ class TestWrappedCommandEchoMode:
     async def test_opening_is_open_command(self):
         cover = _make_wrapped_cover(reports_command_not_endpoint=True)
         with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
-            await cover._handle_external_state_change("cover.inner", "closed", "opening")
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "opening"
+            )
         open_mock.assert_awaited_once()
 
     @pytest.mark.asyncio
