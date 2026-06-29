@@ -210,7 +210,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         elif new_val == STATE_UNKNOWN:
             self._log("_handle_command_state :: stop command")
             await self.async_stop_cover()
-        # STATE_UNAVAILABLE / anything else: not a command, ignore.
+        else:
+            # STATE_UNAVAILABLE / anything else: not a command, ignore.
+            self._log("_handle_command_state :: ignoring non-command state %s", new_val)
 
     async def _handle_external_attribute_change(self, event):
         """Handle attribute-only updates on the wrapped cover.

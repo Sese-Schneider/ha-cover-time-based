@@ -601,6 +601,20 @@ class TestWrappedCommandEchoMode:
         s.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_opening_is_open_command(self):
+        cover = self._make_echo_cover()
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change("cover.inner", "closed", "opening")
+        open_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_closing_is_close_command(self):
+        cover = self._make_echo_cover()
+        with patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock:
+            await cover._handle_external_state_change("cover.inner", "open", "closing")
+        close_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_flag_off_closed_still_snaps_to_zero(self):
         # Regression: with the flag off, closed is still the 0% endpoint.
         cover = _make_wrapped_cover()  # flag defaults off
