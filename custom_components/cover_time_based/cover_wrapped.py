@@ -151,6 +151,15 @@ class WrappedCoverTimeBased(CoverTimeBased):
             )
             return
 
+        # Command-echo covers report no position and never settle to a snap
+        # target: every reported state is a command. Short-circuit here, before
+        # the endpoint and native-set-position logic below — neither applies to
+        # them (they have no set_position, so the native-move guard is a no-op
+        # for them anyway, and we never snap).
+        if self._reports_command_not_endpoint:
+            await self._handle_command_state(new_val)
+            return
+
         # While we animate a native set_position move, the wrapped cover's own
         # opening/closing state is a side effect of the command we forwarded —
         # not an external open/close. Don't let it hijack the move into a full
@@ -166,10 +175,6 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 " during native set_position move",
                 new_val,
             )
-            return
-
-        if self._reports_command_not_endpoint:
-            await self._handle_command_state(new_val)
             return
 
         if new_val == STATE_OPENING:
@@ -196,10 +201,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
         position and no opening/closing transition — their state mirrors the
         last command (open/close/stop) rather than a real endpoint. With this
         opt-in, map each reported state straight to a time-based command and
-        never snap to an endpoint. The async_* paths run with
-        _triggered_externally set (the dispatcher sets it before calling us),
-        so they update the tracker without bouncing a command back to the
-        wrapped cover.
+        never snap to an endpoint. A genuine command-echo device never reports
+        opening/closing; if one ever does, it is treated as the matching
+        open/close command — a harmless same-direction continuation. The
+        async_* paths run with _triggered_externally set (the dispatcher sets
+        it before calling us), so they update the tracker without bouncing a
+        command back to the wrapped cover.
         """
         if new_val in (STATE_OPEN, STATE_OPENING):
             self._log("_handle_command_state :: open command")
@@ -221,8 +228,17 @@ class WrappedCoverTimeBased(CoverTimeBased):
         current_position attribute changes, trust the new position.
         Mid-travel attribute updates (state opening/closing) are ignored
         because their values may be stale or live depending on the device.
+
+        Command-echo covers (reports_command_not_endpoint) report no
+        trustworthy position or endpoint, so we ignore their attribute-only
+        updates entirely — mirroring the short-circuit in
+        _handle_external_state_change. Without this, an attribute update while
+        the device sits in 'closed' would snap us to 0% via the
+        state==closed -> 0 shortcut, the very snap this option exists to avoid.
         """
         if event.data.get("entity_id") != self._cover_entity_id:
+            return
+        if self._reports_command_not_endpoint:
             return
         if self._in_bounce_grace_window():
             return
