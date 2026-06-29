@@ -1,0 +1,52 @@
+name: Nightly (latest deps)
+
+# Exercises the integration against the newest upstream dependencies every day,
+# separately from PR CI (.github/workflows/tests.yml), which pins specific HA
+# channels. This is the early-warning system for HA-side drift: it installs HA
+# and the test harness unpinned and runs the suite. Note the harness
+# (pytest-homeassistant-custom-component) pins the newest HA it supports, so this
+# tracks the latest harness-compatible HA rather than the absolute newest HA --
+# a regression there still surfaces here before it reaches a pinned PR-CI release.
+#
+# hassfest + HACS already validate daily in hassfest.yml and hacs.yml (same
+# @master/@main actions on a cron), so this workflow only adds the
+# pytest-against-latest leg they don't cover.
+
+on:
+  schedule:
+    - cron: "29 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test-latest:
+    name: pytest (latest HA + harness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          # The newest HA requires Python 3.14 (see tests.yml stable leg), and
+          # the harness pins the newest HA it supports, so the nightly tracks 3.14.
+          python-version: "3.14"
+
+      - name: Install latest Home Assistant + test harness (unpinned)
+        run: |
+          python -m pip install --upgrade pip
+          # No version pins: pip resolves the newest mutually-compatible set, so
+          # the harness (which pins HA) holds HA to the newest version it
+          # supports -- the nightly tracks that pair, not the absolute newest HA.
+          python -m pip install --upgrade \
+            homeassistant \
+            pytest-homeassistant-custom-component
+
+      - name: Run tests
+        run: pytest tests/ -v
