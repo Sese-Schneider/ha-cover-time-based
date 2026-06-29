@@ -40,12 +40,14 @@ class WrappedCoverTimeBased(CoverTimeBased):
         cover_entity_id,
         ignore_reported_position=False,
         force_time_based_position=False,
+        reports_command_not_endpoint=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._cover_entity_id = cover_entity_id
         self._ignore_reported_position = ignore_reported_position
         self._force_time_based_position = force_time_based_position
+        self._reports_command_not_endpoint = reports_command_not_endpoint
         self._last_self_command_time: float | None = None
 
     async def async_added_to_hass(self):
@@ -166,6 +168,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
             )
             return
 
+        if self._reports_command_not_endpoint:
+            await self._handle_command_state(new_val)
+            return
+
         if new_val == STATE_OPENING:
             self._log("_handle_external_state_change :: wrapped cover opening")
             await self.async_open_cover()
@@ -182,6 +188,29 @@ class WrappedCoverTimeBased(CoverTimeBased):
                     " no position info"
                 )
                 await self.async_stop_cover()
+
+    async def _handle_command_state(self, new_val: str) -> None:
+        """Reinterpret the wrapped entity's state as a command echo.
+
+        Some covers (e.g. single-DP Tuya shutters, issue #137) report no
+        position and no opening/closing transition — their state mirrors the
+        last command (open/close/stop) rather than a real endpoint. With this
+        opt-in, map each reported state straight to a time-based command and
+        never snap to an endpoint. The async_* paths run with
+        _triggered_externally set (the dispatcher sets it before calling us),
+        so they update the tracker without bouncing a command back to the
+        wrapped cover.
+        """
+        if new_val in (STATE_OPEN, STATE_OPENING):
+            self._log("_handle_command_state :: open command")
+            await self.async_open_cover()
+        elif new_val in (STATE_CLOSED, STATE_CLOSING):
+            self._log("_handle_command_state :: close command")
+            await self.async_close_cover()
+        elif new_val == STATE_UNKNOWN:
+            self._log("_handle_command_state :: stop command")
+            await self.async_stop_cover()
+        # STATE_UNAVAILABLE / anything else: not a command, ignore.
 
     async def _handle_external_attribute_change(self, event):
         """Handle attribute-only updates on the wrapped cover.
