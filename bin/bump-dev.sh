@@ -3,14 +3,13 @@
 #
 # Usage: bin/bump-dev.sh [--no-push]
 #
-# Run this AFTER a release tag is pushed. release.yml normally pushes the
-# next-minor bump straight to main, but this repo's main is protected (PR-only
-# + required status checks), so that direct push is rejected. This helper does
-# the same bump as a PR instead — run it as yourself so CI triggers and the PR
-# is mergeable.
+# Run this AFTER a release tag is pushed. This repo's main is protected (PR-only
+# + required status checks), so the release workflow can't push the next-minor
+# bump itself — this helper lands the same bump as a PR instead. Run it as
+# yourself so CI triggers and the PR is mergeable, then merge it.
 #
-# It mirrors bin/release.sh's preflight and the next-minor formula in
-# .github/workflows/release.yml, so the three can't drift. The branch is
+# It mirrors bin/release.sh's preflight and uses the same verified bump
+# (bin/bump-version.sh), so they can't drift. The branch is
 # deliberately version-less: HACS scans every branch and complains about
 # version numbers in branch names.
 

@@ -1,7 +1,7 @@
 """Tests for bin/bump-dev.sh.
 
 Post-release helper that opens a PR rolling main forward to the next minor
-(the dev-cycle bump release.yml can't push directly on a protected main).
+(the dev-cycle bump — main is protected, so the release workflow can't push it).
 
 Invokes the real bash script inside a throwaway git repo in tmp_path. All GIT_*
 env vars are scrubbed so the subprocess git calls operate on the fixture repo

@@ -20,8 +20,9 @@
 #
 # After the PR merges, push the v<version> tag to publish the GitHub Release:
 #   git tag v<version> && git push origin v<version>
-# The release workflow then publishes the release and, for final releases,
-# pushes a follow-up commit bumping main to the next minor (main is unprotected).
+# The release workflow then publishes the release. Roll main forward to the next
+# minor for development separately, via bin/bump-dev.sh (the workflow can't push
+# the bump itself — main is protected).
 #
 # The release branch is deliberately version-less: HACS scans every branch and
 # complains about version numbers in branch names.
@@ -133,8 +134,8 @@ git tag $TAG
 git push origin $TAG
 \`\`\`
 
-The release workflow publishes the GitHub Release and, for final releases,
-rolls \`main\` forward to the next minor.
+The release workflow publishes the GitHub Release. Roll \`main\` forward to the
+next minor for development separately, via bin/bump-dev.sh.
 "
 
 echo "Release $TAG branch pushed and PR opened."

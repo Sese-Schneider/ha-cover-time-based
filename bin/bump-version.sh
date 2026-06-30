@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Bumps the integration version in the manifest, verified.
 #
-# Single source of truth for the version bump, shared by bin/release.sh (local
-# release prep) and .github/workflows/release.yml (post-release next-minor
-# bump), so the two can never drift.
+# Single source of truth for the version bump, shared by bin/release.sh (release
+# prep) and bin/bump-dev.sh (post-release next-minor dev bump), so they can
+# never drift.
 #
 # Usage: bin/bump-version.sh <version>             bump manifest to <version>
 #        bin/bump-version.sh --validate <version>  semver-check only, no writes
