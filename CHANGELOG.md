@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixes
+
+- **Inline tilt at a parked endpoint no longer rolls the cover fully open/closed** ([#142](https://github.com/Sese-Schneider/ha-cover-time-based/issues/142)): the companion to [#125](https://github.com/Sese-Schneider/ha-cover-time-based/issues/125). In **inline** tilt mode the slats are articulated by the main travel motor, so a tilt move adjusting the slats while the cover is parked at a travel endpoint (fully open or fully closed) drives the motor *off* its limit switch. #125 fixed the run-on overshoot for **Switch** mode, but the self-stopping modes (**Toggle**, **Pulse** and **wrapped** covers) took a different branch: at an endpoint they skip the stop entirely, assuming the motor is still seated against its physical limit and self-stops there. For a tilt move that assumption is wrong — the motor has just been driven off the limit — so the stop was never sent and the cover ran on to the full endpoint (e.g. tilting the slats open while fully closed rolled the blind all the way up). The stop is now sent for tilt moves at an endpoint in these modes (mirroring the run-on exclusion #125 added), so the motor stops at the requested tilt; real *travel* moves to an endpoint still skip the redundant stop as before.
+
 ## 4.7.0 (2026-06-29)
 
 ### Features

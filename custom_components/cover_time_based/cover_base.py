@@ -1447,6 +1447,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 return
 
             current_travel = self.travel_calc.current_position()
+            # Endpoint handling (the self-stop skip and the run-on below) is a
+            # *travel* concept: it only applies when a travel move reaches a
+            # physical limit. A tilt move that merely finishes while the cover is
+            # parked at a travel endpoint has driven the motor *off* that limit
+            # to articulate the slats, so the motor will NOT self-stop there and
+            # must always be stopped explicitly — never given the self-stop skip
+            # (issue #142) or the run-on (issue #125).
+            endpoint_applies = (
+                self._at_endpoint(current_travel) and not self._moving_tilt
+            )
             if self._motor_stops_itself():
                 # The device drives to the target and holds there on its own
                 # (e.g. a wrapped cover commanded via set_cover_position). Any
@@ -1461,7 +1471,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 # travel stop below and re-pulse the travel relay off a stale
                 # _last_command.
                 await self._tilt_settle()
-            elif self._at_endpoint(current_travel) and self._self_stops_at_endpoints():
+            elif endpoint_applies and self._self_stops_at_endpoints():
                 # The motor self-stops at its physical limit switch. Sending a
                 # stop here is redundant (and for toggle re-pulses → restart),
                 # so skip the relay stop and any run-on; just settle the
@@ -1472,8 +1482,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     current_travel,
                 )
             elif (
-                self._at_endpoint(current_travel)
-                and not self._moving_tilt
+                endpoint_applies
                 and self._endpoint_runon_time is not None
                 and self._endpoint_runon_time > 0
             ):

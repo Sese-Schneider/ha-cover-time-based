@@ -845,3 +845,84 @@ async def test_stop_during_tilt_then_travel_still_runs_on(make_cover):
         "travel run-on must fire after a tilt move was committed then stopped"
     )
     await _cancel_tasks(cover)
+
+
+# ===================================================================
+# Inline tilt at a travel endpoint, self-stopping modes (issue #142)
+#
+# #125 (above) fixed inline tilt at an endpoint for the *latched* modes
+# (switch), whose _self_stops_at_endpoints() is False — those hit the
+# run-on branch. The *self-stopping* modes (toggle/pulse/wrapped), whose
+# _self_stops_at_endpoints() is True, hit the earlier self-stop branch,
+# which skipped the stop on the assumption the motor sits against its
+# limit. But an inline tilt move drives the motor *off* the limit to
+# articulate the slats, so it does NOT self-stop — skipping the stop
+# lets it run on to the full endpoint (the cover rolls all the way
+# up/down instead of just tilting).
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_inline_tilt_at_closed_endpoint_self_stopping_mode_stops(make_cover):
+    """Toggle + inline: tilting open while parked fully closed drives the motor
+    off the bottom limit, so it won't self-stop — the stop must be sent (a
+    toggle re-pulse) or the cover rolls all the way up (issue #142)."""
+    cover = _make_inline(make_cover, CONTROL_MODE_TOGGLE)
+    cover.travel_calc.set_position(0)  # parked fully closed (a travel endpoint)
+    cover.tilt_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(50)  # tilt open, off the closed endpoint
+        cover.hass.services.async_call.reset_mock()
+        cover.tilt_calc.set_position(50)  # tilt reaches its 50% target
+        await cover.auto_stop_if_necessary()
+
+    on_calls = [c for c in _ha_calls(cover) if c.args[1] == "turn_on"]
+    assert on_calls, (
+        "inline tilt at a travel endpoint must stop the motor — it was driven "
+        "off the limit and won't self-stop (issue #142)"
+    )
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_inline_tilt_at_open_endpoint_self_stopping_mode_stops(make_cover):
+    """The same bug bites at the open endpoint: tilting closed while parked
+    fully open drives the motor off the top limit and must be stopped, or the
+    cover rolls all the way down (issue #142)."""
+    cover = _make_inline(make_cover, CONTROL_MODE_TOGGLE)
+    cover.travel_calc.set_position(100)  # parked fully open (a travel endpoint)
+    cover.tilt_calc.set_position(100)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(50)  # tilt closed, off the open endpoint
+        cover.hass.services.async_call.reset_mock()
+        cover.tilt_calc.set_position(50)
+        await cover.auto_stop_if_necessary()
+
+    on_calls = [c for c in _ha_calls(cover) if c.args[1] == "turn_on"]
+    assert on_calls, "inline tilt at the open endpoint must stop the motor (issue #142)"
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_inline_travel_to_endpoint_self_stopping_mode_skips_stop(make_cover):
+    """The fix is tilt-move only: a real *travel* move to an endpoint in a
+    self-stopping mode must still skip the stop (the motor self-stops at its
+    limit; a toggle re-pulse would restart it — issue #105)."""
+    cover = _make_inline(make_cover, CONTROL_MODE_TOGGLE)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(0)  # already at the closing tilt endpoint
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(0)  # pure travel to fully closed
+        cover.hass.services.async_call.reset_mock()
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+        await cover.auto_stop_if_necessary()
+
+    assert _ha_calls(cover) == [], (
+        "a travel move to an endpoint must still self-stop (no re-pulse)"
+    )
+    assert cover._delay_task is None
+    await _cancel_tasks(cover)
