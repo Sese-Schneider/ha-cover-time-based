@@ -1385,6 +1385,81 @@ class TestDualMotorTiltPreStep:
         assert cover._tilt_restore_target is None
         assert not cover.tilt_calc.is_traveling()
 
+    @pytest.mark.asyncio
+    async def test_stop_while_stopping_travel_skips_tilt_motor_start(self, make_cover):
+        """A stop while the restore is stopping travel must not then start the
+        tilt motor on resume.
+
+        The dual-motor restore runs on the auto-updater's background task and
+        stops travel before starting the separate tilt motor. If a user stop
+        interleaves during that travel-stop, the resumed restore must abort
+        instead of energising the tilt motor the user just stopped.
+        """
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+
+        events = []
+        fired = {"stop": False}
+
+        async def stop_on_first_travel_stop(*_a, **_k):
+            if not fired["stop"]:
+                fired["stop"] = True
+                await cover.async_stop_cover()
+
+        async def record_tilt_close(*_a, **_k):
+            events.append("tilt_close")
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()  # tilt pre-step (30 -> 100)
+            cover.tilt_calc.set_position(100)
+            await cover.auto_stop_if_necessary()  # travel starts; restore target = 0
+            assert cover._tilt_restore_target == 0
+            cover.travel_calc.set_position(0)  # travel completes
+
+            with (
+                patch.object(
+                    cover, "_send_stop", side_effect=stop_on_first_travel_stop
+                ),
+                patch.object(cover, "_send_tilt_close", side_effect=record_tilt_close),
+            ):
+                await cover.auto_stop_if_necessary()  # -> _start_tilt_restore (dual)
+
+        # The stop landed while stopping travel: the tilt motor must not start,
+        # the restore state must be cleared, and tracking must not re-arm.
+        assert "tilt_close" not in events
+        assert cover._tilt_restore_active is False
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_stop_during_tilt_motor_start_does_not_rearm(self, make_cover):
+        """A stop while the restore is bringing the tilt motor up aborts it.
+
+        If the user stop interleaves during the tilt-motor-start, the resumed
+        restore must not re-arm tilt tracking after the user stopped.
+        """
+        cover = self._make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+
+        async def stop_during_tilt_start(*_a, **_k):
+            await cover.async_stop_cover()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()  # tilt pre-step (30 -> 100)
+            cover.tilt_calc.set_position(100)
+            await cover.auto_stop_if_necessary()  # travel starts; restore target = 0
+            assert cover._tilt_restore_target == 0
+            cover.travel_calc.set_position(0)  # travel completes
+
+            with patch.object(
+                cover, "_send_tilt_close", side_effect=stop_during_tilt_start
+            ):
+                await cover.auto_stop_if_necessary()  # -> _start_tilt_restore (dual)
+
+        assert cover._tilt_restore_active is False
+        assert not cover.tilt_calc.is_traveling()
+
     # -- Edge cases --
 
     @pytest.mark.asyncio

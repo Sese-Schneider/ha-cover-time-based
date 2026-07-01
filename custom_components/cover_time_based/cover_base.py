@@ -1840,9 +1840,21 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         closing = restore_target < current_tilt
 
+        # Everything below runs on the auto-updater's background task, so every
+        # await yields the event loop and a user STOP or a new movement command
+        # can interleave. Mark the restore active *before* the first await so
+        # those paths (async_stop_cover -> _handle_stop, other moves ->
+        # _abandon_active_lifecycle) recognise it, stop the motor, and clear the
+        # flag; we then re-check the flag after each await and bail so we never
+        # (re)start or keep tracking a motor the user just stopped.
+        self._tilt_restore_active = True
+
         if self._tilt_strategy.uses_tilt_motor:
-            # Dual motor: stop travel, start tilt motor
+            # Dual motor: stop travel, then start the separate tilt motor.
             await self._async_handle_command(SERVICE_STOP_COVER)
+            if not self._tilt_restore_active:
+                self._log("_start_tilt_restore :: cancelled before tilt motor start")
+                return
             if closing:
                 await self._send_tilt_close()
             else:
@@ -1855,15 +1867,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # direction (issue #147) — an instant reversal leaves a short
             # restore pulse's stop command dropped by the relay, so the cover
             # overruns to its physical endpoint.
-            #
-            # This runs on the auto-updater's background task, so the settle
-            # delay yields the event loop for a full second during which a user
-            # STOP or a new movement command can interleave. Mark the restore
-            # active *before* yielding so those paths (async_stop_cover ->
-            # _handle_stop, other moves -> _abandon_active_lifecycle) recognise
-            # and cancel it (clearing the flag); then bail on resume so we don't
-            # re-issue the reverse command and restart a motor the user stopped.
-            self._tilt_restore_active = True
             await self._async_handle_command(SERVICE_STOP_COVER)
             await self._direction_change_delay()
             if not self._tilt_restore_active:
@@ -1872,8 +1875,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             command = self._tilt_strategy.tilt_command_for(closing)
             await self._async_handle_command(command)
 
+        if not self._tilt_restore_active:
+            self._log("_start_tilt_restore :: cancelled during motor start")
+            return
         self.tilt_calc.start_travel(restore_target)
-        self._tilt_restore_active = True
         self.start_auto_updater()
 
     # -----------------------------------------------------------------------
