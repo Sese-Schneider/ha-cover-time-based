@@ -1848,7 +1848,27 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             else:
                 await self._send_tilt_open()
         else:
-            # Shared motor (inline or sequential): consult the strategy for direction.
+            # Shared motor (inline tilt — the only strategy that both restores
+            # tilt and drives it via the travel motor): the travel motor is
+            # still running from the travel phase and the restore reverses it.
+            # Stop and let the motor settle before commanding the opposite
+            # direction (issue #147) — an instant reversal leaves a short
+            # restore pulse's stop command dropped by the relay, so the cover
+            # overruns to its physical endpoint.
+            #
+            # This runs on the auto-updater's background task, so the settle
+            # delay yields the event loop for a full second during which a user
+            # STOP or a new movement command can interleave. Mark the restore
+            # active *before* yielding so those paths (async_stop_cover ->
+            # _handle_stop, other moves -> _abandon_active_lifecycle) recognise
+            # and cancel it (clearing the flag); then bail on resume so we don't
+            # re-issue the reverse command and restart a motor the user stopped.
+            self._tilt_restore_active = True
+            await self._async_handle_command(SERVICE_STOP_COVER)
+            await self._direction_change_delay()
+            if not self._tilt_restore_active:
+                self._log("_start_tilt_restore :: cancelled during settle delay")
+                return
             command = self._tilt_strategy.tilt_command_for(closing)
             await self._async_handle_command(command)
 

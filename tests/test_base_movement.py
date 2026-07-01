@@ -13,7 +13,7 @@ These tests exercise the movement coordination logic in cover_base.py:
 import asyncio
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
@@ -2073,7 +2073,10 @@ class TestInlineTiltRestore:
         cover.travel_calc.set_position(80)
         cover.tilt_calc.set_position(100)
 
-        with patch.object(cover, "async_write_ha_state"):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_direction_change_delay", new_callable=AsyncMock),
+        ):
             await cover.set_position(30)
 
             # Simulate travel completing (tilt is now 0 after closing)
@@ -2097,13 +2100,104 @@ class TestInlineTiltRestore:
         assert len(open_calls) == 1
 
     @pytest.mark.asyncio
+    async def test_restore_settles_before_reversing_main_motor(self, make_cover):
+        """Inline restore stops and settles before reversing the shared motor.
+
+        Regression for #147: the restore was issued as an instant reversal of
+        the still-running main motor (no settling stop, no reversal delay), so
+        a short restore pulse was dropped by the relay and the cover overran to
+        its physical endpoint. The reversing direction command must be preceded
+        by a stop and the direction-change settle delay.
+        """
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(80)
+        cover.tilt_calc.set_position(100)
+
+        events = []
+
+        async def record_stop(*_a, **_k):
+            events.append("stop")
+
+        async def record_open(*_a, **_k):
+            events.append("open")
+
+        async def record_delay(*_a, **_k):
+            events.append("delay")
+
+        with patch.object(cover, "async_write_ha_state"):
+            # Closing to mid: main motor CLOSE, restore target = tilt 100.
+            await cover.set_position(30)
+
+            # Travel completes; the close has driven tilt to 0.
+            cover.travel_calc.set_position(30)
+            cover.tilt_calc.set_position(0)
+
+            with (
+                patch.object(cover, "_send_stop", side_effect=record_stop),
+                patch.object(cover, "_send_open", side_effect=record_open),
+                patch.object(
+                    cover, "_direction_change_delay", side_effect=record_delay
+                ),
+            ):
+                await cover.auto_stop_if_necessary()
+
+        # Restore reverses the motor to OPEN (tilt 0 -> 100); it must first
+        # stop the running motor and wait out the reversal delay.
+        assert events == ["stop", "delay", "open"]
+
+    @pytest.mark.asyncio
+    async def test_stop_during_settle_delay_does_not_restart_motor(self, make_cover):
+        """A stop landing during the restore settle delay aborts the restore.
+
+        The #147 settle delay runs on the auto-updater's background task, so a
+        user stop can interleave mid-delay. When it does, the resumed restore
+        must NOT re-issue the reverse command and restart the motor the user
+        just stopped, nor re-arm the auto-updater.
+        """
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(80)
+        cover.tilt_calc.set_position(100)
+
+        events = []
+
+        async def record_open(*_a, **_k):
+            events.append("open")
+
+        # Simulate a user stop arriving while the settle delay is in progress.
+        async def stop_during_delay(*_a, **_k):
+            events.append("delay")
+            await cover.async_stop_cover()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(30)  # closing; restore target = tilt 100
+            cover.travel_calc.set_position(30)
+            cover.tilt_calc.set_position(0)
+
+            with (
+                patch.object(cover, "_send_open", side_effect=record_open),
+                patch.object(
+                    cover, "_direction_change_delay", side_effect=stop_during_delay
+                ),
+            ):
+                await cover.auto_stop_if_necessary()
+
+        # The stop landed mid-delay: the motor must not be reversed/restarted,
+        # the restore state must be cleared, and tilt tracking must not re-arm.
+        assert "open" not in events
+        assert cover._tilt_restore_active is False
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
     async def test_restore_complete_stops_main_motor(self, make_cover):
         """When restore finishes, main motor is stopped."""
         cover = self._make_inline_cover(make_cover)
         cover.travel_calc.set_position(80)
         cover.tilt_calc.set_position(100)
 
-        with patch.object(cover, "async_write_ha_state"):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_direction_change_delay", new_callable=AsyncMock),
+        ):
             await cover.set_position(30)
 
             # Complete travel
@@ -2126,7 +2220,10 @@ class TestInlineTiltRestore:
         cover.travel_calc.set_position(80)
         cover.tilt_calc.set_position(100)
 
-        with patch.object(cover, "async_write_ha_state"):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_direction_change_delay", new_callable=AsyncMock),
+        ):
             # Start: closing to 30
             await cover.set_position(30)
             assert cover.travel_calc.is_traveling()
