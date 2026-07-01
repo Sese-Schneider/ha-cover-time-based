@@ -2263,6 +2263,53 @@ class TestInlineTiltRestore:
         assert not cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
+    async def test_stop_during_initial_stop_bails_before_settle_delay(self, make_cover):
+        """A stop during the restore's initial STOP bails before the settle delay.
+
+        If the user stop interleaves during the first STOP await (before the
+        ~1s reversal settle), the restore must bail immediately rather than
+        block the background task waiting out a delay for a restore that is
+        already cancelled.
+        """
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(80)
+        cover.tilt_calc.set_position(100)
+
+        events = []
+        fired = {"stop": False}
+
+        async def stop_on_first_send_stop(*_a, **_k):
+            if not fired["stop"]:
+                fired["stop"] = True
+                await cover.async_stop_cover()
+
+        async def record_delay(*_a, **_k):
+            events.append("delay")
+
+        async def record_open(*_a, **_k):
+            events.append("open")
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(30)  # closing; restore target = tilt 100
+            cover.travel_calc.set_position(30)
+            cover.tilt_calc.set_position(0)
+
+            with (
+                patch.object(cover, "_send_stop", side_effect=stop_on_first_send_stop),
+                patch.object(
+                    cover, "_direction_change_delay", side_effect=record_delay
+                ),
+                patch.object(cover, "_send_open", side_effect=record_open),
+            ):
+                await cover.auto_stop_if_necessary()
+
+        # Cancelled during the initial STOP: no settle delay, no reversal, and
+        # the restore state is cleared.
+        assert events == []
+        assert cover._tilt_restore_active is False
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
     async def test_restore_complete_stops_main_motor(self, make_cover):
         """When restore finishes, main motor is stopped."""
         cover = self._make_inline_cover(make_cover)

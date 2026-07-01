@@ -1872,6 +1872,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # restore pulse's stop command dropped by the relay, so the cover
             # overruns to its physical endpoint.
             await self._async_handle_command(SERVICE_STOP_COVER)
+            if not self._tilt_restore_active:
+                # Cancelled while stopping — bail before the settle delay so we
+                # don't block the background task ~1s for a dead restore.
+                self._log("_start_tilt_restore :: cancelled before settle delay")
+                return
             await self._direction_change_delay()
             if not self._tilt_restore_active:
                 self._log("_start_tilt_restore :: cancelled during settle delay")
