@@ -1846,7 +1846,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # those paths (async_stop_cover -> _handle_stop, other moves ->
         # _abandon_active_lifecycle) recognise it, stop the motor, and clear the
         # flag; we then re-check the flag after each await and bail so we never
-        # (re)start or keep tracking a motor the user just stopped.
+        # (re)start or keep tracking a motor the user just stopped. The
+        # auto-updater stays unsubscribed for this whole window (stopped when
+        # travel reached its target, re-armed only at the tail below), so no
+        # re-entrant auto_stop_if_necessary can take the restore-complete branch
+        # mid-startup — keep it that way if this ever moves.
         self._tilt_restore_active = True
 
         if self._tilt_strategy.uses_tilt_motor:
