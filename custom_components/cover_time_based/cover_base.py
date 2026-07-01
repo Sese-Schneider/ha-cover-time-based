@@ -1840,20 +1840,54 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         closing = restore_target < current_tilt
 
+        # Everything below runs on the auto-updater's background task, so every
+        # await yields the event loop and a user STOP or a new movement command
+        # can interleave. Mark the restore active *before* the first await so
+        # those paths (async_stop_cover -> _handle_stop, other moves ->
+        # _abandon_active_lifecycle) recognise it, stop the motor, and clear the
+        # flag; we then re-check the flag after each await and bail so we never
+        # (re)start or keep tracking a motor the user just stopped. The
+        # auto-updater stays unsubscribed for this whole window (stopped when
+        # travel reached its target, re-armed only at the tail below), so no
+        # re-entrant auto_stop_if_necessary can take the restore-complete branch
+        # mid-startup — keep it that way if this ever moves.
+        self._tilt_restore_active = True
+
         if self._tilt_strategy.uses_tilt_motor:
-            # Dual motor: stop travel, start tilt motor
+            # Dual motor: stop travel, then start the separate tilt motor.
             await self._async_handle_command(SERVICE_STOP_COVER)
+            if not self._tilt_restore_active:
+                self._log("_start_tilt_restore :: cancelled before tilt motor start")
+                return
             if closing:
                 await self._send_tilt_close()
             else:
                 await self._send_tilt_open()
         else:
-            # Shared motor (inline or sequential): consult the strategy for direction.
+            # Shared motor (inline tilt — the only strategy that both restores
+            # tilt and drives it via the travel motor): the travel motor is
+            # still running from the travel phase and the restore reverses it.
+            # Stop and let the motor settle before commanding the opposite
+            # direction (issue #147) — an instant reversal leaves a short
+            # restore pulse's stop command dropped by the relay, so the cover
+            # overruns to its physical endpoint.
+            await self._async_handle_command(SERVICE_STOP_COVER)
+            if not self._tilt_restore_active:
+                # Cancelled while stopping — bail before the settle delay so we
+                # don't block the background task ~1s for a dead restore.
+                self._log("_start_tilt_restore :: cancelled before settle delay")
+                return
+            await self._direction_change_delay()
+            if not self._tilt_restore_active:
+                self._log("_start_tilt_restore :: cancelled during settle delay")
+                return
             command = self._tilt_strategy.tilt_command_for(closing)
             await self._async_handle_command(command)
 
+        if not self._tilt_restore_active:
+            self._log("_start_tilt_restore :: cancelled during motor start")
+            return
         self.tilt_calc.start_travel(restore_target)
-        self._tilt_restore_active = True
         self.start_auto_updater()
 
     # -----------------------------------------------------------------------

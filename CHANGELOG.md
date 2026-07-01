@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixes
+
+- **Inline tilt restore no longer overruns on short reversals** ([#147](https://github.com/Sese-Schneider/ha-cover-time-based/issues/147)): in **inline** tilt mode the slats share the main travel motor, so restoring tilt after a travel move (the integration overdrives tilt to an endpoint, travels, then reverses to the requested tilt) reverses that motor. The restore issued the opposite-direction command *instantly*, while the motor was still running from the travel phase — with no settling stop and no reversal delay. For a short restore pulse the follow-up stop then arrived while the relay was still mid-reversal and was dropped, so the motor ran on to its physical endpoint instead of stopping at the restored tilt (long restores completed correctly). The restore now stops the motor and waits out the direction-change settle delay before commanding the reverse direction — the same reversal handling a normal travel direction-change already uses — so the stop is honoured and the cover holds the restored tilt. A stop (or a new movement command) issued *while a tilt restore is starting up* — during the inline settle delay, or during the dual-motor restore's stop-travel / tilt-motor-start step — now cancels the pending restore instead of being overridden when the restore resumes and re-starts the motor.
+
 ## 4.7.1 (2026-06-30)
 
 ### Fixes
