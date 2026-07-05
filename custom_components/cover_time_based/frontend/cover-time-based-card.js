@@ -18,6 +18,7 @@ import {
   clearedEntitiesForMode,
   clearedTiltConfig,
   coverHasNativeTilt,
+  coverHasSetTiltPosition,
   coverConfirmedWithoutTilt,
 } from "./entity-filter.js";
 import { DOMAIN, ATTRIBUTE_TO_CONFIG } from "./constants.js";
@@ -326,6 +327,10 @@ class CoverTimeBasedCard extends LitElement {
 
   _coverSupportsNativeTilt(entityId) {
     return coverHasNativeTilt(entityId ? this.hass?.states?.[entityId] : null);
+  }
+
+  _coverSupportsSetTiltPosition(entityId) {
+    return coverHasSetTiltPosition(entityId ? this.hass?.states?.[entityId] : null);
   }
 
   _onCoverEntityChange(e) {

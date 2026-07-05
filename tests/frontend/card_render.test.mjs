@@ -328,7 +328,7 @@ test("wrapped mode renders cover entity-picker (with includeDomains cover)", asy
   expect(coverPicker).not.toBeUndefined();
 });
 
-test("wrapped mode renders ha-switch toggles (ignore-reported-position, force-time-based, reports-command-not-endpoint, assumed-state)", async () => {
+test("wrapped mode renders base ha-switch toggles when native set-tilt is unavailable", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
   // Exactly 4 toggles: ignore_reported_position, force_time_based_position,
@@ -336,12 +336,66 @@ test("wrapped mode renders ha-switch toggles (ignore-reported-position, force-ti
   expect(toggles.length).toBe(4);
 });
 
+test("wrapped inline native set-tilt mode renders tilt-follows-travel toggle", async () => {
+  const hass = makeHass({
+    states: {
+      "cover.real": { state: "open", attributes: { supported_features: 128 } },
+    },
+  });
+  card = await mountCard(hass, {
+    selectedEntity: "cover.x",
+    config: wrappedCfg({ tilt_mode: "inline" }),
+    activeTab: "device",
+  });
+
+  const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
+  expect(toggles.length).toBe(5);
+  expect(card.shadowRoot.textContent).toContain("Tilt follows travel");
+});
+
+test("wrapped inline native set-tilt command-echo mode hides tilt-follows-travel toggle", async () => {
+  const hass = makeHass({
+    states: {
+      "cover.real": { state: "open", attributes: { supported_features: 128 } },
+    },
+  });
+  card = await mountCard(hass, {
+    selectedEntity: "cover.x",
+    config: wrappedCfg({ tilt_mode: "inline", reports_command_not_endpoint: true }),
+    activeTab: "device",
+  });
+
+  const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
+  expect(toggles.length).toBe(4);
+  expect(card.shadowRoot.textContent).not.toContain("Tilt follows travel");
+});
+
+test("wrapped mode: toggling tilt-follows-travel calls _updateLocal", async () => {
+  const hass = makeHass({
+    states: {
+      "cover.real": { state: "open", attributes: { supported_features: 128 } },
+    },
+  });
+  card = await mountCard(hass, {
+    selectedEntity: "cover.x",
+    config: wrappedCfg({ tilt_mode: "inline" }),
+    activeTab: "device",
+  });
+  const captured = [];
+  card._updateLocal = (u) => captured.push(u);
+  const toggle = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch")[2];
+  toggle.checked = false;
+  toggle.dispatchEvent(new Event("change"));
+  expect(captured).toContainEqual({ tilt_follows_travel: false });
+});
+
 test("wrapped mode: toggling reports-command-not-endpoint calls _updateLocal", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
   const captured = [];
   card._updateLocal = (u) => captured.push(u);
   // Order in renderInputEntities: [0] ignore_reported_position,
-  // [1] force_time_based_position, [2] reports_command_not_endpoint, [3] assumed_state
+  // [1] force_time_based_position, [2] reports_command_not_endpoint,
+  // [3] assumed_state
   const toggle = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch")[2];
   toggle.checked = true;
   toggle.dispatchEvent(new Event("change"));

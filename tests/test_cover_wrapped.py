@@ -4,6 +4,7 @@ Each test verifies that the correct cover.* service call is made.
 """
 
 import asyncio
+import time
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
@@ -13,11 +14,15 @@ from homeassistant.const import STATE_UNAVAILABLE
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
 
 
-# CoverEntityFeature bit values (OPEN=1, CLOSE=2, SET_POSITION=4, STOP=8).
+# CoverEntityFeature bit values (OPEN=1, CLOSE=2, SET_POSITION=4, STOP=8,
+# OPEN_TILT=16, CLOSE_TILT=32, SET_TILT_POSITION=128).
 _F_OPEN = 1
 _F_CLOSE = 2
 _F_SET_POSITION = 4
 _F_STOP = 8
+_F_OPEN_TILT = 16
+_F_CLOSE_TILT = 32
+_F_SET_TILT_POSITION = 128
 
 
 # ---------------------------------------------------------------------------
@@ -645,3 +650,277 @@ class TestWrappedCommandEchoMode:
         with patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock:
             await cover._handle_external_state_change("cover.inner", "open", "closed")
         snap_mock.assert_awaited_once_with(0)
+
+
+class TestWrappedNativeTiltForwarding:
+    """Tilt commands are forwarded natively when the wrapped cover
+    advertises SET_TILT_POSITION and the tilt strategy allows it - the
+    device firmware positions the slats itself, so the time-based
+    simulation (timed main-motor runs) would fail on it.
+    """
+
+    _NATIVE_FEATURES = (
+        _F_OPEN
+        | _F_CLOSE
+        | _F_SET_POSITION
+        | _F_STOP
+        | _F_OPEN_TILT
+        | _F_CLOSE_TILT
+        | _F_SET_TILT_POSITION
+    )
+
+    def _make_native_cover(self, make_cover, **kwargs):
+        kwargs.setdefault("tilt_time_close", 2)
+        kwargs.setdefault("tilt_time_open", 2)
+        kwargs.setdefault("tilt_mode", "inline")
+        cover = make_cover(cover_entity_id="cover.inner", **kwargs)
+        _set_wrapped_features(cover, self._NATIVE_FEATURES)
+        return cover
+
+    def _tilt_svc(self, tilt_position):
+        return call(
+            "cover",
+            "set_cover_tilt_position",
+            {"entity_id": "cover.inner", "tilt_position": tilt_position},
+            False,
+        )
+
+    def test_use_native_tilt_true_when_supported(self, make_cover):
+        cover = self._make_native_cover(make_cover)
+        assert cover._use_native_tilt() is True
+
+    def test_use_native_tilt_false_without_set_tilt_position(self, make_cover):
+        cover = self._make_native_cover(make_cover)
+        _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | _F_OPEN_TILT | _F_CLOSE_TILT
+        )
+        assert cover._use_native_tilt() is False
+
+    def test_use_native_tilt_false_for_command_echo(self, make_cover):
+        cover = self._make_native_cover(
+            make_cover, reports_command_not_endpoint=True
+        )
+        assert cover._use_native_tilt() is False
+
+    def test_use_native_tilt_false_when_unavailable(self, make_cover):
+        cover = self._make_native_cover(make_cover)
+        _set_wrapped_features(
+            cover, self._NATIVE_FEATURES, state=STATE_UNAVAILABLE
+        )
+        assert cover._use_native_tilt() is False
+
+    def test_use_native_tilt_false_for_coupled_strategy(self, make_cover):
+        cover = self._make_native_cover(make_cover, tilt_mode="sequential")
+        assert cover._use_native_tilt() is False
+
+    def test_use_native_tilt_false_without_tilt_config(self):
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, self._NATIVE_FEATURES)
+        assert cover._use_native_tilt() is False
+
+    @pytest.mark.asyncio
+    async def test_set_tilt_position_forwarded_with_optimistic_update(
+        self, make_cover
+    ):
+        cover = self._make_native_cover(make_cover)
+        cover.tilt_calc.set_position(90)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_tilt_position(tilt_position=70)
+
+        assert self._tilt_svc(70) in _calls(cover.hass.services.async_call)
+        assert cover.tilt_calc.current_position() == 70
+
+    @pytest.mark.asyncio
+    async def test_open_tilt_forwarded_as_set_100(self, make_cover):
+        cover = self._make_native_cover(make_cover)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover_tilt()
+
+        assert self._tilt_svc(100) in _calls(cover.hass.services.async_call)
+        assert cover.tilt_calc.current_position() == 100
+
+    @pytest.mark.asyncio
+    async def test_close_tilt_forwarded_as_set_0(self, make_cover):
+        cover = self._make_native_cover(make_cover)
+        cover.tilt_calc.set_position(90)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover_tilt()
+
+        assert self._tilt_svc(0) in _calls(cover.hass.services.async_call)
+        assert cover.tilt_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_equal_target_is_a_no_op(self, make_cover):
+        """Mirrors set_tilt_position's early return: no command and no
+        grace window when the tilt is already at the target."""
+        cover = self._make_native_cover(make_cover)
+        cover.tilt_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_tilt_position(tilt_position=50)
+
+        assert _calls(cover.hass.services.async_call) == []
+        assert not cover._in_bounce_grace_window()
+        assert not cover._in_native_tilt_window()
+
+    @pytest.mark.asyncio
+    async def test_forward_abandons_pending_tilt_restore(self, make_cover):
+        cover = self._make_native_cover(make_cover)
+        cover.tilt_calc.set_position(90)
+        cover._tilt_restore_target = 40
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_tilt_position(tilt_position=70)
+
+        assert cover._tilt_restore_target is None
+
+    @pytest.mark.asyncio
+    async def test_moving_state_during_native_tilt_window_ignored(self, make_cover):
+        """A wrapped cover reporting opening/closing while its slats run
+        must not be mirrored back as an external travel command, even
+        after the bounce grace window has expired."""
+        cover = self._make_native_cover(make_cover)
+        cover.tilt_calc.set_position(90)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_tilt_position(tilt_position=30)
+        # Bounce grace window expired; native tilt window still open.
+        cover._last_self_command_time = time.monotonic() - 1.0
+        assert cover._in_native_tilt_window()
+
+        with patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock:
+            await cover._handle_external_state_change("cover.inner", "open", "closing")
+        close_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_settle_clears_native_tilt_window(self, make_cover):
+        cover = self._make_native_cover(make_cover)
+        cover.tilt_calc.set_position(90)
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_tilt_position(tilt_position=30)
+            assert cover._in_native_tilt_window()
+            cover._last_self_command_time = time.monotonic() - 1.0
+            await cover._handle_external_state_change("cover.inner", "open", "closed")
+
+        assert not cover._in_native_tilt_window()
+
+    @pytest.mark.asyncio
+    async def test_tilt_restore_forwarded_natively(self, make_cover):
+        """Post-travel tilt restore uses the wrapped cover's native tilt
+        instead of re-driving the main motor on a timer."""
+        cover = self._make_native_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+        cover._tilt_restore_target = 40
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._start_tilt_restore()
+
+        assert cover._tilt_restore_target is None
+        assert self._tilt_svc(40) in _calls(cover.hass.services.async_call)
+        assert cover.tilt_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_tilt_restore_cancelled_before_native_forward(self, make_cover):
+        cover = self._make_native_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+        cover._tilt_restore_target = 40
+
+        async def cancel_after_stop(_command):
+            cover._tilt_restore_active = False
+
+        with (
+            patch.object(
+                cover,
+                "_async_handle_command",
+                new=AsyncMock(side_effect=cancel_after_stop),
+            ),
+            patch.object(cover, "_forward_native_tilt", new=AsyncMock()) as forward,
+        ):
+            await cover._start_tilt_restore()
+
+        forward.assert_not_awaited()
+        assert cover._tilt_restore_active is False
+
+    @pytest.mark.asyncio
+    async def test_tilt_restore_noop_when_already_at_target(self, make_cover):
+        cover = self._make_native_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(40)
+        cover._tilt_restore_target = 40
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._start_tilt_restore()
+
+        assert cover._tilt_restore_target is None
+        assert self._tilt_svc(40) not in _calls(cover.hass.services.async_call)
+
+    @pytest.mark.asyncio
+    async def test_snap_skipped_while_time_based_tilt_move_in_flight(
+        self, make_cover
+    ):
+        """An interim tilt report during our own time-based tilt move must
+        not snap the tracker (the auto-updater would stop the motor early);
+        the settle after the move still snaps."""
+        cover = self._make_native_cover(make_cover, tilt_mode="sequential")
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+        cover.tilt_calc.start_travel(0)
+        assert cover.tilt_calc.is_traveling()
+        _set_wrapped_features(
+            cover, self._NATIVE_FEATURES, state="closed"
+        ).attributes["current_tilt_position"] = 60
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._maybe_snap_to_reported_tilt()
+
+        assert cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_tilt_follows_travel_off_skips_coupling(self, make_cover):
+        cover = self._make_native_cover(make_cover, tilt_follows_travel=False)
+        cover._tilt_restore_target = 40
+
+        result = await cover._plan_tilt_for_travel(50, "close_cover", 80, 90)
+
+        assert result == (None, 0.0, False)
+        assert cover._tilt_restore_target is None
+
+    @pytest.mark.asyncio
+    async def test_tilt_follows_travel_on_keeps_coupling(self, make_cover):
+        cover = self._make_native_cover(make_cover)
+
+        with patch(
+            "custom_components.cover_time_based.cover_base"
+            ".CoverTimeBased._plan_tilt_for_travel",
+            new=AsyncMock(return_value=(0, 0.0, False)),
+        ) as base_plan:
+            await cover._plan_tilt_for_travel(50, "close_cover", 80, 90)
+
+        base_plan.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_tilt_follows_travel_off_ignored_without_native_tilt(
+        self, make_cover
+    ):
+        """The opt-out only applies under native tilt; time-based covers
+        execute the coupling physically and must keep planning it."""
+        cover = self._make_native_cover(
+            make_cover, tilt_follows_travel=False, tilt_mode="sequential"
+        )
+
+        with patch(
+            "custom_components.cover_time_based.cover_base"
+            ".CoverTimeBased._plan_tilt_for_travel",
+            new=AsyncMock(return_value=(0, 0.0, False)),
+        ) as base_plan:
+            await cover._plan_tilt_for_travel(50, "close_cover", 80, 90)
+
+        base_plan.assert_awaited_once()

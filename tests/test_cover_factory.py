@@ -123,6 +123,7 @@ class TestCreateCoverFromOptions:
         # command-echo interpretation off.
         assert cover._force_time_based_position is False
         assert cover._reports_command_not_endpoint is False
+        assert cover._tilt_follows_travel is True
 
     def test_wrapped_cover_force_time_based_position(self):
         from custom_components.cover_time_based.const import (
@@ -157,6 +158,23 @@ class TestCreateCoverFromOptions:
         )
         assert isinstance(cover, WrappedCoverTimeBased)
         assert cover._reports_command_not_endpoint is True
+
+    def test_wrapped_cover_tilt_follows_travel_false(self):
+        from custom_components.cover_time_based.const import (
+            CONF_TILT_FOLLOWS_TRAVEL,
+        )
+
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+                CONF_COVER_ENTITY_ID: "cover.inner",
+                CONF_TILT_FOLLOWS_TRAVEL: False,
+            },
+            device_id="test",
+            name="Test",
+        )
+        assert isinstance(cover, WrappedCoverTimeBased)
+        assert cover._tilt_follows_travel is False
 
     def test_defaults_to_switch_mode(self):
         """When control_mode is not specified, defaults to switch."""

@@ -38,6 +38,10 @@ class InlineTilt(TiltStrategy):
     def restores_tilt(self) -> bool:
         return True
 
+    @property
+    def supports_native_tilt(self) -> bool:
+        return True
+
     def plan_move_position(
         self, target_pos: int, current_pos: int, current_tilt: int
     ) -> list[TiltTo | TravelTo]:

@@ -56,6 +56,16 @@ class TiltStrategy(ABC):
     def restores_tilt(self) -> bool:
         """Whether tilt should be restored after a position change."""
 
+    @property
+    def supports_native_tilt(self) -> bool:
+        """Whether tilt may be forwarded to a wrapped cover's native tilt.
+
+        Only coherent for strategies whose stop-time snap logic does not
+        overwrite tilt from travel after the wrapped cover reports its own
+        native tilt position.
+        """
+        return False
+
     @abstractmethod
     def plan_move_position(
         self,

@@ -14,7 +14,10 @@ import time
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.components.cover import ATTR_CURRENT_POSITION
+from homeassistant.components.cover import (
+    ATTR_CURRENT_POSITION,
+    ATTR_CURRENT_TILT_POSITION,
+)
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based.cover import (
@@ -837,13 +840,15 @@ class TestWrappedCoverStopThenLateSettle:
         assert cover._last_command is None
 
 
-def _set_wrapped_state(cover, state, current_position=None):
+def _set_wrapped_state(cover, state, current_position=None, current_tilt_position=None):
     """Make cover.hass.states.get return a state with optional current_position."""
     fake_state = MagicMock()
     fake_state.state = state
     attrs = {}
     if current_position is not None:
         attrs[ATTR_CURRENT_POSITION] = current_position
+    if current_tilt_position is not None:
+        attrs[ATTR_CURRENT_TILT_POSITION] = current_tilt_position
     fake_state.attributes = attrs
     cover.hass.states.get = lambda eid: fake_state if eid == "cover.inner" else None
     return fake_state
@@ -1001,6 +1006,143 @@ class TestWrappedCoverSnapToReportedPosition:
 
         assert not cover.travel_calc.is_traveling()
         assert cover._last_command is None
+
+
+class TestWrappedCoverSnapToReportedTilt:
+    """When the wrapped cover settles, its reported current_tilt_position
+    (when exposed) is the source of truth for the tilt tracker - the same
+    contract _snap_to_position provides for travel. Covers whose slats are
+    re-tilted as a side effect of travel (venetian blinds) or tilted
+    externally would otherwise drift, since the time-based tilt estimate
+    never sees those changes.
+    """
+
+    def _make_tilt_cover(self, make_cover, **kwargs):
+        kwargs.setdefault("tilt_time_close", 2)
+        kwargs.setdefault("tilt_time_open", 2)
+        kwargs.setdefault("tilt_mode", "inline")
+        return make_cover(cover_entity_id="cover.inner", **kwargs)
+
+    @pytest.mark.asyncio
+    async def test_state_change_to_stopped_snaps_reported_tilt(self, make_cover):
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+        _set_wrapped_state(cover, "closed", current_position=0, current_tilt_position=80)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "open", "closed")
+
+        assert cover.travel_calc.current_position() == 0
+        assert cover.tilt_calc.current_position() == 80
+
+    @pytest.mark.asyncio
+    async def test_attribute_only_tilt_update_in_stopped_state_snaps(self, make_cover):
+        """External slat adjustment: wrapped state stays 'closed', only
+        current_tilt_position changes."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+        _set_wrapped_state(cover, "closed", current_position=0, current_tilt_position=55)
+
+        event = _make_attribute_event("cover.inner", "closed", 0)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_attribute_change(event)
+
+        assert cover.tilt_calc.current_position() == 55
+
+    @pytest.mark.asyncio
+    async def test_reported_tilt_overrides_strategy_coupling(self, make_cover):
+        """The reported tilt must win over whatever
+        snap_trackers_to_physical derives during the position snap."""
+        cover = self._make_tilt_cover(make_cover, tilt_mode="sequential")
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+        # Sequential coupling says tilt=100 whenever travel != 0; the wrapped
+        # cover disagrees and reports 40 - the report wins.
+        _set_wrapped_state(cover, "open", current_position=60, current_tilt_position=40)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "closed", "open")
+
+        assert cover.travel_calc.current_position() == 60
+        assert cover.tilt_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_no_reported_tilt_leaves_tracker_unchanged(self, make_cover):
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+        _set_wrapped_state(cover, "closed", current_position=0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "open", "closed")
+
+        assert cover.tilt_calc.current_position() == 30
+
+    @pytest.mark.asyncio
+    async def test_reported_tilt_without_tilt_support_is_ignored(self, make_cover):
+        """A wrapped cover reporting tilt while this cover has no tilt
+        configured must not crash or create a tilt tracker."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(50)
+        _set_wrapped_state(cover, "closed", current_position=0, current_tilt_position=80)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "open", "closed")
+
+        assert not cover._has_tilt_support()
+        assert cover.travel_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_ignore_reported_position_also_ignores_tilt(self, make_cover):
+        cover = self._make_tilt_cover(make_cover, ignore_reported_position=True)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+        _set_wrapped_state(cover, "closed", current_position=0, current_tilt_position=80)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "open", "closed")
+
+        # closed-state fallback still snaps travel to 0 (unambiguous endpoint)
+        assert cover.travel_calc.current_position() == 0
+        assert cover.tilt_calc.current_position() == 30
+
+    @pytest.mark.asyncio
+    async def test_mid_travel_attribute_update_does_not_snap_tilt(self, make_cover):
+        """Attribute updates while the wrapped cover reports opening/closing
+        are mid-travel values - not trusted for tilt either."""
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+        _set_wrapped_state(
+            cover, "opening", current_position=60, current_tilt_position=80
+        )
+
+        event = _make_state_event(
+            "cover.inner",
+            "opening",
+            "opening",
+            new_attributes={ATTR_CURRENT_TILT_POSITION: 80},
+        )
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_attribute_change(event)
+
+        assert cover.tilt_calc.current_position() == 30
+
+    @pytest.mark.asyncio
+    async def test_invalid_reported_tilt_ignored(self, make_cover):
+        cover = self._make_tilt_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(30)
+        _set_wrapped_state(
+            cover, "closed", current_position=0, current_tilt_position=250
+        )
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_state_change("cover.inner", "open", "closed")
+
+        assert cover.tilt_calc.current_position() == 30
 
 
 class TestAttributeChangeHookDispatch:

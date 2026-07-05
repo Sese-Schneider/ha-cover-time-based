@@ -62,11 +62,18 @@ export function showsPulseTime(controlMode) {
 // CoverEntityFeature bit flags.
 const OPEN_TILT = 16;
 const CLOSE_TILT = 32;
+const SET_TILT_POSITION = 128;
 
 // Whether a cover state object advertises native tilt support.
 export function coverHasNativeTilt(stateObj) {
   const features = stateObj?.attributes?.supported_features || 0;
   return !!(features & (OPEN_TILT | CLOSE_TILT));
+}
+
+// Whether a cover state object advertises native tilt positioning.
+export function coverHasSetTiltPosition(stateObj) {
+  const features = stateObj?.attributes?.supported_features || 0;
+  return !!(features & SET_TILT_POSITION);
 }
 
 // Whether we can positively confirm a cover lacks native tilt — it must be

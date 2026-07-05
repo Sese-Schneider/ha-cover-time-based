@@ -18,6 +18,9 @@ export const EN = {
   "entities.ignore_reported_position": "Ignore reported position",
   "entities.ignore_reported_position_helper":
     "Track position by time only and ignore the position the wrapped cover reports. Enable this if the underlying cover reports an unreliable position.",
+  "entities.tilt_follows_travel": "Tilt follows travel",
+  "entities.tilt_follows_travel_helper":
+    "Show the tilt sweeping to its endpoint while the cover travels (venetian slats close on the way down and open on the way up). Disable if the cover's slats do not follow travel direction. Only applies when tilt is forwarded natively to the wrapped cover.",
   "entities.force_time_based_position": "Force time-based positioning",
   "entities.force_time_based_position_helper":
     "By default, if the wrapped cover supports setting a position, the set-position command is sent straight to it. Enable this to instead drive it with timed open/close/stop, ignoring its native set-position support.",
@@ -142,6 +145,9 @@ export const TRANSLATIONS = {
     "entities.ignore_reported_position": "Ignorar posição reportada",
     "entities.ignore_reported_position_helper":
       "Rastrear a posição apenas pelo tempo e ignorar a posição reportada pelo estore. Ative isto se o estore subjacente reportar uma posição não fiável.",
+    "entities.tilt_follows_travel": "Inclinação acompanha o deslocamento",
+    "entities.tilt_follows_travel_helper":
+      "Mostra a inclinação a avançar até ao limite enquanto o estore se desloca (as lâminas venezianas fecham ao descer e abrem ao subir). Desative se as lâminas do estore não acompanharem a direção do deslocamento. Aplica-se apenas quando a inclinação é encaminhada nativamente para o estore envolvido.",
     "entities.force_time_based_position": "Forçar posicionamento por tempo",
     "entities.force_time_based_position_helper":
       "Por predefinição, se o estore envolvido suportar definir a posição, o comando de definir posição é enviado diretamente para ele. Ative isto para o controlar com abrir/fechar/parar temporizados, ignorando o suporte nativo de definir posição.",
@@ -263,6 +269,9 @@ export const TRANSLATIONS = {
     "entities.ignore_reported_position": "Ignoruj zgłaszaną pozycję",
     "entities.ignore_reported_position_helper":
       "Śledź pozycję wyłącznie na podstawie czasu i ignoruj pozycję zgłaszaną przez roletę. Włącz tę opcję, jeśli roleta zgłasza niewiarygodną pozycję.",
+    "entities.tilt_follows_travel": "Nachylenie podąża za ruchem",
+    "entities.tilt_follows_travel_helper":
+      "Pokazuj nachylenie przesuwające się do położenia krańcowego podczas ruchu rolety (żaluzje weneckie zamykają listwy przy opuszczaniu i otwierają przy podnoszeniu). Wyłącz, jeśli listwy rolety nie podążają za kierunkiem ruchu. Dotyczy tylko sytuacji, gdy nachylenie jest natywnie przekazywane do opakowanej rolety.",
     "entities.force_time_based_position": "Wymuś pozycjonowanie czasowe",
     "entities.force_time_based_position_helper":
       "Domyślnie, jeśli opakowana roleta obsługuje ustawianie pozycji, polecenie ustawienia pozycji jest wysyłane bezpośrednio do niej. Włącz tę opcję, aby zamiast tego sterować nią za pomocą czasowego otwierania/zamykania/zatrzymywania, ignorując natywną obsługę ustawiania pozycji.",

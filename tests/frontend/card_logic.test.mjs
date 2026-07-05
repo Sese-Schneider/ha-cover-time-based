@@ -386,6 +386,33 @@ test("_coverSupportsNativeTilt returns false when no tilt bits set", async () =>
 });
 
 // ---------------------------------------------------------------------------
+// _coverSupportsSetTiltPosition
+// ---------------------------------------------------------------------------
+
+test("_coverSupportsSetTiltPosition returns false for undefined entityId", async () => {
+  card = await mountCard(makeHass());
+  expect(card._coverSupportsSetTiltPosition(undefined)).toBe(false);
+});
+
+test("_coverSupportsSetTiltPosition returns true when bit 128 is set", async () => {
+  card = await mountCard(makeHass({
+    states: {
+      "cover.settilt": { state: "open", attributes: { supported_features: 128 } },
+    },
+  }));
+  expect(card._coverSupportsSetTiltPosition("cover.settilt")).toBe(true);
+});
+
+test("_coverSupportsSetTiltPosition ignores open/close tilt bits", async () => {
+  card = await mountCard(makeHass({
+    states: {
+      "cover.tilts": { state: "open", attributes: { supported_features: 16 | 32 } },
+    },
+  }));
+  expect(card._coverSupportsSetTiltPosition("cover.tilts")).toBe(false);
+});
+
+// ---------------------------------------------------------------------------
 // _hasTiltMotor
 // ---------------------------------------------------------------------------
 

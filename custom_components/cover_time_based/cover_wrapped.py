@@ -3,9 +3,15 @@
 import logging
 import time
 
-from homeassistant.components.cover import ATTR_CURRENT_POSITION, CoverEntityFeature
+from homeassistant.components.cover import (
+    ATTR_CURRENT_POSITION,
+    ATTR_CURRENT_TILT_POSITION,
+    ATTR_TILT_POSITION,
+    CoverEntityFeature,
+)
 from homeassistant.const import (
     ATTR_SUPPORTED_FEATURES,
+    SERVICE_STOP_COVER,
     STATE_CLOSED,
     STATE_CLOSING,
     STATE_OPEN,
@@ -41,6 +47,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         ignore_reported_position=False,
         force_time_based_position=False,
         reports_command_not_endpoint=False,
+        tilt_follows_travel=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -48,7 +55,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._ignore_reported_position = ignore_reported_position
         self._force_time_based_position = force_time_based_position
         self._reports_command_not_endpoint = reports_command_not_endpoint
+        self._tilt_follows_travel = tilt_follows_travel
         self._last_self_command_time: float | None = None
+        self._native_tilt_until: float | None = None
 
     async def async_added_to_hass(self):
         """Register state listener for the wrapped cover entity."""
@@ -184,6 +193,18 @@ class WrappedCoverTimeBased(CoverTimeBased):
             )
             return
 
+        # Same for a native tilt move: some covers report opening/closing
+        # while their slats run, well past the bounce grace window. The
+        # window is bounded by the configured tilt times, and any settle
+        # below clears it early.
+        if new_val in _MOVING_STATES and self._in_native_tilt_window():
+            self._log(
+                "_handle_external_state_change :: ignoring self-driven %s"
+                " during native tilt move",
+                new_val,
+            )
+            return
+
         if new_val == STATE_OPENING:
             self._log("_handle_external_state_change :: wrapped cover opening")
             await self.async_open_cover()
@@ -191,6 +212,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             self._log("_handle_external_state_change :: wrapped cover closing")
             await self.async_close_cover()
         elif new_val in _STOPPED_STATES:
+            self._native_tilt_until = None
             target = self._wrapped_reported_position()
             if target is not None:
                 await self._snap_to_position(target)
@@ -200,6 +222,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
                     " no position info"
                 )
                 await self.async_stop_cover()
+            await self._maybe_snap_to_reported_tilt()
 
     async def _handle_command_state(self, new_val: str) -> None:
         """Reinterpret the wrapped entity's state as a command echo.
@@ -252,9 +275,11 @@ class WrappedCoverTimeBased(CoverTimeBased):
         new_state = event.data.get("new_state")
         if new_state is None or new_state.state not in _STOPPED_STATES:
             return
+        self._native_tilt_until = None
         target = self._wrapped_reported_position()
         if target is not None:
             await self._snap_to_position(target)
+        await self._maybe_snap_to_reported_tilt()
 
     async def _snap_to_position(self, target: int) -> None:
         """Snap our tracker to a known position.
@@ -266,6 +291,47 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._log("_snap_to_position :: snapping to %d", target)
         await self.set_known_position(position=target)
         self._last_command = None
+
+    async def _maybe_snap_to_reported_tilt(self) -> None:
+        """Snap our tilt tracker to the wrapped cover's reported tilt.
+
+        Counterpart of _snap_to_position for the tilt axis: once the wrapped
+        cover has settled, its reported current_tilt_position (when exposed
+        and valid) is the source of truth over our time-based estimate.
+        Callers run this after _snap_to_position so the reported tilt also
+        wins over whatever snap_trackers_to_physical derived there. A no-op
+        when this cover has no tilt configured, the wrapped entity reports
+        no usable tilt, or our own time-based tilt move is still in flight
+        (snapping then would make the auto-updater stop the motor early;
+        the settle after that move still snaps).
+        """
+        if not self._has_tilt_support():
+            return
+        if self.tilt_calc.is_traveling():
+            return
+        target = self._wrapped_reported_tilt_position()
+        if target is None or self.tilt_calc.current_position() == target:
+            return
+        self._log("_maybe_snap_to_reported_tilt :: snapping tilt to %d", target)
+        await self.set_known_tilt_position(tilt_position=target)
+
+    def _wrapped_reported_tilt_position(self) -> int | None:
+        """Return the wrapped cover's reported tilt position, or None.
+
+        Unlike _wrapped_reported_position there is no closed-state fallback:
+        a closed cover implies nothing unambiguous about its slat angle.
+        Honors ignore_reported_position - a device whose reported values are
+        untrustworthy is untrustworthy on both axes.
+        """
+        if self._ignore_reported_position:
+            return None
+        state = self.hass.states.get(self._cover_entity_id)
+        if state is None:
+            return None
+        attr_tilt = state.attributes.get(ATTR_CURRENT_TILT_POSITION)
+        if isinstance(attr_tilt, (int, float)) and 0 <= attr_tilt <= 100:
+            return int(attr_tilt)
+        return None
 
     def _wrapped_reported_position(self) -> int | None:
         """Return the wrapped cover's reported position, or None if unknown.
@@ -365,6 +431,145 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 await self._call_set_cover_position(int(round(pos)))
                 return
         await self._call_cover_service("stop_cover")
+
+    # --- Native tilt forwarding ---
+
+    def _wrapped_supports_native_tilt_position(self) -> bool:
+        """Return True if the wrapped cover advertises native SET_TILT_POSITION."""
+        features = self._wrapped_features()
+        return features is not None and bool(
+            features & CoverEntityFeature.SET_TILT_POSITION
+        )
+
+    def _use_native_tilt(self) -> bool:
+        """Return True if tilt commands should be forwarded natively.
+
+        Wrapped covers whose underlying entity positions its own slats
+        (e.g. Z-Wave shutters in venetian mode) execute tilt themselves,
+        precisely and regardless of travel position. Simulating tilt with
+        timed main-motor runs both fails on such devices (a tilt-close at
+        travel endpoint 0 becomes a close_cover no-op) and fights their
+        firmware. Restricted to strategies that opt in via
+        supports_native_tilt: strategies whose snap_trackers_to_physical
+        forces tilt from travel would overwrite a natively-set tilt.
+        Command-echo covers report nothing trustworthy to snap back from,
+        so they keep the time-based path.
+        """
+        if self._reports_command_not_endpoint:
+            return False
+        if not self._has_tilt_support() or not self._tilt_strategy.supports_native_tilt:
+            return False
+        return self._wrapped_supports_native_tilt_position()
+
+    async def async_set_cover_tilt_position(self, **kwargs):
+        """Forward tilt-to-position natively when the wrapped cover can."""
+        if ATTR_TILT_POSITION in kwargs and self._use_native_tilt():
+            target = int(kwargs[ATTR_TILT_POSITION])
+            current = self.tilt_calc.current_position()
+            if current is not None and int(current) == target:
+                return
+            self._log(
+                "async_set_cover_tilt_position :: forwarding natively (%d)", target
+            )
+            await self._forward_native_tilt(target)
+            return
+        await super().async_set_cover_tilt_position(**kwargs)
+
+    async def _async_move_tilt_to_endpoint(self, target):
+        """Route tilt-endpoint moves (open/close tilt, close-includes-tilt
+        phase) through native forwarding when available."""
+        if self._use_native_tilt():
+            self._log(
+                "_async_move_tilt_to_endpoint :: forwarding natively (%d)", target
+            )
+            await self._forward_native_tilt(target)
+            return
+        await super()._async_move_tilt_to_endpoint(target)
+
+    async def _plan_tilt_for_travel(self, target, command, current_pos, current_tilt):
+        """Skip the travel tilt coupling when the user opted out.
+
+        With tilt_follows_travel off, the tilt display holds its value
+        during travel instead of sweeping to the direction endpoint, and
+        no post-travel restore is scheduled. Only honored under native
+        tilt, where the coupling is tracker-side bookkeeping and the
+        wrapped cover reports the authoritative slat angle on settle;
+        time-based covers execute the coupling physically and keep it.
+        """
+        if not self._tilt_follows_travel and self._use_native_tilt():
+            self._tilt_restore_target = None
+            return None, 0.0, False
+        return await super()._plan_tilt_for_travel(
+            target, command, current_pos, current_tilt
+        )
+
+    async def _start_tilt_restore(self):
+        """Restore post-travel tilt through native forwarding when available.
+
+        The base restore re-drives the main motor on a timer to bring the
+        slats back to their pre-travel angle; a native-tilt cover does the
+        same move precisely itself. The travel-plan side (tilt sweeping to
+        the direction endpoint during travel, restore target bookkeeping)
+        stays with the base class - it models the physical slat coupling.
+        """
+        if not self._use_native_tilt():
+            await super()._start_tilt_restore()
+            return
+        restore_target = self._tilt_restore_target
+        self._tilt_restore_target = None
+        if restore_target is None:
+            return
+        current_tilt = self.tilt_calc.current_position()
+        # The auto-updater hands over here right as travel completes; stop
+        # the travel motor like the base restore does before touching tilt.
+        # A user STOP or a new command can interleave while this awaits, so
+        # expose the same cancellation flag the base restore path uses.
+        self._tilt_restore_active = True
+        await self._async_handle_command(SERVICE_STOP_COVER)
+        if not self._tilt_restore_active:
+            self._log("_start_tilt_restore :: cancelled before native tilt restore")
+            return
+        self._tilt_restore_active = False
+        self._last_command = None
+        if current_tilt is not None and int(current_tilt) == restore_target:
+            return
+        self._log("_start_tilt_restore :: forwarding natively (%d)", restore_target)
+        await self._forward_native_tilt(restore_target)
+
+    async def _forward_native_tilt(self, target: int) -> None:
+        """Forward a tilt move to the wrapped entity's native tilt support.
+
+        The tilt tracker is set optimistically to the target; the settle
+        snap in _maybe_snap_to_reported_tilt then corrects it to whatever
+        the wrapped cover actually reports. The native-tilt window keeps
+        the wrapped cover's own moving states during that run from being
+        mirrored back as external travel commands.
+        """
+        await self._abandon_active_lifecycle()
+        self._start_bounce_grace_window()
+        self._native_tilt_until = time.monotonic() + self._native_tilt_window()
+        await self.hass.services.async_call(
+            "cover",
+            "set_cover_tilt_position",
+            {"entity_id": self._cover_entity_id, ATTR_TILT_POSITION: target},
+            False,
+        )
+        await self.set_known_tilt_position(tilt_position=target)
+
+    def _native_tilt_window(self) -> float:
+        """Upper bound on how long a native tilt run can take.
+
+        A full slat swing takes at most the configured tilt time plus the
+        motor startup; the grace period covers command latency. A settle
+        report from the wrapped cover ends the window early.
+        """
+        tilt_time = max(self._tilting_time_close, self._tilting_time_open)
+        return tilt_time + (self._tilt_startup_delay or 0) + _BOUNCE_GRACE_PERIOD
+
+    def _in_native_tilt_window(self) -> bool:
+        if self._native_tilt_until is None:
+            return False
+        return time.monotonic() < self._native_tilt_until
 
     # --- Tilt motor relay commands ---
 

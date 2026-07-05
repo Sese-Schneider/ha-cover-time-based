@@ -19,6 +19,7 @@ from .cover import (
     CONF_COVER_ENTITY_ID,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
+    CONF_TILT_FOLLOWS_TRAVEL,
     CONF_MIN_MOVEMENT_TIME,
     CONF_MAX_TILT_ALLOWED_POSITION,
     CONF_OPEN_SWITCH_ENTITY_ID,
@@ -48,6 +49,7 @@ from .cover import (
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_IGNORE_REPORTED_POSITION,
+    DEFAULT_TILT_FOLLOWS_TRAVEL,
     DEFAULT_PULSE_TIME,
     DEFAULT_RELAY_REPORTS_OFF,
     DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
@@ -71,6 +73,7 @@ _FIELD_MAP = {
     "ignore_reported_position": CONF_IGNORE_REPORTED_POSITION,
     "force_time_based_position": CONF_FORCE_TIME_BASED_POSITION,
     "reports_command_not_endpoint": CONF_REPORTS_COMMAND_NOT_ENDPOINT,
+    "tilt_follows_travel": CONF_TILT_FOLLOWS_TRAVEL,
     "tilt_mode": CONF_TILT_MODE,
     "travel_time_close": CONF_TRAVEL_TIME_CLOSE,
     "travel_time_open": CONF_TRAVEL_TIME_OPEN,
@@ -198,6 +201,9 @@ async def ws_get_config(
                 CONF_REPORTS_COMMAND_NOT_ENDPOINT,
                 DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
             ),
+            "tilt_follows_travel": options.get(
+                CONF_TILT_FOLLOWS_TRAVEL, DEFAULT_TILT_FOLLOWS_TRAVEL
+            ),
             "tilt_mode": tilt_mode,
             "travel_time_close": options.get(CONF_TRAVEL_TIME_CLOSE),
             "travel_time_open": options.get(CONF_TRAVEL_TIME_OPEN),
@@ -246,6 +252,7 @@ async def ws_get_config(
         vol.Optional("ignore_reported_position"): vol.Any(None, bool),
         vol.Optional("force_time_based_position"): vol.Any(None, bool),
         vol.Optional("reports_command_not_endpoint"): vol.Any(None, bool),
+        vol.Optional("tilt_follows_travel"): vol.Any(None, bool),
         vol.Optional("assumed_state"): vol.Any(None, bool),
         vol.Optional("tilt_mode"): vol.In(
             [

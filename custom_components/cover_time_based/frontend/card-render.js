@@ -212,6 +212,11 @@ export function renderToggleWithHelp(card, labelKey, helperKey, checked, onChang
 
 export function renderInputEntities(card, c) {
   if (c.control_mode === "wrapped") {
+    const showTiltFollowsTravel =
+      c.tilt_mode === "inline" &&
+      !c.reports_command_not_endpoint &&
+      card._coverSupportsSetTiltPosition(c.cover_entity_id);
+
     return html`
       <div class="section">
         <ha-entity-picker
@@ -238,6 +243,15 @@ export function renderInputEntities(card, c) {
           (e) =>
             card._updateLocal({ force_time_based_position: e.target.checked }),
         )}
+        ${showTiltFollowsTravel
+          ? renderToggleWithHelp(
+              card,
+              "entities.tilt_follows_travel",
+              "entities.tilt_follows_travel_helper",
+              c.tilt_follows_travel !== false,
+              (e) => card._updateLocal({ tilt_follows_travel: e.target.checked }),
+            )
+          : ""}
         ${renderToggleWithHelp(
           card,
           "entities.reports_command_not_endpoint",

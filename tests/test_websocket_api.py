@@ -14,6 +14,7 @@ from custom_components.cover_time_based.cover import (
     CONF_RELAY_REPORTS_OFF,
     CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SEND_ENDPOINT_STOP,
+    CONF_TILT_FOLLOWS_TRAVEL,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_TILT_CLOSE_SWITCH,
     CONF_TILT_MODE,
@@ -2186,3 +2187,82 @@ class TestReportsCommandNotEndpointRoundTrip:
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_options[CONF_REPORTS_COMMAND_NOT_ENDPOINT] is True
+
+
+class TestTiltFollowsTravelRoundTrip:
+    """tilt_follows_travel is returned in get_config and saved in update_config."""
+
+    @pytest.mark.asyncio
+    async def test_get_config_defaults_to_true(self):
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["tilt_follows_travel"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_stored_false(self):
+        hass, _, entity_reg = _make_hass(
+            options={
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+                CONF_COVER_ENTITY_ID: "cover.inner",
+                CONF_TILT_FOLLOWS_TRAVEL: False,
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["tilt_follows_travel"] is False
+
+    @pytest.mark.asyncio
+    async def test_update_config_saves_false(self):
+        hass, _, entity_reg = _make_hass(
+            options={CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED}
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "tilt_follows_travel": False,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_options[CONF_TILT_FOLLOWS_TRAVEL] is False

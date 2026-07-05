@@ -13,6 +13,7 @@ import {
   clearedEntitiesForMode,
   clearedTiltConfig,
   coverHasNativeTilt,
+  coverHasSetTiltPosition,
   coverConfirmedWithoutTilt,
 } from "../../custom_components/cover_time_based/frontend/entity-filter.js";
 
@@ -107,6 +108,18 @@ test("coverHasNativeTilt reads the tilt feature bits", () => {
   assert.equal(coverHasNativeTilt({ attributes: {} }), false);
   assert.equal(coverHasNativeTilt(null), false);
   assert.equal(coverHasNativeTilt(undefined), false);
+});
+
+// SET_TILT_POSITION=128
+test("coverHasSetTiltPosition reads the set-tilt-position feature bit", () => {
+  assert.equal(coverHasSetTiltPosition({ attributes: { supported_features: 128 } }), true);
+  assert.equal(
+    coverHasSetTiltPosition({ attributes: { supported_features: 16 | 32 } }),
+    false
+  );
+  assert.equal(coverHasSetTiltPosition({ attributes: {} }), false);
+  assert.equal(coverHasSetTiltPosition(null), false);
+  assert.equal(coverHasSetTiltPosition(undefined), false);
 });
 
 test("coverConfirmedWithoutTilt only confirms for an available, tilt-less cover", () => {
