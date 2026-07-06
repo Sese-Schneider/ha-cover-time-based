@@ -1034,3 +1034,28 @@ class TestNativeTiltSweep:
         assert "set_cover_tilt_position" not in services
         assert "close_cover_tilt" not in services
         assert "open_cover_tilt" not in services
+
+    @pytest.mark.asyncio
+    async def test_native_both_position_move_settles_both_axes(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
+        st = _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | self._F_SET_TILT
+        )
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(80)
+
+        await cover.set_position(30)  # native position forward; tilt sweeps toward 0
+
+        # Device settles and reports its real position + slat angle.
+        cover._last_self_command_time = None  # bypass the bounce grace window
+        st.state = "open"
+        st.attributes["current_position"] = 30
+        st.attributes["current_tilt_position"] = 25
+
+        await cover._handle_external_state_change("cover.inner", "closing", "open")
+
+        assert cover.travel_calc.current_position() == 30
+        assert cover.tilt_calc.current_position() == 25

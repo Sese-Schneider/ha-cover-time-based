@@ -180,10 +180,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
             self-driven native move), and
           - a configured *timed* tilt strategy: native forwarding drives travel
             only and can't express the tilt coupling/pre-steps the time-based
-            path plans, so dual-motor/sequential tilt covers keep the full
-            tilt-aware open/close/stop tracking. A native-tilt cover
-            (_use_native_tilt()) already owns its slats independently of our
-            travel motor, so driving position natively too is coupling-safe.
+            path plans, so a *timed* tilt strategy keeps the timed path
+            (dual-motor/sequential, and inline covers whose wrapped entity
+            can't forward tilt); native-tilt covers drive position natively
+            too. A native-tilt cover (_use_native_tilt()) already owns its
+            slats independently of our travel motor, so driving position
+            natively is coupling-safe there.
         """
         if self._force_time_based_position:
             return False
