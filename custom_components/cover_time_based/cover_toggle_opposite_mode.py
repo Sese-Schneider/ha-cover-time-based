@@ -46,3 +46,77 @@ class ToggleOppositeModeCover(ToggleBaseCover):
                 " skipping"
             )
         self._last_tilt_direction = None
+
+    async def _handle_external_state_change(self, entity_id, old_val, new_val):
+        """Opposite-button: an opposite-direction press while moving stops.
+
+        A same-direction press while already moving that way is a continuation
+        (the hardware keeps moving), so it is a no-op. From idle, a press starts
+        the movement in that direction.
+        """
+        if new_val != "on":
+            return
+        if self._debounce_external_toggle(entity_id):
+            self._log(
+                "_handle_external_state_change :: debounced toggle on %s", entity_id
+            )
+            return
+
+        if entity_id == self._open_switch_entity_id:
+            if self.is_closing:
+                self._log(
+                    "_handle_external_state_change :: open press while closing, stopping"
+                )
+                await self.async_stop_cover()
+            elif not self.is_opening:
+                self._log("_handle_external_state_change :: external open press")
+                await self.async_open_cover()
+            # else already opening -> continuation, no-op
+        elif entity_id == self._close_switch_entity_id:
+            if self.is_opening:
+                self._log(
+                    "_handle_external_state_change :: close press while opening, stopping"
+                )
+                await self.async_stop_cover()
+            elif not self.is_closing:
+                self._log("_handle_external_state_change :: external close press")
+                await self.async_close_cover()
+            # else already closing -> continuation, no-op
+
+    async def _handle_external_tilt_state_change(self, entity_id, old_val, new_val):
+        """Opposite-button tilt: opposite press while tilting stops; same continues."""
+        if new_val != "on":
+            return
+        if self._debounce_external_toggle(entity_id):
+            self._log(
+                "_handle_external_tilt_state_change :: debounced toggle on %s",
+                entity_id,
+            )
+            return
+
+        if entity_id == self._tilt_open_switch_id:
+            if self.tilt_calc.is_closing():
+                self._log(
+                    "_handle_external_tilt_state_change :: tilt open press while"
+                    " tilt closing, stopping"
+                )
+                await self.async_stop_cover()
+            elif not self.tilt_calc.is_opening():
+                self._log(
+                    "_handle_external_tilt_state_change :: external tilt open press"
+                )
+                await self.async_open_cover_tilt()
+            # else already tilt-opening -> continuation, no-op
+        elif entity_id == self._tilt_close_switch_id:
+            if self.tilt_calc.is_opening():
+                self._log(
+                    "_handle_external_tilt_state_change :: tilt close press while"
+                    " tilt opening, stopping"
+                )
+                await self.async_stop_cover()
+            elif not self.tilt_calc.is_closing():
+                self._log(
+                    "_handle_external_tilt_state_change :: external tilt close press"
+                )
+                await self.async_close_cover_tilt()
+            # else already tilt-closing -> continuation, no-op
