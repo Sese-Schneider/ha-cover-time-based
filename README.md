@@ -114,29 +114,30 @@ Because a command-echo cover has no endpoint feedback — and in practice drives
 
 ### Switch-based covers
 
-Control a cover using two relay switches (one for open, one for close), with an optional third stop switch.
+Control a cover using two relay switches (one for open, one for close), with an optional third stop switch (required in **Pulse** mode).
 
-Specify the **Open switch**, **Close switch**, and optionally the **Stop switch** entities.
+Specify the **Open switch**, **Close switch**, and optionally the **Stop switch** entities (required in **Pulse** mode).
 
 ### Input Mode for switch-based covers
 
-Three input modes are available to describe how the switch entities for switch-based covers function:
+Four input modes are available to describe how the switch entities for switch-based covers function:
 
-| Mode       | Description                                                                                                                                                            |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Switch** | Latching relays. The direction switch stays ON for the entire movement. Movement stops when the switch is turned OFF                                                   |
-| **Pulse**  | Momentary pulse buttons. A brief ON-OFF pulse latches the motor on. Requires a stop button to stop movement, or movement stops when the hardware reaches its endpoint. |
-| **Toggle** | Toggle-style relays. A brief ON-OFF pulse latches the motor on. A second pulse on the same direction button stops the motor.                                           |
+| Mode                         | Description                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Switch**                   | Latching relays. The direction switch stays ON for the entire movement. Movement stops when the switch is turned OFF                                                                                                                                                                                                                                                                       |
+| **Pulse**                    | Momentary pulse buttons. A brief ON-OFF pulse latches the motor on. **Requires a dedicated stop button** (or script) to stop movement mid-travel. If your hardware has no stop signal and instead stops when the opposite button is pressed, use **Toggle (opposite button)** instead.                                                                                                     |
+| **Toggle (same button)**     | Toggle-style relays. A brief ON-OFF pulse latches the motor on. A second pulse on the same direction button stops the motor.                                                                                                                                                                                                                                                               |
+| **Toggle (opposite button)** | Momentary toggle relays with no dedicated stop button, where pressing the _opposite_ direction while moving stops the motor (a same-direction press keeps it moving). Reversing takes two presses: opposite (stop), then press again to move. Choose this over **Toggle (same button)** when your controller stops on the opposite button, and over **Pulse** when you have no stop relay. |
 
-> **Scripts in Pulse mode.** In **Pulse** mode the Open / Close / Stop entities (and the dual-motor tilt entities) may be `script` entities as well as `switch` entities — for example, IR-remote-controlled covers where each script fires an open / close / stop IR command. **Switch** and **Toggle** modes require `switch` entities: they rely on the entity reporting a held/latched on-state, which a script (which auto-returns to `off`) cannot provide. Keep the scripts short: after **Pulse time** elapses the integration turns the entity off again, which cancels any script still running — so a script whose own internal `delay` is longer than the pulse time would be cut short.
+> **Scripts in Pulse mode.** In **Pulse** mode the Open / Close / Stop entities (and the dual-motor tilt entities) may be `script` entities as well as `switch` entities — for example, IR-remote-controlled covers where each script fires an open / close / stop IR command. **Switch** and both **Toggle** modes require `switch` entities: they rely on the entity reporting a held/latched on-state, which a script (which auto-returns to `off`) cannot provide. Keep the scripts short: after **Pulse time** elapses the integration turns the entity off again, which cancels any script still running — so a script whose own internal `delay` is longer than the pulse time would be cut short.
 
 #### Pulse time
 
-With the **Pulse** input mode, the **Pulse time** configures how long the switch should send the ON signal before it turns OFF. Defaults to **1s**. **Toggle** mode does not use it — toggle relays are momentary, so the integration sends a single ON pulse and lets the relay release itself.
+With the **Pulse** input mode, the **Pulse time** configures how long the switch should send the ON signal before it turns OFF. Defaults to **1s**. Neither **Toggle** mode uses it — toggle relays are momentary, so the integration sends a single ON pulse and lets the relay release itself.
 
-#### Relay reports its own OFF (Toggle mode)
+#### Relay reports its own OFF (Toggle modes)
 
-Toggle mode only. Leave it **on** (the default) for normal toggle relays — they switch themselves off after the pulse and report that OFF back to Home Assistant, so the integration can drive a still-ON relay OFF first to guarantee a clean ON edge.
+Applies to both Toggle modes (same-button and opposite-button). Leave it **on** (the default) for normal toggle relays — they switch themselves off after the pulse and report that OFF back to Home Assistant, so the integration can drive a still-ON relay OFF first to guarantee a clean ON edge.
 
 Turn it **off** for hardware-managed pulse modules — for example an **Aqara T2** in its 200 ms internal-pulse mode — that pulse the contact themselves but **never report the OFF** to Home Assistant, leaving the switch entity stuck `on`. On such hardware a `turn_off` is not an idempotent "off" but another activation pulse, so the integration's attempt to force a clean edge (`turn_off` then `turn_on`) lands as a doubled command and the motor's toggle counter drifts — the symptom is Stop reversing the cover and Up driving it down. With the option off, toggle mode only ever sends a **single `turn_on` per command and never a `turn_off`**, giving exactly one clean activation per press. A repeated `turn_on` still pulses the motor even while the entity reads `on`.
 
@@ -144,7 +145,7 @@ Turn it **off** for hardware-managed pulse modules — for example an **Aqara T2
 
 Pulse mode only. Leave it **on** (the default) for controllers that **latch** the direction command and keep running until they receive a separate stop pulse. Without the endpoint stop they stay stuck "moving" — the cover only responds after several clicks and the physical wall/PLC buttons appear blocked. With the option on, the integration pulses the dedicated stop relay when the cover reaches an endpoint (deferred by the **Endpoint run-on time**, see below); because the stop is a separate relay it can never restart the motor.
 
-Turn it **off** for controllers with **automatic end-stop detection**: the motor halts itself at its 0%/100% limit switches, and a stop pulse received _while it is already stopped_ is read as "go to favourite/preset position" (the classic Somfy _my_ behaviour), repositioning the cover on every limit hit. With the option off, no stop is sent at the endpoints. The same flag governs a **separate tilt motor**'s tilt-stop relay at the tilt endpoints. **Switch**, **Toggle** and wrapped-cover modes are unaffected.
+Turn it **off** for controllers with **automatic end-stop detection**: the motor halts itself at its 0%/100% limit switches, and a stop pulse received _while it is already stopped_ is read as "go to favourite/preset position" (the classic Somfy _my_ behaviour), repositioning the cover on every limit hit. With the option off, no stop is sent at the endpoints. The same flag governs a **separate tilt motor**'s tilt-stop relay at the tilt endpoints. **Switch**, **Toggle**, **Toggle (opposite button)** and wrapped-cover modes are unaffected.
 
 ### Assumed state
 
@@ -235,7 +236,7 @@ Recommended values: 0.05 - 0.15 seconds. Can be configured separately for travel
 
 Position tracking is not exact and can drift over time, so the tracker resyncs itself whenever the cover is sent fully to the 0% or 100% endpoint.
 
-Most cover motors have internal limit switches and stop themselves at the endpoints. In **Toggle** and (most) wrapped-cover modes the integration therefore sends **no stop command at an endpoint** — it lets the motor run into its own limit. This avoids an unwanted extra movement (in Toggle mode a stop pulse on an already-stopped motor would restart it) and resyncs the tracker for free, as the motor always reaches its true endpoint. The exception is a wrapped cover with **[Reports commands, not endpoints](#wrapped-covers)** enabled: it has no endpoint feedback and typically an endstop-less motor, so it *is* sent an explicit stop at the endpoint (and re-commanding it to an endpoint it already sits at is a no-op rather than a re-drive). **Pulse** mode is configurable (see [Send stop signal at endpoints](#send-stop-signal-at-endpoints-pulse-mode) above): by default it pulses its dedicated stop relay at the endpoint, which a latching controller needs, but that can be turned off for controllers that self-stop at their own limits.
+Most cover motors have internal limit switches and stop themselves at the endpoints. In **Toggle**, **Toggle (opposite button)** and (most) wrapped-cover modes the integration therefore sends **no stop command at an endpoint** — it lets the motor run into its own limit. This avoids an unwanted extra movement (in Toggle mode a stop pulse on an already-stopped motor would restart it) and resyncs the tracker for free, as the motor always reaches its true endpoint. The exception is a wrapped cover with **[Reports commands, not endpoints](#wrapped-covers)** enabled: it has no endpoint feedback and typically an endstop-less motor, so it *is* sent an explicit stop at the endpoint (and re-commanding it to an endpoint it already sits at is a no-op rather than a re-drive). **Pulse** mode is configurable (see [Send stop signal at endpoints](#send-stop-signal-at-endpoints-pulse-mode) above): by default it pulses its dedicated stop relay at the endpoint, which a latching controller needs, but that can be turned off for controllers that self-stop at their own limits.
 
 In **Switch** mode the direction relay is latched ON for the whole movement, so it must be actively switched off at the endpoint. Because tracking is approximate, the relay is held on for an extra **Endpoint Run-on Time** (default 2s) so the motor reaches the physical endpoint before power is cut. **This setting applies to Switch mode, and to Pulse mode when it sends the endpoint stop** (it defers that stop pulse by the run-on so the motor seats against its limit first).
 
@@ -360,7 +361,7 @@ cover:
 | name                   | string  | **Required**                                    | Name of the created entity                                              |         |
 | open_switch_entity_id  | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for opening the cover. Accepts a `script` entity when `input_mode: pulse` |         |
 | close_switch_entity_id | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover. Accepts a `script` entity when `input_mode: pulse` |         |
-| stop_switch_entity_id  | entity  | _Optional_                                      | Entity ID of the switch for stopping the cover. Accepts a `script` entity when `input_mode: pulse` | None    |
+| stop_switch_entity_id  | entity  | Required for `input_mode: pulse`; not used by other modes | Entity ID of the switch for stopping the cover. Accepts a `script` entity when `input_mode: pulse` | None    |
 | cover_entity_id        | entity  | **Required** or `open_\|close_switch_entity_id` | Entity ID of an existing cover entity                                   |         |
 | is_button              | boolean | _Optional_                                      | Set to `true` for momentary pulse buttons (same as `input_mode: pulse`) | false   |
 | travelling_time_down   | float   | _Optional_                                      | Time in seconds to close the cover                                      | 30      |

@@ -129,3 +129,13 @@ test("coverConfirmedWithoutTilt only confirms for an available, tilt-less cover"
   assert.equal(coverConfirmedWithoutTilt(null), false);
   assert.equal(coverConfirmedWithoutTilt(undefined), false);
 });
+
+test("toggle_opposite behaves like toggle for pickers and clearing", () => {
+  assert.deepEqual(switchPickerDomains("toggle_opposite"), ["switch"]);
+  assert.equal(showsPulseTime("toggle_opposite"), false);
+  assert.deepEqual(clearedEntitiesForMode("toggle_opposite"), {
+    cover_entity_id: null,
+    stop_switch_entity_id: null,
+    tilt_stop_switch: null,
+  });
+});

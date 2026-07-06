@@ -28,6 +28,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_TOGGLE_OPPOSITE,
     CONTROL_MODE_WRAPPED,
     DEFAULT_PULSE_TIME,
 )
@@ -1219,6 +1220,23 @@ class TestTiltModeSchemaValidation:
                     "tilt_mode": "bogus_mode",
                 }
             )
+
+
+class TestControlModeSchemaValidation:
+    """Verify the update_config schema accepts the toggle_opposite control mode."""
+
+    def test_toggle_opposite_accepted(self):
+        """toggle_opposite must pass schema validation for control_mode."""
+        schema = ws_update_config._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": ENTITY_ID,
+                "control_mode": CONTROL_MODE_TOGGLE_OPPOSITE,
+            }
+        )
+        assert result["control_mode"] == CONTROL_MODE_TOGGLE_OPPOSITE
 
 
 # ---------------------------------------------------------------------------

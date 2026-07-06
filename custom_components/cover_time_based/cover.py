@@ -92,6 +92,7 @@ CONTROL_MODE_WRAPPED = "wrapped"
 CONTROL_MODE_SWITCH = "switch"
 CONTROL_MODE_PULSE = "pulse"
 CONTROL_MODE_TOGGLE = "toggle"
+CONTROL_MODE_TOGGLE_OPPOSITE = "toggle_opposite"
 
 CONF_PULSE_TIME = "pulse_time"
 DEFAULT_PULSE_TIME = 1.0
@@ -298,6 +299,7 @@ def _create_cover_from_options(options, device_id="", name=""):
     from .cover_switch_mode import SwitchModeCover
     from .cover_pulse_mode import PulseModeCover
     from .cover_toggle_mode import ToggleModeCover
+    from .cover_toggle_opposite_mode import ToggleOppositeModeCover
 
     control_mode = options.get(CONF_CONTROL_MODE, CONTROL_MODE_SWITCH)
 
@@ -370,6 +372,13 @@ def _create_cover_from_options(options, device_id="", name=""):
         )
     elif control_mode == CONTROL_MODE_TOGGLE:
         return ToggleModeCover(
+            relay_reports_off=options.get(
+                CONF_RELAY_REPORTS_OFF, DEFAULT_RELAY_REPORTS_OFF
+            ),
+            **switch_args,
+        )
+    elif control_mode == CONTROL_MODE_TOGGLE_OPPOSITE:
+        return ToggleOppositeModeCover(
             relay_reports_off=options.get(
                 CONF_RELAY_REPORTS_OFF, DEFAULT_RELAY_REPORTS_OFF
             ),
