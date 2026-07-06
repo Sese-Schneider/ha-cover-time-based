@@ -42,6 +42,7 @@ from .cover import (
     CONTROL_MODE_PULSE,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_TOGGLE_OPPOSITE,
     CONTROL_MODE_WRAPPED,
     DEFAULT_ASSUMED_STATE,
     DEFAULT_CLOSE_INCLUDES_TILT,
@@ -232,6 +233,7 @@ async def ws_get_config(
                 CONTROL_MODE_SWITCH,
                 CONTROL_MODE_PULSE,
                 CONTROL_MODE_TOGGLE,
+                CONTROL_MODE_TOGGLE_OPPOSITE,
             ]
         ),
         vol.Optional("pulse_time"): vol.All(
