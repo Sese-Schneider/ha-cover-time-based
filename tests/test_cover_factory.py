@@ -30,6 +30,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_TOGGLE_OPPOSITE,
     CONTROL_MODE_WRAPPED,
     _create_cover_from_options,
     _resolve_tilt_strategy,
@@ -38,6 +39,9 @@ from custom_components.cover_time_based.cover import (
 from custom_components.cover_time_based.cover_switch_mode import SwitchModeCover
 from custom_components.cover_time_based.cover_pulse_mode import PulseModeCover
 from custom_components.cover_time_based.cover_toggle_mode import ToggleModeCover
+from custom_components.cover_time_based.cover_toggle_opposite_mode import (
+    ToggleOppositeModeCover,
+)
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
 from custom_components.cover_time_based.tilt_strategies import (
     DualMotorTilt,
@@ -107,6 +111,33 @@ class TestCreateCoverFromOptions:
             name="Test",
         )
         assert isinstance(cover, ToggleModeCover)
+        assert cover._relay_reports_off is False
+
+    def test_creates_toggle_opposite_mode_cover(self):
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_TOGGLE_OPPOSITE,
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+            },
+            device_id="test",
+            name="Test",
+        )
+        assert isinstance(cover, ToggleOppositeModeCover)
+        assert cover._relay_reports_off is True
+
+    def test_toggle_opposite_relay_reports_off_from_options(self):
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_TOGGLE_OPPOSITE,
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                CONF_RELAY_REPORTS_OFF: False,
+            },
+            device_id="test",
+            name="Test",
+        )
+        assert isinstance(cover, ToggleOppositeModeCover)
         assert cover._relay_reports_off is False
 
     def test_creates_wrapped_cover(self):
