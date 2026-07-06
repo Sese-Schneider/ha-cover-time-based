@@ -893,7 +893,7 @@ class TestNativeCouplingNeutralized:
             50, "close", current_pos=100, current_tilt=60
         )
 
-        assert (tilt_target, pre_step_delay, started) == (None, 0.0, False)
+        assert (tilt_target, pre_step_delay, started) == (0, 0.0, False)
         assert cover._tilt_restore_target is None
 
     @pytest.mark.asyncio
@@ -969,3 +969,68 @@ class TestNativePositionWithNativeTilt:
         services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
         assert "set_cover_position" in services
         assert "close_cover" not in services and "open_cover" not in services
+
+
+class TestNativeTiltSweep:
+    """During a position travel, a native cover's tilt display sweeps to the
+    direction endpoint (0 closing, 100 opening); no physical tilt command."""
+
+    _F_SET_TILT = 128
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    def _native_cover(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
+        _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | self._F_SET_TILT
+        )
+        self._prep(cover)
+        return cover
+
+    @pytest.mark.asyncio
+    async def test_plan_returns_zero_endpoint_when_closing(self):
+        cover = self._native_cover()
+        tilt_target, pre_step_delay, started = await cover._plan_tilt_for_travel(
+            30, "close", current_pos=100, current_tilt=80
+        )
+        assert (tilt_target, pre_step_delay, started) == (0, 0.0, False)
+        assert cover._tilt_restore_target is None
+
+    @pytest.mark.asyncio
+    async def test_plan_returns_100_endpoint_when_opening(self):
+        cover = self._native_cover()
+        tilt_target, _, started = await cover._plan_tilt_for_travel(
+            90, "open", current_pos=20, current_tilt=10
+        )
+        assert tilt_target == 100
+        assert started is False
+
+    @pytest.mark.asyncio
+    async def test_plan_returns_none_when_position_unknown(self):
+        cover = self._native_cover()
+        result = await cover._plan_tilt_for_travel(
+            50, "open", current_pos=None, current_tilt=40
+        )
+        assert result == (None, 0.0, False)
+
+    @pytest.mark.asyncio
+    async def test_position_move_sweeps_tilt_display_no_tilt_command(self):
+        cover = self._native_cover()
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(80)
+
+        await cover.set_position(30)  # closing
+
+        # Tilt display is animating toward the closed endpoint (0)...
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc._travel_to_position == 0
+        # ...and no physical tilt command was sent (device owns its slats).
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "set_cover_tilt_position" not in services
+        assert "close_cover_tilt" not in services
+        assert "open_cover_tilt" not in services
