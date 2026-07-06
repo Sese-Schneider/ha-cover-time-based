@@ -84,10 +84,10 @@ class NativeTiltDriver(TiltDriver):
 
     async def move_to(self, target) -> None:
         cover = self._cover
-        await cover._prepare_native_tilt()
         current = cover.tilt_calc.current_position()
         if current is not None and int(current) == target:
             return
+        await cover._prepare_native_tilt()
         cover._self_initiated_movement = not cover._triggered_externally
         cover._moving_tilt = True
         cover._log("NativeTiltDriver :: forwarding set_cover_tilt_position(%d)", target)

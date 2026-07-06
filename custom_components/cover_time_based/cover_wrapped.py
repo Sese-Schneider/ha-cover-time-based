@@ -252,6 +252,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
         direction changes. When the wrapped cover settles into a stopped
         state we snap to its reported position; for covers without a
         current_position attribute we fall back to stopping the tracker.
+        On settle we also snap tilt to the wrapped cover's reported tilt
+        (native-tilt covers only, via _maybe_snap_to_reported_tilt).
         """
         if self._in_bounce_grace_window():
             self._log(
@@ -284,6 +286,22 @@ class WrappedCoverTimeBased(CoverTimeBased):
             self._log(
                 "_handle_external_state_change :: ignoring self-driven %s"
                 " during native set_position move",
+                new_val,
+            )
+            return
+
+        # Same for a self-driven native tilt move: the wrapped cover's own
+        # opening/closing while its slats run is a side effect of the tilt we
+        # forwarded, not an external travel. tilt_calc is traveling for the
+        # duration of our animation; mirror the native set_position guard above.
+        if (
+            new_val in _MOVING_STATES
+            and self._use_native_tilt()
+            and self.tilt_calc.is_traveling()
+        ):
+            self._log(
+                "_handle_external_state_change :: ignoring self-driven %s"
+                " during native tilt move",
                 new_val,
             )
             return
@@ -347,6 +365,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         _handle_external_state_change. Without this, an attribute update while
         the device sits in 'closed' would snap us to 0% via the
         state==closed -> 0 shortcut, the very snap this option exists to avoid.
+        After handling position, we also snap tilt to the wrapped cover's
+        reported tilt (native-tilt covers only, via
+        _maybe_snap_to_reported_tilt).
         """
         if event.data.get("entity_id") != self._cover_entity_id:
             return

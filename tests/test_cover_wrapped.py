@@ -771,6 +771,13 @@ class TestNativeTiltForwarding:
         assert "set_cover_tilt_position" in services
         assert "open_cover_tilt" not in services  # not the dual-motor relay path
 
+        tilt_call = next(
+            c
+            for c in _calls(cover.hass.services.async_call)
+            if c.args[1] == "set_cover_tilt_position"
+        )
+        assert tilt_call.args[2] == {"entity_id": "cover.inner", "tilt_position": 100}
+
     @pytest.mark.asyncio
     async def test_tilt_already_at_target_is_noop(self):
         cover = self._native_tilt_cover()
@@ -848,6 +855,24 @@ class TestTiltSettleSnap:
         await cover._handle_external_state_change("cover.inner", "opening", "open")
 
         assert cover.tilt_calc.current_position() == 100  # unchanged; not native
+
+    @pytest.mark.asyncio
+    async def test_snaps_tilt_to_zero_on_settle(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
+        st = _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT, state="open"
+        )
+        st.attributes["current_position"] = 100
+        st.attributes["current_tilt_position"] = 0
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(50)
+
+        await cover._handle_external_state_change("cover.inner", "opening", "open")
+
+        assert cover.tilt_calc.current_position() == 0
 
 
 class TestNativeCouplingNeutralized:
