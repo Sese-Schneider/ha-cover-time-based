@@ -103,9 +103,9 @@ export function clearedTiltConfig() {
  *
  * Wrapped mode uses an inner cover and none of the switch/tilt slots, so all
  * six are cleared — including tilt_open/tilt_close, which would otherwise
- * survive and trip the backend script guard. Switch/toggle keep the direction
- * switches but drop the wrapped cover and the pulse-only stop slots. Pulse
- * only drops the wrapped cover.
+ * survive and trip the backend script guard. Switch and the toggle modes
+ * (same- and opposite-button) keep the direction switches but drop the wrapped
+ * cover and the pulse-only stop slots. Pulse only drops the wrapped cover.
  */
 export function clearedEntitiesForMode(mode) {
   const updates = {};

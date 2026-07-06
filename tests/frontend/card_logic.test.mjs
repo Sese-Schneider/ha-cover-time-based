@@ -110,6 +110,21 @@ test("_hasRequiredEntities pulse: additionally requires stop switch", async () =
   })).toBe(true);
 });
 
+test("_hasRequiredEntities toggle_opposite: requires only open+close (no stop switch)", async () => {
+  card = await mountCard(makeHass());
+  // open+close present, no stop switch -> ready
+  expect(card._hasRequiredEntities({
+    control_mode: "toggle_opposite",
+    open_switch_entity_id: "switch.o",
+    close_switch_entity_id: "switch.c",
+  })).toBe(true);
+  // missing close -> not ready
+  expect(card._hasRequiredEntities({
+    control_mode: "toggle_opposite",
+    open_switch_entity_id: "switch.o",
+  })).toBe(false);
+});
+
 test("_hasRequiredEntities dual_motor (non-wrapped): requires tilt_open + tilt_close", async () => {
   card = await mountCard(makeHass());
   // switch + dual_motor but no tilt switches → false
