@@ -3,7 +3,12 @@
 import logging
 import time
 
-from homeassistant.components.cover import ATTR_CURRENT_POSITION, CoverEntityFeature
+from homeassistant.components.cover import (
+    ATTR_CURRENT_POSITION,
+    ATTR_CURRENT_TILT_POSITION,
+    ATTR_TILT_POSITION,
+    CoverEntityFeature,
+)
 from homeassistant.const import (
     ATTR_SUPPORTED_FEATURES,
     STATE_CLOSED,
@@ -17,6 +22,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 
 from .cover_base import CoverTimeBased
 from .drivers import NativePositionDriver, PositionDriver, TimedPositionDriver
+from .tilt_strategies.inline import InlineTilt
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,6 +114,31 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Return True if the wrapped cover advertises native STOP."""
         features = self._wrapped_features()
         return features is not None and bool(features & CoverEntityFeature.STOP)
+
+    def _wrapped_supports_set_tilt_position(self) -> bool:
+        """Return True if the wrapped cover advertises native SET_TILT_POSITION."""
+        features = self._wrapped_features()
+        return features is not None and bool(
+            features & CoverEntityFeature.SET_TILT_POSITION
+        )
+
+    def _use_native_tilt(self) -> bool:
+        """Return True if tilt commands should be forwarded to the wrapped
+        cover's own tilt instead of simulated with the main motor.
+
+        Restricted to InlineTilt: the device positions its own slats, so the
+        inline strategy's no-op snap_trackers_to_physical leaves our
+        natively-set tilt intact. Dual-motor/sequential strategies re-derive
+        tilt from travel and keep the timed path. Command-echo covers report
+        nothing trustworthy to snap back from, so they keep the timed path too.
+        """
+        if self._reports_command_not_endpoint:
+            return False
+        if not self._has_tilt_support():
+            return False
+        if not isinstance(self._tilt_strategy, InlineTilt):
+            return False
+        return self._wrapped_supports_set_tilt_position()
 
     def _use_native_set_position(self) -> bool:
         """Return True if set_cover_position should be forwarded natively.

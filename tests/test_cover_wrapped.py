@@ -29,16 +29,32 @@ def _make_wrapped_cover(
     cover_entity_id="cover.inner",
     force_time_based_position=False,
     reports_command_not_endpoint=False,
+    tilt_time_close=None,
+    tilt_time_open=None,
+    tilt_mode="none",
 ):
     """Create a WrappedCoverTimeBased wired to a mock hass."""
+    tilt_strategy = None
+    if tilt_time_close is not None and tilt_time_open is not None:
+        # Map tilt_mode to strategy
+        from custom_components.cover_time_based.tilt_strategies import (
+            InlineTilt,
+            SequentialCloseTilt,
+        )
+
+        if tilt_mode == "inline":
+            tilt_strategy = InlineTilt()
+        elif tilt_mode in ("sequential_close", "sequential"):
+            tilt_strategy = SequentialCloseTilt()
+
     cover = WrappedCoverTimeBased(
         device_id="test_wrapped",
         name="Test Wrapped",
-        tilt_strategy=None,
+        tilt_strategy=tilt_strategy,
         travel_time_close=30,
         travel_time_open=30,
-        tilt_time_close=None,
-        tilt_time_open=None,
+        tilt_time_close=tilt_time_close,
+        tilt_time_open=tilt_time_open,
         travel_startup_delay=None,
         tilt_startup_delay=None,
         endpoint_runon_time=None,
@@ -662,3 +678,40 @@ class TestWrappedCommandEchoMode:
         with patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock:
             await cover._handle_external_state_change("cover.inner", "open", "closed")
         snap_mock.assert_awaited_once_with(0)
+
+
+class TestUseNativeTilt:
+    """_use_native_tilt() requires InlineTilt + wrapped SET_TILT_POSITION,
+    and is off for command-echo covers and non-inline strategies."""
+
+    _F_SET_TILT = 128  # CoverEntityFeature.SET_TILT_POSITION
+
+    def test_native_tilt_when_inline_and_set_tilt_supported(self):
+        cover = _make_wrapped_cover(tilt_time_close=5, tilt_time_open=5, tilt_mode="inline")
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT)
+        assert cover._use_native_tilt() is True
+
+    def test_not_native_without_set_tilt_position(self):
+        cover = _make_wrapped_cover(tilt_time_close=5, tilt_time_open=5, tilt_mode="inline")
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE)  # no SET_TILT_POSITION
+        assert cover._use_native_tilt() is False
+
+    def test_not_native_for_non_inline_strategy(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="sequential_close"
+        )
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT)
+        assert cover._use_native_tilt() is False
+
+    def test_not_native_for_command_echo(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline",
+            reports_command_not_endpoint=True,
+        )
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT)
+        assert cover._use_native_tilt() is False
+
+    def test_not_native_without_tilt_configured(self):
+        cover = _make_wrapped_cover()  # no tilt times → no tilt strategy
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT)
+        assert cover._use_native_tilt() is False
