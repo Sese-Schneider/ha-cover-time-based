@@ -341,6 +341,36 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             and self.tilt_calc.travel_direction == TravelStatus.DIRECTION_DOWN
         )
 
+    def _travel_axis_opening(self) -> bool:
+        """Whether the *travel* axis is opening, for reversal decisions.
+
+        On dual_motor a dedicated tilt motor moves independently of travel, so
+        a moving tilt motor must not read as the cover opening (that would make
+        a travel command stop-and-settle the running tilt motor). A travel
+        operation still counts while its tilt-to-safe pre-step runs — travel is
+        pending though ``travel_calc`` hasn't started — so the pre-step's
+        direction is honoured. Shared-motor tilt (inline/sequential) has no
+        separate motor — its tilt phase IS the travel motor running — so the
+        cover-level property is retained there to keep settle-before-reverse.
+        """
+        if not self._has_tilt_motor():
+            return self.is_opening
+        if self.travel_calc.is_opening():
+            return True
+        if self._pending_travel_target is not None:
+            return self._pending_travel_command == SERVICE_OPEN_COVER
+        return False
+
+    def _travel_axis_closing(self) -> bool:
+        """Travel-axis counterpart of :meth:`_travel_axis_opening`."""
+        if not self._has_tilt_motor():
+            return self.is_closing
+        if self.travel_calc.is_closing():
+            return True
+        if self._pending_travel_target is not None:
+            return self._pending_travel_command == SERVICE_CLOSE_COVER
+        return False
+
     @property
     def is_closed(self):
         """Return if the cover is closed.
@@ -399,16 +429,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         self._require_configured()
         self._log("async_close_cover")
-        if not self._triggered_externally and (self.is_opening or self.is_closing):
+        if not self._triggered_externally and (
+            self._travel_axis_opening() or self._travel_axis_closing()
+        ):
             # In-motion UI click stops the cover. Reversing direction requires
             # a second click after the stop, or use set_cover_position which
             # keeps its existing stop-then-reverse behavior. External triggers
             # (wall switches) keep the legacy "stop and reverse if needed"
-            # behavior to honor the physical user intent.
+            # behavior to honor the physical user intent. Decisions key off the
+            # travel axis so a moving independent tilt motor (dual_motor) isn't
+            # stopped by a travel command.
             self._log("async_close_cover :: cover is in motion, stopping")
             await self.async_stop_cover()
             return
-        if self._triggered_externally and self.is_opening:
+        if self._triggered_externally and self._travel_axis_opening():
             # External trigger: stop the opposite-direction motion, settle,
             # then proceed with close (legacy reverse behavior).
             self._log("async_close_cover :: external close while opening, reversing")
@@ -462,11 +496,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         self._require_configured()
         self._log("async_open_cover")
-        if not self._triggered_externally and (self.is_opening or self.is_closing):
+        if not self._triggered_externally and (
+            self._travel_axis_opening() or self._travel_axis_closing()
+        ):
             self._log("async_open_cover :: cover is in motion, stopping")
             await self.async_stop_cover()
             return
-        if self._triggered_externally and self.is_closing:
+        if self._triggered_externally and self._travel_axis_closing():
             self._log("async_open_cover :: external open while closing, reversing")
             await self.async_stop_cover()
             await self._direction_change_delay()

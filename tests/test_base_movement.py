@@ -11,9 +11,10 @@ These tests exercise the movement coordination logic in cover_base.py:
 """
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
@@ -167,6 +168,301 @@ class TestOpenStopsOppositeDirection:
 
         assert cover._last_command is None
         assert not cover.travel_calc.is_traveling()
+
+
+# ===================================================================
+# Reversal guards key off the travel axis, not an independent tilt motor
+# ===================================================================
+
+
+def _dual_motor_cover(make_cover, **kw):
+    """A cover with a dedicated (independent) tilt motor — dual_motor mode."""
+    return make_cover(
+        tilt_mode="dual_motor",
+        tilt_time_close=5.0,
+        tilt_time_open=5.0,
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        **kw,
+    )
+
+
+class TestReversalGuardTravelAxis:
+    """async_open_cover / async_close_cover reversal guards must decide on the
+    *travel* axis, not the cover-level is_opening/is_closing (which OR in tilt
+    motion). On a dual_motor cover a moving independent tilt motor must not make
+    a travel command stop-and-settle it. Shared-motor tilt (inline/sequential)
+    has no separate motor — its tilt phase IS the travel motor running — so it
+    still counts and the settle-before-reverse is preserved.
+    """
+
+    # --- dual_motor: independent tilt motor must be ignored --------------
+
+    @pytest.mark.asyncio
+    async def test_external_close_ignores_moving_tilt_motor(self, make_cover):
+        cover = _dual_motor_cover(make_cover, close_includes_tilt=False)
+        assert cover._has_tilt_motor()
+        cover.travel_calc.set_position(50)  # travel idle
+        cover.tilt_calc.set_position(40)
+        cover.tilt_calc.start_travel(100)  # independent tilt motor opening
+        assert cover.is_opening  # cover-level property conflates tilt motion
+        assert not cover.travel_calc.is_opening()
+
+        cover._triggered_externally = True
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(
+                cover, "_direction_change_delay", new_callable=AsyncMock
+            ) as settle,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as move,
+        ):
+            await cover.async_close_cover()
+
+        stop.assert_not_awaited()  # tilt motor not stopped
+        settle.assert_not_awaited()  # no spurious 1s reversal settle
+        move.assert_awaited_once_with(target=0)  # travel close proceeds
+
+    @pytest.mark.asyncio
+    async def test_external_open_ignores_moving_tilt_motor(self, make_cover):
+        cover = _dual_motor_cover(make_cover)
+        assert cover._has_tilt_motor()
+        cover.travel_calc.set_position(50)  # travel idle
+        cover.tilt_calc.set_position(60)
+        cover.tilt_calc.start_travel(0)  # independent tilt motor closing
+        assert cover.is_closing
+        assert not cover.travel_calc.is_closing()
+
+        cover._triggered_externally = True
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(
+                cover, "_direction_change_delay", new_callable=AsyncMock
+            ) as settle,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as move,
+        ):
+            await cover.async_open_cover()
+
+        stop.assert_not_awaited()
+        settle.assert_not_awaited()
+        move.assert_awaited_once_with(target=100)
+
+    @pytest.mark.asyncio
+    async def test_ui_close_ignores_moving_tilt_motor(self, make_cover):
+        cover = _dual_motor_cover(make_cover, close_includes_tilt=False)
+        cover.travel_calc.set_position(50)  # travel idle
+        cover.tilt_calc.set_position(40)
+        cover.tilt_calc.start_travel(100)  # independent tilt motor opening
+        assert cover.is_opening
+
+        # UI click (not externally triggered).
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as move,
+        ):
+            await cover.async_close_cover()
+
+        # A travel command must close travel, not merely stop the tilt motor.
+        stop.assert_not_awaited()
+        move.assert_awaited_once_with(target=0)
+
+    @pytest.mark.asyncio
+    async def test_ui_open_ignores_moving_tilt_motor(self, make_cover):
+        cover = _dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(50)  # travel idle
+        cover.tilt_calc.set_position(60)
+        cover.tilt_calc.start_travel(0)  # independent tilt motor closing
+        assert cover.is_closing
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as move,
+        ):
+            await cover.async_open_cover()
+
+        stop.assert_not_awaited()
+        move.assert_awaited_once_with(target=100)
+
+    @pytest.mark.asyncio
+    async def test_external_close_reverses_during_pending_open_pre_step(
+        self, make_cover
+    ):
+        """A dual_motor travel-open pre-step (tilt-to-safe) is a live travel
+        operation, not an independent tilt move: an external close still
+        reverses it, honouring the pending travel direction.
+
+        ``safe_tilt_position=0`` makes the tilt-to-safe move travel DOWN while
+        the pending travel command is OPEN, so the cover-level ``is_opening`` is
+        False here (tilt closing). The reversal therefore isolates the pending-
+        travel branch of ``_travel_axis_opening``: this fails both if the fix is
+        fully reverted to ``is_opening`` AND if only the pending clause is dropped.
+        """
+        cover = _dual_motor_cover(make_cover, safe_tilt_position=0)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(80)  # open; runs tilt-to-safe (→0) pre-step first
+        assert cover._pending_travel_target == 80
+        assert cover._pending_travel_command == SERVICE_OPEN_COVER
+        assert not cover.travel_calc.is_opening()  # travel motor not started yet
+        assert cover.tilt_calc.is_closing()  # tilt-to-safe moves DOWN (toward 0)
+        assert not cover.is_opening  # cover-level property False (tilt is closing)
+
+        cover._triggered_externally = True
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(
+                cover, "_direction_change_delay", new_callable=AsyncMock
+            ) as settle,
+            patch.object(cover, "_async_move_to_endpoint", new_callable=AsyncMock),
+        ):
+            await cover.async_close_cover()
+
+        stop.assert_awaited_once()
+        settle.assert_awaited_once()
+
+    # --- shared motor: tilt phase still counts (settle preserved) --------
+
+    @pytest.mark.asyncio
+    async def test_shared_motor_external_reverse_still_settles(self, make_cover):
+        # sequential (default when tilt times set) = shared motor.
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
+        assert not cover._has_tilt_motor()
+        cover.travel_calc.set_position(50)  # travel idle
+        cover.tilt_calc.set_position(40)
+        cover.tilt_calc.start_travel(100)  # shared-motor tilt phase running "up"
+        assert cover.is_opening
+
+        cover._triggered_externally = True
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(
+                cover, "_direction_change_delay", new_callable=AsyncMock
+            ) as settle,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as move,
+        ):
+            await cover.async_close_cover()
+
+        # The physical motor is running (tilt phase) — still settle before reverse.
+        stop.assert_awaited_once()
+        settle.assert_awaited_once()
+        move.assert_awaited_once_with(target=0)
+
+    @pytest.mark.asyncio
+    async def test_shared_motor_ui_click_during_tilt_phase_still_stops(
+        self, make_cover
+    ):
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=5.0)
+        cover.travel_calc.set_position(50)  # travel idle
+        cover.tilt_calc.set_position(40)
+        cover.tilt_calc.start_travel(100)  # shared-motor tilt phase running
+        assert cover.is_opening
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as move,
+        ):
+            await cover.async_close_cover()
+
+        # In-motion UI click stops the (shared) motor and does not proceed.
+        stop.assert_awaited_once()
+        move.assert_not_awaited()
+
+
+class TestDualMotorTravelDuringIndependentTilt:
+    """End-to-end (un-mocked) downstream of the reversal-guard fix: when a
+    travel command now proceeds (instead of stopping) while the independent tilt
+    motor is mid-move, the real ``_async_move_to_endpoint`` must cleanly take the
+    tilt motor over via the tilt-to-safe pre-step and de-energize it on
+    completion — not leave it running (tracker/motor desync).
+    """
+
+    @staticmethod
+    def _turn_calls(cover):
+        """(action, entity_id) for every turn_on/turn_off relay call so far."""
+        return [
+            (c.args[1], c.args[2]["entity_id"])
+            for c in cover.hass.services.async_call.await_args_list
+            if c.args[1] in ("turn_on", "turn_off")
+        ]
+
+    @pytest.mark.asyncio
+    async def test_travel_hijacks_moving_tilt_into_pre_step_then_stops_it(
+        self, make_cover
+    ):
+        cover = make_cover(
+            control_mode="switch",
+            tilt_mode="dual_motor",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        cover.hass.states.get = MagicMock(
+            side_effect=lambda eid: SimpleNamespace(state="off")
+        )
+        assert cover._has_tilt_motor()
+        assert cover._tilt_strategy._safe_tilt_position == 100
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(80)
+
+        # 1) Independent tilt move DOWN to 20 (the dedicated tilt motor runs).
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_tilt_position(tilt_position=20)
+        assert cover.tilt_calc.is_closing()
+        assert cover._pending_travel_target is None
+
+        # 2) Travel-open command mid tilt move. With the fix the guard no longer
+        #    stops on the moving tilt motor, so travel proceeds.
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+
+        # It takes the tilt motor over via the tilt-to-safe pre-step: tilt is
+        # retargeted from 20 up to safe (100), travel is queued as pending, and
+        # the relay is swapped break-before-make (no double-energised tilt).
+        assert cover._pending_travel_target == 100
+        assert cover._pending_travel_command == SERVICE_OPEN_COVER
+        assert cover.tilt_calc._travel_to_position == 100  # retargeted to safe
+        assert cover.tilt_calc.is_opening()  # now heading up to safe
+        assert not cover.travel_calc.is_traveling()  # travel waits for pre-step
+        takeover = self._turn_calls(cover)
+        assert ("turn_off", "switch.tilt_close") in takeover
+        assert ("turn_on", "switch.tilt_open") in takeover
+
+        # 3) Pre-step completes (tilt reaches safe) → travel starts, tilt stops.
+        cover.tilt_calc.set_position(100)
+        cover.hass.services.async_call.reset_mock()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.auto_stop_if_necessary()
+
+        assert cover._pending_travel_target is None
+        assert cover.travel_calc.is_opening()
+        assert cover.travel_calc._travel_to_position == 100
+        assert not cover.tilt_calc.is_traveling()
+        # The tilt motor is de-energised on completion (both relays off) — no
+        # motor left running behind a frozen tracker.
+        completion = self._turn_calls(cover)
+        assert ("turn_off", "switch.tilt_open") in completion
+        assert ("turn_off", "switch.tilt_close") in completion
 
 
 # ===================================================================
