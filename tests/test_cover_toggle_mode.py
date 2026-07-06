@@ -977,6 +977,86 @@ class TestToggleExternalTravelWhileTraveling:
         await _cancel_tasks(cover)
 
 
+class TestToggleExternalTravelKeysOffTravelAxis:
+    """Same-button travel handler decides on the travel axis, not a moving
+    *independent* tilt motor (dual_motor). Mirrors the opposite-mode handler and
+    the base reversal guards: a moving tilt relay must not make a travel-relay
+    press read as a stop. Shared-motor tilt (no dedicated motor) is unchanged.
+    """
+
+    def _dual(self, make_cover):
+        return make_cover(
+            control_mode="toggle",
+            tilt_mode="dual_motor",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+
+    @pytest.mark.asyncio
+    async def test_external_open_press_ignores_moving_tilt_motor(self, make_cover):
+        cover = self._dual(make_cover)
+        assert cover._has_tilt_motor()
+        cover.travel_calc.set_position(50)  # travel idle
+        cover.tilt_calc.set_position(40)
+        cover.tilt_calc.start_travel(100)  # independent tilt motor opening
+        assert cover.is_opening  # cover-level property conflates tilt motion
+
+        cover._triggered_externally = True
+        with (
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(cover, "async_open_cover", new_callable=AsyncMock) as op,
+        ):
+            await cover._handle_external_state_change("switch.open", "off", "on")
+
+        stop.assert_not_awaited()  # not read as a stop
+        op.assert_awaited_once()  # starts travel opening
+
+    @pytest.mark.asyncio
+    async def test_external_close_press_ignores_moving_tilt_motor(self, make_cover):
+        cover = self._dual(make_cover)
+        cover.travel_calc.set_position(50)  # travel idle
+        cover.tilt_calc.set_position(60)
+        cover.tilt_calc.start_travel(0)  # independent tilt motor closing
+        assert cover.is_closing
+
+        cover._triggered_externally = True
+        with (
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(cover, "async_close_cover", new_callable=AsyncMock) as cl,
+        ):
+            await cover._handle_external_state_change("switch.close", "off", "on")
+
+        stop.assert_not_awaited()
+        cl.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_shared_motor_open_press_during_tilt_phase_still_stops(
+        self, make_cover
+    ):
+        # sequential (default) = shared motor; the tilt phase IS the travel
+        # motor running, so a same-button press still reads as a stop.
+        cover = make_cover(
+            control_mode="toggle", tilt_time_close=5.0, tilt_time_open=5.0
+        )
+        assert not cover._has_tilt_motor()
+        cover.travel_calc.set_position(50)  # travel idle
+        cover.tilt_calc.set_position(40)
+        cover.tilt_calc.start_travel(100)  # shared-motor tilt phase running
+        assert cover.is_opening
+
+        cover._triggered_externally = True
+        with (
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(cover, "async_open_cover", new_callable=AsyncMock) as op,
+        ):
+            await cover._handle_external_state_change("switch.open", "off", "on")
+
+        stop.assert_awaited_once()
+        op.assert_not_awaited()
+
+
 # ===================================================================
 # Rising-edge guarantee: single turn_on, release-first only when held ON
 # ===================================================================

@@ -53,6 +53,13 @@ class ToggleOppositeModeCover(ToggleBaseCover):
         in tilt motion: on a dual-motor cover a moving tilt relay must not make a
         travel-relay press read as a stop (the tilt handler mirrors this with
         ``tilt_calc``).
+
+        The base reversal guards and the same-button handler factor this same
+        axis check into ``_travel_axis_opening``/``_travel_axis_closing`` (which
+        additionally fold in shared-motor tilt and the dual-motor tilt-to-safe
+        pre-step). The raw ``travel_calc`` check suffices here because these
+        branches route to ``async_open_cover``/``async_close_cover``, whose base
+        reversal guard applies those cases downstream.
         """
         if self._ignore_external_toggle_edge(
             entity_id, new_val, "_handle_external_state_change"
