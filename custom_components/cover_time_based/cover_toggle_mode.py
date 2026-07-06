@@ -1,15 +1,11 @@
 """Same-button toggle mode cover."""
 
-import logging
-
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
 )
 
 from .cover_toggle_base import ToggleBaseCover
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class ToggleModeCover(ToggleBaseCover):
@@ -42,12 +38,9 @@ class ToggleModeCover(ToggleBaseCover):
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Same-button: a same-direction press while moving stops the motor."""
-        if new_val != "on":
-            return
-        if self._debounce_external_toggle(entity_id):
-            self._log(
-                "_handle_external_state_change :: debounced toggle on %s", entity_id
-            )
+        if self._ignore_external_toggle_edge(
+            entity_id, new_val, "_handle_external_state_change"
+        ):
             return
 
         if entity_id == self._open_switch_entity_id:
@@ -75,13 +68,9 @@ class ToggleModeCover(ToggleBaseCover):
 
     async def _handle_external_tilt_state_change(self, entity_id, old_val, new_val):
         """Same-button: any tilt toggle while tilt is moving stops the motor."""
-        if new_val != "on":
-            return
-        if self._debounce_external_toggle(entity_id):
-            self._log(
-                "_handle_external_tilt_state_change :: debounced toggle on %s",
-                entity_id,
-            )
+        if self._ignore_external_toggle_edge(
+            entity_id, new_val, "_handle_external_tilt_state_change"
+        ):
             return
 
         if entity_id == self._tilt_open_switch_id:

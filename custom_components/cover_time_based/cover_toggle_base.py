@@ -15,7 +15,6 @@ stale-reappearance guard, direction-change orchestration and the shared
 open/close/tilt-open/tilt-close relay commands — lives here.
 """
 
-import logging
 import time
 
 from homeassistant.const import (
@@ -26,8 +25,6 @@ from homeassistant.const import (
 )
 
 from .cover_switch import SwitchCoverTimeBased
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class ToggleBaseCover(SwitchCoverTimeBased):
@@ -57,6 +54,22 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         if now - last < self._EXTERNAL_TOGGLE_DEBOUNCE:
             return True
         self._last_external_toggle_time[entity_id] = now
+        return False
+
+    def _ignore_external_toggle_edge(self, entity_id, new_val, caller) -> bool:
+        """Return True if this external edge is not an actionable press.
+
+        Only the rising edge (OFF->ON) is a button press; the ON->OFF release is
+        ignored. Contact bounce (a repeat edge within the debounce window) is
+        dropped too, logging the drop under ``caller``. Both toggle modes gate
+        their external handlers on this, so the rising-edge + debounce boilerplate
+        lives in one place.
+        """
+        if new_val != "on":
+            return True
+        if self._debounce_external_toggle(entity_id):
+            self._log("%s :: debounced toggle on %s", caller, entity_id)
+            return True
         return False
 
     async def _pulse_relay(self, entity_id):

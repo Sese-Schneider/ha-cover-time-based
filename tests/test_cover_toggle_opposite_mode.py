@@ -247,6 +247,46 @@ class TestOppositeExternalTravel:
         assert cover.travel_calc._travel_to_position == 100
         await _cancel_tasks(cover)
 
+    @pytest.mark.asyncio
+    async def test_external_travel_press_keys_off_travel_axis_not_tilt(self):
+        """A travel press decides on travel-axis state, not conflated tilt motion.
+
+        On a dual-motor cover a moving tilt motor makes the cover-level
+        is_opening/is_closing True. A travel-relay press must NOT be read as a
+        stop because of that — it keys off travel_calc directly. Regression guard
+        for the tilt/travel conflation.
+        """
+        cover = _make_opposite_cover(
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        _all_relays_off(cover)
+        cover.travel_calc.set_position(50)  # travel idle
+        cover.tilt_calc.set_position(0)
+        cover.tilt_calc.start_travel(100)  # tilt opening
+        assert not cover.travel_calc.is_traveling()
+        # Cover-level property conflates in the tilt motion; the handler must not.
+        assert cover.is_opening
+
+        cover._triggered_externally = True
+        try:
+            with (
+                patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+                patch.object(
+                    cover, "async_close_cover", new_callable=AsyncMock
+                ) as close,
+                patch.object(cover, "async_open_cover", new_callable=AsyncMock),
+            ):
+                # External travel-CLOSE press while travel is idle: start a close,
+                # NOT a stop triggered by the moving tilt motor.
+                await cover._handle_external_state_change("switch.close", "off", "on")
+        finally:
+            cover._triggered_externally = False
+
+        stop.assert_not_awaited()
+        close.assert_awaited_once()
+        await _cancel_tasks(cover)
+
 
 class TestOppositeExternalTilt:
     @pytest.mark.asyncio
