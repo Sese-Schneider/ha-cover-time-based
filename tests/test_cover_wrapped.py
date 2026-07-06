@@ -789,3 +789,54 @@ class TestNativeTiltForwarding:
         services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
         assert "stop_cover" not in services
         assert "close_cover" not in services
+
+
+class TestTiltSettleSnap:
+    """On settle, a native-tilt cover snaps tilt_calc to the device's reported
+    current_tilt_position; non-native strategies do not."""
+
+    _F_SET_TILT = 128
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_snaps_tilt_to_reported_on_settle(self):
+        cover = _make_wrapped_cover(tilt_time_close=5, tilt_time_open=5, tilt_mode="inline")
+        st = _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT, state="open"
+        )
+        st.attributes["current_position"] = 100
+        st.attributes["current_tilt_position"] = 45
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(60)  # optimistic/stale
+
+        await cover._handle_external_state_change("cover.inner", "opening", "open")
+
+        assert cover.tilt_calc.current_position() == 45
+
+    @pytest.mark.asyncio
+    async def test_no_tilt_snap_for_non_native_strategy(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="sequential_close"
+        )
+        st = _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT, state="open"
+        )
+        st.attributes["current_position"] = 100
+        st.attributes["current_tilt_position"] = 45
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+        # SequentialCloseTilt's own (pre-existing, unrelated) snap_trackers_to_
+        # physical forces tilt to 100 whenever travel is not at 0 — set tilt to
+        # 100 up front so that mechanism is a no-op here, isolating the
+        # assertion to whether _maybe_snap_to_reported_tilt (this task) pulls
+        # tilt from the wrapped device's reported current_tilt_position (45).
+        cover.tilt_calc.set_position(100)
+
+        await cover._handle_external_state_change("cover.inner", "opening", "open")
+
+        assert cover.tilt_calc.current_position() == 100  # unchanged; not native

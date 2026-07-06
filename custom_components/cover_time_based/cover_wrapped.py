@@ -288,6 +288,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
                     " no position info"
                 )
                 await self.async_stop_cover()
+            await self._maybe_snap_to_reported_tilt()
 
     async def _handle_command_state(self, new_val: str) -> None:
         """Reinterpret the wrapped entity's state as a command echo.
@@ -343,6 +344,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         target = self._wrapped_reported_position()
         if target is not None:
             await self._snap_to_position(target)
+        await self._maybe_snap_to_reported_tilt()
 
     async def _snap_to_position(self, target: int) -> None:
         """Snap our tracker to a known position.
@@ -376,6 +378,42 @@ class WrappedCoverTimeBased(CoverTimeBased):
         if state.state == STATE_CLOSED:
             return 0
         return None
+
+    def _wrapped_reported_tilt_position(self) -> int | None:
+        """Return the wrapped cover's reported tilt position, or None.
+
+        Honors ignore_reported_position — a device whose reported values are
+        untrustworthy is untrustworthy on both axes. Unlike
+        _wrapped_reported_position there is no closed-state fallback: a closed
+        cover implies nothing unambiguous about its slat angle.
+        """
+        if self._ignore_reported_position:
+            return None
+        state = self.hass.states.get(self._cover_entity_id)
+        if state is None:
+            return None
+        attr_tilt = state.attributes.get(ATTR_CURRENT_TILT_POSITION)
+        if isinstance(attr_tilt, (int, float)) and 0 <= attr_tilt <= 100:
+            return int(attr_tilt)
+        return None
+
+    async def _maybe_snap_to_reported_tilt(self) -> None:
+        """Snap tilt_calc to the wrapped cover's reported tilt once it settles.
+
+        Gated on _use_native_tilt(): only covers whose tilt we forward natively
+        treat the reported tilt as source of truth. For dual-motor/sequential
+        the coupling model owns the tilt tracker, so we must not clobber it.
+        Skipped while our own tilt animation is still in flight.
+        """
+        if not self._use_native_tilt():
+            return
+        if self.tilt_calc.is_traveling():
+            return
+        target = self._wrapped_reported_tilt_position()
+        if target is None or self.tilt_calc.current_position() == target:
+            return
+        self._log("_maybe_snap_to_reported_tilt :: snapping tilt to %d", target)
+        await self.set_known_tilt_position(tilt_position=target)
 
     async def _command_position_move(self, target, command, already_moving_same_dir):
         """Drive a mid-position move via the selected position driver.
