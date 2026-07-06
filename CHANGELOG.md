@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixes
+
+- **Wrapped command-echo covers now stop cleanly at both endpoints** ([#152](https://github.com/Sese-Schneider/ha-cover-time-based/issues/152)): a wrapped cover with **Reports commands, not endpoints** enabled typically drives an *endstop-less* motor — one with no limit switches that simply stalls against the mechanical stop while powered (e.g. a Shelly 2PM Gen4 in cover profile driving a plain tubular motor). Wrapped mode inherited the base assumption that the motor self-stops at its limits, so at the 0%/100% endpoints it skipped the stop and let the motor run — stalling for seconds until the device's own max-time cutoff on every full open/close, and running to max-time when commanded to an endpoint it was already at. It now sends the endpoint stop for these command-echo covers, exactly as **Switch** mode already de-energizes its latched relay (set **Endpoint run-on time** to 0 to cut power the instant the endpoint is reached). Separately, `open_cover` while the cover is already parked fully open now no-ops instead of re-driving to the endpoint — mirroring `close_cover` at fully closed — so it no longer re-energizes the motor with a redundant relay pulse. Wrapped covers that report a real position, and the **Switch** / **Toggle** / **Pulse** relay modes, are unchanged — they keep resyncing the tracker at the endpoints as before.
+
 ## 4.7.2 (2026-07-01)
 
 ### Fixes

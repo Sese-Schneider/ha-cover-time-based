@@ -257,6 +257,137 @@ async def test_wrapped_non_native_reaching_endpoint_sends_no_stop(make_cover):
     await _cancel_tasks(cover)
 
 
+# ===================================================================
+# Command-echo wrapped cover + tilt (issue #152 interaction check)
+#
+# A command-echo wrapped cover is non-self-stopping. These lock in how that
+# flip interacts with each tilt strategy, since command-echo + tilt has no
+# config guard.
+# ===================================================================
+
+
+def _cover_calls(cover, service):
+    return [
+        c
+        for c in cover.hass.services.async_call.call_args_list
+        if c.args[0] == "cover" and c.args[1] == service
+    ]
+
+
+@pytest.mark.asyncio
+async def test_command_echo_inline_travel_to_endpoint_sends_stop(make_cover):
+    """Command-echo + inline: a real travel move to a travel endpoint must send
+    the stop (the endstop-less motor won't self-stop). The self-stopping-mode
+    counterpart (#142) skips this stop; command-echo must not (issue #152)."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        reports_command_not_endpoint=True,
+        tilt_time_close=1.5,
+        tilt_time_open=1.5,
+        tilt_mode="inline",
+        endpoint_runon_time=0,
+    )
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(0)  # already at the closing tilt endpoint
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(0)  # pure travel to fully closed
+        cover.hass.services.async_call.reset_mock()
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+        await cover.auto_stop_if_necessary()
+
+    assert _cover_calls(cover, "stop_cover"), (
+        "command-echo inline travel to an endpoint must send the stop (no endstop)"
+    )
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_command_echo_inline_tilt_at_endpoint_still_sends_stop(make_cover):
+    """Command-echo + inline: a tilt move that drives the motor off a parked
+    travel endpoint must still be stopped (#142 path is independent of the
+    self-stop flag, so unchanged by #152)."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        reports_command_not_endpoint=True,
+        tilt_time_close=1.5,
+        tilt_time_open=1.5,
+        tilt_mode="inline",
+        endpoint_runon_time=0,
+    )
+    cover.travel_calc.set_position(0)  # parked fully closed (a travel endpoint)
+    cover.tilt_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(50)  # tilt open, off the closed endpoint
+        cover.hass.services.async_call.reset_mock()
+        cover.tilt_calc.set_position(50)
+        await cover.auto_stop_if_necessary()
+
+    assert _cover_calls(cover, "stop_cover"), (
+        "command-echo inline tilt off a travel endpoint must still be stopped"
+    )
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_command_echo_dual_motor_tilt_at_endpoint_sends_tilt_stop(make_cover):
+    """Command-echo + dual-motor: a tilt move reaching a tilt endpoint now sends
+    the wrapped entity's stop_cover_tilt — the tilt motor is treated as
+    endstop-less too, consistent with travel (issue #152). (Toggle/wrapped
+    self-stopping modes skip this.) In practice a single-DP command-echo device
+    has no tilt services, so _wrapped_supports_tilt() would gate the call off;
+    here the mock entity advertises tilt so we can assert the intent."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        reports_command_not_endpoint=True,
+        tilt_time_close=2.0,
+        tilt_time_open=2.0,
+        tilt_mode="dual_motor",
+    )
+    cover.travel_calc.set_position(50)  # mid-travel: isolate tilt behaviour
+    cover.tilt_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(100)  # tilt to its open endpoint
+        cover.hass.services.async_call.reset_mock()
+        cover.tilt_calc.set_position(100)
+        await cover.auto_stop_if_necessary()
+
+    assert _cover_calls(cover, "stop_cover_tilt"), (
+        "command-echo dual-motor tilt at an endpoint must stop the tilt motor"
+    )
+    assert not _cover_calls(cover, "stop_cover"), (
+        "a tilt move must not drive/stop the travel motor"
+    )
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_command_echo_open_at_endpoint_with_tilt_is_noop(make_cover):
+    """The open-at-100 no-op (issue #152) is safe when a tilt strategy is
+    configured: already settled at the open endpoint, open_cover sends nothing
+    — matching the pre-existing resync path, which also did not restore tilt."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        reports_command_not_endpoint=True,
+        tilt_time_close=1.5,
+        tilt_time_open=1.5,
+        tilt_mode="inline",
+    )
+    cover.travel_calc.set_position(100)  # settled fully open
+    cover.tilt_calc.set_position(100)
+
+    cover.hass.services.async_call.reset_mock()
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover()
+
+    assert cover.hass.services.async_call.call_args_list == []
+    assert not cover.travel_calc.is_traveling()
+    await _cancel_tasks(cover)
+
+
 @pytest.mark.asyncio
 async def test_toggle_mid_travel_still_stops(make_cover):
     """Mid-travel (not an endpoint) still issues the timed stop in every mode —
@@ -379,15 +510,48 @@ async def test_mid_tilt_at_travel_endpoint_still_stops_tilt(make_cover):
         ({"control_mode": CONTROL_MODE_TOGGLE}, True),
         ({"control_mode": CONTROL_MODE_PULSE, "stop_switch": "switch.stop"}, False),
         ({"cover_entity_id": "cover.inner"}, True),
+        (
+            {"cover_entity_id": "cover.inner", "reports_command_not_endpoint": True},
+            False,
+        ),
         ({"control_mode": CONTROL_MODE_SWITCH}, False),
     ],
 )
 def test_self_stops_at_endpoints_per_mode(make_cover, kwargs, expected):
     """Modes with a dedicated stop relay (switch, pulse) stop at endpoints; modes
     whose only "stop" re-pulses a direction relay (toggle) or whose device
-    self-stops (wrapped) skip it."""
+    self-stops (wrapped) skip it.
+
+    A wrapped command-echo cover (``reports_command_not_endpoint``) is the
+    exception among wrapped covers: it has no endpoint feedback and in practice
+    no endstop, so it must still be told to stop at 0/100 (issue #152)."""
     cover = make_cover(**kwargs)
     assert cover._self_stops_at_endpoints() is expected
+
+
+@pytest.mark.asyncio
+async def test_wrapped_command_echo_reaching_endpoint_sends_stop(make_cover):
+    """A wrapped command-echo cover has no endpoint feedback and in practice no
+    endstop, so reaching an endpoint MUST send the stop to de-energize the
+    underlying motor — unlike a plain wrapped cover, whose motor self-stops at
+    its limit (issue #152). Run-on disabled here so the stop is immediate."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        reports_command_not_endpoint=True,
+        endpoint_runon_time=0,
+    )
+    cover._self_initiated_movement = True
+    cover._last_command = SERVICE_CLOSE_COVER
+    cover.travel_calc.set_position(0)
+
+    cover.hass.services.async_call.reset_mock()
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.auto_stop_if_necessary()
+
+    assert _cover_calls(cover, "stop_cover"), (
+        "a command-echo wrapped cover must stop at an endpoint (it has no endstop)"
+    )
+    await _cancel_tasks(cover)
 
 
 # ===================================================================
