@@ -16,6 +16,7 @@ from homeassistant.const import (
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .cover_base import CoverTimeBased
+from .drivers import NativePositionDriver, TimedPositionDriver
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._force_time_based_position = force_time_based_position
         self._reports_command_not_endpoint = reports_command_not_endpoint
         self._last_self_command_time: float | None = None
+        self._native_position_driver = NativePositionDriver(self)
+        self._timed_position_driver = TimedPositionDriver(self)
 
     async def async_added_to_hass(self):
         """Register state listener for the wrapped cover entity."""
@@ -129,9 +132,19 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return False
         return self._wrapped_supports_set_position()
 
+    def _position_driver(self):
+        """Select the position actuation driver from current capabilities.
+
+        Re-evaluated per call: the wrapped entity's supported_features can
+        change at runtime (e.g. it goes unavailable and back).
+        """
+        if self._use_native_set_position():
+            return self._native_position_driver
+        return self._timed_position_driver
+
     def _motor_stops_itself(self) -> bool:
         """Native covers drive to and hold the target position themselves."""
-        return self._use_native_set_position()
+        return self._position_driver().holds_itself
 
     def _self_stops_at_endpoints(self) -> bool:
         """Command-echo wrapped covers have no endstop and must be stopped.
@@ -320,25 +333,14 @@ class WrappedCoverTimeBased(CoverTimeBased):
         return None
 
     async def _command_position_move(self, target, command, already_moving_same_dir):
-        """Drive a mid-position move for the wrapped cover.
+        """Drive a mid-position move via the selected position driver.
 
-        When the wrapped entity supports native SET_POSITION, forward
-        ``cover.set_cover_position`` straight to it (including on a same-direction
-        retarget — the device changes course): the device drives to the target
-        and holds there itself, so we never depend on its ``stop_cover`` and
-        ``_motor_stops_itself`` keeps auto-stop from re-commanding it. Everything
-        else — direction handling, min-movement, startup delay, tracker
-        animation — is the base set_position ceremony. Without native support we
-        fall back to the base relay drive (latched open/close + timed stop).
+        Native covers forward set_cover_position and hold themselves; timed
+        covers run the base relay drive (latched open/close + timed stop).
         """
-        if not self._use_native_set_position():
-            await super()._command_position_move(
-                target, command, already_moving_same_dir
-            )
-            return
-        self._require_movement_target_available(self._cover_entity_id)
-        self._log("_command_position_move :: forwarding set_cover_position(%d)", target)
-        await self._call_set_cover_position(int(round(target)))
+        await self._position_driver().command_move(
+            target, command, already_moving_same_dir
+        )
 
     async def _call_set_cover_position(self, position: int) -> None:
         """Forward a set_cover_position command to the wrapped entity."""

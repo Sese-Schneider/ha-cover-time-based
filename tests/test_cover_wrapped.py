@@ -538,6 +538,23 @@ class TestWrappedNativeInheritsBaseCeremony:
         assert cover._motor_stops_itself() is False
 
     @pytest.mark.asyncio
+    async def test_position_driver_selection_matches_native_flag(self):
+        from custom_components.cover_time_based.drivers import (
+            NativePositionDriver,
+            TimedPositionDriver,
+        )
+
+        cover = _make_wrapped_cover()
+
+        _set_wrapped_features(cover, 7)  # OPEN|CLOSE|SET_POSITION -> native
+        assert isinstance(cover._position_driver(), NativePositionDriver)
+        assert cover._motor_stops_itself() is True
+
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)  # no SET_POSITION
+        assert isinstance(cover._position_driver(), TimedPositionDriver)
+        assert cover._motor_stops_itself() is False
+
+    @pytest.mark.asyncio
     async def test_auto_stop_sends_no_relay_stop_for_native(self):
         cover = _make_wrapped_cover()
         _set_wrapped_features(cover, 7)
