@@ -715,3 +715,77 @@ class TestUseNativeTilt:
         cover = _make_wrapped_cover()  # no tilt times → no tilt strategy
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT)
         assert cover._use_native_tilt() is False
+
+
+class TestNativeTiltForwarding:
+    """Native tilt covers forward set_cover_tilt_position and animate tilt_calc,
+    and the auto-updater issues no relay stop when the tilt move completes."""
+
+    _F_SET_TILT = 128
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    def _native_tilt_cover(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT)
+        self._prep(cover)
+        return cover
+
+    @pytest.mark.asyncio
+    async def test_set_tilt_position_forwards_natively(self):
+        cover = self._native_tilt_cover()
+        cover.tilt_calc.set_position(100)
+
+        await cover.async_set_cover_tilt_position(tilt_position=30)
+
+        services = [
+            (c.args[1], c.args[2]) for c in _calls(cover.hass.services.async_call)
+        ]
+        assert (
+            "set_cover_tilt_position",
+            {"entity_id": "cover.inner", "tilt_position": 30},
+        ) in services
+        assert all(svc != "close_cover" and svc != "open_cover" for svc, _ in services)
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc._travel_to_position == 30
+
+    @pytest.mark.asyncio
+    async def test_open_close_tilt_forward_natively(self):
+        cover = self._native_tilt_cover()
+        cover.tilt_calc.set_position(0)
+
+        await cover.async_open_cover_tilt()
+
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "set_cover_tilt_position" in services
+        assert "open_cover_tilt" not in services  # not the dual-motor relay path
+
+    @pytest.mark.asyncio
+    async def test_tilt_already_at_target_is_noop(self):
+        cover = self._native_tilt_cover()
+        cover.tilt_calc.set_position(30)
+
+        await cover.async_set_cover_tilt_position(tilt_position=30)
+
+        assert _calls(cover.hass.services.async_call) == []
+
+    @pytest.mark.asyncio
+    async def test_auto_stop_sends_no_relay_stop_for_native_tilt(self):
+        cover = self._native_tilt_cover()
+        cover.tilt_calc.set_position(100)
+        await cover.async_set_cover_tilt_position(tilt_position=30)
+        cover.hass.services.async_call.reset_mock()
+
+        # Simulate the tilt animation having reached the target, then let the
+        # auto-updater's stop check run: a native tilt device holds itself.
+        cover.tilt_calc.set_position(30)
+        await cover.auto_stop_if_necessary()
+
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "stop_cover" not in services
+        assert "close_cover" not in services

@@ -21,7 +21,12 @@ from homeassistant.const import (
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .cover_base import CoverTimeBased
-from .drivers import NativePositionDriver, PositionDriver, TimedPositionDriver
+from .drivers import (
+    NativePositionDriver,
+    NativeTiltDriver,
+    PositionDriver,
+    TimedPositionDriver,
+)
 from .tilt_strategies.inline import InlineTilt
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,6 +63,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._last_self_command_time: float | None = None
         self._native_position_driver = NativePositionDriver(self)
         self._timed_position_driver = TimedPositionDriver(self)
+        self._native_tilt_driver = NativeTiltDriver(self)
 
     async def async_added_to_hass(self):
         """Register state listener for the wrapped cover entity."""
@@ -174,7 +180,15 @@ class WrappedCoverTimeBased(CoverTimeBased):
         return self._timed_position_driver
 
     def _motor_stops_itself(self) -> bool:
-        """Native covers drive to and hold the target position themselves."""
+        """The device holds the target itself — the auto-updater must not send
+        a relay stop.
+
+        True during a native tilt move (the wrapped cover positions its own
+        slats), and for native set_position covers (Plan 1). Timed covers on
+        either axis must be told to stop, so False otherwise.
+        """
+        if self._moving_tilt and self._use_native_tilt():
+            return True
         return self._position_driver().holds_itself
 
     def _self_stops_at_endpoints(self) -> bool:
@@ -464,6 +478,46 @@ class WrappedCoverTimeBased(CoverTimeBased):
             self._cover_entity_id,
             service,
         )
+
+    async def _call_set_cover_tilt_position(self, position: int) -> None:
+        """Forward a set_cover_tilt_position command to the wrapped entity."""
+        self._start_bounce_grace_window()
+        await self.hass.services.async_call(
+            "cover",
+            "set_cover_tilt_position",
+            {"entity_id": self._cover_entity_id, ATTR_TILT_POSITION: position},
+            False,
+        )
+
+    async def _prepare_native_tilt(self) -> None:
+        """Stop any in-flight move before forwarding a native tilt.
+
+        The base tilt entry points abandon the active lifecycle and stop an
+        in-flight travel before tilting. _abandon_active_lifecycle early-returns
+        without stopping a plain (non-restore, non-pre-step) timed travel, so
+        stop that here explicitly — including its physical relay — otherwise a
+        tilt issued mid-travel leaves the wrapped cover's position motor running.
+        """
+        await self._abandon_active_lifecycle()
+        if self.travel_calc.is_traveling():
+            self.travel_calc.stop()
+            self.stop_auto_updater()
+            if not self._triggered_externally:
+                await self._send_stop()
+
+    async def async_set_cover_tilt_position(self, **kwargs):
+        """Forward tilt-to-position natively when the wrapped cover can."""
+        if ATTR_TILT_POSITION in kwargs and self._use_native_tilt():
+            await self._native_tilt_driver.move_to(int(kwargs[ATTR_TILT_POSITION]))
+            return
+        await super().async_set_cover_tilt_position(**kwargs)
+
+    async def _async_move_tilt_to_endpoint(self, target):
+        """Route open/close-tilt through native forwarding when available."""
+        if self._use_native_tilt():
+            await self._native_tilt_driver.move_to(target)
+            return
+        await super()._async_move_tilt_to_endpoint(target)
 
     async def _send_tilt_open(self) -> None:
         if not self._wrapped_supports_tilt():
