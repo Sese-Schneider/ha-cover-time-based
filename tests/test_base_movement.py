@@ -82,6 +82,56 @@ class TestOpenFromClosed:
         assert cover._last_command == SERVICE_OPEN_COVER
 
 
+class TestWrappedCommandEchoOpenAtEndpoint:
+    """A wrapped command-echo cover at the open endpoint must not re-drive.
+
+    Mirrors async_close_cover's skip-at-0 no-op: a command-echo cover has no
+    endpoint feedback and drives an endstop-less motor, so re-commanding open at
+    100% is a pointless relay pulse that re-energizes (and stalls) the motor
+    (issue #152). Relay modes and plain wrapped covers keep the resync re-drive
+    — see test_open_when_already_open_sends_resync."""
+
+    @pytest.mark.asyncio
+    async def test_command_echo_open_when_already_open_is_noop(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner", reports_command_not_endpoint=True
+        )
+        cover.travel_calc.set_position(100)  # settled fully open
+
+        cover.hass.services.async_call.reset_mock()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+
+        # No command sent: already at 100, no resync pulse.
+        assert not cover.travel_calc.is_traveling()
+        cover.hass.services.async_call.assert_not_awaited()
+        assert cover._last_command is None
+
+    @pytest.mark.asyncio
+    async def test_non_echo_wrapped_open_when_already_open_still_resyncs(
+        self, make_cover
+    ):
+        """A plain wrapped cover (real position/endpoint feedback) keeps the
+        resync re-drive at the open endpoint — the scope of the no-op is
+        command-echo only."""
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(100)  # settled fully open
+
+        cover.hass.services.async_call.reset_mock()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+
+        open_calls = [
+            c
+            for c in cover.hass.services.async_call.call_args_list
+            if c.args[0] == "cover" and c.args[1] == "open_cover"
+        ]
+        assert open_calls, (
+            "a plain wrapped cover must still resync at the open endpoint"
+        )
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+
 class TestCloseStopsOppositeDirection:
     """UI close while opening just stops — does not reverse. (Reverse is
     still available via set_cover_position which preserves the legacy

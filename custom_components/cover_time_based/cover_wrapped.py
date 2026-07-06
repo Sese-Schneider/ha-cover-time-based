@@ -133,6 +133,36 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Native covers drive to and hold the target position themselves."""
         return self._use_native_set_position()
 
+    def _self_stops_at_endpoints(self) -> bool:
+        """Command-echo wrapped covers have no endstop and must be stopped.
+
+        A wrapped cover whose state is a command echo
+        (``reports_command_not_endpoint``) reports no real endpoint and, in
+        practice, drives an endstop-less motor that merely stalls against the
+        mechanical stop while powered. The base assumption that the motor
+        self-stops at its limit does not hold, so return False: the endpoint
+        stop must be sent to de-energize the motor rather than let it stall
+        until the device's own max-time cutoff (issue #152).
+
+        A normal wrapped cover (real position/endpoint feedback) keeps the base
+        default of True — its underlying motor stops at its own limits, so the
+        endpoint stop stays redundant and is skipped.
+        """
+        if self._reports_command_not_endpoint:
+            return False
+        return super()._self_stops_at_endpoints()
+
+    def _skip_open_resync_at_endpoint(self) -> bool:
+        """A command-echo wrapped cover treats open-at-100 as a no-op.
+
+        With no endpoint feedback and an endstop-less motor, re-commanding open
+        while already settled at 100% is a pointless relay pulse that
+        re-energizes (and stalls) the motor — so skip the resync, mirroring
+        async_close_cover's skip-at-0 (issue #152). A plain wrapped cover keeps
+        the base resync behaviour.
+        """
+        return self._reports_command_not_endpoint
+
     def _start_bounce_grace_window(self) -> None:
         self._last_self_command_time = time.monotonic()
 

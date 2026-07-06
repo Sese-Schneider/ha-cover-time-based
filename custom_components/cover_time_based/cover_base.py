@@ -415,23 +415,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self.async_stop_cover()
             await self._direction_change_delay()
 
-        # Carve-outs that must always reach _async_move_to_endpoint even
-        # when the tracker says we're settled at 0: a pending opposite-
-        # direction startup delay needs cancelling, and an external
-        # sequential close needs to articulate the slats.
-        startup_delay_open = (
-            self._startup_delay_task is not None
-            and not self._startup_delay_task.done()
-            and self._last_command == SERVICE_OPEN_COVER
-        )
-        external_sequential = self._triggered_externally and isinstance(
-            self._tilt_strategy, SequentialTilt
-        )
-        skip_travel = (
-            not (startup_delay_open or external_sequential)
-            and self.travel_calc.current_position() == 0
-            and self.travel_calc.travel_direction == TravelStatus.STOPPED
-        )
+        # Skip the re-drive when already settled at 0 (HA convention: a
+        # re-applied close is a no-op). _settled_at_endpoint keeps the
+        # carve-outs that must still reach _async_move_to_endpoint — a pending
+        # opposite-direction startup delay to cancel, or an external sequential
+        # close that articulates the slats.
+        skip_travel = self._settled_at_endpoint(0)
         if not skip_travel:
             await self._async_move_to_endpoint(target=0)
 
@@ -481,7 +470,57 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("async_open_cover :: external open while closing, reversing")
             await self.async_stop_cover()
             await self._direction_change_delay()
+        # Mirror async_close_cover's skip-at-0 for covers that treat an endpoint
+        # re-command as a pointless re-energize rather than a resync (command-
+        # echo wrapped, issue #152). Relay modes keep the resync re-drive.
+        if self._skip_open_resync_at_endpoint() and self._settled_at_endpoint(100):
+            self._log("async_open_cover :: already settled at 100, skipping resync")
+            return
         await self._async_move_to_endpoint(target=100)
+
+    def _settled_at_endpoint(self, endpoint: int) -> bool:
+        """Return True when the tracker is stopped exactly at ``endpoint`` (0 or
+        100) and a re-drive there would be a pure resync — nothing to cancel or
+        articulate.
+
+        Excludes two cases that must still reach ``_async_move_to_endpoint``: a
+        pending opposite-direction startup delay (which that method cancels),
+        and an external close on sequential-tilt hardware (which drives past 0
+        to articulate the slats). The sequential carve-out is an endpoint-0
+        concern only — the drive-past redirect in ``_async_move_to_endpoint`` is
+        gated on ``target == 0`` — so it is not applied at 100, where it would
+        needlessly defeat the open-at-100 no-op.
+        """
+        opposite = SERVICE_OPEN_COVER if endpoint == 0 else SERVICE_CLOSE_COVER
+        pending_opposite_startup = (
+            self._startup_delay_task is not None
+            and not self._startup_delay_task.done()
+            and self._last_command == opposite
+        )
+        external_sequential = (
+            endpoint == 0
+            and self._triggered_externally
+            and isinstance(self._tilt_strategy, SequentialTilt)
+        )
+        return (
+            not (pending_opposite_startup or external_sequential)
+            and self.travel_calc.current_position() == endpoint
+            and self.travel_calc.travel_direction == TravelStatus.STOPPED
+        )
+
+    def _skip_open_resync_at_endpoint(self) -> bool:
+        """Whether ``open_cover`` at the open endpoint (100%) is a no-op rather
+        than a resync re-drive.
+
+        Relay-driven modes return False: re-driving to the endpoint physically
+        resyncs a drifted cover, and the pulse (#129) and toggle (#105) resync
+        paths depend on it. A command-echo wrapped cover overrides this to True
+        — it has no feedback to resync and drives an endstop-less motor, so
+        re-commanding open there only re-energizes (and stalls) it (issue #152).
+        ``async_close_cover`` already treats 0% as a universal no-op; this
+        brings open into line for the covers that need it.
+        """
+        return False
 
     async def _direction_change_delay(self):
         """Pause between stop and direction change to let the motor settle."""
