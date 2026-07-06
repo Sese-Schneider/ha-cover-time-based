@@ -114,9 +114,9 @@ Because a command-echo cover has no endpoint feedback — and in practice drives
 
 ### Switch-based covers
 
-Control a cover using two relay switches (one for open, one for close), with an optional third stop switch.
+Control a cover using two relay switches (one for open, one for close), with an optional third stop switch (required in **Pulse** mode).
 
-Specify the **Open switch**, **Close switch**, and optionally the **Stop switch** entities.
+Specify the **Open switch**, **Close switch**, and optionally the **Stop switch** entities (required in **Pulse** mode).
 
 ### Input Mode for switch-based covers
 
@@ -126,18 +126,18 @@ Four input modes are available to describe how the switch entities for switch-ba
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Switch**                   | Latching relays. The direction switch stays ON for the entire movement. Movement stops when the switch is turned OFF                                                                                                                                                                                                                                                                       |
 | **Pulse**                    | Momentary pulse buttons. A brief ON-OFF pulse latches the motor on. **Requires a dedicated stop button** (or script) to stop movement mid-travel. If your hardware has no stop signal and instead stops when the opposite button is pressed, use **Toggle (opposite button)** instead.                                                                                                     |
-| **Toggle**                   | Toggle-style relays. A brief ON-OFF pulse latches the motor on. A second pulse on the same direction button stops the motor.                                                                                                                                                                                                                                                               |
+| **Toggle (same button)**     | Toggle-style relays. A brief ON-OFF pulse latches the motor on. A second pulse on the same direction button stops the motor.                                                                                                                                                                                                                                                               |
 | **Toggle (opposite button)** | Momentary toggle relays with no dedicated stop button, where pressing the _opposite_ direction while moving stops the motor (a same-direction press keeps it moving). Reversing takes two presses: opposite (stop), then press again to move. Choose this over **Toggle (same button)** when your controller stops on the opposite button, and over **Pulse** when you have no stop relay. |
 
-> **Scripts in Pulse mode.** In **Pulse** mode the Open / Close / Stop entities (and the dual-motor tilt entities) may be `script` entities as well as `switch` entities — for example, IR-remote-controlled covers where each script fires an open / close / stop IR command. **Switch** and **Toggle** modes require `switch` entities: they rely on the entity reporting a held/latched on-state, which a script (which auto-returns to `off`) cannot provide. Keep the scripts short: after **Pulse time** elapses the integration turns the entity off again, which cancels any script still running — so a script whose own internal `delay` is longer than the pulse time would be cut short.
+> **Scripts in Pulse mode.** In **Pulse** mode the Open / Close / Stop entities (and the dual-motor tilt entities) may be `script` entities as well as `switch` entities — for example, IR-remote-controlled covers where each script fires an open / close / stop IR command. **Switch** and both **Toggle** modes require `switch` entities: they rely on the entity reporting a held/latched on-state, which a script (which auto-returns to `off`) cannot provide. Keep the scripts short: after **Pulse time** elapses the integration turns the entity off again, which cancels any script still running — so a script whose own internal `delay` is longer than the pulse time would be cut short.
 
 #### Pulse time
 
-With the **Pulse** input mode, the **Pulse time** configures how long the switch should send the ON signal before it turns OFF. Defaults to **1s**. **Toggle** mode does not use it — toggle relays are momentary, so the integration sends a single ON pulse and lets the relay release itself.
+With the **Pulse** input mode, the **Pulse time** configures how long the switch should send the ON signal before it turns OFF. Defaults to **1s**. Neither **Toggle** mode uses it — toggle relays are momentary, so the integration sends a single ON pulse and lets the relay release itself.
 
-#### Relay reports its own OFF (Toggle mode)
+#### Relay reports its own OFF (Toggle modes)
 
-Toggle mode only. Leave it **on** (the default) for normal toggle relays — they switch themselves off after the pulse and report that OFF back to Home Assistant, so the integration can drive a still-ON relay OFF first to guarantee a clean ON edge.
+Applies to both Toggle modes (same-button and opposite-button). Leave it **on** (the default) for normal toggle relays — they switch themselves off after the pulse and report that OFF back to Home Assistant, so the integration can drive a still-ON relay OFF first to guarantee a clean ON edge.
 
 Turn it **off** for hardware-managed pulse modules — for example an **Aqara T2** in its 200 ms internal-pulse mode — that pulse the contact themselves but **never report the OFF** to Home Assistant, leaving the switch entity stuck `on`. On such hardware a `turn_off` is not an idempotent "off" but another activation pulse, so the integration's attempt to force a clean edge (`turn_off` then `turn_on`) lands as a doubled command and the motor's toggle counter drifts — the symptom is Stop reversing the cover and Up driving it down. With the option off, toggle mode only ever sends a **single `turn_on` per command and never a `turn_off`**, giving exactly one clean activation per press. A repeated `turn_on` still pulses the motor even while the entity reads `on`.
 

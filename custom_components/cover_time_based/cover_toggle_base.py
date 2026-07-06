@@ -175,7 +175,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         self._last_command = None
         self._last_tilt_direction = None
 
-    # --- External state change handlers ---
+    # --- Stale-reappearance guard ---
 
     def _is_stale_reappearance(self, old_val, new_val) -> bool:
         """A non-self-reporting relay coming back online is not a press.
