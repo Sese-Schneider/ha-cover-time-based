@@ -39,7 +39,12 @@ class TimedPositionDriver(PositionDriver):
 
 
 class NativePositionDriver(PositionDriver):
-    """Native position: forward set_cover_position; the device holds itself."""
+    """Native position: forward set_cover_position; the device holds itself.
+
+    Forwarding fires unconditionally, including on a same-direction retarget
+    (the device changes course to the new target) — which is why
+    ``already_moving_same_dir`` is ignored here, unlike the timed path.
+    """
 
     holds_itself = True
 

@@ -16,7 +16,7 @@ from homeassistant.const import (
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .cover_base import CoverTimeBased
-from .drivers import NativePositionDriver, TimedPositionDriver
+from .drivers import NativePositionDriver, PositionDriver, TimedPositionDriver
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -132,7 +132,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return False
         return self._wrapped_supports_set_position()
 
-    def _position_driver(self):
+    def _position_driver(self) -> PositionDriver:
         """Select the position actuation driver from current capabilities.
 
         Re-evaluated per call: the wrapped entity's supported_features can
