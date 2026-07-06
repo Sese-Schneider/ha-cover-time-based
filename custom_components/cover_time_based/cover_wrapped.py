@@ -3,7 +3,12 @@
 import logging
 import time
 
-from homeassistant.components.cover import ATTR_CURRENT_POSITION, CoverEntityFeature
+from homeassistant.components.cover import (
+    ATTR_CURRENT_POSITION,
+    ATTR_CURRENT_TILT_POSITION,
+    ATTR_TILT_POSITION,
+    CoverEntityFeature,
+)
 from homeassistant.const import (
     ATTR_SUPPORTED_FEATURES,
     STATE_CLOSED,
@@ -16,6 +21,13 @@ from homeassistant.const import (
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .cover_base import CoverTimeBased
+from .drivers import (
+    NativePositionDriver,
+    NativeTiltDriver,
+    PositionDriver,
+    TimedPositionDriver,
+)
+from .tilt_strategies.inline import InlineTilt
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +61,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._force_time_based_position = force_time_based_position
         self._reports_command_not_endpoint = reports_command_not_endpoint
         self._last_self_command_time: float | None = None
+        self._native_position_driver = NativePositionDriver(self)
+        self._timed_position_driver = TimedPositionDriver(self)
+        self._native_tilt_driver = NativeTiltDriver(self)
 
     async def async_added_to_hass(self):
         """Register state listener for the wrapped cover entity."""
@@ -106,6 +121,52 @@ class WrappedCoverTimeBased(CoverTimeBased):
         features = self._wrapped_features()
         return features is not None and bool(features & CoverEntityFeature.STOP)
 
+    def _wrapped_supports_set_tilt_position(self) -> bool:
+        """Return True if the wrapped cover advertises native SET_TILT_POSITION."""
+        features = self._wrapped_features()
+        return features is not None and bool(
+            features & CoverEntityFeature.SET_TILT_POSITION
+        )
+
+    def _use_native_tilt(self) -> bool:
+        """Return True if tilt commands should be forwarded to the wrapped
+        cover's own tilt instead of simulated with the main motor.
+
+        Restricted to InlineTilt: the device positions its own slats, so the
+        inline strategy's no-op snap_trackers_to_physical leaves our
+        natively-set tilt intact. Dual-motor/sequential strategies re-derive
+        tilt from travel and keep the timed path. Command-echo covers report
+        nothing trustworthy to snap back from, so they keep the timed path too.
+        """
+        if self._reports_command_not_endpoint:
+            return False
+        if not self._has_tilt_support():
+            return False
+        if not isinstance(self._tilt_strategy, InlineTilt):
+            return False
+        return self._wrapped_supports_set_tilt_position()
+
+    async def _plan_tilt_for_travel(self, target, command, current_pos, current_tilt):
+        """Sweep the tilt DISPLAY to the direction endpoint during native travel.
+
+        The wrapped device positions its own slats, so we drive no physical
+        tilt. But the slats visibly track travel on a venetian (close going
+        down, open going up), so animate tilt_calc to that endpoint for display;
+        the base feeds this coupled target to tilt_calc.start_travel(). No
+        restore is scheduled — the device owns the final angle, and the
+        settle-snap syncs tilt to the reported value once travel completes.
+        Non-native covers keep the base coupling (physical, main-motor).
+        """
+        if self._use_native_tilt():
+            self._tilt_restore_target = None
+            if current_pos is None or current_tilt is None:
+                return None, 0.0, False
+            tilt_endpoint = 0 if target < current_pos else 100
+            return tilt_endpoint, 0.0, False
+        return await super()._plan_tilt_for_travel(
+            target, command, current_pos, current_tilt
+        )
+
     def _use_native_set_position(self) -> bool:
         """Return True if set_cover_position should be forwarded natively.
 
@@ -117,21 +178,49 @@ class WrappedCoverTimeBased(CoverTimeBased):
             native position to it; this also keeps the command-echo
             reinterpretation in _handle_external_state_change from ever racing a
             self-driven native move), and
-          - a configured tilt strategy: native forwarding drives travel only and
-            can't express the tilt coupling/pre-steps the time-based path plans,
-            so tilt covers keep the full tilt-aware open/close/stop tracking.
+          - a configured *timed* tilt strategy: native forwarding drives travel
+            only and can't express the tilt coupling/pre-steps the time-based
+            path plans, so a *timed* tilt strategy keeps the timed path
+            (dual-motor/sequential, and inline covers whose wrapped entity
+            can't forward tilt); native-tilt covers drive position natively
+            too. A native-tilt cover (_use_native_tilt()) already owns its
+            slats independently of our travel motor, so driving position
+            natively is coupling-safe there.
         """
         if self._force_time_based_position:
             return False
         if self._reports_command_not_endpoint:
             return False
-        if self._tilt_strategy is not None:
+        # A configured tilt strategy normally keeps the timed path so the
+        # tilt coupling/pre-steps can run. But when tilt is itself forwarded
+        # natively (_use_native_tilt) the wrapped device owns its slats, so
+        # driving position natively is coupling-safe and gives device-accurate
+        # positioning. Dual-motor/sequential (timed tilt) keep the timed path.
+        if self._tilt_strategy is not None and not self._use_native_tilt():
             return False
         return self._wrapped_supports_set_position()
 
+    def _position_driver(self) -> PositionDriver:
+        """Select the position actuation driver from current capabilities.
+
+        Re-evaluated per call: the wrapped entity's supported_features can
+        change at runtime (e.g. it goes unavailable and back).
+        """
+        if self._use_native_set_position():
+            return self._native_position_driver
+        return self._timed_position_driver
+
     def _motor_stops_itself(self) -> bool:
-        """Native covers drive to and hold the target position themselves."""
-        return self._use_native_set_position()
+        """The device holds the target itself — the auto-updater must not send
+        a relay stop.
+
+        True during a native tilt move (the wrapped cover positions its own
+        slats), and for native set_position covers (Plan 1). Timed covers on
+        either axis must be told to stop, so False otherwise.
+        """
+        if self._moving_tilt and self._use_native_tilt():
+            return True
+        return self._position_driver().holds_itself
 
     def _self_stops_at_endpoints(self) -> bool:
         """Command-echo wrapped covers have no endstop and must be stopped.
@@ -178,6 +267,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
         direction changes. When the wrapped cover settles into a stopped
         state we snap to its reported position; for covers without a
         current_position attribute we fall back to stopping the tracker.
+        On settle we also snap tilt to the wrapped cover's reported tilt
+        (native-tilt covers only, via _maybe_snap_to_reported_tilt).
         """
         if self._in_bounce_grace_window():
             self._log(
@@ -214,6 +305,22 @@ class WrappedCoverTimeBased(CoverTimeBased):
             )
             return
 
+        # Same for a self-driven native tilt move: the wrapped cover's own
+        # opening/closing while its slats run is a side effect of the tilt we
+        # forwarded, not an external travel. tilt_calc is traveling for the
+        # duration of our animation; mirror the native set_position guard above.
+        if (
+            new_val in _MOVING_STATES
+            and self._use_native_tilt()
+            and self.tilt_calc.is_traveling()
+        ):
+            self._log(
+                "_handle_external_state_change :: ignoring self-driven %s"
+                " during native tilt move",
+                new_val,
+            )
+            return
+
         if new_val == STATE_OPENING:
             self._log("_handle_external_state_change :: wrapped cover opening")
             await self.async_open_cover()
@@ -230,6 +337,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
                     " no position info"
                 )
                 await self.async_stop_cover()
+            await self._maybe_snap_to_reported_tilt()
 
     async def _handle_command_state(self, new_val: str) -> None:
         """Reinterpret the wrapped entity's state as a command echo.
@@ -272,6 +380,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         _handle_external_state_change. Without this, an attribute update while
         the device sits in 'closed' would snap us to 0% via the
         state==closed -> 0 shortcut, the very snap this option exists to avoid.
+        After handling position, we also snap tilt to the wrapped cover's
+        reported tilt (native-tilt covers only, via
+        _maybe_snap_to_reported_tilt).
         """
         if event.data.get("entity_id") != self._cover_entity_id:
             return
@@ -285,6 +396,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         target = self._wrapped_reported_position()
         if target is not None:
             await self._snap_to_position(target)
+        await self._maybe_snap_to_reported_tilt()
 
     async def _snap_to_position(self, target: int) -> None:
         """Snap our tracker to a known position.
@@ -319,26 +431,51 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return 0
         return None
 
-    async def _command_position_move(self, target, command, already_moving_same_dir):
-        """Drive a mid-position move for the wrapped cover.
+    def _wrapped_reported_tilt_position(self) -> int | None:
+        """Return the wrapped cover's reported tilt position, or None.
 
-        When the wrapped entity supports native SET_POSITION, forward
-        ``cover.set_cover_position`` straight to it (including on a same-direction
-        retarget — the device changes course): the device drives to the target
-        and holds there itself, so we never depend on its ``stop_cover`` and
-        ``_motor_stops_itself`` keeps auto-stop from re-commanding it. Everything
-        else — direction handling, min-movement, startup delay, tracker
-        animation — is the base set_position ceremony. Without native support we
-        fall back to the base relay drive (latched open/close + timed stop).
+        Honors ignore_reported_position — a device whose reported values are
+        untrustworthy is untrustworthy on both axes. Unlike
+        _wrapped_reported_position there is no closed-state fallback: a closed
+        cover implies nothing unambiguous about its slat angle.
         """
-        if not self._use_native_set_position():
-            await super()._command_position_move(
-                target, command, already_moving_same_dir
-            )
+        if self._ignore_reported_position:
+            return None
+        state = self.hass.states.get(self._cover_entity_id)
+        if state is None:
+            return None
+        attr_tilt = state.attributes.get(ATTR_CURRENT_TILT_POSITION)
+        if isinstance(attr_tilt, (int, float)) and 0 <= attr_tilt <= 100:
+            return int(attr_tilt)
+        return None
+
+    async def _maybe_snap_to_reported_tilt(self) -> None:
+        """Snap tilt_calc to the wrapped cover's reported tilt once it settles.
+
+        Gated on _use_native_tilt(): only covers whose tilt we forward natively
+        treat the reported tilt as source of truth. For dual-motor/sequential
+        the coupling model owns the tilt tracker, so we must not clobber it.
+        Skipped while our own tilt animation is still in flight.
+        """
+        if not self._use_native_tilt():
             return
-        self._require_movement_target_available(self._cover_entity_id)
-        self._log("_command_position_move :: forwarding set_cover_position(%d)", target)
-        await self._call_set_cover_position(int(round(target)))
+        if self.tilt_calc.is_traveling():
+            return
+        target = self._wrapped_reported_tilt_position()
+        if target is None or self.tilt_calc.current_position() == target:
+            return
+        self._log("_maybe_snap_to_reported_tilt :: snapping tilt to %d", target)
+        await self.set_known_tilt_position(tilt_position=target)
+
+    async def _command_position_move(self, target, command, already_moving_same_dir):
+        """Drive a mid-position move via the selected position driver.
+
+        Native covers forward set_cover_position and hold themselves; timed
+        covers run the base relay drive (latched open/close + timed stop).
+        """
+        await self._position_driver().command_move(
+            target, command, already_moving_same_dir
+        )
 
     async def _call_set_cover_position(self, position: int) -> None:
         """Forward a set_cover_position command to the wrapped entity."""
@@ -431,6 +568,51 @@ class WrappedCoverTimeBased(CoverTimeBased):
             self._cover_entity_id,
             service,
         )
+
+    async def _call_set_cover_tilt_position(self, position: int) -> None:
+        """Forward a set_cover_tilt_position command to the wrapped entity.
+
+        No bounce-grace window here (unlike the position forward): the
+        self-driven-tilt guard already suppresses the wrapped cover's own
+        opening/closing echo, and a bounce window would swallow a fast settle
+        report that the tilt settle-snap needs.
+        """
+        await self.hass.services.async_call(
+            "cover",
+            "set_cover_tilt_position",
+            {"entity_id": self._cover_entity_id, ATTR_TILT_POSITION: position},
+            False,
+        )
+
+    async def _prepare_native_tilt(self) -> None:
+        """Stop any in-flight move before forwarding a native tilt.
+
+        The base tilt entry points abandon the active lifecycle and stop an
+        in-flight travel before tilting. _abandon_active_lifecycle early-returns
+        without stopping a plain (non-restore, non-pre-step) timed travel, so
+        stop that here explicitly — including its physical relay — otherwise a
+        tilt issued mid-travel leaves the wrapped cover's position motor running.
+        """
+        await self._abandon_active_lifecycle()
+        if self.travel_calc.is_traveling():
+            self.travel_calc.stop()
+            self.stop_auto_updater()
+            if not self._triggered_externally:
+                await self._send_stop()
+
+    async def async_set_cover_tilt_position(self, **kwargs):
+        """Forward tilt-to-position natively when the wrapped cover can."""
+        if ATTR_TILT_POSITION in kwargs and self._use_native_tilt():
+            await self._native_tilt_driver.move_to(int(kwargs[ATTR_TILT_POSITION]))
+            return
+        await super().async_set_cover_tilt_position(**kwargs)
+
+    async def _async_move_tilt_to_endpoint(self, target):
+        """Route open/close-tilt through native forwarding when available."""
+        if self._use_native_tilt():
+            await self._native_tilt_driver.move_to(target)
+            return
+        await super()._async_move_tilt_to_endpoint(target)
 
     async def _send_tilt_open(self) -> None:
         if not self._wrapped_supports_tilt():

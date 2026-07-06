@@ -112,6 +112,8 @@ Because a command-echo cover has no endpoint feedback — and in practice drives
 
 **Tilt on a wrapped cover.** The **Inline** and **Sequential** tilt modes drive the wrapped cover's normal open / close commands, so they work on any wrapped cover regardless of whether it reports tilt support. Only the **Separate tilt motor** mode requires the wrapped cover to expose its own tilt commands, so it is offered only when the wrapped entity reports native tilt support.
 
+**Native tilt forwarding.** If the wrapped cover natively supports `set_cover_tilt_position` — for example a Z-Wave venetian shutter whose firmware positions its own slats — and you use the **Inline** tilt mode, the integration forwards the tilt commands (set-tilt, open-tilt, close-tilt) straight to the wrapped cover instead of simulating them by pulsing the main motor. The device positions its slats itself, precisely and at any travel position, and the integration snaps its tilt tracker to the angle the cover reports once it settles. On such a cover the integration also drives **position** natively (forwarding `set_cover_position`) even though tilt is configured, and animates the tilt display sweeping toward the direction endpoint during travel — venetian slats close on the way down, open on the way up — before syncing to the reported angle. This is auto-detected from the wrapped entity's supported features; no extra configuration is needed. A cover that does not advertise native tilt keeps the timed simulation described above, and the Sequential / Separate-tilt-motor modes always use their existing behaviour.
+
 ### Switch-based covers
 
 Control a cover using two relay switches (one for open, one for close), with an optional third stop switch (required in **Pulse** mode).
