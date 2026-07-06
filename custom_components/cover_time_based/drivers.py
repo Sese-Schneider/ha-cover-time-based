@@ -51,10 +51,11 @@ class NativePositionDriver(PositionDriver):
     async def command_move(self, target, command, already_moving_same_dir) -> None:
         cover = self._cover
         cover._require_movement_target_available(cover._cover_entity_id)
+        position = int(round(target))
         cover._log(
-            "_command_position_move :: forwarding set_cover_position(%d)", target
+            "_command_position_move :: forwarding set_cover_position(%d)", position
         )
-        await cover._call_set_cover_position(int(round(target)))
+        await cover._call_set_cover_position(position)
 
 
 class TiltDriver(ABC):
@@ -87,8 +88,9 @@ class NativeTiltDriver(TiltDriver):
         current = cover.tilt_calc.current_position()
         if current is not None and int(current) == target:
             return
-        await cover._prepare_native_tilt()
         cover._self_initiated_movement = not cover._triggered_externally
+        cover._require_movement_target_available(cover._cover_entity_id)
+        await cover._prepare_native_tilt()
         cover._moving_tilt = True
         cover._log("NativeTiltDriver :: forwarding set_cover_tilt_position(%d)", target)
         await cover._call_set_cover_tilt_position(target)

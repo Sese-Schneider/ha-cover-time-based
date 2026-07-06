@@ -913,6 +913,23 @@ class TestNativeCouplingNeutralized:
         assert started is False
         assert cover._tilt_restore_target == 60  # base scheduled a restore
 
+    @pytest.mark.asyncio
+    async def test_move_to_rejects_unavailable_target(self):
+        from custom_components.cover_time_based.drivers import NativeTiltDriver
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
+        _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT, state="unavailable"
+        )
+        cover.tilt_calc.set_position(80)
+        cover._triggered_externally = False
+
+        with pytest.raises(HomeAssistantError):
+            await NativeTiltDriver(cover).move_to(30)
+
 
 class TestNativePositionWithNativeTilt:
     """A native-both-inline cover drives position natively too (symmetry);
