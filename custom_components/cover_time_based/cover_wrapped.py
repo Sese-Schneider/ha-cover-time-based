@@ -146,6 +146,22 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return False
         return self._wrapped_supports_set_tilt_position()
 
+    async def _plan_tilt_for_travel(self, target, command, current_pos, current_tilt):
+        """Skip the physical tilt coupling for native-tilt covers.
+
+        The wrapped device positions its own slats during travel, so the base
+        inline coupling (sweep tilt to the endpoint via the main motor, then
+        restore) would fight it. Skip it and let the settle-snap sync tilt to
+        the device's reported angle once travel completes. Non-native covers
+        keep the base coupling.
+        """
+        if self._use_native_tilt():
+            self._tilt_restore_target = None
+            return None, 0.0, False
+        return await super()._plan_tilt_for_travel(
+            target, command, current_pos, current_tilt
+        )
+
     def _use_native_set_position(self) -> bool:
         """Return True if set_cover_position should be forwarded natively.
 

@@ -840,3 +840,38 @@ class TestTiltSettleSnap:
         await cover._handle_external_state_change("cover.inner", "opening", "open")
 
         assert cover.tilt_calc.current_position() == 100  # unchanged; not native
+
+
+class TestNativeCouplingNeutralized:
+    """A position move on a native-tilt cover schedules no main-motor tilt
+    restore — the device manages its own slats."""
+
+    _F_SET_TILT = 128
+
+    @pytest.mark.asyncio
+    async def test_no_tilt_restore_scheduled_for_native(self):
+        cover = _make_wrapped_cover(tilt_time_close=5, tilt_time_open=5, tilt_mode="inline")
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT)
+        cover._tilt_restore_target = 77  # pretend something set it
+
+        tilt_target, pre_step_delay, started = await cover._plan_tilt_for_travel(
+            50, "close", current_pos=100, current_tilt=60
+        )
+
+        assert (tilt_target, pre_step_delay, started) == (None, 0.0, False)
+        assert cover._tilt_restore_target is None
+
+    @pytest.mark.asyncio
+    async def test_coupling_preserved_for_non_native(self):
+        # A non-native inline cover (no SET_TILT_POSITION) keeps the base plan,
+        # which for an inline mid-position move schedules a tilt restore.
+        cover = _make_wrapped_cover(tilt_time_close=5, tilt_time_open=5, tilt_mode="inline")
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE)  # no SET_TILT_POSITION
+        cover.tilt_calc.set_position(60)
+
+        _, _, started = await cover._plan_tilt_for_travel(
+            50, "close", current_pos=100, current_tilt=60
+        )
+
+        assert started is False
+        assert cover._tilt_restore_target == 60  # base scheduled a restore
