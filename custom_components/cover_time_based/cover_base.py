@@ -348,10 +348,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         a moving tilt motor must not read as the cover opening (that would make
         a travel command stop-and-settle the running tilt motor). A travel
         operation still counts while its tilt-to-safe pre-step runs — travel is
-        pending though ``travel_calc`` hasn't started — so the pre-step's
-        direction is honoured. Shared-motor tilt (inline/sequential) has no
-        separate motor — its tilt phase IS the travel motor running — so the
-        cover-level property is retained there to keep settle-before-reverse.
+        pending though ``travel_calc`` hasn't started — so the pending travel
+        command's direction is honoured (the queued travel direction, not the
+        tilt pre-step's own motion, which may be the opposite way). Shared-motor
+        tilt (inline/sequential) has no separate motor — its tilt phase IS the
+        travel motor running — so the cover-level property is retained there to
+        keep settle-before-reverse.
         """
         if not self._has_tilt_motor():
             return self.is_opening
