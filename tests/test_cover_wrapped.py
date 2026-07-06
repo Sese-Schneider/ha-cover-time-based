@@ -912,3 +912,60 @@ class TestNativeCouplingNeutralized:
 
         assert started is False
         assert cover._tilt_restore_target == 60  # base scheduled a restore
+
+
+class TestNativePositionWithNativeTilt:
+    """A native-both-inline cover drives position natively too (symmetry);
+    timed-tilt strategies keep the timed position path."""
+
+    _F_SET_TILT = 128
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    def test_native_position_enabled_for_native_both_inline(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
+        _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | self._F_SET_TILT
+        )
+        assert cover._use_native_set_position() is True
+
+    def test_timed_position_kept_for_sequential_even_with_set_position(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="sequential_close"
+        )
+        _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | self._F_SET_TILT
+        )
+        assert cover._use_native_set_position() is False
+
+    def test_timed_position_kept_for_inline_without_set_tilt(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
+        _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION
+        )  # no SET_TILT
+        assert cover._use_native_set_position() is False
+
+    @pytest.mark.asyncio
+    async def test_position_move_forwards_natively_for_native_both(self):
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
+        _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | self._F_SET_TILT
+        )
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(50)
+
+        await cover.set_position(60)
+
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "set_cover_position" in services
+        assert "close_cover" not in services and "open_cover" not in services

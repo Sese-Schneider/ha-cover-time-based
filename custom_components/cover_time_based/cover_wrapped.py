@@ -173,15 +173,23 @@ class WrappedCoverTimeBased(CoverTimeBased):
             native position to it; this also keeps the command-echo
             reinterpretation in _handle_external_state_change from ever racing a
             self-driven native move), and
-          - a configured tilt strategy: native forwarding drives travel only and
-            can't express the tilt coupling/pre-steps the time-based path plans,
-            so tilt covers keep the full tilt-aware open/close/stop tracking.
+          - a configured *timed* tilt strategy: native forwarding drives travel
+            only and can't express the tilt coupling/pre-steps the time-based
+            path plans, so dual-motor/sequential tilt covers keep the full
+            tilt-aware open/close/stop tracking. A native-tilt cover
+            (_use_native_tilt()) already owns its slats independently of our
+            travel motor, so driving position natively too is coupling-safe.
         """
         if self._force_time_based_position:
             return False
         if self._reports_command_not_endpoint:
             return False
-        if self._tilt_strategy is not None:
+        # A configured tilt strategy normally keeps the timed path so the
+        # tilt coupling/pre-steps can run. But when tilt is itself forwarded
+        # natively (_use_native_tilt) the wrapped device owns its slats, so
+        # driving position natively is coupling-safe and gives device-accurate
+        # positioning. Dual-motor/sequential (timed tilt) keep the timed path.
+        if self._tilt_strategy is not None and not self._use_native_tilt():
             return False
         return self._wrapped_supports_set_position()
 
