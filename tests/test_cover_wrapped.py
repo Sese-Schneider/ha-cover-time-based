@@ -687,12 +687,16 @@ class TestUseNativeTilt:
     _F_SET_TILT = 128  # CoverEntityFeature.SET_TILT_POSITION
 
     def test_native_tilt_when_inline_and_set_tilt_supported(self):
-        cover = _make_wrapped_cover(tilt_time_close=5, tilt_time_open=5, tilt_mode="inline")
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT)
         assert cover._use_native_tilt() is True
 
     def test_not_native_without_set_tilt_position(self):
-        cover = _make_wrapped_cover(tilt_time_close=5, tilt_time_open=5, tilt_mode="inline")
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE)  # no SET_TILT_POSITION
         assert cover._use_native_tilt() is False
 
@@ -705,7 +709,9 @@ class TestUseNativeTilt:
 
     def test_not_native_for_command_echo(self):
         cover = _make_wrapped_cover(
-            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline",
+            tilt_time_close=5,
+            tilt_time_open=5,
+            tilt_mode="inline",
             reports_command_not_endpoint=True,
         )
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT)
@@ -804,7 +810,9 @@ class TestTiltSettleSnap:
 
     @pytest.mark.asyncio
     async def test_snaps_tilt_to_reported_on_settle(self):
-        cover = _make_wrapped_cover(tilt_time_close=5, tilt_time_open=5, tilt_mode="inline")
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
         st = _set_wrapped_features(
             cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT, state="open"
         )
@@ -850,7 +858,9 @@ class TestNativeCouplingNeutralized:
 
     @pytest.mark.asyncio
     async def test_no_tilt_restore_scheduled_for_native(self):
-        cover = _make_wrapped_cover(tilt_time_close=5, tilt_time_open=5, tilt_mode="inline")
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | self._F_SET_TILT)
         cover._tilt_restore_target = 77  # pretend something set it
 
@@ -865,7 +875,9 @@ class TestNativeCouplingNeutralized:
     async def test_coupling_preserved_for_non_native(self):
         # A non-native inline cover (no SET_TILT_POSITION) keeps the base plan,
         # which for an inline mid-position move schedules a tilt restore.
-        cover = _make_wrapped_cover(tilt_time_close=5, tilt_time_open=5, tilt_mode="inline")
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE)  # no SET_TILT_POSITION
         cover.tilt_calc.set_position(60)
 
