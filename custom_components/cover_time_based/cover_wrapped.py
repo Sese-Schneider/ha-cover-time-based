@@ -570,8 +570,13 @@ class WrappedCoverTimeBased(CoverTimeBased):
         )
 
     async def _call_set_cover_tilt_position(self, position: int) -> None:
-        """Forward a set_cover_tilt_position command to the wrapped entity."""
-        self._start_bounce_grace_window()
+        """Forward a set_cover_tilt_position command to the wrapped entity.
+
+        No bounce-grace window here (unlike the position forward): the
+        self-driven-tilt guard already suppresses the wrapped cover's own
+        opening/closing echo, and a bounce window would swallow a fast settle
+        report that the tilt settle-snap needs.
+        """
         await self.hass.services.async_call(
             "cover",
             "set_cover_tilt_position",
