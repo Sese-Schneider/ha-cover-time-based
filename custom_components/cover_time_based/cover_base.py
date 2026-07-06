@@ -485,10 +485,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         Excludes two cases that must still reach ``_async_move_to_endpoint``: a
         pending opposite-direction startup delay (which that method cancels),
-        and an external move on sequential-tilt hardware (whose external close
-        drives past 0 to articulate the slats). The sequential carve-out is
-        strictly needed only at endpoint 0; it is applied at both endpoints for
-        symmetry and is at worst a harmless extra resync at 100.
+        and an external close on sequential-tilt hardware (which drives past 0
+        to articulate the slats). The sequential carve-out is an endpoint-0
+        concern only — the drive-past redirect in ``_async_move_to_endpoint`` is
+        gated on ``target == 0`` — so it is not applied at 100, where it would
+        needlessly defeat the open-at-100 no-op.
         """
         opposite = SERVICE_OPEN_COVER if endpoint == 0 else SERVICE_CLOSE_COVER
         pending_opposite_startup = (
@@ -496,8 +497,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             and not self._startup_delay_task.done()
             and self._last_command == opposite
         )
-        external_sequential = self._triggered_externally and isinstance(
-            self._tilt_strategy, SequentialTilt
+        external_sequential = (
+            endpoint == 0
+            and self._triggered_externally
+            and isinstance(self._tilt_strategy, SequentialTilt)
         )
         return (
             not (pending_opposite_startup or external_sequential)

@@ -17,7 +17,7 @@ self-stops there, so the timed stop is essential.
 import asyncio
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
@@ -385,6 +385,34 @@ async def test_command_echo_open_at_endpoint_with_tilt_is_noop(make_cover):
 
     assert cover.hass.services.async_call.call_args_list == []
     assert not cover.travel_calc.is_traveling()
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_command_echo_sequential_external_open_at_endpoint_is_noop(make_cover):
+    """External open on a command-echo sequential-tilt cover already settled at
+    100 must still no-op. The sequential carve-out in _settled_at_endpoint is a
+    close-side (endpoint-0) concern — the drive-past-to-articulate redirect in
+    _async_move_to_endpoint is gated on target==0 — so it must not defeat the
+    open-at-100 no-op (issue #152, raised in review)."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        reports_command_not_endpoint=True,
+        tilt_time_close=2.0,
+        tilt_time_open=2.0,
+        tilt_mode="sequential_close",
+    )
+    cover._triggered_externally = True
+    cover.travel_calc.set_position(100)  # settled fully open
+    cover.tilt_calc.set_position(100)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_move_to_endpoint", new=AsyncMock()) as move_mock,
+    ):
+        await cover.async_open_cover()
+
+    move_mock.assert_not_called()
     await _cancel_tasks(cover)
 
 
