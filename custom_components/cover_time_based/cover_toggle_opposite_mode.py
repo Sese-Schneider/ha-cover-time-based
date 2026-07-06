@@ -26,9 +26,7 @@ class ToggleOppositeModeCover(ToggleBaseCover):
         elif self._last_command == SERVICE_OPEN_COVER:
             await self._pulse_relay(self._close_switch_entity_id)
         else:
-            self._log(
-                "_send_stop :: opposite toggle with no last command, skipping"
-            )
+            self._log("_send_stop :: opposite toggle with no last command, skipping")
 
     async def _send_tilt_stop(self) -> None:
         # Pulse the opposite tilt relay to halt a moving tilt motor.
