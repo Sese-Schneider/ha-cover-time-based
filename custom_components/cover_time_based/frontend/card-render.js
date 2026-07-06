@@ -148,6 +148,9 @@ export function renderControlMode(card, c) {
         <option value="toggle" ?selected=${mode === "toggle"}>
           ${card._t("control_mode.toggle")}
         </option>
+        <option value="toggle_opposite" ?selected=${mode === "toggle_opposite"}>
+          ${card._t("control_mode.toggle_opposite")}
+        </option>
       </select>
       ${showPulseTime
         ? html`
@@ -290,7 +293,7 @@ export function renderInputEntities(card, c) {
         ></ha-entity-picker>
         ` : ""}
       </div>
-      ${c.control_mode === "toggle"
+      ${c.control_mode === "toggle" || c.control_mode === "toggle_opposite"
         ? renderToggleWithHelp(
             card,
             "relay_reports_off.label",

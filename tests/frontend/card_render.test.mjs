@@ -45,6 +45,13 @@ const toggleCfg = (over = {}) => ({
   ...over,
 });
 
+const toggleOppositeCfg = (over = {}) => ({
+  control_mode: "toggle_opposite",
+  open_switch_entity_id: "switch.o",
+  close_switch_entity_id: "switch.c",
+  ...over,
+});
+
 const wrappedCfg = (over = {}) => ({
   control_mode: "wrapped",
   cover_entity_id: "cover.real",
@@ -216,12 +223,12 @@ test("entity info row shows the selectedEntity string", async () => {
 // _renderControlMode — four option values; pulse-time field
 // ---------------------------------------------------------------------------
 
-test("control mode select has four options: wrapped/switch/pulse/toggle", async () => {
+test("control mode select has five options: wrapped/switch/pulse/toggle/toggle_opposite", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
   const select = card.shadowRoot.querySelector("select.ha-select");
   expect(select).not.toBeNull();
   const values = [...select.options].map((o) => o.value);
-  expect(values).toEqual(["wrapped", "switch", "pulse", "toggle"]);
+  expect(values).toEqual(["wrapped", "switch", "pulse", "toggle", "toggle_opposite"]);
 });
 
 // Note: happy-dom does not sync the `selected` HTML attribute to the native
@@ -248,6 +255,20 @@ test("toggle mode: 'toggle' option has the selected attribute", async () => {
   const select = card.shadowRoot.querySelector("select.ha-select");
   const selectedOpt = [...select.options].find((o) => o.hasAttribute("selected"));
   expect(selectedOpt?.value).toBe("toggle");
+});
+
+test("toggle_opposite mode: its option has the selected attribute", async () => {
+  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: toggleOppositeCfg(), activeTab: "device" });
+  const select = card.shadowRoot.querySelector("select.ha-select");
+  const selectedOpt = [...select.options].find((o) => o.hasAttribute("selected"));
+  expect(selectedOpt?.value).toBe("toggle_opposite");
+});
+
+test("toggle_opposite mode shows the relay_reports_off toggle", async () => {
+  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: toggleOppositeCfg(), activeTab: "device" });
+  const labels = [...card.shadowRoot.querySelectorAll(".toggle-label")].map((n) => n.textContent);
+  // The relay_reports_off toggle label is present (same as toggle mode).
+  expect(labels.some((t) => /report/i.test(t))).toBe(true);
 });
 
 test("wrapped mode: 'wrapped' option has the selected attribute", async () => {
