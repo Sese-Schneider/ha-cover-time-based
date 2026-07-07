@@ -582,6 +582,52 @@ class TestInvertCommandEcho:
         open_mock.assert_awaited_once()
 
 
+class TestInvertEndToEndOpenClose:
+    """End-to-end: driving the public async_open_cover/async_close_cover
+    entry points on an inverted cover (no native features, so the timed
+    path is used) drives the underlying's opposite command, while the
+    internal tracker still travels toward the user-frame target.
+    """
+
+    def _prep(self, cover):
+        # Avoid scheduling a real auto-updater / writing state on the mock hass.
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+        # No native SET_POSITION -> open/close use the timed _send_open/
+        # _send_close path (see TestInvertOutboundOpenClose), while the
+        # target stays "available" so movement isn't rejected.
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)
+
+    @pytest.mark.asyncio
+    async def test_open_cover_drives_underlying_close_and_travels_to_user_open(self):
+        cover = _make_wrapped_cover(invert=True)
+        self._prep(cover)
+        cover.travel_calc.set_position(0)  # user-frame closed
+
+        await cover.async_open_cover()
+
+        assert _cover_svc("close_cover", "cover.inner") in _calls(
+            cover.hass.services.async_call
+        )
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 100
+
+    @pytest.mark.asyncio
+    async def test_close_cover_drives_underlying_open_and_travels_to_user_close(self):
+        cover = _make_wrapped_cover(invert=True)
+        self._prep(cover)
+        cover.travel_calc.set_position(100)  # user-frame open
+
+        await cover.async_close_cover()
+
+        assert _cover_svc("open_cover", "cover.inner") in _calls(
+            cover.hass.services.async_call
+        )
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 0
+
+
 class TestWrappedNativeMoveNoHijack:
     """While the tracker animates a native set_position move, the wrapped
     cover's own opening/closing state (a side effect of our forwarded
