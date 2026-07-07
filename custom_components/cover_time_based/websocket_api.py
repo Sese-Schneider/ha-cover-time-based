@@ -54,7 +54,7 @@ from .cover import (
     DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
 )
-from .const import DOMAIN
+from .const import CONF_INVERT, DEFAULT_INVERT, DOMAIN
 from .helpers import resolve_entity_or_none
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,6 +72,7 @@ _FIELD_MAP = {
     "ignore_reported_position": CONF_IGNORE_REPORTED_POSITION,
     "force_time_based_position": CONF_FORCE_TIME_BASED_POSITION,
     "reports_command_not_endpoint": CONF_REPORTS_COMMAND_NOT_ENDPOINT,
+    "invert": CONF_INVERT,
     "tilt_mode": CONF_TILT_MODE,
     "travel_time_close": CONF_TRAVEL_TIME_CLOSE,
     "travel_time_open": CONF_TRAVEL_TIME_OPEN,
@@ -199,6 +200,7 @@ async def ws_get_config(
                 CONF_REPORTS_COMMAND_NOT_ENDPOINT,
                 DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
             ),
+            "invert": options.get(CONF_INVERT, DEFAULT_INVERT),
             "tilt_mode": tilt_mode,
             "travel_time_close": options.get(CONF_TRAVEL_TIME_CLOSE),
             "travel_time_open": options.get(CONF_TRAVEL_TIME_OPEN),
