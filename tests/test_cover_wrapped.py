@@ -387,6 +387,70 @@ class TestWrappedNativeSetPosition:
         assert "close_cover" in services
 
 
+class TestInvertOutboundSetPosition:
+    """Inverted covers forward set_cover_position(100 - p) to the underlying."""
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_native_set_position_is_inverted(self):
+        cover = _make_wrapped_cover(invert=True)
+        _set_wrapped_features(cover, 7)  # OPEN|CLOSE|SET_POSITION
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+
+        await cover.set_position(30)  # user target 30
+
+        assert _calls(cover.hass.services.async_call) == [
+            call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.inner", "position": 70},
+                False,
+            ),
+        ]
+        # Internal tracker stays in user frame.
+        assert cover.travel_calc._travel_to_position == 30
+
+    @pytest.mark.asyncio
+    async def test_stop_freeze_is_inverted(self):
+        cover = _make_wrapped_cover(invert=True)
+        _set_wrapped_features(cover, 7)  # SET_POSITION, no STOP → freeze via set_position
+        cover.travel_calc.set_position(43)  # user frame
+
+        await cover._send_stop()
+
+        assert _calls(cover.hass.services.async_call) == [
+            call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.inner", "position": 57},
+                False,
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_native_set_position_unchanged_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        _set_wrapped_features(cover, 7)
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+
+        await cover.set_position(30)
+
+        assert _calls(cover.hass.services.async_call) == [
+            call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.inner", "position": 30},
+                False,
+            ),
+        ]
+
+
 class TestWrappedNativeMoveNoHijack:
     """While the tracker animates a native set_position move, the wrapped
     cover's own opening/closing state (a side effect of our forwarded

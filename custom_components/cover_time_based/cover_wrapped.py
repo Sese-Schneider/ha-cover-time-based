@@ -488,12 +488,19 @@ class WrappedCoverTimeBased(CoverTimeBased):
         )
 
     async def _call_set_cover_position(self, position: int) -> None:
-        """Forward a set_cover_position command to the wrapped entity."""
+        """Forward a set_cover_position command to the wrapped entity.
+
+        The forwarded value is translated to the underlying's frame
+        (100 - position when inverted); the caller works in user frame.
+        """
         self._start_bounce_grace_window()
         await self.hass.services.async_call(
             "cover",
             "set_cover_position",
-            {"entity_id": self._cover_entity_id, "position": position},
+            {
+                "entity_id": self._cover_entity_id,
+                "position": self._invert_position(position),
+            },
             False,
         )
 
