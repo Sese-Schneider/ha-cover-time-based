@@ -2294,3 +2294,17 @@ class TestInvertRoundTrip:
         from custom_components.cover_time_based.websocket_api import _FIELD_MAP
 
         assert _FIELD_MAP["invert"] == CONF_INVERT
+
+    def test_update_schema_accepts_invert(self):
+        # Guards the schema/_FIELD_MAP pair: a real websocket update_config
+        # carrying `invert` must validate, else persistence is silently rejected.
+        schema = ws_update_config._ws_schema
+        validated = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": "cover.x",
+                "invert": True,
+            }
+        )
+        assert validated["invert"] is True

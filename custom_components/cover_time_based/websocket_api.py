@@ -250,6 +250,7 @@ async def ws_get_config(
         vol.Optional("ignore_reported_position"): vol.Any(None, bool),
         vol.Optional("force_time_based_position"): vol.Any(None, bool),
         vol.Optional("reports_command_not_endpoint"): vol.Any(None, bool),
+        vol.Optional("invert"): vol.Any(None, bool),
         vol.Optional("assumed_state"): vol.Any(None, bool),
         vol.Optional("tilt_mode"): vol.In(
             [
