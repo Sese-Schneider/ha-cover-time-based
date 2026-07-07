@@ -333,10 +333,16 @@ class WrappedCoverTimeBased(CoverTimeBased):
 
         if new_val == STATE_OPENING:
             self._log("_handle_external_state_change :: wrapped cover opening")
-            await self.async_open_cover()
+            if self._invert:
+                await self.async_close_cover()
+            else:
+                await self.async_open_cover()
         elif new_val == STATE_CLOSING:
             self._log("_handle_external_state_change :: wrapped cover closing")
-            await self.async_close_cover()
+            if self._invert:
+                await self.async_open_cover()
+            else:
+                await self.async_close_cover()
         elif new_val in _STOPPED_STATES:
             target = self._wrapped_reported_position()
             if target is not None:

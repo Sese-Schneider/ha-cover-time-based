@@ -503,6 +503,45 @@ class TestInvertInboundReportedPosition:
         assert cover._wrapped_reported_position() == 0
 
 
+class TestInvertInboundStateChange:
+    """Inverted: underlying opening → we close; underlying closing → we open."""
+
+    @pytest.mark.asyncio
+    async def test_underlying_opening_drives_our_close(self):
+        cover = _make_wrapped_cover(invert=True)
+        cover.travel_calc.set_position(50)  # idle
+        cover._last_self_command_time = None
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._handle_external_state_change("cover.inner", "closed", "opening")
+        close_mock.assert_awaited_once()
+        open_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_underlying_closing_drives_our_open(self):
+        cover = _make_wrapped_cover(invert=True)
+        cover.travel_calc.set_position(50)
+        cover._last_self_command_time = None
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._handle_external_state_change("cover.inner", "open", "closing")
+        open_mock.assert_awaited_once()
+        close_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_opening_drives_our_open_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        cover.travel_calc.set_position(50)
+        cover._last_self_command_time = None
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change("cover.inner", "closed", "opening")
+        open_mock.assert_awaited_once()
+
+
 class TestWrappedNativeMoveNoHijack:
     """While the tracker animates a native set_position move, the wrapped
     cover's own opening/closing state (a side effect of our forwarded
