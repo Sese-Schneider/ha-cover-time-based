@@ -451,6 +451,34 @@ class TestInvertOutboundSetPosition:
         ]
 
 
+class TestInvertOutboundOpenClose:
+    """Inverted user-open drives the underlying close_cover, and vice versa."""
+
+    @pytest.mark.asyncio
+    async def test_send_open_drives_underlying_close(self):
+        cover = _make_wrapped_cover(invert=True)
+        await cover._send_open()
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("close_cover", "cover.inner"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_close_drives_underlying_open(self):
+        cover = _make_wrapped_cover(invert=True)
+        await cover._send_close()
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("open_cover", "cover.inner"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_open_unchanged_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        await cover._send_open()
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("open_cover", "cover.inner"),
+        ]
+
+
 class TestWrappedNativeMoveNoHijack:
     """While the tracker animates a native set_position move, the wrapped
     cover's own opening/closing state (a side effect of our forwarded

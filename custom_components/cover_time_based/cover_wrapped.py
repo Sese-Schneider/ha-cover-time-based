@@ -512,13 +512,27 @@ class WrappedCoverTimeBased(CoverTimeBased):
         )
 
     async def _send_open(self) -> None:
+        """User-intent open. When inverted, drives the underlying close."""
+        if self._invert:
+            await self._send_underlying_close()
+        else:
+            await self._send_underlying_open()
+
+    async def _send_close(self) -> None:
+        """User-intent close. When inverted, drives the underlying open."""
+        if self._invert:
+            await self._send_underlying_open()
+        else:
+            await self._send_underlying_close()
+
+    async def _send_underlying_open(self) -> None:
         # If the wrapped cover is currently closing, the open command produces
         # two state transitions (closing→open, then open→opening).
         state = self.hass.states.get(self._cover_entity_id)
         expected = 2 if state and state.state == STATE_CLOSING else 1
         await self._call_cover_service("open_cover", expected)
 
-    async def _send_close(self) -> None:
+    async def _send_underlying_close(self) -> None:
         # If the wrapped cover is currently opening, the close command produces
         # two state transitions (opening→open, then open→closing).
         state = self.hass.states.get(self._cover_entity_id)
