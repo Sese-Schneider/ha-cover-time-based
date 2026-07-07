@@ -362,7 +362,7 @@ test("wrapped mode: toggling reports-command-not-endpoint calls _updateLocal", a
   const captured = [];
   card._updateLocal = (u) => captured.push(u);
   // Order in renderInputEntities: [0] ignore_reported_position,
-  // [1] force_time_based_position, [2] reports_command_not_endpoint, [3] assumed_state
+  // [1] force_time_based_position, [2] reports_command_not_endpoint, [3] invert, [4] assumed_state
   const toggle = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch")[2];
   toggle.checked = true;
   toggle.dispatchEvent(new Event("change"));
