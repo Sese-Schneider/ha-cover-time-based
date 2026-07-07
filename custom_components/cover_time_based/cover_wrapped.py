@@ -442,7 +442,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
 
         Prefers the current_position attribute. Falls back to 0 for
         state=closed (unambiguous); state=open without an attribute is
-        ambiguous (could be any position > 0) and returns None.
+        ambiguous (could be any position > 0) and returns None. Both the
+        attribute and the closed fallback are translated through
+        _invert_position, so when self._invert is set the reported value is
+        100 - position and the closed fallback becomes 100.
         """
         state = self.hass.states.get(self._cover_entity_id)
         if state is None:
