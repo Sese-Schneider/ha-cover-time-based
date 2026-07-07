@@ -370,11 +370,19 @@ class WrappedCoverTimeBased(CoverTimeBased):
         command back to the wrapped cover.
         """
         if new_val in (STATE_OPEN, STATE_OPENING):
-            self._log("_handle_command_state :: open command")
-            await self.async_open_cover()
+            if self._invert:
+                self._log("_handle_command_state :: open echo → close (inverted)")
+                await self.async_close_cover()
+            else:
+                self._log("_handle_command_state :: open command")
+                await self.async_open_cover()
         elif new_val in (STATE_CLOSED, STATE_CLOSING):
-            self._log("_handle_command_state :: close command")
-            await self.async_close_cover()
+            if self._invert:
+                self._log("_handle_command_state :: close echo → open (inverted)")
+                await self.async_open_cover()
+            else:
+                self._log("_handle_command_state :: close command")
+                await self.async_close_cover()
         elif new_val == STATE_UNKNOWN:
             self._log("_handle_command_state :: stop command")
             await self.async_stop_cover()

@@ -542,6 +542,46 @@ class TestInvertInboundStateChange:
         open_mock.assert_awaited_once()
 
 
+class TestInvertCommandEcho:
+    """Inverted command-echo: open-echo → our close; close-echo → our open."""
+
+    @pytest.mark.asyncio
+    async def test_open_echo_drives_our_close(self):
+        cover = _make_wrapped_cover(invert=True, reports_command_not_endpoint=True)
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._handle_external_state_change("cover.inner", "unknown", "open")
+        close_mock.assert_awaited_once()
+        open_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_closed_echo_drives_our_open(self):
+        cover = _make_wrapped_cover(invert=True, reports_command_not_endpoint=True)
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._handle_external_state_change("cover.inner", "open", "closed")
+        open_mock.assert_awaited_once()
+        close_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unknown_is_still_stop_when_inverted(self):
+        cover = _make_wrapped_cover(invert=True, reports_command_not_endpoint=True)
+        with patch.object(cover, "async_stop_cover", new=AsyncMock()) as stop_mock:
+            await cover._handle_external_state_change("cover.inner", "closed", "unknown")
+        stop_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_open_echo_drives_our_open_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False, reports_command_not_endpoint=True)
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change("cover.inner", "unknown", "open")
+        open_mock.assert_awaited_once()
+
+
 class TestWrappedNativeMoveNoHijack:
     """While the tracker animates a native set_position move, the wrapped
     cover's own opening/closing state (a side effect of our forwarded
