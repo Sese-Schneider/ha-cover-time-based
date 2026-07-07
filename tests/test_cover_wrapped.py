@@ -418,7 +418,9 @@ class TestInvertOutboundSetPosition:
     @pytest.mark.asyncio
     async def test_stop_freeze_is_inverted(self):
         cover = _make_wrapped_cover(invert=True)
-        _set_wrapped_features(cover, 7)  # SET_POSITION, no STOP → freeze via set_position
+        _set_wrapped_features(
+            cover, 7
+        )  # SET_POSITION, no STOP → freeze via set_position
         cover.travel_calc.set_position(43)  # user frame
 
         await cover._send_stop()
@@ -515,7 +517,9 @@ class TestInvertInboundStateChange:
             patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
             patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
         ):
-            await cover._handle_external_state_change("cover.inner", "closed", "opening")
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "opening"
+            )
         close_mock.assert_awaited_once()
         open_mock.assert_not_awaited()
 
@@ -538,7 +542,9 @@ class TestInvertInboundStateChange:
         cover.travel_calc.set_position(50)
         cover._last_self_command_time = None
         with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
-            await cover._handle_external_state_change("cover.inner", "closed", "opening")
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "opening"
+            )
         open_mock.assert_awaited_once()
 
 
@@ -571,7 +577,9 @@ class TestInvertCommandEcho:
     async def test_unknown_is_still_stop_when_inverted(self):
         cover = _make_wrapped_cover(invert=True, reports_command_not_endpoint=True)
         with patch.object(cover, "async_stop_cover", new=AsyncMock()) as stop_mock:
-            await cover._handle_external_state_change("cover.inner", "closed", "unknown")
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "unknown"
+            )
         stop_mock.assert_awaited_once()
 
     @pytest.mark.asyncio
