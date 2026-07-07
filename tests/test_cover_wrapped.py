@@ -479,6 +479,30 @@ class TestInvertOutboundOpenClose:
         ]
 
 
+class TestInvertInboundReportedPosition:
+    """Inverted covers report 100 - underlying position; closed → 100."""
+
+    def test_reported_attr_position_is_inverted(self):
+        cover = _make_wrapped_cover(invert=True)
+        _set_wrapped_features(cover, 7, state="open", current_position=70)
+        assert cover._wrapped_reported_position() == 30
+
+    def test_reported_closed_maps_to_100(self):
+        cover = _make_wrapped_cover(invert=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE, state="closed")
+        assert cover._wrapped_reported_position() == 100
+
+    def test_reported_attr_unchanged_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        _set_wrapped_features(cover, 7, state="open", current_position=70)
+        assert cover._wrapped_reported_position() == 70
+
+    def test_reported_closed_maps_to_0_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE, state="closed")
+        assert cover._wrapped_reported_position() == 0
+
+
 class TestWrappedNativeMoveNoHijack:
     """While the tracker animates a native set_position move, the wrapped
     cover's own opening/closing state (a side effect of our forwarded

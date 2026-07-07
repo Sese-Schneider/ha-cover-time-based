@@ -436,9 +436,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         if not self._ignore_reported_position:
             attr_pos = state.attributes.get(ATTR_CURRENT_POSITION)
             if isinstance(attr_pos, (int, float)) and 0 <= attr_pos <= 100:
-                return int(attr_pos)
+                return self._invert_position(int(attr_pos))
         if state.state == STATE_CLOSED:
-            return 0
+            return self._invert_position(0)
         return None
 
     def _wrapped_reported_tilt_position(self) -> int | None:
