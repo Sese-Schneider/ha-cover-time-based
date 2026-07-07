@@ -25,6 +25,9 @@ export const EN = {
   "entities.reports_command_not_endpoint": "Reports commands, not endpoints",
   "entities.reports_command_not_endpoint_helper":
     "Enable for covers (e.g. some Tuya shutters) whose open/closed/unknown state is a command echo rather than a real endpoint — they report no opening/closing transition and no position. The state is treated as an open/close/stop command and the position is tracked by time.",
+  "entities.invert": "Invert position",
+  "entities.invert_helper":
+    "Flip the position axis: report 100 − the wrapped cover's position, and swap open/close. Use for covers that run backwards, e.g. an awning where the underlying entity reports open = extended. Position only; tilt is unaffected.",
   "entities.switch_entities": "Switch Entities",
   "entities.open_switch": "Open switch",
   "entities.close_switch": "Close switch",
