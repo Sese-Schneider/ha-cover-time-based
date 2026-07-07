@@ -29,6 +29,7 @@ def _make_wrapped_cover(
     cover_entity_id="cover.inner",
     force_time_based_position=False,
     reports_command_not_endpoint=False,
+    invert=False,
     tilt_time_close=None,
     tilt_time_open=None,
     tilt_mode="none",
@@ -62,6 +63,7 @@ def _make_wrapped_cover(
         cover_entity_id=cover_entity_id,
         force_time_based_position=force_time_based_position,
         reports_command_not_endpoint=reports_command_not_endpoint,
+        invert=invert,
     )
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
@@ -1076,3 +1078,32 @@ class TestNativeTiltSweep:
 
         assert cover.travel_calc.current_position() == 30
         assert cover.tilt_calc.current_position() == 25
+
+
+# ===================================================================
+# Invert option
+# ===================================================================
+
+
+class TestInvertOption:
+    """The invert option: constructor field, default, and the involution helper."""
+
+    def test_default_invert_is_false(self):
+        cover = _make_wrapped_cover()
+        assert cover._invert is False
+
+    def test_invert_stored_when_true(self):
+        cover = _make_wrapped_cover(invert=True)
+        assert cover._invert is True
+
+    def test_invert_position_is_noop_when_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        assert cover._invert_position(0) == 0
+        assert cover._invert_position(30) == 30
+        assert cover._invert_position(100) == 100
+
+    def test_invert_position_flips_when_on(self):
+        cover = _make_wrapped_cover(invert=True)
+        assert cover._invert_position(0) == 100
+        assert cover._invert_position(30) == 70
+        assert cover._invert_position(100) == 0

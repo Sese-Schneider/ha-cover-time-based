@@ -53,6 +53,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         ignore_reported_position=False,
         force_time_based_position=False,
         reports_command_not_endpoint=False,
+        invert=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -60,10 +61,19 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._ignore_reported_position = ignore_reported_position
         self._force_time_based_position = force_time_based_position
         self._reports_command_not_endpoint = reports_command_not_endpoint
+        self._invert = invert
         self._last_self_command_time: float | None = None
         self._native_position_driver = NativePositionDriver(self)
         self._timed_position_driver = TimedPositionDriver(self)
         self._native_tilt_driver = NativeTiltDriver(self)
+
+    def _invert_position(self, x: int) -> int:
+        """Translate a position between our frame and the underlying's.
+
+        An involution (100 - x), so the same call serves both directions.
+        A no-op when invert is off (issue #160).
+        """
+        return 100 - x if self._invert else x
 
     async def async_added_to_hass(self):
         """Register state listener for the wrapped cover entity."""
