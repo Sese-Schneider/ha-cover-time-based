@@ -279,6 +279,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
         current_position attribute we fall back to stopping the tracker.
         On settle we also snap tilt to the wrapped cover's reported tilt
         (native-tilt covers only, via _maybe_snap_to_reported_tilt).
+        When self._invert is set, the underlying's opening/closing are
+        interpreted as our close/open (swapped).
         """
         if self._in_bounce_grace_window():
             self._log(
@@ -367,7 +369,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         open/close command — a harmless same-direction continuation. The
         async_* paths run with _triggered_externally set (the dispatcher sets
         it before calling us), so they update the tracker without bouncing a
-        command back to the wrapped cover.
+        command back to the wrapped cover. When self._invert is set, an open
+        echo drives our close and a close echo drives our open (swapped);
+        the stop echo is unchanged.
         """
         if new_val in (STATE_OPEN, STATE_OPENING):
             if self._invert:
