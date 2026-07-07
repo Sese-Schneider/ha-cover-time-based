@@ -53,6 +53,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         ignore_reported_position=False,
         force_time_based_position=False,
         reports_command_not_endpoint=False,
+        invert=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -60,10 +61,19 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._ignore_reported_position = ignore_reported_position
         self._force_time_based_position = force_time_based_position
         self._reports_command_not_endpoint = reports_command_not_endpoint
+        self._invert = invert
         self._last_self_command_time: float | None = None
         self._native_position_driver = NativePositionDriver(self)
         self._timed_position_driver = TimedPositionDriver(self)
         self._native_tilt_driver = NativeTiltDriver(self)
+
+    def _invert_position(self, x: int) -> int:
+        """Translate a position between our frame and the underlying's.
+
+        An involution (100 - x), so the same call serves both directions.
+        A no-op when invert is off (issue #160).
+        """
+        return 100 - x if self._invert else x
 
     async def async_added_to_hass(self):
         """Register state listener for the wrapped cover entity."""
@@ -269,6 +279,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
         current_position attribute we fall back to stopping the tracker.
         On settle we also snap tilt to the wrapped cover's reported tilt
         (native-tilt covers only, via _maybe_snap_to_reported_tilt).
+        When self._invert is set, the underlying's opening/closing are
+        interpreted as our close/open (swapped).
         """
         if self._in_bounce_grace_window():
             self._log(
@@ -323,10 +335,16 @@ class WrappedCoverTimeBased(CoverTimeBased):
 
         if new_val == STATE_OPENING:
             self._log("_handle_external_state_change :: wrapped cover opening")
-            await self.async_open_cover()
+            if self._invert:
+                await self.async_close_cover()
+            else:
+                await self.async_open_cover()
         elif new_val == STATE_CLOSING:
             self._log("_handle_external_state_change :: wrapped cover closing")
-            await self.async_close_cover()
+            if self._invert:
+                await self.async_open_cover()
+            else:
+                await self.async_close_cover()
         elif new_val in _STOPPED_STATES:
             target = self._wrapped_reported_position()
             if target is not None:
@@ -351,14 +369,24 @@ class WrappedCoverTimeBased(CoverTimeBased):
         open/close command — a harmless same-direction continuation. The
         async_* paths run with _triggered_externally set (the dispatcher sets
         it before calling us), so they update the tracker without bouncing a
-        command back to the wrapped cover.
+        command back to the wrapped cover. When self._invert is set, an open
+        echo drives our close and a close echo drives our open (swapped);
+        the stop echo is unchanged.
         """
         if new_val in (STATE_OPEN, STATE_OPENING):
-            self._log("_handle_command_state :: open command")
-            await self.async_open_cover()
+            if self._invert:
+                self._log("_handle_command_state :: open echo → close (inverted)")
+                await self.async_close_cover()
+            else:
+                self._log("_handle_command_state :: open command")
+                await self.async_open_cover()
         elif new_val in (STATE_CLOSED, STATE_CLOSING):
-            self._log("_handle_command_state :: close command")
-            await self.async_close_cover()
+            if self._invert:
+                self._log("_handle_command_state :: close echo → open (inverted)")
+                await self.async_open_cover()
+            else:
+                self._log("_handle_command_state :: close command")
+                await self.async_close_cover()
         elif new_val == STATE_UNKNOWN:
             self._log("_handle_command_state :: stop command")
             await self.async_stop_cover()
@@ -414,7 +442,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
 
         Prefers the current_position attribute. Falls back to 0 for
         state=closed (unambiguous); state=open without an attribute is
-        ambiguous (could be any position > 0) and returns None.
+        ambiguous (could be any position > 0) and returns None. Both the
+        attribute and the closed fallback are translated through
+        _invert_position, so when self._invert is set the reported value is
+        100 - position and the closed fallback becomes 100.
         """
         state = self.hass.states.get(self._cover_entity_id)
         if state is None:
@@ -426,9 +457,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         if not self._ignore_reported_position:
             attr_pos = state.attributes.get(ATTR_CURRENT_POSITION)
             if isinstance(attr_pos, (int, float)) and 0 <= attr_pos <= 100:
-                return int(attr_pos)
+                return self._invert_position(int(attr_pos))
         if state.state == STATE_CLOSED:
-            return 0
+            return self._invert_position(0)
         return None
 
     def _wrapped_reported_tilt_position(self) -> int | None:
@@ -478,12 +509,19 @@ class WrappedCoverTimeBased(CoverTimeBased):
         )
 
     async def _call_set_cover_position(self, position: int) -> None:
-        """Forward a set_cover_position command to the wrapped entity."""
+        """Forward a set_cover_position command to the wrapped entity.
+
+        The forwarded value is translated to the underlying's frame
+        (100 - position when inverted); the caller works in user frame.
+        """
         self._start_bounce_grace_window()
         await self.hass.services.async_call(
             "cover",
             "set_cover_position",
-            {"entity_id": self._cover_entity_id, "position": position},
+            {
+                "entity_id": self._cover_entity_id,
+                "position": self._invert_position(position),
+            },
             False,
         )
 
@@ -495,13 +533,27 @@ class WrappedCoverTimeBased(CoverTimeBased):
         )
 
     async def _send_open(self) -> None:
+        """User-intent open. When inverted, drives the underlying close."""
+        if self._invert:
+            await self._send_underlying_close()
+        else:
+            await self._send_underlying_open()
+
+    async def _send_close(self) -> None:
+        """User-intent close. When inverted, drives the underlying open."""
+        if self._invert:
+            await self._send_underlying_open()
+        else:
+            await self._send_underlying_close()
+
+    async def _send_underlying_open(self) -> None:
         # If the wrapped cover is currently closing, the open command produces
         # two state transitions (closing→open, then open→opening).
         state = self.hass.states.get(self._cover_entity_id)
         expected = 2 if state and state.state == STATE_CLOSING else 1
         await self._call_cover_service("open_cover", expected)
 
-    async def _send_close(self) -> None:
+    async def _send_underlying_close(self) -> None:
         # If the wrapped cover is currently opening, the close command produces
         # two state transitions (opening→open, then open→closing).
         state = self.hass.states.get(self._cover_entity_id)

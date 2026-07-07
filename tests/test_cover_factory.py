@@ -189,6 +189,32 @@ class TestCreateCoverFromOptions:
         assert isinstance(cover, WrappedCoverTimeBased)
         assert cover._reports_command_not_endpoint is True
 
+    def test_wrapped_invert_threads_into_cover(self):
+        from custom_components.cover_time_based.cover import CONF_INVERT
+
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+                CONF_COVER_ENTITY_ID: "cover.real",
+                CONF_INVERT: True,
+            },
+            device_id="d",
+            name="n",
+        )
+        assert isinstance(cover, WrappedCoverTimeBased)
+        assert cover._invert is True
+
+    def test_wrapped_invert_defaults_false(self):
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+                CONF_COVER_ENTITY_ID: "cover.real",
+            },
+            device_id="d",
+            name="n",
+        )
+        assert cover._invert is False
+
     def test_defaults_to_switch_mode(self):
         """When control_mode is not specified, defaults to switch."""
         cover = _create_cover_from_options(

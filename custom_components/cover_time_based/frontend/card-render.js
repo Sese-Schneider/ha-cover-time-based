@@ -253,6 +253,13 @@ export function renderInputEntities(card, c) {
         )}
         ${renderToggleWithHelp(
           card,
+          "entities.invert",
+          "entities.invert_helper",
+          !!c.invert,
+          (e) => card._updateLocal({ invert: e.target.checked }),
+        )}
+        ${renderToggleWithHelp(
+          card,
           "assumed_state.label",
           "assumed_state.helper",
           c.assumed_state !== false,

@@ -8,6 +8,7 @@ from custom_components.cover_time_based.cover import (
     CONF_CONTROL_MODE,
     CONF_COVER_ENTITY_ID,
     CONF_IGNORE_REPORTED_POSITION,
+    CONF_INVERT,
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
@@ -2204,3 +2205,106 @@ class TestReportsCommandNotEndpointRoundTrip:
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_options[CONF_REPORTS_COMMAND_NOT_ENDPOINT] is True
+
+
+# ---------------------------------------------------------------------------
+# invert
+# ---------------------------------------------------------------------------
+
+
+class TestInvertRoundTrip:
+    """invert is returned in get_config and saved in update_config."""
+
+    @pytest.mark.asyncio
+    async def test_get_config_defaults_to_false(self):
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["invert"] is False
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_stored_true(self):
+        hass, _, entity_reg = _make_hass(
+            options={
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+                CONF_COVER_ENTITY_ID: "cover.inner",
+                CONF_INVERT: True,
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["invert"] is True
+
+    @pytest.mark.asyncio
+    async def test_update_config_saves_true(self):
+        hass, _, entity_reg = _make_hass(
+            options={CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED}
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "invert": True,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_options[CONF_INVERT] is True
+
+    def test_field_map_contains_invert(self):
+        from custom_components.cover_time_based.websocket_api import _FIELD_MAP
+
+        assert _FIELD_MAP["invert"] == CONF_INVERT
+
+    def test_update_schema_accepts_invert(self):
+        # Guards the schema/_FIELD_MAP pair: a real websocket update_config
+        # carrying `invert` must validate, else persistence is silently rejected.
+        schema = ws_update_config._ws_schema
+        validated = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": "cover.x",
+                "invert": True,
+            }
+        )
+        assert validated["invert"] is True

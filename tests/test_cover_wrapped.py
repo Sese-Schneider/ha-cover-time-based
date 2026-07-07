@@ -29,6 +29,7 @@ def _make_wrapped_cover(
     cover_entity_id="cover.inner",
     force_time_based_position=False,
     reports_command_not_endpoint=False,
+    invert=False,
     tilt_time_close=None,
     tilt_time_open=None,
     tilt_mode="none",
@@ -62,6 +63,7 @@ def _make_wrapped_cover(
         cover_entity_id=cover_entity_id,
         force_time_based_position=force_time_based_position,
         reports_command_not_endpoint=reports_command_not_endpoint,
+        invert=invert,
     )
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
@@ -383,6 +385,255 @@ class TestWrappedNativeSetPosition:
         services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
         assert "set_cover_position" not in services
         assert "close_cover" in services
+
+
+class TestInvertOutboundSetPosition:
+    """Inverted covers forward set_cover_position(100 - p) to the underlying."""
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_native_set_position_is_inverted(self):
+        cover = _make_wrapped_cover(invert=True)
+        _set_wrapped_features(cover, 7)  # OPEN|CLOSE|SET_POSITION
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+
+        await cover.set_position(30)  # user target 30
+
+        assert _calls(cover.hass.services.async_call) == [
+            call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.inner", "position": 70},
+                False,
+            ),
+        ]
+        # Internal tracker stays in user frame.
+        assert cover.travel_calc._travel_to_position == 30
+
+    @pytest.mark.asyncio
+    async def test_stop_freeze_is_inverted(self):
+        cover = _make_wrapped_cover(invert=True)
+        _set_wrapped_features(
+            cover, 7
+        )  # SET_POSITION, no STOP → freeze via set_position
+        cover.travel_calc.set_position(43)  # user frame
+
+        await cover._send_stop()
+
+        assert _calls(cover.hass.services.async_call) == [
+            call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.inner", "position": 57},
+                False,
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_native_set_position_unchanged_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        _set_wrapped_features(cover, 7)
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+
+        await cover.set_position(30)
+
+        assert _calls(cover.hass.services.async_call) == [
+            call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.inner", "position": 30},
+                False,
+            ),
+        ]
+
+
+class TestInvertOutboundOpenClose:
+    """Inverted user-open drives the underlying close_cover, and vice versa."""
+
+    @pytest.mark.asyncio
+    async def test_send_open_drives_underlying_close(self):
+        cover = _make_wrapped_cover(invert=True)
+        await cover._send_open()
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("close_cover", "cover.inner"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_close_drives_underlying_open(self):
+        cover = _make_wrapped_cover(invert=True)
+        await cover._send_close()
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("open_cover", "cover.inner"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_open_unchanged_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        await cover._send_open()
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("open_cover", "cover.inner"),
+        ]
+
+
+class TestInvertInboundReportedPosition:
+    """Inverted covers report 100 - underlying position; closed → 100."""
+
+    def test_reported_attr_position_is_inverted(self):
+        cover = _make_wrapped_cover(invert=True)
+        _set_wrapped_features(cover, 7, state="open", current_position=70)
+        assert cover._wrapped_reported_position() == 30
+
+    def test_reported_closed_maps_to_100(self):
+        cover = _make_wrapped_cover(invert=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE, state="closed")
+        assert cover._wrapped_reported_position() == 100
+
+    def test_reported_attr_unchanged_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        _set_wrapped_features(cover, 7, state="open", current_position=70)
+        assert cover._wrapped_reported_position() == 70
+
+    def test_reported_closed_maps_to_0_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE, state="closed")
+        assert cover._wrapped_reported_position() == 0
+
+
+class TestInvertInboundStateChange:
+    """Inverted: underlying opening → we close; underlying closing → we open."""
+
+    @pytest.mark.asyncio
+    async def test_underlying_opening_drives_our_close(self):
+        cover = _make_wrapped_cover(invert=True)
+        cover.travel_calc.set_position(50)  # idle
+        cover._last_self_command_time = None
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "opening"
+            )
+        close_mock.assert_awaited_once()
+        open_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_underlying_closing_drives_our_open(self):
+        cover = _make_wrapped_cover(invert=True)
+        cover.travel_calc.set_position(50)
+        cover._last_self_command_time = None
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._handle_external_state_change("cover.inner", "open", "closing")
+        open_mock.assert_awaited_once()
+        close_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_opening_drives_our_open_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        cover.travel_calc.set_position(50)
+        cover._last_self_command_time = None
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "opening"
+            )
+        open_mock.assert_awaited_once()
+
+
+class TestInvertCommandEcho:
+    """Inverted command-echo: open-echo → our close; close-echo → our open."""
+
+    @pytest.mark.asyncio
+    async def test_open_echo_drives_our_close(self):
+        cover = _make_wrapped_cover(invert=True, reports_command_not_endpoint=True)
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._handle_external_state_change("cover.inner", "unknown", "open")
+        close_mock.assert_awaited_once()
+        open_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_closed_echo_drives_our_open(self):
+        cover = _make_wrapped_cover(invert=True, reports_command_not_endpoint=True)
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._handle_external_state_change("cover.inner", "open", "closed")
+        open_mock.assert_awaited_once()
+        close_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unknown_is_still_stop_when_inverted(self):
+        cover = _make_wrapped_cover(invert=True, reports_command_not_endpoint=True)
+        with patch.object(cover, "async_stop_cover", new=AsyncMock()) as stop_mock:
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "unknown"
+            )
+        stop_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_open_echo_drives_our_open_when_invert_off(self):
+        cover = _make_wrapped_cover(invert=False, reports_command_not_endpoint=True)
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change("cover.inner", "unknown", "open")
+        open_mock.assert_awaited_once()
+
+
+class TestInvertEndToEndOpenClose:
+    """End-to-end: driving the public async_open_cover/async_close_cover
+    entry points on an inverted cover (no native features, so the timed
+    path is used) drives the underlying's opposite command, while the
+    internal tracker still travels toward the user-frame target.
+    """
+
+    def _prep(self, cover):
+        # Avoid scheduling a real auto-updater / writing state on the mock hass.
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+        # No native SET_POSITION -> open/close use the timed _send_open/
+        # _send_close path (see TestInvertOutboundOpenClose), while the
+        # target stays "available" so movement isn't rejected.
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)
+
+    @pytest.mark.asyncio
+    async def test_open_cover_drives_underlying_close_and_travels_to_user_open(self):
+        cover = _make_wrapped_cover(invert=True)
+        self._prep(cover)
+        cover.travel_calc.set_position(0)  # user-frame closed
+
+        await cover.async_open_cover()
+
+        assert _cover_svc("close_cover", "cover.inner") in _calls(
+            cover.hass.services.async_call
+        )
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 100
+
+    @pytest.mark.asyncio
+    async def test_close_cover_drives_underlying_open_and_travels_to_user_close(self):
+        cover = _make_wrapped_cover(invert=True)
+        self._prep(cover)
+        cover.travel_calc.set_position(100)  # user-frame open
+
+        await cover.async_close_cover()
+
+        assert _cover_svc("open_cover", "cover.inner") in _calls(
+            cover.hass.services.async_call
+        )
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 0
 
 
 class TestWrappedNativeMoveNoHijack:
@@ -1076,3 +1327,32 @@ class TestNativeTiltSweep:
 
         assert cover.travel_calc.current_position() == 30
         assert cover.tilt_calc.current_position() == 25
+
+
+# ===================================================================
+# Invert option
+# ===================================================================
+
+
+class TestInvertOption:
+    """The invert option: constructor field, default, and the involution helper."""
+
+    def test_default_invert_is_false(self):
+        cover = _make_wrapped_cover()
+        assert cover._invert is False
+
+    def test_invert_stored_when_true(self):
+        cover = _make_wrapped_cover(invert=True)
+        assert cover._invert is True
+
+    def test_invert_position_is_noop_when_off(self):
+        cover = _make_wrapped_cover(invert=False)
+        assert cover._invert_position(0) == 0
+        assert cover._invert_position(30) == 30
+        assert cover._invert_position(100) == 100
+
+    def test_invert_position_flips_when_on(self):
+        cover = _make_wrapped_cover(invert=True)
+        assert cover._invert_position(0) == 100
+        assert cover._invert_position(30) == 70
+        assert cover._invert_position(100) == 0
