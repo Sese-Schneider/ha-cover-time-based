@@ -11,6 +11,10 @@
     }
   },
   "issues": {
+    "card_installed": {
+      "title": "Odśwież przeglądarkę, aby wyświetlić kartę Cover Time Based",
+      "description": "Karta Cover Time Based została zainstalowana. Home Assistant ładuje zasoby panelu tylko podczas wczytywania strony, więc w już otwartych sesjach przeglądarki karta pozostaje niewidoczna do czasu ponownego załadowania — i często pomaga dopiero **twarde odświeżenie**. Wykonaj twarde odświeżenie (**Ctrl+Shift+R** lub **⌘+Shift+R** w systemie macOS), aby załadować kartę; jeśli nadal wyświetla się błąd konfiguracji, wyczyść pamięć podręczną przeglądarki i załaduj ponownie. Możesz zignorować to ostrzeżenie, gdy karta się pojawi."
+    },
     "deprecated_yaml": {
       "title": "Konfiguracja YAML jest przestarzała",
       "description": "Konfiguracja Cover Time Based za pomocą YAML jest przestarzała i zostanie usunięta w przyszłej wersji.\n\nProszę usunąć konfigurację YAML i odtworzyć rolety za pomocą interfejsu: **Ustawienia > Urządzenia i usługi > Pomocniki > Utwórz pomocnik > Cover Time Based**."

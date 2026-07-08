@@ -11,6 +11,10 @@
     }
   },
   "issues": {
+    "card_installed": {
+      "title": "Atualize o navegador para mostrar o cartão Cover Time Based",
+      "description": "O cartão Cover Time Based foi instalado. O Home Assistant só carrega os recursos do painel ao carregar a página, por isso nas sessões do navegador já abertas o cartão permanece ausente até recarregar — e muitas vezes só um **recarregamento forçado** funciona. Faça um recarregamento forçado (**Ctrl+Shift+R**, ou **⌘+Shift+R** no macOS) para carregar o cartão; se ainda mostrar um erro de configuração, limpe a cache do navegador e recarregue. Pode dispensar este aviso assim que o cartão aparecer."
+    },
     "deprecated_yaml": {
       "title": "A configuração YAML está obsoleta",
       "description": "A configuração do Cover Time Based usando YAML está obsoleta e será removida numa versão futura.\n\nPor favor, remova a configuração YAML e recrie os seus estores usando a interface: **Definições > Dispositivos e Serviços > Auxiliares > Criar Auxiliar > Cover Time Based**."

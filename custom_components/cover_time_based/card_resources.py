@@ -18,16 +18,18 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components import frontend, persistent_notification
+from homeassistant.components import frontend
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 # Key under hass.data[DOMAIN] holding the registered resource's id.
 _RESOURCE_ID_KEY = "card_resource_id"
-# Stable id so repeated (re)registrations replace the notice rather than stack.
-_REFRESH_NOTIFICATION_ID = f"{DOMAIN}_card_refresh"
+# issue_id (scoped to DOMAIN) and translation_key for the "card installed —
+# hard-refresh to load it" repair issue.
+_CARD_INSTALLED_ISSUE = "card_installed"
 
 
 def _get_lovelace_resources(hass: HomeAssistant):
@@ -41,34 +43,31 @@ def _record_resource_id(hass: HomeAssistant, resource_id: str) -> None:
     hass.data.setdefault(DOMAIN, {})[_RESOURCE_ID_KEY] = resource_id
 
 
-def _notify_card_refresh(hass: HomeAssistant) -> None:
-    """Tell the user to hard-refresh so the browser loads the newly added card.
+def _create_refresh_issue(hass: HomeAssistant) -> None:
+    """Raise a repair issue telling the user to hard-refresh for the new card.
 
-    HA loads its Lovelace resource list once, at page load, and does not
-    hot-inject a newly registered resource into already-open browser sessions.
-    So a fresh install leaves the card missing (or showing a "custom element
-    doesn't exist" error) until the page is reloaded — and, because HA's service
-    worker serves the app through a cache, often only a *hard* refresh picks it
-    up. Since the card is registered from Python rather than installed as a
-    standalone HACS plugin, the user otherwise gets no prompt to reload at all.
+    The module docstring explains the custom-element timing issue that makes a
+    reload necessary; the user-facing title/description are translated via
+    ``translation_key`` (strings.json + translations/).
 
-    Fired only when the resource is newly created — a first install (or a
+    Raised only when the resource is newly created — a first install (or a
     re-create after a full uninstall / upgrade from a pre-resource version),
     all cases where open sessions lack the card. A version update instead leaves
     the card already present (running the previous code) with the new JS at a
     fresh, uncached URL, so a normal reload picks it up — nagging on every
     release would be spam.
+
+    Non-fixable and non-persistent (the HA default): the user dismisses it once
+    the card appears, and it clears on the next restart — by then any fresh
+    session loads the card anyway, and we only re-raise it on a real new create.
     """
-    persistent_notification.async_create(
+    async_create_issue(
         hass,
-        (
-            "The Cover Time Based dashboard card was installed. "
-            "Do a hard refresh of your browser (Ctrl+Shift+R, or ⌘+Shift+R "
-            "on Mac) to load it. If the card still shows a configuration error, "
-            "clear your browser cache and reload."
-        ),
-        title="Cover Time Based card installed",
-        notification_id=_REFRESH_NOTIFICATION_ID,
+        DOMAIN,
+        _CARD_INSTALLED_ISSUE,
+        is_fixable=False,
+        severity=IssueSeverity.WARNING,
+        translation_key=_CARD_INSTALLED_ISSUE,
     )
 
 
@@ -85,7 +84,7 @@ async def async_register_card_resource(
     ``add_extra_js_url`` if the Lovelace resource store isn't available.
     """
     # Set only when the resource is created for the first time — the sole case
-    # that warrants a refresh prompt (see _notify_card_refresh for why).
+    # that warrants a refresh prompt (see _create_refresh_issue for why).
     installed = False
     try:
         resources = _get_lovelace_resources(hass)
@@ -102,7 +101,7 @@ async def async_register_card_resource(
             url = item.get("url", "")
             if url == card_url:
                 # Already current — record the id so a later uninstall can
-                # delete it. No change, so no refresh notification.
+                # delete it. No change, so no refresh issue.
                 _record_resource_id(hass, item["id"])
                 return
             if url.startswith(base_url):
@@ -130,14 +129,14 @@ async def async_register_card_resource(
         frontend.add_extra_js_url(hass, card_url)
         return
 
-    # Notify outside the try so a notification failure can't trigger the
-    # fallback path and double-register the card; guard it separately so that
-    # failure also can't abort integration setup.
+    # Raise the issue outside the try so a failure can't trigger the fallback
+    # path and double-register the card; guard it separately so that failure
+    # also can't abort integration setup.
     if installed:
         try:
-            _notify_card_refresh(hass)
+            _create_refresh_issue(hass)
         except Exception:  # pylint: disable=broad-exception-caught
-            _LOGGER.debug("Could not create card refresh notification", exc_info=True)
+            _LOGGER.debug("Could not create card refresh repair issue", exc_info=True)
 
 
 async def async_unregister_card_resource(
