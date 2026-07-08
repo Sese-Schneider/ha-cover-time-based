@@ -5,6 +5,8 @@ import re
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.helpers.issue_registry import IssueSeverity
+
 from custom_components.cover_time_based import (
     _CARD_BASE_URL,
     _CARD_JS_URL,
@@ -17,7 +19,7 @@ from custom_components.cover_time_based import (
     async_update_options,
 )
 from custom_components.cover_time_based.card_resources import (
-    _REFRESH_NOTIFICATION_ID,
+    _CARD_INSTALLED_ISSUE,
     _RESOURCE_ID_KEY,
 )
 from custom_components.cover_time_based.const import DOMAIN
@@ -249,37 +251,43 @@ class TestCardResourceRegistration:
         assert js_url == _CARD_JS_URL
 
 
-class TestCardRefreshNotification:
+class TestCardRefreshRepairIssue:
     """HA does not hot-load a newly registered Lovelace resource into
     already-open browser sessions, so a fresh install leaves the card missing
-    until the page is reloaded. Surface a persistent notification guiding the
-    user to hard-refresh — but only on a first install. A version update leaves
-    the card already present (running the old code) at a fresh, uncached URL, so
-    a normal reload suffices and a per-release nag would be spam. Never notify
-    on an unchanged restart or the YAML-mode add_extra_js_url fallback."""
+    until the page is reloaded. Raise a translated repair issue guiding the
+    user to hard-refresh — but only on a first install (resource newly
+    created). A version update leaves the card already present at a fresh,
+    uncached URL, so a normal reload suffices and a per-release nag would be
+    spam. Never raise it on an unchanged restart or the YAML-mode
+    add_extra_js_url fallback."""
 
-    _NOTIFY = "homeassistant.components.persistent_notification.async_create"
+    _CREATE_ISSUE = (
+        "custom_components.cover_time_based.card_resources.async_create_issue"
+    )
 
     @pytest.mark.asyncio
-    async def test_fresh_install_notifies_to_refresh(self):
+    async def test_fresh_install_raises_refresh_issue(self):
         resources = FakeResources()
         hass = _make_setup_hass(resources)
 
         with (
             patch("homeassistant.components.frontend.add_extra_js_url"),
-            patch(self._NOTIFY) as mock_notify,
+            patch(self._CREATE_ISSUE) as mock_issue,
         ):
             await async_setup(hass, {})
 
-        mock_notify.assert_called_once()
-        _, message = mock_notify.call_args.args
-        assert "refresh" in message.lower()
-        assert (
-            mock_notify.call_args.kwargs["notification_id"] == _REFRESH_NOTIFICATION_ID
-        )
+        mock_issue.assert_called_once()
+        # async_create_issue(hass, DOMAIN, issue_id, ...)
+        _, domain, issue_id = mock_issue.call_args.args
+        assert domain == DOMAIN
+        assert issue_id == _CARD_INSTALLED_ISSUE
+        kwargs = mock_issue.call_args.kwargs
+        assert kwargs["translation_key"] == _CARD_INSTALLED_ISSUE
+        assert kwargs["is_fixable"] is False
+        assert kwargs["severity"] == IssueSeverity.WARNING
 
     @pytest.mark.asyncio
-    async def test_version_update_does_not_notify(self):
+    async def test_version_update_does_not_raise_issue(self):
         """On update the card is already present (running the old code) and the
         new JS lives at a fresh, uncached URL, so a normal reload picks it up.
         The resource is still cache-busted, but silently — no per-release nag."""
@@ -289,44 +297,44 @@ class TestCardRefreshNotification:
 
         with (
             patch("homeassistant.components.frontend.add_extra_js_url"),
-            patch(self._NOTIFY) as mock_notify,
+            patch(self._CREATE_ISSUE) as mock_issue,
         ):
             await async_setup(hass, {})
 
         # The cache-bust still happens...
         assert resources.updated == [("old", {"url": _CARD_JS_URL})]
         # ...but the user is not nagged.
-        mock_notify.assert_not_called()
+        mock_issue.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_unchanged_resource_does_not_notify(self):
+    async def test_unchanged_resource_does_not_raise_issue(self):
         resources = FakeResources(items=[{"id": "x", "url": _CARD_JS_URL}], loaded=True)
         hass = _make_setup_hass(resources)
 
         with (
             patch("homeassistant.components.frontend.add_extra_js_url"),
-            patch(self._NOTIFY) as mock_notify,
+            patch(self._CREATE_ISSUE) as mock_issue,
         ):
             await async_setup(hass, {})
 
-        mock_notify.assert_not_called()
+        mock_issue.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_yaml_mode_fallback_does_not_notify(self):
+    async def test_yaml_mode_fallback_does_not_raise_issue(self):
         hass = _make_setup_hass(None)
 
         with (
             patch("homeassistant.components.frontend.add_extra_js_url"),
-            patch(self._NOTIFY) as mock_notify,
+            patch(self._CREATE_ISSUE) as mock_issue,
         ):
             await async_setup(hass, {})
 
-        mock_notify.assert_not_called()
+        mock_issue.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_setup_then_entry_notifies_once(self):
-        """async_setup creates the resource (one notification); the per-entry
-        registration then finds it already current and must not notify again."""
+    async def test_setup_then_entry_raises_issue_once(self):
+        """async_setup creates the resource (one issue); the per-entry
+        registration then finds it already current and must not raise again."""
         resources = FakeResources()
         hass = _make_setup_hass(resources)
         hass.config_entries.async_forward_entry_setups = AsyncMock()
@@ -336,24 +344,24 @@ class TestCardRefreshNotification:
 
         with (
             patch("homeassistant.components.frontend.add_extra_js_url"),
-            patch(self._NOTIFY) as mock_notify,
+            patch(self._CREATE_ISSUE) as mock_issue,
         ):
             await async_setup(hass, {})
             await async_setup_entry(hass, entry)
 
-        mock_notify.assert_called_once()
+        mock_issue.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_notification_failure_neither_aborts_setup_nor_falls_back(self):
-        """The notify runs outside the try so it can't cascade into the
-        double-registering fallback; it is also guarded so a notification
-        failure can't abort integration setup."""
+    async def test_issue_failure_neither_aborts_setup_nor_falls_back(self):
+        """The issue is raised outside the try so a failure can't cascade into
+        the double-registering fallback; it is also guarded so a failure can't
+        abort integration setup."""
         resources = FakeResources()
         hass = _make_setup_hass(resources)
 
         with (
             patch("homeassistant.components.frontend.add_extra_js_url") as mock_add_js,
-            patch(self._NOTIFY, side_effect=RuntimeError("boom")),
+            patch(self._CREATE_ISSUE, side_effect=RuntimeError("boom")),
         ):
             result = await async_setup(hass, {})
 
@@ -362,21 +370,21 @@ class TestCardRefreshNotification:
         mock_add_js.assert_not_called()  # not double-registered via fallback
 
     @pytest.mark.asyncio
-    async def test_resource_error_falls_back_and_does_not_notify(self):
+    async def test_resource_error_falls_back_and_does_not_raise_issue(self):
         """If registering the resource raises, we fall back to add_extra_js_url
-        and must not notify (no resource was created)."""
+        and must not raise the issue (no resource was created)."""
         resources = FakeResources()
         resources.async_create_item = AsyncMock(side_effect=RuntimeError("boom"))
         hass = _make_setup_hass(resources)
 
         with (
             patch("homeassistant.components.frontend.add_extra_js_url") as mock_add_js,
-            patch(self._NOTIFY) as mock_notify,
+            patch(self._CREATE_ISSUE) as mock_issue,
         ):
             await async_setup(hass, {})
 
         mock_add_js.assert_called_once()
-        mock_notify.assert_not_called()
+        mock_issue.assert_not_called()
 
 
 class TestManifest:

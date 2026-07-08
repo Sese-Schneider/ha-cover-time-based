@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixes
+
+- **A Repairs prompt now guides you to hard-refresh after installing the card** ([#164](https://github.com/Sese-Schneider/ha-cover-time-based/issues/164)): Home Assistant loads dashboard resources only when the page first loads, so immediately after installing the integration the **Cover Time Based** card is missing from already-open browser sessions until the page is reloaded — and because HA's service worker caches the app, often only a *hard* refresh brings it in. Since the card is registered by the integration itself rather than installed as a standalone HACS plugin, nothing prompted you to reload. A dismissible **Settings → Repairs** notice (translated EN/PL/PT) now appears to prompt the hard refresh. It is raised only when the card resource is newly created — a first install (or a re-create after a full uninstall) — never on a version update (the card is already present and a normal reload picks up the new code) or an ordinary restart, and it clears itself on the next restart once a fresh session would load the card anyway.
+
 ## 4.8.0 (2026-07-06)
 
 ### Features
