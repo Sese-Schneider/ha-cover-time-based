@@ -683,6 +683,117 @@ class TestWrappedNativeMoveNoHijack:
         open_mock.assert_awaited_once()
 
 
+class TestWrappedTimedMoveNoHijack:
+    """A time-based wrapped cover (Force time-based, or no native
+    set_position) forwards open_cover/close_cover to reach a partial target,
+    then the wrapped cover reports its own opening/closing as a side effect of
+    that command. When that report lands after the bounce grace window -- e.g.
+    a template cover driven by a physical binary sensor that lags the relay by
+    >0.5s (issue #165) -- it must not be reinterpreted as a fresh full
+    open/close that hijacks the in-flight partial move.
+
+    Only the SAME-direction echo of our own move is suppressed. An
+    opposite-direction report is a genuine external reversal (e.g. the wall
+    switch pressed the other way) and is still honored. When the tracker is
+    idle it is honored too (an external press).
+    """
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_opening_during_timed_partial_move_is_not_hijacked(self):
+        cover = _make_wrapped_cover(force_time_based_position=True)
+        _set_wrapped_features(cover, 15, state="closed")
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+        await cover.set_position(4)  # timed; tracker now travelling up to 4%
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 4
+
+        # The up binary sensor flips ~1.5s later, past the bounce grace window.
+        cover._last_self_command_time = None
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change("cover.inner", "open", "opening")
+
+        open_mock.assert_not_awaited()
+        assert cover.travel_calc._travel_to_position == 4
+
+    @pytest.mark.asyncio
+    async def test_closing_reversal_during_timed_move_is_honored(self):
+        cover = _make_wrapped_cover(force_time_based_position=True)
+        _set_wrapped_features(cover, 15, state="closed")
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+        await cover.set_position(60)  # timed; travelling up
+        assert cover.travel_calc.is_opening()
+
+        cover._last_self_command_time = None
+        # Opposite direction: the wall switch was pressed down mid-move.
+        with patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock:
+            await cover._handle_external_state_change(
+                "cover.inner", "opening", "closing"
+            )
+
+        close_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_closing_during_timed_partial_move_is_not_hijacked(self):
+        # Same-direction echo on a downward move (the mirror of test 1):
+        # forwarding close_cover to reach a partial target makes the underlying
+        # report "closing"; that echo must not hijack the move to 0%.
+        cover = _make_wrapped_cover(force_time_based_position=True)
+        _set_wrapped_features(cover, 15, state="open")
+        self._prep(cover)
+        cover.travel_calc.set_position(100)
+        await cover.set_position(96)  # timed; tracker now travelling down to 96%
+        assert cover.travel_calc.is_closing()
+        assert cover.travel_calc._travel_to_position == 96
+
+        cover._last_self_command_time = None
+        with patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock:
+            await cover._handle_external_state_change("cover.inner", "open", "closing")
+
+        close_mock.assert_not_awaited()
+        assert cover.travel_calc._travel_to_position == 96
+
+    @pytest.mark.asyncio
+    async def test_opening_when_idle_timed_is_honored(self):
+        cover = _make_wrapped_cover(force_time_based_position=True)
+        _set_wrapped_features(cover, 15, state="closed")
+        self._prep(cover)
+        cover.travel_calc.set_position(0)  # idle, not travelling
+        cover._last_self_command_time = None
+
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "opening"
+            )
+
+        open_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_inverted_echo_during_timed_partial_move_is_not_hijacked(self):
+        # Inverted: our up-move forwards close_cover to the underlying, which
+        # then reports "closing" -- our-frame open. That same-direction echo
+        # must be suppressed, not drive us to the open endpoint.
+        cover = _make_wrapped_cover(force_time_based_position=True, invert=True)
+        _set_wrapped_features(cover, 15, state="open")
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+        await cover.set_position(4)  # our-frame up; underlying driven closed
+        assert cover.travel_calc.is_opening()
+
+        cover._last_self_command_time = None
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change("cover.inner", "open", "closing")
+
+        open_mock.assert_not_awaited()
+        assert cover.travel_calc._travel_to_position == 4
+
+
 class TestWrappedSendStopCapabilityAware:
     """_send_stop adapts to the wrapped cover's capabilities:
     - native STOP supported            -> cover.stop_cover
