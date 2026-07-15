@@ -333,6 +333,34 @@ class WrappedCoverTimeBased(CoverTimeBased):
             )
             return
 
+        # Timed-path counterpart of the native-move guard above. A time-based
+        # wrapped cover (Force time-based, or one lacking native set_position)
+        # reaches a partial target by forwarding open_cover/close_cover; the
+        # wrapped cover then reports its own opening/closing as a side effect of
+        # that command. If that report lands after the bounce grace window --
+        # e.g. a template cover driven by a physical binary sensor that lags the
+        # relay by >0.5s (issue #165) -- it must not be reinterpreted as a fresh
+        # external full open/close that hijacks our in-flight partial move. Only
+        # the same-direction echo of our own self-initiated move is suppressed;
+        # an opposite-direction report is a genuine external reversal (e.g. the
+        # wall switch pressed the other way) and still falls through below.
+        if (
+            new_val in _MOVING_STATES
+            and self._self_initiated_movement
+            and self.travel_calc.is_traveling()
+        ):
+            # While traveling, is_opening() is the exact complement of
+            # is_closing(), so comparing it to the echo's direction (both in our
+            # frame) tells same- from opposite-direction directly.
+            echo_is_open = (new_val == STATE_OPENING) != self._invert
+            if self.travel_calc.is_opening() == echo_is_open:
+                self._log(
+                    "_handle_external_state_change :: ignoring self-driven %s"
+                    " during timed move",
+                    new_val,
+                )
+                return
+
         if new_val == STATE_OPENING:
             self._log("_handle_external_state_change :: wrapped cover opening")
             if self._invert:
