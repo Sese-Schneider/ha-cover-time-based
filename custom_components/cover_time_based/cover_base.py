@@ -596,7 +596,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         opposite = 100 if target == 0 else 0
         self._log(
-            "_force_full_redrive :: target=%d modeled from opposite=%d", target, opposite
+            "_force_full_redrive :: target=%d modeled from opposite=%d",
+            target,
+            opposite,
         )
         self.travel_calc.set_position(opposite)
         await self._async_move_to_endpoint(target=target)

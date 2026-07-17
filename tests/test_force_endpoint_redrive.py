@@ -81,9 +81,7 @@ async def test_force_endpoint_redrive_in_state_attributes(make_cover):
         ]
         is True
     )
-    assert (
-        make_cover().extra_state_attributes["force_endpoint_redrive"] is False
-    )
+    assert make_cover().extra_state_attributes["force_endpoint_redrive"] is False
 
 
 @pytest.mark.asyncio
@@ -128,9 +126,7 @@ async def test_force_open_command_echo_wrapped_overrides_152_skip(make_cover):
 @pytest.mark.asyncio
 async def test_command_echo_wrapped_open_still_skips_when_off(make_cover):
     """Regression guard: with the flag off, the #152 open-at-100 skip stands."""
-    cover = make_cover(
-        cover_entity_id="cover.inner", reports_command_not_endpoint=True
-    )
+    cover = make_cover(cover_entity_id="cover.inner", reports_command_not_endpoint=True)
     assert cover._force_endpoint_redrive is False
     cover.travel_calc.set_position(100)
     cover.hass.services.async_call.reset_mock()
@@ -176,9 +172,7 @@ async def test_force_close_pulse_redrives(make_cover):
 
 @pytest.mark.asyncio
 async def test_force_close_toggle_redrives(make_cover):
-    cover = make_cover(
-        control_mode=CONTROL_MODE_TOGGLE, force_endpoint_redrive=True
-    )
+    cover = make_cover(control_mode=CONTROL_MODE_TOGGLE, force_endpoint_redrive=True)
     cover.travel_calc.set_position(0)
     cover.hass.services.async_call.reset_mock()
 
@@ -206,7 +200,7 @@ async def test_force_close_dual_motor_runs_safe_pre_step(make_cover):
         force_endpoint_redrive=True,
     )
     cover.travel_calc.set_position(0)  # believed fully closed
-    cover.tilt_calc.set_position(0)    # slats NOT at safe (100)
+    cover.tilt_calc.set_position(0)  # slats NOT at safe (100)
     cover.hass.services.async_call.reset_mock()
 
     with patch.object(cover, "async_write_ha_state"):

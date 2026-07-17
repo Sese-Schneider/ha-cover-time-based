@@ -2326,7 +2326,11 @@ class TestForceEndpointRedriveRoundTrip:
             await _ws_get_config(
                 hass,
                 conn,
-                {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID},
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
             )
 
         result = conn.send_result.call_args[0][1]
@@ -2334,9 +2338,7 @@ class TestForceEndpointRedriveRoundTrip:
 
     @pytest.mark.asyncio
     async def test_get_config_returns_stored_true(self):
-        hass, _, entity_reg = _make_hass(
-            options={CONF_FORCE_ENDPOINT_REDRIVE: True}
-        )
+        hass, _, entity_reg = _make_hass(options={CONF_FORCE_ENDPOINT_REDRIVE: True})
         conn = _make_connection()
 
         with patch(
@@ -2346,7 +2348,11 @@ class TestForceEndpointRedriveRoundTrip:
             await _ws_get_config(
                 hass,
                 conn,
-                {"id": 1, "type": "cover_time_based/get_config", "entity_id": ENTITY_ID},
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
             )
 
         result = conn.send_result.call_args[0][1]
