@@ -460,14 +460,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # carve-outs that must still reach _async_move_to_endpoint — a pending
         # opposite-direction startup delay to cancel, or an external sequential
         # close that articulates the slats.
-        skip_travel = self._settled_at_endpoint(0)
-        if skip_travel and self._force_endpoint_redrive:
+        settled = self._settled_at_endpoint(0)
+        force_redrive = settled and self._force_endpoint_redrive
+        if force_redrive:
             # issue #167: don't trust "already closed" — re-drive the full close
             # so a remote-opened, no-feedback cover actually closes.
             await self._force_full_redrive(target=0)
-            skip_travel = False
-        elif not skip_travel:
+        elif not settled:
             await self._async_move_to_endpoint(target=0)
+        # Travel was skipped only when settled at 0 without a forced re-drive.
+        skip_travel = settled and not force_redrive
 
         # Skip inline: its close already drives tilt to 0 via a TiltTo pre-step,
         # so the trailing restore would be a no-op AND would short-circuit the
@@ -584,6 +586,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         opposite endpoint so the normal endpoint move runs the motor for the
         full travel time (and each mode's tilt phases) instead of skipping or
         firing only a short resync pulse.
+
+        Correctness relies on callers only invoking this from a settled
+        endpoint: _settled_at_endpoint already excludes the states where
+        _async_move_to_endpoint would early-return without starting travel (a
+        pending opposite-direction startup delay, an external sequential close),
+        so seeding the opposite endpoint always reaches the full-travel branch.
+        Keep that exclusion in sync if those guards ever change.
         """
         opposite = 100 if target == 0 else 0
         self._log(

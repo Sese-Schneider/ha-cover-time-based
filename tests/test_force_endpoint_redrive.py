@@ -23,8 +23,7 @@ from custom_components.cover_time_based.cover import (
 async def test_force_close_at_closed_redrives_full_travel(make_cover):
     """Switch cover believed fully closed: force-close starts a real full
     journey (is_traveling), not the skip no-op."""
-    cover = make_cover()  # switch mode
-    cover._force_endpoint_redrive = True
+    cover = make_cover(force_endpoint_redrive=True)  # switch mode
     cover.travel_calc.set_position(0)  # believed fully closed
 
     with patch.object(cover, "async_write_ha_state"):
@@ -39,8 +38,7 @@ async def test_force_close_at_closed_redrives_full_travel(make_cover):
 async def test_force_open_at_open_redrives_full_travel(make_cover):
     """Switch cover believed fully open: force-open starts a real full journey,
     not the short resync (which does not travel)."""
-    cover = make_cover()  # switch mode
-    cover._force_endpoint_redrive = True
+    cover = make_cover(force_endpoint_redrive=True)  # switch mode
     cover.travel_calc.set_position(100)  # believed fully open
 
     with patch.object(cover, "async_write_ha_state"):
@@ -142,6 +140,20 @@ async def test_command_echo_wrapped_open_still_skips_when_off(make_cover):
 
     assert not cover.travel_calc.is_traveling()
     cover.hass.services.async_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_force_redrive_command_echo_keeps_endpoint_stop_active(make_cover):
+    """The #152-override is safe because the endpoint stop still fires: a
+    command-echo wrapped cover does not self-stop at endpoints, so the forced
+    full-travel branch's auto-stop de-energizes the motor rather than leaving
+    the endstop-less motor stalled against its limit."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        reports_command_not_endpoint=True,
+        force_endpoint_redrive=True,
+    )
+    assert cover._self_stops_at_endpoints() is False
 
 
 @pytest.mark.asyncio
