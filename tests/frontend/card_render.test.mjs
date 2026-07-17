@@ -349,12 +349,12 @@ test("wrapped mode renders cover entity-picker (with includeDomains cover)", asy
   expect(coverPicker).not.toBeUndefined();
 });
 
-test("wrapped mode renders ha-switch toggles (ignore-reported-position, force-time-based, reports-command-not-endpoint, invert, assumed-state)", async () => {
+test("wrapped mode renders ha-switch toggles (ignore-reported-position, force-time-based, reports-command-not-endpoint, invert, assumed-state, force-endpoint-redrive)", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // Exactly 5 toggles: ignore_reported_position, force_time_based_position,
-  // reports_command_not_endpoint, invert, assumed_state
-  expect(toggles.length).toBe(5);
+  // Exactly 6 toggles: ignore_reported_position, force_time_based_position,
+  // reports_command_not_endpoint, invert, assumed_state, force_endpoint_redrive
+  expect(toggles.length).toBe(6);
 });
 
 test("wrapped mode: toggling reports-command-not-endpoint calls _updateLocal", async () => {
@@ -362,7 +362,8 @@ test("wrapped mode: toggling reports-command-not-endpoint calls _updateLocal", a
   const captured = [];
   card._updateLocal = (u) => captured.push(u);
   // Order in renderInputEntities: [0] ignore_reported_position,
-  // [1] force_time_based_position, [2] reports_command_not_endpoint, [3] invert, [4] assumed_state
+  // [1] force_time_based_position, [2] reports_command_not_endpoint, [3] invert,
+  // [4] assumed_state, [5] force_endpoint_redrive
   const toggle = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch")[2];
   toggle.checked = true;
   toggle.dispatchEvent(new Event("change"));
@@ -411,8 +412,9 @@ test("wrapped mode has no .entity-grid", async () => {
 test("switch mode shows assumed-state toggle", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // Exactly 1 toggle: assumed-state only (switch mode has no other toggle-with-help)
-  expect(toggles.length).toBe(1);
+  // Exactly 2 toggles: assumed-state and force-endpoint-redrive (switch mode has
+  // no other toggle-with-help)
+  expect(toggles.length).toBe(2);
 });
 
 // ---------------------------------------------------------------------------
