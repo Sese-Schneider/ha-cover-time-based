@@ -77,10 +77,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt_mode_str="none",
         close_includes_tilt=True,
         assumed_state=True,
+        force_endpoint_redrive=False,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
         self._assumed_state = assumed_state
+        self._force_endpoint_redrive = force_endpoint_redrive
 
         self._tilt_strategy = tilt_strategy
         # Keep the raw configured mode so calibration can still pick the right
@@ -457,7 +459,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # opposite-direction startup delay to cancel, or an external sequential
         # close that articulates the slats.
         skip_travel = self._settled_at_endpoint(0)
-        if not skip_travel:
+        if skip_travel and self._force_endpoint_redrive:
+            # issue #167: don't trust "already closed" — re-drive the full close
+            # so a remote-opened, no-feedback cover actually closes.
+            await self._force_full_redrive(target=0)
+            skip_travel = False
+        elif not skip_travel:
             await self._async_move_to_endpoint(target=0)
 
         # Skip inline: its close already drives tilt to 0 via a TiltTo pre-step,
@@ -511,7 +518,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # Mirror async_close_cover's skip-at-0 for covers that treat an endpoint
         # re-command as a pointless re-energize rather than a resync (command-
         # echo wrapped, issue #152). Relay modes keep the resync re-drive.
-        if self._skip_open_resync_at_endpoint() and self._settled_at_endpoint(100):
+        settled_open = self._settled_at_endpoint(100)
+        if settled_open and self._force_endpoint_redrive:
+            # issue #167: don't trust "already open" — re-drive the full open,
+            # overriding both the command-echo skip and the short resync.
+            await self._force_full_redrive(target=100)
+            return
+        if self._skip_open_resync_at_endpoint() and settled_open:
             self._log("async_open_cover :: already settled at 100, skipping resync")
             return
         await self._async_move_to_endpoint(target=100)
@@ -559,6 +572,23 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         brings open into line for the covers that need it.
         """
         return False
+
+    async def _force_full_redrive(self, target: int) -> None:
+        """Re-drive fully to ``target`` (0 or 100) even though the tracker
+        believes it is already settled there (issue #167).
+
+        For a cover with no position feedback that an external remote may have
+        moved, the believed endpoint is untrustworthy. Model the start as the
+        opposite endpoint so the normal endpoint move runs the motor for the
+        full travel time (and each mode's tilt phases) instead of skipping or
+        firing only a short resync pulse.
+        """
+        opposite = 100 if target == 0 else 0
+        self._log(
+            "_force_full_redrive :: target=%d modeled from opposite=%d", target, opposite
+        )
+        self.travel_calc.set_position(opposite)
+        await self._async_move_to_endpoint(target=target)
 
     async def _direction_change_delay(self):
         """Pause between stop and direction change to let the motor settle."""

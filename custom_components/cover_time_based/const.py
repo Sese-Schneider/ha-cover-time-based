@@ -48,3 +48,12 @@ DEFAULT_RELAY_REPORTS_OFF = True
 # #133), so the stop must not be sent at all.
 CONF_SEND_ENDPOINT_STOP = "send_endpoint_stop"
 DEFAULT_SEND_ENDPOINT_STOP = True
+
+# All modes. When True, an open_cover / close_cover commanded while the tracker
+# already believes it is settled at that endpoint is re-driven for the full
+# travel time (modeled from the opposite endpoint) instead of being skipped as a
+# no-op / short resync. For covers with no position feedback that are also moved
+# by an external remote (issue #167), HA's belief is untrustworthy, so the
+# endpoint command must actually reach the underlying device.
+CONF_FORCE_ENDPOINT_REDRIVE = "force_endpoint_redrive"
+DEFAULT_FORCE_ENDPOINT_REDRIVE = False
