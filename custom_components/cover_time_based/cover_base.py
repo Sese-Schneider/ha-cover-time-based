@@ -35,6 +35,7 @@ from .cover_calibration import CalibrationMixin
 from .position_storage import async_get_position_store
 from .const import (
     CONF_ENDPOINT_RUNON_TIME,
+    CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_MIN_MOVEMENT_TIME,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
@@ -407,6 +408,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             attr[CONF_ENDPOINT_RUNON_TIME] = self._endpoint_runon_time
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
+        attr[CONF_FORCE_ENDPOINT_REDRIVE] = self._force_endpoint_redrive
         if self._calibration is not None:
             attr["calibration_active"] = True
             attr["calibration_attribute"] = self._calibration.attribute

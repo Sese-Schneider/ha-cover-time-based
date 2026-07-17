@@ -33,6 +33,7 @@ from custom_components.cover_time_based.cover import (
 )
 from custom_components.cover_time_based.const import (
     CONF_CLOSE_INCLUDES_TILT,
+    CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
     CONF_REPORTS_COMMAND_NOT_ENDPOINT,
@@ -108,6 +109,7 @@ def make_cover(make_hass, _mock_position_store):
         ignore_reported_position=None,
         force_time_based_position=None,
         reports_command_not_endpoint=None,
+        force_endpoint_redrive=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -169,6 +171,8 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_FORCE_TIME_BASED_POSITION] = force_time_based_position
         if reports_command_not_endpoint is not None:
             options[CONF_REPORTS_COMMAND_NOT_ENDPOINT] = reports_command_not_endpoint
+        if force_endpoint_redrive is not None:
+            options[CONF_FORCE_ENDPOINT_REDRIVE] = force_endpoint_redrive
 
         cover = _create_cover_from_options(
             options,

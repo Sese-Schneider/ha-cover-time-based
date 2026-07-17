@@ -59,3 +59,24 @@ async def test_option_off_close_at_closed_is_noop(make_cover):
     assert not cover.travel_calc.is_traveling()
     cover.hass.services.async_call.assert_not_awaited()
     assert cover._last_command is None
+
+
+@pytest.mark.asyncio
+async def test_config_sets_force_endpoint_redrive(make_cover):
+    """The option flows from config into the entity attribute."""
+    assert make_cover(force_endpoint_redrive=True)._force_endpoint_redrive is True
+    assert make_cover()._force_endpoint_redrive is False
+
+
+@pytest.mark.asyncio
+async def test_force_endpoint_redrive_in_state_attributes(make_cover):
+    """The flag is exposed in extra_state_attributes for diagnostics."""
+    assert (
+        make_cover(force_endpoint_redrive=True).extra_state_attributes[
+            "force_endpoint_redrive"
+        ]
+        is True
+    )
+    assert (
+        make_cover().extra_state_attributes["force_endpoint_redrive"] is False
+    )
