@@ -2374,3 +2374,23 @@ class TestForceEndpointRedriveRoundTrip:
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_options[CONF_FORCE_ENDPOINT_REDRIVE] is True
+
+    def test_field_map_contains_force_endpoint_redrive(self):
+        from custom_components.cover_time_based.websocket_api import _FIELD_MAP
+
+        assert _FIELD_MAP["force_endpoint_redrive"] == CONF_FORCE_ENDPOINT_REDRIVE
+
+    def test_update_schema_accepts_force_endpoint_redrive(self):
+        # Guards the schema/_FIELD_MAP pair: a real websocket update_config
+        # carrying `force_endpoint_redrive` must validate, else persistence
+        # is silently rejected.
+        schema = ws_update_config._ws_schema
+        validated = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": "cover.x",
+                "force_endpoint_redrive": True,
+            }
+        )
+        assert validated["force_endpoint_redrive"] is True
