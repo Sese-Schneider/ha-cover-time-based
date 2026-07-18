@@ -58,7 +58,7 @@ export function renderEntityPicker(card) {
               card._onStopCalibration(true);
             }
           }
-          card._selectedEntity = newEntity;
+          card._setSelectedEntity(newEntity);
           card._config = null;
           card._loadError = null;
           card._knownPosition = "unknown";

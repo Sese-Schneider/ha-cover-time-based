@@ -21,6 +21,7 @@ import {
   coverConfirmedWithoutTilt,
 } from "./entity-filter.js";
 import { DOMAIN, ATTRIBUTE_TO_CONFIG } from "./constants.js";
+import { loadSelectedEntity, saveSelectedEntity } from "./selection-storage.js";
 import { translate } from "./translations.js";
 import { cardStyles } from "./card-styles.js";
 import { renderCard } from "./card-render.js";
@@ -52,6 +53,8 @@ class CoverTimeBasedCard extends LitElement {
     this._knownPosition = "unknown";
     this._helpersLoaded = false;
     this._openHelp = null;
+    this._selectionRestoreAttempted = false;
+    this._configLoadToken = 0;
   }
 
   // --- Translation support ---
@@ -127,8 +130,44 @@ class CoverTimeBasedCard extends LitElement {
       this.requestUpdate();
     }
 
-    // Load entity list from full registry (includes config_entry_id)
-    this._loadEntityList();
+    // Load entity list from full registry (includes config_entry_id). This also
+    // restores the device this browser last had selected, once the list is
+    // available to validate it against.
+    this._entityListReady = this._loadEntityList();
+  }
+
+  /**
+   * Re-select the device remembered from a previous session, if it is still a
+   * live cover_time_based entity. A device that has since been deleted is
+   * dropped silently rather than left in the picker (the entity may still fail
+   * to load for other reasons — an unloaded config entry, say — which surfaces
+   * as the usual load error). Called from _loadEntityList, which supplies the
+   * live list this validates against.
+   */
+  _restoreSelection() {
+    // The registry lookup may have outlived the element; a detached card must
+    // not mutate state or issue further calls. No attempt is recorded, so a
+    // later re-connect can still restore.
+    if (!this.isConnected) return;
+    // Restore only on the card's first load. connectedCallback runs again every
+    // time HA re-parents the element, and restoring then would pull a selection
+    // made in another card or browser tab into a picker the user had cleared.
+    if (this._selectionRestoreAttempted) return;
+    this._selectionRestoreAttempted = true;
+    // The user may have picked a device while the registry lookup was in
+    // flight; never override a live selection.
+    if (this._selectedEntity) return;
+    const remembered = loadSelectedEntity();
+    if (!remembered) return;
+    if (!(this._configEntryEntities || []).includes(remembered)) return;
+    this._selectedEntity = remembered;
+    this._loadConfig();
+  }
+
+  /** Sets the selected device and remembers it for the next page load. */
+  _setSelectedEntity(entityId) {
+    this._selectedEntity = entityId;
+    saveSelectedEntity(entityId);
   }
 
   updated(changedProperties) {
@@ -147,6 +186,9 @@ class CoverTimeBasedCard extends LitElement {
         validEntryIds,
         DOMAIN
       );
+      // Restore before requesting the update so the populated picker and the
+      // restored selection render together, rather than in two passes.
+      this._restoreSelection();
       this.requestUpdate();
     } catch (err) {
       console.error(
@@ -180,20 +222,34 @@ class CoverTimeBasedCard extends LitElement {
   // --- Data fetching ---
 
   async _loadConfig() {
-    if (!this._selectedEntity || !this.hass) return;
+    const entityId = this._selectedEntity;
+    if (!entityId || !this.hass) return;
+    const token = ++this._configLoadToken;
     this._loading = true;
     this._loadError = null;
     try {
-      this._config = await this.hass.callWS({
+      const config = await this.hass.callWS({
         type: "cover_time_based/get_config",
-        entity_id: this._selectedEntity,
+        entity_id: entityId,
       });
+      // The selection can change while this is in flight (the user picks
+      // another device, or a restored selection races their pick). Applying a
+      // stale response would bind one device's config to another — and the next
+      // autosave would then write those settings onto the wrong device.
+      if (this._selectedEntity !== entityId) return;
+      this._config = config;
     } catch (err) {
+      if (this._selectedEntity !== entityId) return;
       console.error("Failed to load config:", err);
       this._config = null;
       this._loadError = this._t("yaml_warning");
+    } finally {
+      // Only the newest request owns the spinner: an older one must not clear
+      // it while a newer load is still running, but a request that was merely
+      // abandoned (the user cleared the picker, so nothing newer started) still
+      // has to, or the card spins forever.
+      if (token === this._configLoadToken) this._loading = false;
     }
-    this._loading = false;
   }
 
   _updateLocal(updates) {
@@ -284,7 +340,7 @@ class CoverTimeBasedCard extends LitElement {
 
   _onEntityChange(e) {
     const newValue = e.detail?.value || e.target?.value || "";
-    this._selectedEntity = newValue;
+    this._setSelectedEntity(newValue);
     this._config = null;
     if (this._selectedEntity) {
       this._loadConfig();
