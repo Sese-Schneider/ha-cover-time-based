@@ -23,6 +23,7 @@ import {
 import { DOMAIN, ATTRIBUTE_TO_CONFIG } from "./constants.js";
 import { loadSelectedEntity, saveSelectedEntity } from "./selection-storage.js";
 import { translate } from "./translations.js";
+import { loadDismissedLangs, persistLangDismissed } from "./language-banner.js";
 import { cardStyles } from "./card-styles.js";
 import { renderCard } from "./card-render.js";
 
@@ -55,6 +56,11 @@ class CoverTimeBasedCard extends LitElement {
     this._openHelp = null;
     this._selectionRestoreAttempted = false;
     this._configLoadToken = 0;
+    // The single answer to "has the translation nudge been dismissed?", seeded
+    // from storage once here rather than re-read on every render. Holding it in
+    // memory also means a dismissal sticks for the session when localStorage is
+    // unavailable and the write silently no-ops.
+    this._dismissedLangs = new Set(loadDismissedLangs());
   }
 
   // --- Translation support ---
@@ -65,6 +71,12 @@ class CoverTimeBasedCard extends LitElement {
 
   _switchLabel(baseKey, controlMode) {
     return this._t(switchLabelKey(baseKey, controlMode));
+  }
+
+  _dismissLanguageBanner(code) {
+    this._dismissedLangs.add(code);
+    persistLangDismissed(code);
+    this.requestUpdate();
   }
 
   // --- Lifecycle ---

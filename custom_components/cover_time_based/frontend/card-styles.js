@@ -454,6 +454,46 @@ export const cardStyles = css`
         color: var(--secondary-text-color);
       }
 
+      .lang-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 16px;
+        margin: 0 0 16px;
+        background: var(--secondary-background-color, #f5f5f5);
+        border-radius: 8px;
+        font-size: 14px;
+        line-height: 1.4;
+      }
+
+      .lang-banner ha-icon {
+        color: var(--secondary-text-color, #727272);
+        flex: 0 0 auto;
+      }
+
+      .lang-banner-body {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1 1 auto;
+        color: var(--primary-text-color, #212121);
+      }
+
+      .lang-banner-body a {
+        color: var(--primary-color, #03a9f4);
+        text-decoration: none;
+        font-weight: 500;
+      }
+
+      .lang-banner-body a:hover {
+        text-decoration: underline;
+      }
+
+      .lang-banner ha-icon-button {
+        flex: 0 0 auto;
+        cursor: pointer;
+      }
+
       .yaml-warning {
         padding: 16px;
         margin: 8px 0;

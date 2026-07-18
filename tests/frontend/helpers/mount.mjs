@@ -2,6 +2,7 @@ import "../../../custom_components/cover_time_based/frontend/cover-time-based-ca
 
 const HA_STUBS = [
   "ha-card", "ha-entity-picker", "ha-switch", "ha-icon", "ha-input", "ha-textfield",
+  "ha-icon-button",
 ];
 
 export function defineHaStubs({ exclude = [] } = {}) {
