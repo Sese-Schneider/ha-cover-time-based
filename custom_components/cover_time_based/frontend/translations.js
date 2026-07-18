@@ -405,13 +405,23 @@ export const TRANSLATIONS = {
  * Separators are normalised (pt_BR -> pt-BR) but case is not: hass.language is
  * always one of HA's canonical codes with the region already correctly cased,
  * so exact lookups line up. Only the base is lowercased.
+ *
+ * The separator rule lives in {@link normaliseLocale} so callers that need the
+ * canonical code for their own purposes — the banner keys dismissals, display
+ * names and issue URLs off it — cannot drift from what resolution uses.
  */
+export function normaliseLocale(raw) {
+  return (raw || "").replace(/_/g, "-");
+}
+
 export function resolveLocale(raw) {
-  const code = (raw || "").replace(/_/g, "-");
+  const code = normaliseLocale(raw);
   if (!code) return "";
-  if (code in TRANSLATIONS) return code;
+  // hasOwn, not `in`: `in` walks the prototype chain, so "constructor" and
+  // friends would read as shipped catalogues.
+  if (Object.hasOwn(TRANSLATIONS, code)) return code;
   const base = code.split("-")[0].toLowerCase();
-  return base in TRANSLATIONS ? base : "";
+  return Object.hasOwn(TRANSLATIONS, base) ? base : "";
 }
 
 /**
@@ -429,7 +439,9 @@ export function translate(lang, key, replacements) {
   let str = strings[key] || EN[key] || key;
   if (replacements) {
     for (const [k, v] of Object.entries(replacements)) {
-      str = str.replace(`{${k}}`, v);
+      // split/join, not replace(): replace() substitutes only the first
+      // occurrence and interprets $&, $` and $' in the replacement value.
+      str = str.split(`{${k}}`).join(v);
     }
   }
   return str;

@@ -10,7 +10,7 @@ import {
   LANG_DISMISSED_STORAGE_KEY,
   buildTranslationRequestUrl,
   languageDisplayName,
-  isLangDismissed,
+  loadDismissedLangs,
   persistLangDismissed,
 } from "../../custom_components/cover_time_based/frontend/language-banner.js";
 import { defineHaStubs, mountCard } from "./helpers/mount.mjs";
@@ -20,13 +20,10 @@ defineHaStubs();
 
 const banner = (el) => el.shadowRoot.querySelector(".lang-banner");
 
+// setup.mjs installs a fresh Storage before every test, so there is nothing to
+// clear here — only the spies some tests install on it.
 afterEach(() => {
   vi.restoreAllMocks();
-  try {
-    window.localStorage.removeItem(LANG_DISMISSED_STORAGE_KEY);
-  } catch (_) {
-    // storage unavailable — nothing to clean up
-  }
 });
 
 test("buildTranslationRequestUrl points at the upstream repo's new-issue form", () => {
@@ -64,13 +61,13 @@ test("languageDisplayName returns the input unchanged when it is empty", () => {
   expect(languageDisplayName("")).toBe("");
 });
 
-test("isLangDismissed is false before anything is dismissed", () => {
-  expect(isLangDismissed("de")).toBe(false);
+test("loadDismissedLangs is empty before anything is dismissed", () => {
+  expect(loadDismissedLangs()).toEqual([]);
 });
 
-test("persistLangDismissed then isLangDismissed round-trips a locale", () => {
+test("persistLangDismissed then loadDismissedLangs round-trips a locale", () => {
   persistLangDismissed("de");
-  expect(isLangDismissed("de")).toBe(true);
+  expect(loadDismissedLangs()).toContain("de");
 });
 
 test("dismissing a second locale preserves the first", () => {
@@ -78,8 +75,7 @@ test("dismissing a second locale preserves the first", () => {
   // and the nudge would reappear.
   persistLangDismissed("de");
   persistLangDismissed("fr");
-  expect(isLangDismissed("de")).toBe(true);
-  expect(isLangDismissed("fr")).toBe(true);
+  expect(loadDismissedLangs()).toEqual(["de", "fr"]);
 });
 
 test("persistLangDismissed does not duplicate an already-dismissed locale", () => {
@@ -89,16 +85,16 @@ test("persistLangDismissed does not duplicate an already-dismissed locale", () =
   expect(stored).toEqual(["de"]);
 });
 
-test("isLangDismissed is false when storage access throws", () => {
+test("loadDismissedLangs is empty when storage access throws", () => {
   vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
     throw new Error("storage disabled");
   });
-  expect(isLangDismissed("de")).toBe(false);
+  expect(loadDismissedLangs()).toEqual([]);
 });
 
-test("isLangDismissed is false when the stored value is corrupt", () => {
+test("loadDismissedLangs is empty when the stored value is corrupt", () => {
   window.localStorage.setItem(LANG_DISMISSED_STORAGE_KEY, "not json");
-  expect(isLangDismissed("de")).toBe(false);
+  expect(loadDismissedLangs()).toEqual([]);
 });
 
 test("persistLangDismissed is a silent no-op when storage access throws", () => {
@@ -148,7 +144,7 @@ test("clicking dismiss hides the banner and persists the locale", async () => {
   banner(el).querySelector("ha-icon-button").click();
   await el.updateComplete;
   expect(banner(el)).toBe(null);
-  expect(isLangDismissed("de")).toBe(true);
+  expect(loadDismissedLangs()).toContain("de");
 });
 
 test("dismissal sticks for the session when storage is unavailable", async () => {
@@ -159,5 +155,37 @@ test("dismissal sticks for the session when storage is unavailable", async () =>
   const el = await mountCard(makeHass({ language: "de" }));
   banner(el).querySelector("ha-icon-button").click();
   await el.updateComplete;
+  expect(banner(el)).toBe(null);
+});
+
+test("languageDisplayName falls back to the raw code when Intl throws", () => {
+  // "e" is a structurally invalid tag, so Intl.DisplayNames throws RangeError —
+  // unlike "zzz", which is valid and merely echoes. This is what exercises the
+  // guards; without it both catch arms are unreached.
+  expect(languageDisplayName("e")).toBe("e");
+});
+
+test("the issue body names the base language for a region variant", () => {
+  // de-AT, de-DE and de all want one `de` catalogue. Without this, each files a
+  // differently-titled issue and the maintainer can't tell which key to create.
+  const params = new URL(
+    buildTranslationRequestUrl("de-AT", "Österreichisches Deutsch")
+  ).searchParams;
+  expect(params.get("body")).toContain("de");
+  expect(params.get("body")).toContain("base language");
+});
+
+test("the issue body omits the base-language line for a plain language code", () => {
+  const params = new URL(buildTranslationRequestUrl("de", "Deutsch")).searchParams;
+  expect(params.get("body")).not.toContain("base language");
+});
+
+test("the banner does not render for English users", async () => {
+  const el = await mountCard(makeHass({ language: "en" }));
+  expect(banner(el)).toBe(null);
+});
+
+test("the banner does not render for a regional English variant", async () => {
+  const el = await mountCard(makeHass({ language: "en-GB" }));
   expect(banner(el)).toBe(null);
 });

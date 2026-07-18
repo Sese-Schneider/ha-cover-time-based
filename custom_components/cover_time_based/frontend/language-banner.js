@@ -14,7 +14,7 @@
  */
 
 import { html } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
-import { isLanguageSupported } from "./translations.js";
+import { isLanguageSupported, normaliseLocale } from "./translations.js";
 
 /** Upstream repository — the issue link must not point at a fork. */
 export const GITHUB_REPO_URL =
@@ -32,15 +32,27 @@ export const LANG_DISMISSED_STORAGE_KEY =
  * Title and body are deliberately English rather than localised — they land in
  * the project's issue tracker, which the maintainers read in English. No
  * `labels=` parameter: the repo has no `translation` label to request.
+ *
+ * For a region variant the body also names the base language, because one
+ * catalogue serves the whole family: `de-AT`, `de-DE` and `de` users would
+ * otherwise file three differently-titled issues for the single `de` catalogue
+ * that would satisfy all of them.
  */
 export function buildTranslationRequestUrl(code, displayName) {
+  const base = code.split("-")[0].toLowerCase();
+  const body = [
+    `I'd like Cover Time Based to be translated into: **${displayName}** (\`${code}\`).`,
+  ];
+  if (base !== code) {
+    body.push(
+      ``,
+      `A \`${base}\` catalogue would cover this — the card falls back to the base language.`
+    );
+  }
+  body.push(``, `- [ ] I'm happy to review the translation`);
   const params = new URLSearchParams({
     title: `Translation request: ${displayName} (${code})`,
-    body: [
-      `I'd like Cover Time Based to be translated into: **${displayName}** (\`${code}\`).`,
-      ``,
-      `- [ ] I'm happy to review the translation`,
-    ].join("\n"),
+    body: body.join("\n"),
   });
   return `${GITHUB_REPO_URL}/issues/new?${params.toString()}`;
 }
@@ -70,8 +82,14 @@ export function languageDisplayName(code) {
   return code;
 }
 
-/** The dismissed locales, or [] when absent, unreadable or corrupt. */
-function dismissedLocales() {
+/**
+ * The dismissed locales, or [] when absent, unreadable or corrupt.
+ *
+ * Read once when a card is constructed rather than on every render: the card
+ * holds the result in a Set, which is then the single answer to "was this
+ * dismissed?" — including when localStorage throws and the write below no-ops.
+ */
+export function loadDismissedLangs() {
   try {
     const raw = window.localStorage.getItem(LANG_DISMISSED_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
@@ -81,15 +99,10 @@ function dismissedLocales() {
   }
 }
 
-/** Whether the nudge was already dismissed for `code`. */
-export function isLangDismissed(code) {
-  return dismissedLocales().includes(code);
-}
-
 /** Record a dismissal for `code` (append + de-dup). */
 export function persistLangDismissed(code) {
   try {
-    const current = dismissedLocales();
+    const current = loadDismissedLangs();
     if (current.includes(code)) return;
     window.localStorage.setItem(
       LANG_DISMISSED_STORAGE_KEY,
@@ -108,9 +121,9 @@ export function persistLangDismissed(code) {
  * which is why `language_request.*` exists in EN only.
  */
 export function renderLanguageBanner(card) {
-  const code = (card.hass?.language || "").replace(/_/g, "-");
+  const code = normaliseLocale(card.hass?.language);
   if (isLanguageSupported(code)) return "";
-  if (card._dismissedLangs?.has(code) || isLangDismissed(code)) return "";
+  if (card._dismissedLangs.has(code)) return "";
 
   const displayName = languageDisplayName(code);
   const message = card._t("language_request.message", { language: displayName });

@@ -63,3 +63,34 @@ test("translate returns the key itself when no catalogue defines it", () => {
 test("translate substitutes placeholders", () => {
   expect(translate("en", "calibration.step", { step: 2 })).toBe("Step 2");
 });
+
+test("resolveLocale does not treat inherited Object properties as catalogues", () => {
+  // `in` walks the prototype chain; only own keys are real catalogues.
+  expect(resolveLocale("constructor")).toBe("");
+  expect(resolveLocale("toString")).toBe("");
+});
+
+test("isLanguageSupported is true for English so English users are never nudged", () => {
+  // The highest-consequence regression this feature could ship: if `en` ever
+  // stopped resolving, every English user would be told English is untranslated.
+  expect(isLanguageSupported("en")).toBe(true);
+  expect(isLanguageSupported("en-GB")).toBe(true);
+});
+
+test("translate substitutes every occurrence of a repeated placeholder", () => {
+  expect(translate("en", "language_request.message", { language: "X" })).not.toContain(
+    "{language}"
+  );
+  // A string repeating a placeholder must not leave the later ones raw.
+  expect(translate("en", "no.such.key.{a}.and.{a}", { a: "Z" })).toBe(
+    "no.such.key.Z.and.Z"
+  );
+});
+
+test("translate treats $-patterns in a replacement value as literal text", () => {
+  // String.replace interprets $&, $` and $' in the replacement — a display name
+  // containing one must not be able to splice the surrounding string into itself.
+  expect(translate("en", "no.such.key.{a}", { a: "$& $` $'" })).toBe(
+    "no.such.key.$& $` $'"
+  );
+});
