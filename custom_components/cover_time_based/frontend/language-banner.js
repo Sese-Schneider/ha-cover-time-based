@@ -24,6 +24,22 @@ export const LANG_DISMISSED_STORAGE_KEY =
   "cover_time_based_card.dismissed_lang_requests";
 
 /**
+ * The banner's copy, deliberately NOT in the translation table.
+ *
+ * These strings are unreachable in any language but English: the banner renders
+ * only when no catalogue covers the user's locale, so a translated copy could
+ * never be displayed. Keeping them out of `EN` also keeps them out of the
+ * language-parity gate, which correctly requires every English key to be
+ * translated — a rule these strings would otherwise have to be excepted from.
+ */
+const COPY = {
+  message: (language) =>
+    `Your Home Assistant language is ${language}, but Cover Time Based isn't translated into it yet.`,
+  action: "Request a translation →",
+  dismiss: "Dismiss",
+};
+
+/**
  * A prefilled "new issue" URL requesting a translation for `code`.
  *
  * Uses `?body=` rather than `?template=`: a template link resolves against the
@@ -116,9 +132,8 @@ export function persistLangDismissed(code) {
 /**
  * The nudge, or "" when the language is covered or already dismissed.
  *
- * The copy always renders in English: by construction the banner only appears
- * to users whose language has no catalogue, so `_t` falls back to EN anyway —
- * which is why `language_request.*` exists in EN only.
+ * The copy always renders in English — see {@link COPY} for why it is not
+ * translated.
  */
 export function renderLanguageBanner(card) {
   const code = normaliseLocale(card.hass?.language);
@@ -126,7 +141,7 @@ export function renderLanguageBanner(card) {
   if (card._dismissedLangs.has(code)) return "";
 
   const displayName = languageDisplayName(code);
-  const message = card._t("language_request.message", { language: displayName });
+  const message = COPY.message(displayName);
   return html`
     <div class="lang-banner">
       <ha-icon icon="mdi:translate"></ha-icon>
@@ -136,11 +151,11 @@ export function renderLanguageBanner(card) {
           href=${buildTranslationRequestUrl(code, displayName)}
           target="_blank"
           rel="noopener noreferrer"
-          >${card._t("language_request.action")}</a
+          >${COPY.action}</a
         >
       </div>
       <ha-icon-button
-        .label=${card._t("language_request.dismiss")}
+        .label=${COPY.dismiss}
         @click=${() => card._dismissLanguageBanner(code)}
       >
         <ha-icon icon="mdi:close"></ha-icon>

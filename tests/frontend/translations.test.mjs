@@ -78,9 +78,6 @@ test("isLanguageSupported is true for English so English users are never nudged"
 });
 
 test("translate substitutes every occurrence of a repeated placeholder", () => {
-  expect(translate("en", "language_request.message", { language: "X" })).not.toContain(
-    "{language}"
-  );
   // A string repeating a placeholder must not leave the later ones raw.
   expect(translate("en", "no.such.key.{a}.and.{a}", { a: "Z" })).toBe(
     "no.such.key.Z.and.Z"

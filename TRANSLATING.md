@@ -44,7 +44,7 @@ The card falls back to English for any key you miss, so a partial translation wi
 
 The card resolves a locale by trying the exact code first, then its base language, then English — so a `pt-BR` user reads the `pt` catalogue, and adding `de` also covers `de-AT` and `de-CH`. Add a region-specific key (`pt-BR`) only when that variant needs wording of its own.
 
-The `language_request.*` keys are deliberately **English-only**. They are the "your language isn't translated yet" banner, which by construction is only ever shown to users whose language has no catalogue — a translated copy would be unreachable.
+The "your language isn't translated yet" banner is not in this table at all — its copy lives in `frontend/language-banner.js`, because it is only ever shown to users whose language has no catalogue, so a translated copy could never be displayed.
 
 ## Adding a new translatable string
 
@@ -109,13 +109,10 @@ def keys_of(t): return set(re.findall(r'"([^"]+)":\s*"', t))
 
 en_card = keys_of(block(card, r"const EN\s*=\s*\{"))
 trans   = block(card, r"const TRANSLATIONS\s*=\s*\{")
-# The translation-request banner is English-only by design — see above.
-IGNORE = {k for k in en_card if k.startswith("language_request.")}
 for lang in re.findall(r"^\s{2}(\w+):\s*\{", trans, re.M):
     if lang == "en": continue
     other = keys_of(block(trans, rf"{lang}:\s*\{{"))
-    missing = sorted((en_card - IGNORE) - other)
-    print(f"card    {lang}: missing={missing or 'none'}  extra={sorted(other - en_card) or 'none'}")
+    print(f"card    {lang}: missing={sorted(en_card - other) or 'none'}  extra={sorted(other - en_card) or 'none'}")
 PY
 ```
 
