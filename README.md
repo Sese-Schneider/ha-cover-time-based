@@ -53,6 +53,8 @@ Click here:
 The configuration card provides a visual interface for all settings and supports built-in calibration to measure timing parameters automatically.
 
 > **Create at least one cover first.** The configuration card is delivered as a frontend asset of this integration, and Home Assistant only loads an integration's frontend assets once the integration is loaded — which requires at least one config entry to exist. If you add the card to a dashboard before creating any cover, Lovelace will show a red **Configuration error** ("custom element doesn't exist: cover-time-based-card"). Create a cover via the steps above, then add the card.
+>
+> **Hard-refresh your browser after the first install.** Home Assistant loads dashboard resources only when the page first loads, so the card is missing from any browser session that was already open when you installed the integration — and because Home Assistant's service worker caches the app, often only a _hard_ refresh brings it in (`Ctrl`/`Cmd`+`Shift`+`R`). A dismissible notice in **Settings → Repairs** prompts you to do this after a first install; it does not appear on version updates or ordinary restarts.
 
 1. Go to **Settings → Dashboards**.
 2. Click **Add dashboard → New dashboard from scratch**.
@@ -72,6 +74,8 @@ The configuration card provides a visual interface for all settings and supports
 The configuration card provides a visual interface for all settings and supports built-in calibration to measure timing parameters automatically.
 
 The configuration card has two tabs: **Device** and **Calibration**. The Device tab must be fully configured before accessing the Calibration tab.
+
+The card remembers the device you last selected and restores it the next time the dashboard loads, so you don't have to re-pick the cover you were configuring. The selection is remembered per browser rather than per Home Assistant user, and a cover that has since been deleted is simply not restored.
 
 The main items on the **Device** configure how to interface with the
 physical cover:
@@ -106,7 +110,7 @@ Specify the **Cover entity**.
 
 **Reports commands, not endpoints.** Some covers (for example single-DP Tuya shutters) have no position feedback and never emit an `opening` / `closing` state — their reported state simply echoes the last command: `open` when opening was commanded, `closed` when closing was commanded, and `unknown` when stopped. For these, a `closed` state does *not* mean the cover reached the bottom; pressing **stop** halfway is reported identically to a full close, so the default behaviour wrongly snaps the position to 0%. Enable this option to treat the wrapped entity's state as an open / close / stop **command** and track the position entirely by time: `open` starts a timed open, `closed` starts a timed close, and `unknown` (stop) freezes the cover at its current time-based position. Leave it **off** for any cover that reports a real position or a genuine `opening` / `closing` transition.
 
-Because a command-echo cover has no endpoint feedback — and in practice drives an endstop-less motor that only stalls against its mechanical stop while powered — the integration also sends an explicit **stop** when the cover reaches the 0% / 100% endpoints (rather than assuming the motor self-stops there, as it does for other wrapped covers), and treats an `open` / `close` command issued while already parked at that endpoint as a no-op. Set **Endpoint Run-on Time** to 0 for such a motor so it is de-energized the instant it reaches the endpoint.
+Because a command-echo cover has no endpoint feedback — and in practice drives an endstop-less motor that only stalls against its mechanical stop while powered — the integration also sends an explicit **stop** when the cover reaches the 0% / 100% endpoints (rather than assuming the motor self-stops there, as it does for other wrapped covers), and treats an `open` / `close` command issued while already parked at that endpoint as a no-op. Set **Endpoint Run-on Time** to 0 for such a motor so it is de-energized the instant it reaches the endpoint. If the cover can also be moved by an external remote — so "already parked there" may not be true — enable [Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints) to drive the command through anyway.
 
 **Setting a position.** If the wrapped cover natively supports `set_cover_position`, the integration forwards the set-position command straight to it, so the cover stops at the requested position even if the underlying device has no `stop` service. The time-based tracker still animates the position live during the move (handy for covers that only report their position once they finish moving). On such a cover, the integration's **Stop** is implemented by setting the wrapped cover to the current calculated position. If the wrapped cover doesn't support `set_cover_position`, the integration falls back to driving it with timed open / close / stop. The **Force time-based positioning** option forces that timed behaviour even when native set-position is available — use it if the wrapped cover's own set-position is unreliable.
 
@@ -154,6 +158,14 @@ Turn it **off** for controllers with **automatic end-stop detection**: the motor
 ### Assumed state
 
 Available for every device type. A time-based cover calculates its position from travel time without feedback, so by default it reports an _assumed_ state and Home Assistant keeps both the open and close buttons active at all times. Turn **Assumed state** off if you trust the time-based calculation and want the UI to behave like a position-aware cover — greying out actions that can't apply (for example the close button once the cover is already fully closed). Leave it on if the calculation can drift (motor slip, manual operation, power loss mid-travel), since the always-active buttons let you re-issue a command to re-converge.
+
+### Always re-send open/close at the endpoints
+
+Available for every device type. Normally, an open (or close) command issued while the tracker already believes the cover is settled at that endpoint is treated as redundant — the movement is skipped, or reduced to a short resync pulse — since the motor is thought to already be there.
+
+Turn this option **on** for a cover that has **no position feedback** and can _also_ be moved by an external remote or wall button. Such a remote moves the cover without telling Home Assistant, so the tracker can believe the cover is closed while it is physically open — and the close command that would fix that is exactly the one skipped as redundant, making the cover appear unresponsive until you nudge it off the endpoint by hand. With the option on, an endpoint command is always driven for the **full travel time** (modelled as starting from the opposite endpoint, so each mode's tilt phases run too), guaranteeing it reaches the motor.
+
+Leave it **off** (the default) for covers that report their own position: there the skip is correct, and forcing a re-drive would run the motor into its limit on every redundant press.
 
 ## Tilt Mode
 
@@ -241,11 +253,13 @@ Recommended values: 0.05 - 0.15 seconds. Can be configured separately for travel
 
 Position tracking is not exact and can drift over time, so the tracker resyncs itself whenever the cover is sent fully to the 0% or 100% endpoint.
 
-Most cover motors have internal limit switches and stop themselves at the endpoints. In **Toggle**, **Toggle (opposite button)** and (most) wrapped-cover modes the integration therefore sends **no stop command at an endpoint** — it lets the motor run into its own limit. This avoids an unwanted extra movement (in Toggle mode a stop pulse on an already-stopped motor would restart it) and resyncs the tracker for free, as the motor always reaches its true endpoint. The exception is a wrapped cover with **[Reports commands, not endpoints](#wrapped-covers)** enabled: it has no endpoint feedback and typically an endstop-less motor, so it *is* sent an explicit stop at the endpoint (and re-commanding it to an endpoint it already sits at is a no-op rather than a re-drive). **Pulse** mode is configurable (see [Send stop signal at endpoints](#send-stop-signal-at-endpoints-pulse-mode) above): by default it pulses its dedicated stop relay at the endpoint, which a latching controller needs, but that can be turned off for controllers that self-stop at their own limits.
+Most cover motors have internal limit switches and stop themselves at the endpoints. In **Toggle**, **Toggle (opposite button)** and (most) wrapped-cover modes the integration therefore sends **no stop command at an endpoint** — it lets the motor run into its own limit. This avoids an unwanted extra movement (in Toggle mode a stop pulse on an already-stopped motor would restart it) and resyncs the tracker for free, as the motor always reaches its true endpoint. The exception is a wrapped cover with **[Reports commands, not endpoints](#wrapped-covers)** enabled: it has no endpoint feedback and typically an endstop-less motor, so it *is* sent an explicit stop at the endpoint (and re-commanding it to an endpoint it already sits at is a no-op rather than a re-drive, unless [Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints) is on). **Pulse** mode is configurable (see [Send stop signal at endpoints](#send-stop-signal-at-endpoints-pulse-mode) above): by default it pulses its dedicated stop relay at the endpoint, which a latching controller needs, but that can be turned off for controllers that self-stop at their own limits.
 
 In **Switch** mode the direction relay is latched ON for the whole movement, so it must be actively switched off at the endpoint. Because tracking is approximate, the relay is held on for an extra **Endpoint Run-on Time** (default 2s) so the motor reaches the physical endpoint before power is cut. **This setting applies to Switch mode, and to Pulse mode when it sends the endpoint stop** (it defers that stop pulse by the run-on so the motor seats against its limit first).
 
 The same self-stop handling applies to a **separate tilt motor** (separate-tilt-motor mode): no stop is sent when tilt reaches its 0%/100% endpoints — the tilt motor self-stops on its own limit — except in **Switch** mode (which de-energizes the latched tilt relay) and in **Pulse** mode when _Send stop signal at endpoints_ is on (which pulses the tilt-stop relay). Mid-tilt positions are always stopped (nothing self-stops there).
+
+The self-stop skip covers **travel** moves only. A **tilt** move made while the cover is parked at a travel endpoint drives the motor _off_ its limit switch (in **inline** tilt the slats share the travel motor), so it will not self-stop there — the stop is therefore always sent for a tilt move at an endpoint, in every mode.
 
 Under the **sequential closes-then-tilts-closed** and **sequential closes-then-tilts-open** tilt modes, run-on is skipped at the closed (0%) endpoint, because the motor is already driven past cover-closed for the tilt phase. Run-on still applies at the open (100%) endpoint.
 
