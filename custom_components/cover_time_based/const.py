@@ -13,6 +13,14 @@ CONF_ENDPOINT_RUNON_TIME = "endpoint_runon_time"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
 DEFAULT_ENDPOINT_RUNON_TIME = 2.0
 
+CONF_DIRECTION_CHANGE_DELAY = "direction_change_delay"
+# Gap between the stop and the new direction when reversing a moving cover, so
+# the motor comes to rest before being driven the other way. Configurable
+# because motors differ: too short and the reverse command arrives while the
+# motor is still settling and is ignored, parking the cover while the position
+# tracker runs on to the target (issue #153 follow-up).
+DEFAULT_DIRECTION_CHANGE_DELAY = 1.0
+
 CONF_CLOSE_INCLUDES_TILT = "close_includes_tilt"
 DEFAULT_CLOSE_INCLUDES_TILT = True
 

@@ -506,6 +506,7 @@ export function renderTimingTable(card, c) {
     ["timing.travel_time_close", "travel_time_close", c.travel_time_close, 0.1],
     ["timing.travel_time_open", "travel_time_open", c.travel_time_open, 0.1],
     ["timing.travel_startup_delay", "travel_startup_delay", c.travel_startup_delay],
+    ["timing.direction_change_delay", "direction_change_delay", c.direction_change_delay],
     ["timing.min_movement_time", "min_movement_time", c.min_movement_time],
   ];
   // Endpoint run-on applies to modes that send a relay stop at the endpoint:

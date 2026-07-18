@@ -34,6 +34,7 @@ from .calibration import CalibrationState
 from .cover_calibration import CalibrationMixin
 from .position_storage import async_get_position_store
 from .const import (
+    CONF_DIRECTION_CHANGE_DELAY,
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_MIN_MOVEMENT_TIME,
@@ -44,6 +45,7 @@ from .const import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    DEFAULT_DIRECTION_CHANGE_DELAY,
 )
 from .tilt_strategies import InlineTilt, SequentialTilt
 from .tilt_strategies.planning import (
@@ -72,6 +74,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt_startup_delay,
         endpoint_runon_time,
         min_movement_time,
+        direction_change_delay=None,
         tilt_open_switch=None,
         tilt_close_switch=None,
         tilt_stop_switch=None,
@@ -97,6 +100,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._tilt_startup_delay = tilt_startup_delay
         self._endpoint_runon_time = endpoint_runon_time
         self._min_movement_time = min_movement_time
+        # Resolved here, not just at the config boundary. An explicit None does
+        # reach this constructor: the YAML `defaults:` block accepts it
+        # (DEFAULTS_SCHEMA allows `vol.Any(cv.positive_float, None)`) and
+        # `_get_value` returns that None verbatim, which `options.get(key,
+        # default)` then hands straight through — `.get` only substitutes the
+        # default for a *missing* key, not a present-but-None one. Without this
+        # sleep(None) would raise on every reversal for those users. (The card
+        # cannot produce it: ws_update_config pops the key on null.) Kept
+        # non-None so the reversal path can sleep it directly, and compared
+        # against None rather than falsiness because 0 is a legitimate
+        # "no settle gap".
+        self._direction_change_delay_time = (
+            DEFAULT_DIRECTION_CHANGE_DELAY
+            if direction_change_delay is None
+            else direction_change_delay
+        )
         self._tilt_open_switch_id = tilt_open_switch
         self._tilt_close_switch_id = tilt_close_switch
         self._tilt_stop_switch_id = tilt_stop_switch
@@ -113,6 +132,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._delay_task = None
         self._startup_delay_task = None
         self._last_command = None
+        # Claimed by every command that supersedes an in-flight movement; read
+        # across the settle gap by _settle_before_reversing.
+        self._movement_epoch = 0
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
         #   - _plan_tilt_for_travel (mid-position moves: restore prior tilt;
@@ -409,6 +431,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
         attr[CONF_FORCE_ENDPOINT_REDRIVE] = self._force_endpoint_redrive
+        attr[CONF_DIRECTION_CHANGE_DELAY] = self._direction_change_delay_time
         if self._calibration is not None:
             attr["calibration_active"] = True
             attr["calibration_attribute"] = self._calibration.attribute
@@ -453,7 +476,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # then proceed with close (legacy reverse behavior).
             self._log("async_close_cover :: external close while opening, reversing")
             await self.async_stop_cover()
-            await self._direction_change_delay()
+            if not await self._settle_before_reversing():
+                return
 
         # Skip the re-drive when already settled at 0 (HA convention: a
         # re-applied close is a no-op). _settled_at_endpoint keeps the
@@ -518,7 +542,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._triggered_externally and self._travel_axis_closing():
             self._log("async_open_cover :: external open while closing, reversing")
             await self.async_stop_cover()
-            await self._direction_change_delay()
+            if not await self._settle_before_reversing():
+                return
         # Mirror async_close_cover's skip-at-0 for covers that treat an endpoint
         # re-command as a pointless re-energize rather than a resync (command-
         # echo wrapped, issue #152). Relay modes keep the resync re-drive.
@@ -604,8 +629,34 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         await self._async_move_to_endpoint(target=target)
 
     async def _direction_change_delay(self):
-        """Pause between stop and direction change to let the motor settle."""
-        await sleep(1.0)
+        """Pause between stop and direction change to let the motor settle.
+
+        Configurable per cover — see DEFAULT_DIRECTION_CHANGE_DELAY in const.py
+        for why a fixed gap is not good enough.
+        """
+        await sleep(self._direction_change_delay_time)
+
+    def _supersede_movement(self) -> None:
+        """Claim the movement, cancelling any reversal waiting out its settle."""
+        self._movement_epoch += 1
+
+    async def _settle_before_reversing(self) -> bool:
+        """Await the settle gap; False if this movement was superseded.
+
+        A reversal stops the motor, waits for it to come to rest, then drives
+        the other way — but the caller is a plain service-call coroutine, not a
+        task anything can cancel. Without this check a stop (or a newer target)
+        arriving inside the gap is overridden the moment the reversal resumes,
+        moving the cover after the user stopped it up to
+        direction_change_delay seconds later — a window that widens with the
+        gap, which slow motors are meant to widen.
+        """
+        epoch = self._movement_epoch
+        await self._direction_change_delay()
+        if epoch != self._movement_epoch:
+            self._log("_settle_before_reversing :: superseded during settle, aborting")
+            return False
+        return True
 
     async def async_stop_cover(self, **kwargs):
         """Turn the device stop."""
@@ -963,7 +1014,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             if self._has_tilt_support() and self.tilt_calc.is_traveling():
                 self.tilt_calc.stop()
             await self._async_handle_command(SERVICE_STOP_COVER)
-            await self._direction_change_delay()
+            if not await self._settle_before_reversing():
+                return
             current = self.travel_calc.current_position()
             if target == current:
                 return
@@ -1723,7 +1775,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt pre-step is in progress, stops all hardware and calculators.
         Always clears the pending restore target so it won't fire after
         the next travel completes.
+
+        Being the one hook every movement entry point funnels through, this is
+        also where a new movement claims the epoch — see
+        _settle_before_reversing. Tilt counts: on shared-motor strategies tilt
+        is driven by the travel motor, so a tilt command must invalidate a
+        travel reversal parked in its settle gap just as a travel command does.
         """
+        self._supersede_movement()
         was_restoring = self._tilt_restore_active
         was_pre_stepping = (
             self._pending_travel_target is not None
@@ -1773,6 +1832,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     def _handle_stop(self):
         """Handle stop"""
+        # Every route that halts the cover lands here — both async_stop_cover
+        # implementations (the toggle override does not call super), plus the
+        # known-position resets — so this is where a stop claims the movement
+        # and keeps a reversal parked in its settle gap from driving afterwards.
+        #
+        # Only our own intent counts, never the device talking back. Passive
+        # routes land here too: a wrapped cover reporting its settled position
+        # snaps via set_known_position, and a switch-mode relay's unmarked off
+        # (a hardware interlock clearing the opposite relay) calls
+        # async_stop_cover. Both run with _triggered_externally set, and both
+        # can arrive inside the settle window — the wrapped self-echo
+        # suppressors are keyed on is_traveling(), which the reversal has
+        # already cleared. Treating those as supersessions would silently drop
+        # the user's move, or freeze the tracker while the motor runs.
+        if not self._triggered_externally:
+            self._supersede_movement()
         self._tilt_restore_target = None
         self._tilt_restore_active = False
         self._pending_travel_target = None
@@ -1994,7 +2069,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self._async_handle_command(SERVICE_STOP_COVER)
             if not self._tilt_restore_active:
                 # Cancelled while stopping — bail before the settle delay so we
-                # don't block the background task ~1s for a dead restore.
+                # don't block the background task for a dead restore. The gap is
+                # the per-cover direction_change_delay, so it can be several
+                # seconds, not the ~1s this once assumed.
                 self._log("_start_tilt_restore :: cancelled before settle delay")
                 return
             await self._direction_change_delay()

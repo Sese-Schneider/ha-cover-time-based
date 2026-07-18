@@ -576,14 +576,14 @@ test("timing tab renders .timing-table", async () => {
   expect(card.shadowRoot.querySelector(".timing-table")).not.toBeNull();
 });
 
-test("switch mode timing table includes endpoint_runon_time row (5 travel rows: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time, endpoint_runon_time)", async () => {
+test("switch mode timing table includes endpoint_runon_time row (6 travel rows: travel_time_close, travel_time_open, travel_startup_delay, direction_change_delay, min_movement_time, endpoint_runon_time)", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
   const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
-  // switch mode: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time, endpoint_runon_time
-  expect(inputs.length).toBe(5);
+  // switch mode: travel_time_close, travel_time_open, travel_startup_delay, direction_change_delay, min_movement_time, endpoint_runon_time
+  expect(inputs.length).toBe(6);
 });
 
-test("pulse mode with send_endpoint_stop off timing table does NOT include endpoint_runon_time (4 travel rows)", async () => {
+test("pulse mode with send_endpoint_stop off timing table does NOT include endpoint_runon_time (5 travel rows)", async () => {
   // Pulse covers that send the endpoint stop (default) DO show the run-on row;
   // only when send_endpoint_stop is off does pulse self-stop at endpoints and
   // hide it. See send_endpoint_stop.test.mjs for the full gating matrix.
@@ -593,8 +593,31 @@ test("pulse mode with send_endpoint_stop off timing table does NOT include endpo
     activeTab: "timing",
   });
   const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
-  // pulse w/stop-off: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time (no endpoint_runon)
-  expect(inputs.length).toBe(4);
+  // pulse w/stop-off: travel_time_close, travel_time_open, travel_startup_delay, direction_change_delay, min_movement_time (no endpoint_runon)
+  expect(inputs.length).toBe(5);
+});
+
+test.each([
+  ["switch", switchCfg],
+  ["pulse", pulseCfg],
+  ["toggle", toggleCfg],
+  ["toggle_opposite", toggleOppositeCfg],
+  ["wrapped", wrappedCfg],
+])("direction_change_delay row is shown in %s mode", async (_mode, cfg) => {
+  // The stop->reverse settle gap applies wherever a reversal happens, so it is
+  // not gated per mode the way endpoint_runon_time is.
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: cfg({ direction_change_delay: 3.5 }),
+    activeTab: "timing",
+  });
+  // Locate the row by its label, not by value — matching on the value alone
+  // would pass if some other timing row happened to hold 3.5.
+  const row = [...card.shadowRoot.querySelectorAll("tr")].find(
+    (tr) => tr.querySelector("td")?.textContent.trim() === "Direction change delay",
+  );
+  expect(row).toBeTruthy();
+  expect(row.querySelector("input.timing-input").value).toBe("3.5");
 });
 
 test("timing row input has min attribute set (travel_time_close has min=0.1)", async () => {
