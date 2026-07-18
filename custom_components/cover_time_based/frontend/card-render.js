@@ -2,6 +2,7 @@ import { html } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module"
 import { renderTextfield } from "./textfield-render.js";
 import { switchPickerDomains, showsPulseTime } from "./entity-filter.js";
 import { TIMING_ATTRIBUTES } from "./constants.js";
+import { renderLanguageBanner } from "./language-banner.js";
 
 export function renderCard(card) {
   if (!card.hass) return html``;
@@ -9,6 +10,7 @@ export function renderCard(card) {
     <ha-card>
       <div class="card-header">${card._t("header")}</div>
       <div class="card-content">
+        ${renderLanguageBanner(card)}
         ${renderEntityPicker(card)}
         ${card._selectedEntity && card._config
           ? renderConfigSections(card)

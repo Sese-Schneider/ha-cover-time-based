@@ -6,6 +6,10 @@ export const EN = {
   "confirm_cancel_calibration": "A calibration is running. Cancel it and continue?",
   "create_new": "+ Create new cover entity",
   "yaml_warning": "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings \u2192 Devices & Services \u2192 Helpers \u2192 Create Helper \u2192 Cover Time Based.",
+  "language_request.message":
+    "Your Home Assistant language is {language}, but Cover Time Based isn't translated into it yet.",
+  "language_request.action": "Request a translation →",
+  "language_request.dismiss": "Dismiss",
   "tabs.device": "Device",
   "tabs.calibration": "Calibration",
   "control_mode.label": "Control Mode",

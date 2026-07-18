@@ -13,6 +13,9 @@
  * dismissal is far better than a card that fails to render.
  */
 
+import { html } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
+import { isLanguageSupported } from "./translations.js";
+
 /** Upstream repository — the issue link must not point at a fork. */
 export const GITHUB_REPO_URL =
   "https://github.com/Sese-Schneider/ha-cover-time-based";
@@ -95,4 +98,40 @@ export function persistLangDismissed(code) {
   } catch (_) {
     // storage unavailable — the dismissal simply isn't remembered
   }
+}
+
+/**
+ * The nudge, or "" when the language is covered or already dismissed.
+ *
+ * The copy always renders in English: by construction the banner only appears
+ * to users whose language has no catalogue, so `_t` falls back to EN anyway —
+ * which is why `language_request.*` exists in EN only.
+ */
+export function renderLanguageBanner(card) {
+  const code = (card.hass?.language || "").replace(/_/g, "-");
+  if (isLanguageSupported(code)) return "";
+  if (card._dismissedLangs?.has(code) || isLangDismissed(code)) return "";
+
+  const displayName = languageDisplayName(code);
+  const message = card._t("language_request.message", { language: displayName });
+  return html`
+    <div class="lang-banner">
+      <ha-icon icon="mdi:translate"></ha-icon>
+      <div class="lang-banner-body">
+        <span>${message}</span>
+        <a
+          href=${buildTranslationRequestUrl(code, displayName)}
+          target="_blank"
+          rel="noopener noreferrer"
+          >${card._t("language_request.action")}</a
+        >
+      </div>
+      <ha-icon-button
+        .label=${card._t("language_request.dismiss")}
+        @click=${() => card._dismissLanguageBanner(code)}
+      >
+        <ha-icon icon="mdi:close"></ha-icon>
+      </ha-icon-button>
+    </div>
+  `;
 }

@@ -13,6 +13,12 @@ import {
   isLangDismissed,
   persistLangDismissed,
 } from "../../custom_components/cover_time_based/frontend/language-banner.js";
+import { defineHaStubs, mountCard } from "./helpers/mount.mjs";
+import { makeHass } from "./helpers/hass.mjs";
+
+defineHaStubs();
+
+const banner = (el) => el.shadowRoot.querySelector(".lang-banner");
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -100,4 +106,58 @@ test("persistLangDismissed is a silent no-op when storage access throws", () => 
     throw new Error("storage disabled");
   });
   expect(() => persistLangDismissed("de")).not.toThrow();
+});
+
+test("the banner renders for a language with no shipped translation", async () => {
+  const el = await mountCard(makeHass({ language: "de" }));
+  expect(banner(el)).not.toBe(null);
+});
+
+test("the banner does not render for a shipped language", async () => {
+  const el = await mountCard(makeHass({ language: "pl" }));
+  expect(banner(el)).toBe(null);
+});
+
+test("the banner does not render for a region variant covered by its base", async () => {
+  // pt-BR reads European Portuguese, so there is nothing to request.
+  const el = await mountCard(makeHass({ language: "pt-BR" }));
+  expect(banner(el)).toBe(null);
+});
+
+test("the banner does not render when the language is undeterminable", async () => {
+  const el = await mountCard(makeHass({ language: "" }));
+  expect(banner(el)).toBe(null);
+});
+
+test("the banner names the language and links to a prefilled issue", async () => {
+  const el = await mountCard(makeHass({ language: "de" }));
+  const text = banner(el).textContent;
+  expect(text).toContain(languageDisplayName("de"));
+  const href = banner(el).querySelector("a").getAttribute("href");
+  expect(href).toBe(buildTranslationRequestUrl("de", languageDisplayName("de")));
+});
+
+test("the banner does not render for a locale already dismissed in storage", async () => {
+  persistLangDismissed("de");
+  const el = await mountCard(makeHass({ language: "de" }));
+  expect(banner(el)).toBe(null);
+});
+
+test("clicking dismiss hides the banner and persists the locale", async () => {
+  const el = await mountCard(makeHass({ language: "de" }));
+  banner(el).querySelector("ha-icon-button").click();
+  await el.updateComplete;
+  expect(banner(el)).toBe(null);
+  expect(isLangDismissed("de")).toBe(true);
+});
+
+test("dismissal sticks for the session when storage is unavailable", async () => {
+  // Persistence silently no-ops, but the in-memory set must still hide it.
+  vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+    throw new Error("storage disabled");
+  });
+  const el = await mountCard(makeHass({ language: "de" }));
+  banner(el).querySelector("ha-icon-button").click();
+  await el.updateComplete;
+  expect(banner(el)).toBe(null);
 });
