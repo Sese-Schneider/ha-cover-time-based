@@ -7,6 +7,7 @@ blind stays put, the entity ticks on to the target). Motors differ, so the gap
 is configurable; it defaults to the historical 1.0s.
 """
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -196,3 +197,140 @@ def test_omitted_option_leaves_the_default():
     """An unset option falls back to the historical 1.0s."""
     cover = _create_cover_from_options(_switch_options(), device_id="test", name="Test")
     assert cover._direction_change_delay_time == 1.0
+
+
+async def _reach_settle_gap():
+    """Yield to the loop until the reversal task is parked in the settle gap."""
+    for _ in range(10):
+        await asyncio.sleep(0)
+
+
+@pytest.mark.asyncio
+async def test_stop_during_the_settle_gap_cancels_the_reversal(make_cover):
+    """A stop landing inside the settle gap must win.
+
+    The reversal stops the motor, waits out the gap, then drives the new
+    direction. Nothing re-checked that the movement was still wanted, so a stop
+    arriving during the gap was overridden when the coroutine resumed — the
+    cover moved *after* the user told it to stop, up to direction_change_delay
+    seconds later. Raising the gap for slow motors widens that window.
+    """
+    cover = make_cover(
+        control_mode=CONTROL_MODE_TOGGLE_OPPOSITE, direction_change_delay=2.5
+    )
+    cover.hass.states.get = MagicMock(
+        side_effect=lambda eid: SimpleNamespace(state="off")
+    )
+    cover.travel_calc.set_position(40)
+    cover.travel_calc.start_travel_up()
+    cover._last_command = SERVICE_OPEN_COVER
+
+    commands = []
+    real_handle = cover._async_handle_command
+
+    async def record(command, *args):
+        commands.append(command)
+        return await real_handle(command, *args)
+
+    release = asyncio.Event()
+
+    async def gated_sleep(_seconds):
+        await release.wait()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=record),
+        patch(SLEEP, side_effect=gated_sleep),
+    ):
+        reversal = asyncio.create_task(cover.set_position(20))
+        await _reach_settle_gap()
+        assert commands == [SERVICE_STOP_COVER], "expected to be parked in the gap"
+
+        await cover.async_stop_cover()
+        release.set()
+        await reversal
+
+    # The reversal must not have driven the motor after the stop.
+    assert commands == [SERVICE_STOP_COVER]
+    assert not cover.travel_calc.is_traveling()
+
+
+@pytest.mark.asyncio
+async def test_newer_target_during_the_settle_gap_supersedes_the_reversal(make_cover):
+    """A second slider drag inside the gap wins over the first.
+
+    The stale reversal must not wake up and drive its own (now abandoned)
+    direction while the newer movement is already tracking — that would leave
+    motor and tracker disagreeing, the same desync class this option exists to
+    fix.
+    """
+    cover = make_cover(
+        control_mode=CONTROL_MODE_TOGGLE_OPPOSITE, direction_change_delay=2.5
+    )
+    cover.hass.states.get = MagicMock(
+        side_effect=lambda eid: SimpleNamespace(state="off")
+    )
+    cover.travel_calc.set_position(40)
+    cover.travel_calc.start_travel_up()
+    cover._last_command = SERVICE_OPEN_COVER
+
+    commands = []
+    real_handle = cover._async_handle_command
+
+    async def record(command, *args):
+        commands.append(command)
+        return await real_handle(command, *args)
+
+    release = asyncio.Event()
+
+    async def gated_sleep(_seconds):
+        await release.wait()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=record),
+        patch(SLEEP, side_effect=gated_sleep),
+    ):
+        reversal = asyncio.create_task(cover.set_position(20))
+        await _reach_settle_gap()
+
+        # Newer target, same direction as the original travel: no reversal, so
+        # it drives straight away rather than parking in the gap.
+        await cover.set_position(60)
+        release.set()
+        await reversal
+
+    # The abandoned close must never have been issued.
+    assert SERVICE_CLOSE_COVER not in commands
+    assert cover.travel_calc._travel_to_position == 60
+
+
+@pytest.mark.asyncio
+async def test_undisturbed_reversal_still_completes(make_cover):
+    """The guard must not cancel a reversal that nothing interrupted."""
+    cover = make_cover(
+        control_mode=CONTROL_MODE_TOGGLE_OPPOSITE, direction_change_delay=2.5
+    )
+    cover.hass.states.get = MagicMock(
+        side_effect=lambda eid: SimpleNamespace(state="off")
+    )
+    cover.travel_calc.set_position(40)
+    cover.travel_calc.start_travel_up()
+    cover._last_command = SERVICE_OPEN_COVER
+
+    commands = []
+    real_handle = cover._async_handle_command
+
+    async def record(command, *args):
+        commands.append(command)
+        return await real_handle(command, *args)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=record),
+        patch(SLEEP, new_callable=AsyncMock),
+    ):
+        await cover.set_position(20)
+
+    assert commands == [SERVICE_STOP_COVER, SERVICE_CLOSE_COVER]
+    assert cover.travel_calc._travel_to_position == 20
