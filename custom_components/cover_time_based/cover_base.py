@@ -132,10 +132,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._delay_task = None
         self._startup_delay_task = None
         self._last_command = None
-        # Bumped by every command that supersedes an in-flight movement, so a
-        # coroutine parked in the direction-change settle gap can tell whether
-        # its movement is still wanted when it wakes — see
-        # _settle_before_reversing.
+        # Claimed by every command that supersedes an in-flight movement; read
+        # across the settle gap by _settle_before_reversing.
         self._movement_epoch = 0
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
@@ -460,7 +458,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         self._require_configured()
         self._log("async_close_cover")
-        self._supersede_movement()
         if not self._triggered_externally and (
             self._travel_axis_opening() or self._travel_axis_closing()
         ):
@@ -536,7 +533,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         self._require_configured()
         self._log("async_open_cover")
-        self._supersede_movement()
         if not self._triggered_externally and (
             self._travel_axis_opening() or self._travel_axis_closing()
         ):
@@ -652,12 +648,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         task anything can cancel. Without this check a stop (or a newer target)
         arriving inside the gap is overridden the moment the reversal resumes,
         moving the cover after the user stopped it up to
-        direction_change_delay seconds later. The gap is configurable precisely
-        so slow motors can widen it, which widens that window too.
-
-        The tilt-restore path already brackets this same delay with liveness
-        checks on _tilt_restore_active; this is the equivalent for travel,
-        where there is no such flag to key off.
+        direction_change_delay seconds later — a window that widens with the
+        gap, which slow motors are meant to widen.
         """
         epoch = self._movement_epoch
         await self._direction_change_delay()
@@ -984,7 +976,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def set_position(self, position):
         """Move cover to a designated position."""
-        self._supersede_movement()
         self._self_initiated_movement = not self._triggered_externally
         await self._abandon_active_lifecycle()
         current = self.travel_calc.current_position()
@@ -1784,7 +1775,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt pre-step is in progress, stops all hardware and calculators.
         Always clears the pending restore target so it won't fire after
         the next travel completes.
+
+        Being the one hook every movement entry point funnels through, this is
+        also where a new movement claims the epoch — see
+        _settle_before_reversing. Tilt counts: on shared-motor strategies tilt
+        is driven by the travel motor, so a tilt command must invalidate a
+        travel reversal parked in its settle gap just as a travel command does.
         """
+        self._supersede_movement()
         was_restoring = self._tilt_restore_active
         was_pre_stepping = (
             self._pending_travel_target is not None
@@ -1836,10 +1834,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Handle stop"""
         # Every route that halts the cover lands here — both async_stop_cover
         # implementations (the toggle override does not call super), plus the
-        # known-position resets. Claiming the movement here rather than in
-        # async_stop_cover keeps a reversal waiting out its settle gap from
-        # driving the motor afterwards, whichever route stopped it.
-        self._supersede_movement()
+        # known-position resets — so this is where a stop claims the movement
+        # and keeps a reversal parked in its settle gap from driving afterwards.
+        #
+        # Only our own intent counts, never the device talking back. Passive
+        # routes land here too: a wrapped cover reporting its settled position
+        # snaps via set_known_position, and a switch-mode relay's unmarked off
+        # (a hardware interlock clearing the opposite relay) calls
+        # async_stop_cover. Both run with _triggered_externally set, and both
+        # can arrive inside the settle window — the wrapped self-echo
+        # suppressors are keyed on is_traveling(), which the reversal has
+        # already cleared. Treating those as supersessions would silently drop
+        # the user's move, or freeze the tracker while the motor runs.
+        if not self._triggered_externally:
+            self._supersede_movement()
         self._tilt_restore_target = None
         self._tilt_restore_active = False
         self._pending_travel_target = None
