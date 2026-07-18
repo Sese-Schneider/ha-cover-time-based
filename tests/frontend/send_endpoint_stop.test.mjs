@@ -117,47 +117,47 @@ test("send_endpoint_stop toggle does NOT render for wrapped mode", async () => {
 //   toggle / wrapped → 4 rows (endpoint_runon_time hidden)
 // ---------------------------------------------------------------------------
 
-test("switch mode shows the endpoint run-on row (5 travel rows)", async () => {
+test("switch mode shows the endpoint run-on row (6 travel rows)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: switchCfg(),
     activeTab: "timing",
   });
-  expect(timingInputCount(card)).toBe(5);
+  expect(timingInputCount(card)).toBe(6);
 });
 
-test("pulse mode with stop on (default) shows the endpoint run-on row (5 travel rows)", async () => {
+test("pulse mode with stop on (default) shows the endpoint run-on row (6 travel rows)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: pulseCfg(),
     activeTab: "timing",
   });
-  expect(timingInputCount(card)).toBe(5);
+  expect(timingInputCount(card)).toBe(6);
 });
 
-test("pulse mode with stop OFF hides the endpoint run-on row (4 travel rows)", async () => {
+test("pulse mode with stop OFF hides the endpoint run-on row (5 travel rows)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: pulseCfg({ send_endpoint_stop: false }),
     activeTab: "timing",
   });
-  expect(timingInputCount(card)).toBe(4);
+  expect(timingInputCount(card)).toBe(5);
 });
 
-test("toggle mode hides the endpoint run-on row (4 travel rows)", async () => {
+test("toggle mode hides the endpoint run-on row (5 travel rows)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: toggleCfg(),
     activeTab: "timing",
   });
-  expect(timingInputCount(card)).toBe(4);
+  expect(timingInputCount(card)).toBe(5);
 });
 
-test("wrapped mode hides the endpoint run-on row (4 travel rows)", async () => {
+test("wrapped mode hides the endpoint run-on row (5 travel rows)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: wrappedCfg(),
     activeTab: "timing",
   });
-  expect(timingInputCount(card)).toBe(4);
+  expect(timingInputCount(card)).toBe(5);
 });
