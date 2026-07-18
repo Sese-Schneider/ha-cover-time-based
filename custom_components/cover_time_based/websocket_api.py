@@ -17,6 +17,7 @@ from .cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_CONTROL_MODE,
     CONF_COVER_ENTITY_ID,
+    CONF_DIRECTION_CHANGE_DELAY,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
@@ -48,6 +49,7 @@ from .cover import (
     CONTROL_MODE_WRAPPED,
     DEFAULT_ASSUMED_STATE,
     DEFAULT_CLOSE_INCLUDES_TILT,
+    DEFAULT_DIRECTION_CHANGE_DELAY,
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
@@ -87,6 +89,7 @@ _FIELD_MAP = {
     "tilt_startup_delay": CONF_TILT_STARTUP_DELAY,
     "endpoint_runon_time": CONF_ENDPOINT_RUNON_TIME,
     "min_movement_time": CONF_MIN_MOVEMENT_TIME,
+    "direction_change_delay": CONF_DIRECTION_CHANGE_DELAY,
     "safe_tilt_position": CONF_SAFE_TILT_POSITION,
     "max_tilt_allowed_position": CONF_MAX_TILT_ALLOWED_POSITION,
     "tilt_open_switch": CONF_TILT_OPEN_SWITCH,
@@ -179,6 +182,15 @@ async def ws_get_config(
     tilt_mode = options.get(CONF_TILT_MODE, "none")
     if tilt_mode == "sequential":
         tilt_mode = "sequential_close"
+    # Report the effective settle gap rather than the raw option. Entries that
+    # predate the option — and any whose field was cleared, which pops the key
+    # — have nothing stored, and sending None back renders an empty box for a
+    # gap that is in fact being applied, hiding it from the very user debugging
+    # a parked reversal. Matches endpoint_runon_time. Checked against None
+    # rather than falsiness because 0 is a legitimate "no settle gap".
+    direction_change_delay = options.get(CONF_DIRECTION_CHANGE_DELAY)
+    if direction_change_delay is None:
+        direction_change_delay = DEFAULT_DIRECTION_CHANGE_DELAY
     connection.send_result(
         msg["id"],
         {
@@ -217,6 +229,7 @@ async def ws_get_config(
                 CONF_ENDPOINT_RUNON_TIME, DEFAULT_ENDPOINT_RUNON_TIME
             ),
             "min_movement_time": options.get(CONF_MIN_MOVEMENT_TIME),
+            "direction_change_delay": direction_change_delay,
             "safe_tilt_position": options.get(CONF_SAFE_TILT_POSITION, 100),
             "max_tilt_allowed_position": options.get(CONF_MAX_TILT_ALLOWED_POSITION),
             "tilt_open_switch": options.get(CONF_TILT_OPEN_SWITCH),
@@ -293,6 +306,9 @@ async def ws_get_config(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
         vol.Optional("min_movement_time"): vol.Any(
+            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
+        ),
+        vol.Optional("direction_change_delay"): vol.Any(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
         vol.Optional("safe_tilt_position"): vol.Any(

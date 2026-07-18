@@ -377,6 +377,7 @@ cover:
 | min_movement_time      | float   | _Optional_                                      | Minimum movement duration (seconds) - blocks shorter movements          | None    |
 | travel_startup_delay   | float   | _Optional_                                      | Motor startup time compensation (seconds) for travel movements          | None    |
 | tilt_startup_delay     | float   | _Optional_                                      | Motor startup time compensation (seconds) for tilt movements            | None    |
+| direction_change_delay | float   | _Optional_                                      | Settle gap (seconds) between stopping and driving the other way when reversing. Raise it if a reversal leaves the cover parked while the position keeps counting. Also applies to the tilt-restore reversal on shared-motor covers | 1.0     |
 | pulse_time             | float   | _Optional_                                      | Duration in seconds for button press in pulse mode                      | 1.0     |
 | relay_reports_off      | boolean | _Optional_                                      | Toggle mode: set false for pulse modules that never report their OFF    | true    |
 | send_endpoint_stop     | boolean | _Optional_                                      | Pulse mode: set false for auto-stop controllers that reposition on a stop received while stopped | true    |
