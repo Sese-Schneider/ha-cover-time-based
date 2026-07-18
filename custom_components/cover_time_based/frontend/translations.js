@@ -391,8 +391,37 @@ export const TRANSLATIONS = {
   },
 };
 
+/**
+ * The TRANSLATIONS key covering `raw`, or "" when nothing does.
+ *
+ * Tries the exact (region-specific) code first, then its base language, so a
+ * pt-BR user reads European Portuguese rather than falling through to English,
+ * while a dedicated pt-BR catalogue would still win if one were ever added.
+ *
+ * Separators are normalised (pt_BR -> pt-BR) but case is not: hass.language is
+ * always one of HA's canonical codes with the region already correctly cased,
+ * so exact lookups line up. Only the base is lowercased.
+ */
+export function resolveLocale(raw) {
+  const code = (raw || "").replace(/_/g, "-");
+  if (!code) return "";
+  if (code in TRANSLATIONS) return code;
+  const base = code.split("-")[0].toLowerCase();
+  return base in TRANSLATIONS ? base : "";
+}
+
+/**
+ * Whether a shipped catalogue covers `raw` — i.e. whether to suppress the
+ * "request a translation" banner. A missing or undeterminable language counts
+ * as supported: it renders in English anyway, and nagging on it would be noise.
+ */
+export function isLanguageSupported(raw) {
+  if (!raw) return true;
+  return resolveLocale(raw) !== "";
+}
+
 export function translate(lang, key, replacements) {
-  const strings = TRANSLATIONS[lang] || EN;
+  const strings = TRANSLATIONS[resolveLocale(lang)] || EN;
   let str = strings[key] || EN[key] || key;
   if (replacements) {
     for (const [k, v] of Object.entries(replacements)) {
