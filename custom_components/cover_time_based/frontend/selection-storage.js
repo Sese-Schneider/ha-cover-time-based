@@ -7,6 +7,11 @@
  * selection is restored without a websocket round-trip and the picker never
  * renders empty and then jumps.
  *
+ * The key is per-origin, not per-card: several config cards on one dashboard
+ * (or several browser tabs) share one memory, so they all restore whichever
+ * device was selected last. That suits a single config card, which is the
+ * expected usage.
+ *
  * Every access is guarded: Safari private mode and storage-disabled browsers
  * throw on localStorage access, and a forgotten selection is far better than a
  * broken picker.
