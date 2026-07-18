@@ -145,6 +145,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         #     (sequential_close, dual_motor — not inline or sequential_open).
         self._tilt_restore_target: int | None = None
         self._tilt_restore_active: bool = False
+        # Identity for the active restore, bumped on every claim. The bool says
+        # only that *a* restore is live, which a restore resuming from an await
+        # cannot distinguish from its own — see _tilt_restore_superseded.
+        self._tilt_restore_epoch: int = 0
         self._pending_travel_target: int | None = None
         self._pending_travel_command: str | None = None
         self._pending_tilt_target: int | None = None
@@ -639,6 +643,23 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     def _supersede_movement(self) -> None:
         """Claim the movement, cancelling any reversal waiting out its settle."""
         self._movement_epoch += 1
+
+    def _claim_tilt_restore(self) -> int:
+        """Mark a tilt restore active and return its identity."""
+        self._tilt_restore_active = True
+        self._tilt_restore_epoch += 1
+        return self._tilt_restore_epoch
+
+    def _tilt_restore_superseded(self, epoch: int) -> bool:
+        """Whether the restore holding ``epoch`` has been cancelled or replaced.
+
+        The active flag alone answers "is a restore live", not "is mine". A
+        restore cancelled while parked on an await, then replaced by a newer one
+        before it resumed, read its own True back and carried on — driving the
+        motor a second time and retargeting the tilt tracker at the goal it had
+        already been told to abandon.
+        """
+        return not self._tilt_restore_active or epoch != self._tilt_restore_epoch
 
     async def _settle_before_reversing(self) -> bool:
         """Await the settle gap; False if this movement was superseded.
@@ -2046,12 +2067,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # travel reached its target, re-armed only at the tail below), so no
         # re-entrant auto_stop_if_necessary can take the restore-complete branch
         # mid-startup — keep it that way if this ever moves.
-        self._tilt_restore_active = True
+        epoch = self._claim_tilt_restore()
 
         if self._tilt_strategy.uses_tilt_motor:
             # Dual motor: stop travel, then start the separate tilt motor.
             await self._async_handle_command(SERVICE_STOP_COVER)
-            if not self._tilt_restore_active:
+            if self._tilt_restore_superseded(epoch):
                 self._log("_start_tilt_restore :: cancelled before tilt motor start")
                 return
             if closing:
@@ -2067,7 +2088,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # restore pulse's stop command dropped by the relay, so the cover
             # overruns to its physical endpoint.
             await self._async_handle_command(SERVICE_STOP_COVER)
-            if not self._tilt_restore_active:
+            if self._tilt_restore_superseded(epoch):
                 # Cancelled while stopping — bail before the settle delay so we
                 # don't block the background task for a dead restore. The gap is
                 # the per-cover direction_change_delay, so it can be several
@@ -2075,13 +2096,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._log("_start_tilt_restore :: cancelled before settle delay")
                 return
             await self._direction_change_delay()
-            if not self._tilt_restore_active:
+            if self._tilt_restore_superseded(epoch):
                 self._log("_start_tilt_restore :: cancelled during settle delay")
                 return
             command = self._tilt_strategy.tilt_command_for(closing)
             await self._async_handle_command(command)
 
-        if not self._tilt_restore_active:
+        if self._tilt_restore_superseded(epoch):
             self._log("_start_tilt_restore :: cancelled during motor start")
             return
         self.tilt_calc.start_travel(restore_target)

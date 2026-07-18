@@ -2609,6 +2609,60 @@ class TestInlineTiltRestore:
         assert not cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
+    async def test_newer_restore_during_settle_delay_supersedes_the_stale_one(
+        self, make_cover
+    ):
+        """A restore that was cancelled must not resume behind its replacement.
+
+        The cancellation checks read a plain bool, so they only answer "is a
+        restore active", not "is *my* restore still the active one". A newer
+        restore claiming the cover during the old one's settle delay sets that
+        bool back to True, and the stale restore then sails through every check
+        it was supposed to fail: it drives the motor a second time and retargets
+        the tilt tracker at its own abandoned goal, leaving the tracker chasing
+        a position nothing is moving towards.
+        """
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(80)
+        cover.tilt_calc.set_position(100)
+
+        events = []
+        delays = {"n": 0}
+
+        async def record_open(*_a, **_k):
+            events.append("open")
+
+        async def newer_restore_during_delay(*_a, **_k):
+            delays["n"] += 1
+            if delays["n"] > 1:
+                return  # the replacement's own settle gap; nothing to inject
+            # A newer command lands mid-gap: it abandons the in-flight restore
+            # and, once its own travel finishes, starts a restore of its own.
+            await cover._abandon_active_lifecycle()
+            cover._tilt_restore_target = 50
+            await cover._start_tilt_restore()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(30)  # closing; restore target = tilt 100
+            cover.travel_calc.set_position(30)
+            cover.tilt_calc.set_position(0)
+
+            with (
+                patch.object(cover, "_send_open", side_effect=record_open),
+                patch.object(
+                    cover,
+                    "_direction_change_delay",
+                    side_effect=newer_restore_during_delay,
+                ),
+            ):
+                await cover.auto_stop_if_necessary()
+
+        # Only the replacement may have driven the motor and claimed the
+        # tracker; the stale restore's target (100) must be nowhere in sight.
+        assert events == ["open"]
+        assert cover.tilt_calc._travel_to_position == 50
+
+    @pytest.mark.asyncio
     async def test_stop_during_initial_stop_bails_before_settle_delay(self, make_cover):
         """A stop during the restore's initial STOP bails before the settle delay.
 
