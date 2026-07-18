@@ -264,7 +264,14 @@ class _ParkedReversal:
         _async_switch_state_changed wraps its handler in exactly this
         try/finally, so a command parked in the gap is still 'external' when
         anything else lands on the cover meanwhile.
+
+        Set *inside* the task, not before it, because that is where the
+        dispatcher sets it. A test that raises the flag in its own context and
+        then calls the cover from that same context is not modelling a wall
+        switch — it is modelling a wall switch and a UI click sharing one call
+        stack, which never happens.
         """
+        self.cover._triggered_externally = True
         try:
             await coro
         finally:
@@ -296,7 +303,6 @@ class _ParkedReversal:
             # Reverse: already moving at 40%, now told to go the other way.
             coro = self._start(cover)
             if self._external_press is not None:
-                cover._triggered_externally = True
                 coro = self._as_external(coro)
             self._task = asyncio.create_task(coro)
             await self._wait_until_parked()
@@ -558,6 +564,68 @@ async def test_stop_during_the_gap_cancels_an_external_close_reversal(make_cover
 
     assert SERVICE_CLOSE_COVER not in reversal.commands
     assert not reversal.cover.travel_calc.is_traveling()
+
+
+@pytest.mark.asyncio
+async def test_ui_stop_during_the_gap_actually_stops_the_relay(make_cover):
+    """Cancelling the reversal is only half a stop — the relay must fire too.
+
+    _triggered_externally suppresses relay writes so we never echo a command
+    back at hardware that is already doing it. But it is instance state, and
+    the parked external call holds it for the whole settle gap, so a UI stop
+    arriving in that window inherited the suppression: the movement was
+    claimed and nothing was ever sent. The tracker halted while the motor ran
+    on to the endpoint.
+
+    The stop is a separate task with its own context, exactly as HA dispatches
+    a service call, so it must see the flag clear.
+    """
+    async with _parked_external_close(make_cover) as reversal:
+        cover = reversal.cover
+        with patch.object(cover, "_send_stop", new_callable=AsyncMock) as send_stop:
+            await asyncio.create_task(cover.async_stop_cover())
+        await reversal.resume()
+
+    send_stop.assert_awaited_once()
+    assert SERVICE_CLOSE_COVER not in reversal.commands
+
+
+@pytest.mark.asyncio
+async def test_ui_move_during_the_gap_actually_drives_the_relay(make_cover):
+    """The same leak, via _async_handle_command rather than _send_stop.
+
+    A slider drag landing in an external reversal's gap correctly superseded
+    it — _abandon_active_lifecycle never consulted the flag — and then tracked
+    a movement it never commanded, because the relay write inherited the
+    parked call's suppression. HA animates the position bar to the target
+    while the cover does not move: a full desync, and the worse half of this
+    bug, since the tracker ends up confidently wrong.
+    """
+    async with _parked_external_close(make_cover) as reversal:
+        cover = reversal.cover
+        with patch.object(cover, "_send_open", new_callable=AsyncMock) as send_open:
+            await asyncio.create_task(cover.set_position(60))
+        await reversal.resume()
+
+    send_open.assert_awaited()
+    assert cover.travel_calc._travel_to_position == 60
+
+
+@pytest.mark.asyncio
+async def test_ui_move_during_the_gap_is_recorded_as_self_initiated(make_cover):
+    """_self_initiated_movement is snapshotted from the same flag.
+
+    A UI move beginning inside the gap recorded itself as externally driven,
+    which sends auto_stop_if_necessary down _settle_external_endpoint at
+    completion instead of the normal endpoint stop and run-on handling — so
+    the move ended wrong as well as starting wrong.
+    """
+    async with _parked_external_close(make_cover) as reversal:
+        cover = reversal.cover
+        with patch.object(cover, "_send_open", new_callable=AsyncMock):
+            await asyncio.create_task(cover.set_position(60))
+        assert cover._self_initiated_movement is True
+        await reversal.resume()
 
 
 @pytest.mark.asyncio

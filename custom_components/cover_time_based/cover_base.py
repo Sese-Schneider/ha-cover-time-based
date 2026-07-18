@@ -4,6 +4,7 @@ import asyncio
 import logging
 from abc import abstractmethod
 from asyncio import sleep
+from contextvars import ContextVar
 from datetime import timedelta
 
 from homeassistant.components.cover import (
@@ -56,6 +57,14 @@ from .tilt_strategies.planning import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# The covers whose external-state handler is running in the current context.
+# One module-level var holding a set, rather than one var per entity: context
+# variables are never reclaimed, so creating them per instance would leak on
+# every integration reload. See CoverTimeBased._triggered_externally.
+_EXTERNAL_TRIGGER: ContextVar[frozenset] = ContextVar(
+    "cover_time_based_external_trigger", default=frozenset()
+)
 
 
 class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
@@ -153,7 +162,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_travel_command: str | None = None
         self._pending_tilt_target: int | None = None
         self._pending_tilt_command: str | None = None
-        self._triggered_externally = False
         self._self_initiated_movement = True
         # True while the active movement drives a dedicated tilt motor (dual
         # motor), so auto-stop settles the tilt motor instead of travel.
@@ -642,6 +650,31 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         for why a fixed gap is not good enough.
         """
         await sleep(self._direction_change_delay_time)
+
+    @property
+    def _triggered_externally(self) -> bool:
+        """Whether *this* call is handling something the hardware did.
+
+        Set by the external-state dispatcher around its handler, and read all
+        over to suppress relay writes (never echo a command back at hardware
+        that is already doing it) and to pick external-trigger behaviour.
+
+        Task-scoped, not instance-scoped. An external handler holds this across
+        every await it makes — including a reversal's whole settle gap — so as
+        plain instance state it leaked onto anything that ran meanwhile. A UI
+        stop landing in that window inherited the suppression and sent no relay
+        command at all, halting the tracker while the motor ran on. HA
+        dispatches each service call as its own task, and a task gets a copy of
+        the context at creation, so scoping it here means the dispatcher's
+        handler still sees it across its awaits while a concurrent caller
+        correctly does not.
+        """
+        return self in _EXTERNAL_TRIGGER.get()
+
+    @_triggered_externally.setter
+    def _triggered_externally(self, value: bool) -> None:
+        current = _EXTERNAL_TRIGGER.get()
+        _EXTERNAL_TRIGGER.set(current | {self} if value else current - {self})
 
     def _supersede_movement(self) -> None:
         """Claim the movement, cancelling any reversal waiting out its settle."""
@@ -2133,10 +2166,23 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self._async_handle_command(command)
 
         if self._tilt_restore_superseded(epoch):
-            self._log("_start_tilt_restore :: cancelled during motor start")
+            # The motor is already energized: whoever cancelled us sent their
+            # stop while we were awaiting this turn-on, so theirs went out
+            # first and ours landed after it. Nothing else will take it down —
+            # we are the only one that knows it went up — and on a latching
+            # relay that means a cover driving to its endpoint untracked.
+            self._log("_start_tilt_restore :: cancelled during motor start, stopping")
+            await self._stop_restore_motor()
             return
         self.tilt_calc.start_travel(restore_target)
         self.start_auto_updater()
+
+    async def _stop_restore_motor(self) -> None:
+        """Take down whichever motor the restore energized."""
+        if self._tilt_strategy.uses_tilt_motor:
+            await self._send_tilt_stop()
+        else:
+            await self._async_handle_command(SERVICE_STOP_COVER)
 
     # -----------------------------------------------------------------------
     # Relay command dispatch
