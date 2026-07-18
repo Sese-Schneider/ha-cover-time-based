@@ -21,6 +21,7 @@ import {
   coverConfirmedWithoutTilt,
 } from "./entity-filter.js";
 import { DOMAIN, ATTRIBUTE_TO_CONFIG } from "./constants.js";
+import { loadSelectedEntity, saveSelectedEntity } from "./selection-storage.js";
 import { translate } from "./translations.js";
 import { cardStyles } from "./card-styles.js";
 import { renderCard } from "./card-render.js";
@@ -127,8 +128,35 @@ class CoverTimeBasedCard extends LitElement {
       this.requestUpdate();
     }
 
-    // Load entity list from full registry (includes config_entry_id)
-    this._loadEntityList();
+    // Load entity list from full registry (includes config_entry_id), then
+    // restore the device this browser last had selected. Restoring afterwards
+    // lets the remembered id be validated against the live list.
+    this._entityListReady = this._loadEntityList().then(() =>
+      this._restoreSelection()
+    );
+  }
+
+  /**
+   * Re-select the device remembered from a previous session, if it is still a
+   * live cover_time_based entity. A device that has since been deleted is
+   * dropped silently rather than left in the picker with a failing config load
+   * beneath it.
+   */
+  _restoreSelection() {
+    // The user may have picked a device while the registry lookup was in
+    // flight; never override a live selection.
+    if (this._selectedEntity) return;
+    const remembered = loadSelectedEntity();
+    if (!remembered) return;
+    if (!(this._configEntryEntities || []).includes(remembered)) return;
+    this._selectedEntity = remembered;
+    this._loadConfig();
+  }
+
+  /** Sets the selected device and remembers it for the next page load. */
+  _setSelectedEntity(entityId) {
+    this._selectedEntity = entityId;
+    saveSelectedEntity(entityId);
   }
 
   updated(changedProperties) {
@@ -284,7 +312,7 @@ class CoverTimeBasedCard extends LitElement {
 
   _onEntityChange(e) {
     const newValue = e.detail?.value || e.target?.value || "";
-    this._selectedEntity = newValue;
+    this._setSelectedEntity(newValue);
     this._config = null;
     if (this._selectedEntity) {
       this._loadConfig();

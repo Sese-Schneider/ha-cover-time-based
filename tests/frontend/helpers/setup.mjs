@@ -17,5 +17,13 @@ beforeEach(() => {
   }));
   window.confirm = vi.fn(() => true);
   window.alert = vi.fn();
-  document.body.innerHTML = "";
+  document.body.replaceChildren();
+  // happy-dom under vitest exposes sessionStorage but leaves window.localStorage
+  // undefined, so install a fresh Storage per test. Fresh (rather than cleared)
+  // also drops any spies a previous test installed on it.
+  Object.defineProperty(window, "localStorage", {
+    value: new Storage(),
+    configurable: true,
+    writable: true,
+  });
 });
