@@ -45,4 +45,4 @@ class SwitchCoverTimeBased(CoverTimeBased):
             await self.async_close_cover()
         elif entity_id == self._stop_switch_entity_id:
             self._log("_handle_external_state_change :: external stop pulse detected")
-            await self.async_stop_cover()
+            await self.async_stop_cover(supersede=False)

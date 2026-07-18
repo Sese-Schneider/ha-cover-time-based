@@ -404,19 +404,39 @@ async def test_device_feedback_during_the_settle_gap_does_not_abort(make_cover):
     Treating those as supersessions silently drops the user's move, or worse
     freezes the tracker while the motor runs, which is the very desync the
     guard exists to prevent.
+
+    Those routes say so with supersede=False; test_wrapped_snap_during_the_gap
+    _does_not_abort drives one of them for real, so this stays a direct test of
+    the contract itself.
     """
     async with _ParkedReversal(_reversing_cover(make_cover)) as reversal:
-        cover = reversal.cover
-        cover._triggered_externally = True
-        try:
-            await cover.async_stop_cover()
-        finally:
-            cover._triggered_externally = False
+        await reversal.cover.async_stop_cover(supersede=False)
         await reversal.resume()
 
     # The reversal was the user's; the echo must not have cancelled it.
     assert reversal.commands == [SERVICE_STOP_COVER, SERVICE_CLOSE_COVER]
     assert reversal.cover.travel_calc._travel_to_position == 20
+
+
+@pytest.mark.asyncio
+async def test_wrapped_snap_does_not_claim_the_movement(make_cover):
+    """The real device-feedback route still declares itself feedback.
+
+    _snap_to_position is how a wrapped cover records the position its inner
+    entity just reported, and it reaches _handle_stop like any other stop.
+    Claiming the movement is what cancels a parked reversal (the test above
+    ties the two together), so it is enough — and far cheaper than parking a
+    reversal on a natively-positioned wrapped cover — to assert this caller
+    leaves the epoch alone.
+    """
+    cover = make_cover(cover_entity_id="cover.inner")
+    cover.travel_calc.set_position(40)
+
+    with patch.object(cover, "async_write_ha_state"):
+        before = cover._movement_epoch
+        await cover._snap_to_position(35)
+
+    assert cover._movement_epoch == before
 
 
 # ---------------------------------------------------------------------------
@@ -466,23 +486,17 @@ async def test_undisturbed_external_open_reversal_still_completes(make_cover):
     assert reversal.cover.travel_calc._travel_to_position == 100
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="_triggered_externally is ambient instance state, not task-scoped, so a"
-    " genuine stop inside an external reversal's settle gap is misread as a"
-    " device echo and dropped. Needs a scoping fix, not a guard tweak.",
-)
 @pytest.mark.asyncio
 async def test_stop_during_the_gap_cancels_an_external_close_reversal(make_cover):
     """A stop landing inside an external reversal's settle gap must win.
 
     Same requirement as the set_position reversal, reached from the wall-switch
-    path — and the harder case. _handle_stop only supersedes when
-    _triggered_externally is clear, but that flag is ambient instance state
-    held for the *whole* external call, settle gap included. A genuine stop
-    arriving in that window is therefore indistinguishable from a device echo:
-    it is dropped, and the parked reversal wakes and drives the cover up to
-    direction_change_delay seconds after the user said stop.
+    path — and the harder case. _handle_stop used to decide this by reading
+    _triggered_externally, ambient instance state held for the *whole* external
+    call, settle gap included; a genuine stop arriving in that window was
+    therefore indistinguishable from a device echo, so it was dropped and the
+    parked reversal drove the cover up to direction_change_delay seconds after
+    the user said stop. Callers now say which kind of stop they are.
     """
     async with _parked_external_close(make_cover) as reversal:
         # No flag fiddling: production leaves it set, which is the whole point.

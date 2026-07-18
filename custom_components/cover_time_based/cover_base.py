@@ -479,7 +479,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # External trigger: stop the opposite-direction motion, settle,
             # then proceed with close (legacy reverse behavior).
             self._log("async_close_cover :: external close while opening, reversing")
-            await self.async_stop_cover()
+            # This stop is the reversal's own prelude, not a command to halt —
+            # superseding here would cancel the movement it is starting.
+            await self.async_stop_cover(supersede=False)
             if not await self._settle_before_reversing():
                 return
 
@@ -545,7 +547,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
         if self._triggered_externally and self._travel_axis_closing():
             self._log("async_open_cover :: external open while closing, reversing")
-            await self.async_stop_cover()
+            # Reversal prelude, not a halt command — see async_close_cover.
+            await self.async_stop_cover(supersede=False)
             if not await self._settle_before_reversing():
                 return
         # Mirror async_close_cover's skip-at-0 for covers that treat an endpoint
@@ -679,8 +682,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return False
         return True
 
-    async def async_stop_cover(self, **kwargs):
-        """Turn the device stop."""
+    async def async_stop_cover(self, *, supersede: bool = True, **kwargs):
+        """Turn the device stop.
+
+        ``supersede`` defaults True so a stop arriving from HA (service call,
+        UI, automation) always claims the movement; the internal and
+        external-trigger callers that are echoes or reversal preludes pass
+        False. See _handle_stop.
+        """
         self._require_configured()
         self._log("async_stop_cover")
         tilt_restore_was_active = self._tilt_restore_active
@@ -690,7 +699,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
-        self._handle_stop()
+        self._handle_stop(supersede=supersede)
         if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
@@ -730,10 +739,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("async_set_cover_tilt_position: %d", position)
             await self.set_tilt_position(position)
 
-    async def set_known_position(self, **kwargs):
-        """Set the cover to a known position (0=closed, 100=open)."""
+    async def set_known_position(self, *, supersede: bool = True, **kwargs):
+        """Set the cover to a known position (0=closed, 100=open).
+
+        Exposed as a service (a user resyncing the tracker is a real command,
+        hence the default) and used internally by wrapped covers to snap to a
+        position the device just reported, which is not — see _handle_stop.
+        """
         position = kwargs[ATTR_POSITION]
-        self._handle_stop()
+        self._handle_stop(supersede=supersede)
         self.travel_calc.set_position(position)
         if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
@@ -1851,23 +1865,32 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._log("_stop_travel_if_traveling :: also stopping tilt")
                 self.tilt_calc.stop()
 
-    def _handle_stop(self):
-        """Handle stop"""
-        # Every route that halts the cover lands here — both async_stop_cover
-        # implementations (the toggle override does not call super), plus the
-        # known-position resets — so this is where a stop claims the movement
-        # and keeps a reversal parked in its settle gap from driving afterwards.
-        #
-        # Only our own intent counts, never the device talking back. Passive
-        # routes land here too: a wrapped cover reporting its settled position
-        # snaps via set_known_position, and a switch-mode relay's unmarked off
-        # (a hardware interlock clearing the opposite relay) calls
-        # async_stop_cover. Both run with _triggered_externally set, and both
-        # can arrive inside the settle window — the wrapped self-echo
-        # suppressors are keyed on is_traveling(), which the reversal has
-        # already cleared. Treating those as supersessions would silently drop
-        # the user's move, or freeze the tracker while the motor runs.
-        if not self._triggered_externally:
+    def _handle_stop(self, *, supersede: bool = True):
+        """Handle stop.
+
+        ``supersede`` says whether this is a fresh command to halt the cover,
+        which claims the movement and so keeps a reversal parked in its settle
+        gap from driving afterwards. Every route that halts the cover lands
+        here — both async_stop_cover implementations (the toggle override does
+        not call super), plus the known-position resets.
+
+        Passive routes must pass ``supersede=False``: a wrapped cover reporting
+        its settled position snaps via set_known_position, and a switch-mode
+        relay's unmarked off (a hardware interlock clearing the opposite relay)
+        calls async_stop_cover. Both can arrive inside the settle window — the
+        wrapped self-echo suppressors are keyed on is_traveling(), which the
+        reversal has already cleared — and treating them as supersessions would
+        silently drop the user's move, or freeze the tracker while the motor
+        runs. So must the stop a reversal issues as its own prelude, which would
+        otherwise cancel the very movement it is starting.
+
+        This was once inferred from _triggered_externally rather than stated by
+        the caller. That flag is ambient instance state held for the whole
+        external call, settle gap included, so a genuine stop landing in an
+        external reversal's gap read as a device echo and was dropped — the
+        cover then moved seconds after the user said stop.
+        """
+        if supersede:
             self._supersede_movement()
         self._tilt_restore_target = None
         self._tilt_restore_active = False
@@ -2434,7 +2457,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log(
                 "_handle_external_tilt_state_change :: external tilt stop pulse detected"
             )
-            await self.async_stop_cover()
+            await self.async_stop_cover(supersede=False)
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle external state change. Override in subclasses for mode-specific behavior."""
