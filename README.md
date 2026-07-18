@@ -167,6 +167,8 @@ Turn this option **on** for a cover that has **no position feedback** and can _a
 
 Leave it **off** (the default) for covers that report their own position: there the skip is correct, and forcing a re-drive would run the motor into its limit on every redundant press.
 
+Note that a forced re-drive deliberately models the move as starting from the opposite endpoint, so if you **stop it part-way** the reported position is derived from that assumed start and can be well off — stopping a forced close halfway reports roughly 50% even if the cover started at the bottom. Let a re-drive run to the endpoint, where the position resyncs, rather than stopping it mid-travel.
+
 ## Tilt Mode
 
 The **Tilt Mode** setting controls how tilt and travel interact:
@@ -259,7 +261,7 @@ In **Switch** mode the direction relay is latched ON for the whole movement, so 
 
 The same self-stop handling applies to a **separate tilt motor** (separate-tilt-motor mode): no stop is sent when tilt reaches its 0%/100% endpoints — the tilt motor self-stops on its own limit — except in **Switch** mode (which de-energizes the latched tilt relay) and in **Pulse** mode when _Send stop signal at endpoints_ is on (which pulses the tilt-stop relay). Mid-tilt positions are always stopped (nothing self-stops there).
 
-The self-stop skip covers **travel** moves only. A **tilt** move made while the cover is parked at a travel endpoint drives the motor _off_ its limit switch (in **inline** tilt the slats share the travel motor), so it will not self-stop there — the stop is therefore always sent for a tilt move at an endpoint, in every mode.
+The self-stop skip is about **travel** reaching an endpoint. Where the slats share the travel motor — **inline** tilt — a tilt move made while the cover is parked at a travel endpoint drives that motor _off_ its limit switch, so it will not self-stop there; the stop is sent in that case even in the modes that normally skip it. The two cases that settle themselves are unaffected: a dedicated **tilt motor** skips the stop at its own tilt endpoints (as described above), and a wrapped cover tilting **natively** holds itself at the target, so neither is sent an extra stop.
 
 Under the **sequential closes-then-tilts-closed** and **sequential closes-then-tilts-open** tilt modes, run-on is skipped at the closed (0%) endpoint, because the motor is already driven past cover-closed for the tilt phase. Run-on still applies at the open (100%) endpoint.
 
@@ -390,11 +392,11 @@ cover:
 | Name                   | Type    | Requirement                                     | Description                                                             | Default |
 | ---------------------- | ------- | ----------------------------------------------- | ----------------------------------------------------------------------- | ------- |
 | name                   | string  | **Required**                                    | Name of the created entity                                              |         |
-| open_switch_entity_id  | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for opening the cover. Accepts a `script` entity when `input_mode: pulse` |         |
-| close_switch_entity_id | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover. Accepts a `script` entity when `input_mode: pulse` |         |
-| stop_switch_entity_id  | entity  | Required for `input_mode: pulse`; not used by other modes | Entity ID of the switch for stopping the cover. Accepts a `script` entity when `input_mode: pulse` | None    |
+| open_switch_entity_id  | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for opening the cover. Accepts a `script` entity when `is_button: true` |         |
+| close_switch_entity_id | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover. Accepts a `script` entity when `is_button: true` |         |
+| stop_switch_entity_id  | entity  | Required when `is_button: true`; not used by other modes | Entity ID of the switch for stopping the cover. Accepts a `script` entity when `is_button: true` | None    |
 | cover_entity_id        | entity  | **Required** or `open_\|close_switch_entity_id` | Entity ID of an existing cover entity                                   |         |
-| is_button              | boolean | _Optional_                                      | Set to `true` for momentary pulse buttons (same as `input_mode: pulse`) | false   |
+| is_button              | boolean | _Optional_                                      | Set to `true` for momentary pulse buttons (the only control mode selectable from YAML; the rest are card-only) | false   |
 | travelling_time_down   | float   | _Optional_                                      | Time in seconds to close the cover                                      | 30      |
 | travelling_time_up     | float   | _Optional_                                      | Time in seconds to open the cover                                       | 30      |
 | tilting_time_down      | float   | _Optional_                                      | Time in seconds to tilt the cover fully closed                          | None    |

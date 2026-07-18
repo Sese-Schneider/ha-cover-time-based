@@ -199,7 +199,7 @@ export const TRANSLATIONS = {
       "Quando a cobertura chega totalmente aberta ou fechada, envia o pulso de paragem. Mantenha ativo para controladores que continuam a funcionar até receberem uma paragem (caso contrário a cobertura fica presa e os botões físicos deixam de responder). Desative se o seu motor para sozinho nos limites e um pulso de paragem adicional o faz mover para uma posição predefinida/favorita.",
     "force_endpoint_redrive.label": "Reenviar sempre abrir/fechar nos extremos",
     "force_endpoint_redrive.helper":
-      "Para estores sem retorno de posição que também podem ser movidos por um comando externo, pelo que o Home Assistant pode julgar erradamente que já estão totalmente abertos ou fechados. Quando ativo, um comando de abrir ou fechar é sempre executado durante o tempo total de percurso, mesmo que o Home Assistant pense que o estore já lá está — garantindo que o comando chega ao motor. Deixe inativo para estores que reportam a sua própria posição.",
+      "Para estores sem retorno de posição que também podem ser movidos por um telecomando externo, pelo que o Home Assistant pode julgar erradamente que já estão totalmente abertos ou fechados. Quando ativo, um comando de abrir ou fechar é sempre executado durante o tempo total de deslocamento, mesmo que o Home Assistant pense que o estore já lá está — garantindo que o comando chega ao motor. Deixe inativo para estores que reportam a sua própria posição.",
     "more_info": "Mais informação",
     "timing.attribute_header": "Atributo",
     "timing.travel_attribute_header": "Atributo",
@@ -288,7 +288,7 @@ export const TRANSLATIONS = {
       "Włącz dla rolet (np. niektórych rolet Tuya), których stan otwarta/zamknięta/nieznana jest echem polecenia, a nie rzeczywistą pozycją końcową — nie zgłaszają przejścia otwierania/zamykania ani pozycji. Stan jest traktowany jako polecenie otwórz/zamknij/zatrzymaj, a pozycja jest śledzona na podstawie czasu.",
     "entities.invert": "Odwróć pozycję",
     "entities.invert_helper":
-      "Odwraca oś pozycji: zgłasza 100 − pozycję opakowanej rolety i zamienia otwieranie/zamykanie. Użyj dla rolet działających odwrotnie, np. markizy, której encja bazowa zgłasza otwarte = rozwinięte. Dotyczy tylko osi pozycji; logika pochylenia pozostaje bez zmian — przeznaczone dla rolet wyłącznie pozycyjnych (markizy/rolety), a nie żaluzji z regulowanymi lamelami.",
+      "Odwraca oś pozycji: zgłasza 100 − pozycję opakowanej rolety i zamienia otwieranie/zamykanie. Użyj dla rolet działających odwrotnie, np. markizy, której encja bazowa zgłasza otwarte = rozwinięte. Dotyczy tylko osi pozycji; logika nachylenia pozostaje bez zmian — przeznaczone dla rolet wyłącznie pozycyjnych (markizy/rolety), a nie żaluzji z regulowanymi lamelami.",
     "entities.switch_entities": "Encje przełączników",
     "entities.open_switch": "Przełącznik otwierania",
     "entities.close_switch": "Przełącznik zamykania",
@@ -329,7 +329,7 @@ export const TRANSLATIONS = {
     "force_endpoint_redrive.label":
       "Zawsze ponownie wysyłaj otwórz/zamknij na krańcach",
     "force_endpoint_redrive.helper":
-      "Dla rolet bez informacji zwrotnej o pozycji, które mogą być sterowane również zewnętrznym pilotem, przez co Home Assistant może błędnie sądzić, że są już całkowicie otwarte lub zamknięte. Po włączeniu polecenie otwarcia lub zamknięcia jest zawsze wykonywane przez pełny czas przejazdu, nawet jeśli Home Assistant sądzi, że roleta już tam jest — dzięki czemu polecenie na pewno dotrze do silnika. Pozostaw wyłączone dla rolet zgłaszających własną pozycję.",
+      "Dla rolet bez informacji zwrotnej o pozycji, które mogą być sterowane również zewnętrznym pilotem, przez co Home Assistant może błędnie sądzić, że są już całkowicie otwarte lub zamknięte. Po włączeniu polecenie otwarcia lub zamknięcia jest zawsze wykonywane przez pełny czas ruchu, nawet jeśli Home Assistant sądzi, że roleta już tam jest — dzięki czemu polecenie na pewno dotrze do silnika. Pozostaw wyłączone dla rolet zgłaszających własną pozycję.",
     "more_info": "Więcej informacji",
     "timing.attribute_header": "Atrybut",
     "timing.travel_attribute_header": "Atrybut",
