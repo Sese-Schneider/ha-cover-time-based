@@ -157,6 +157,9 @@ export const TRANSLATIONS = {
     "entities.reports_command_not_endpoint": "Reporta comandos, não posições finais",
     "entities.reports_command_not_endpoint_helper":
       "Ative para estores (por exemplo, alguns estores Tuya) cujo estado aberto/fechado/desconhecido é um eco do comando em vez de uma posição final real — não reportam transição de abertura/fecho nem posição. O estado é tratado como um comando abrir/fechar/parar e a posição é rastreada pelo tempo.",
+    "entities.invert": "Inverter posição",
+    "entities.invert_helper":
+      "Inverte o eixo da posição: reporta 100 − a posição do estore envolvido e troca abrir/fechar. Use para estores que funcionam ao contrário, por exemplo um toldo cuja entidade subjacente reporta aberto = estendido. Apenas o eixo da posição; a lógica de inclinação não é alterada — destinado a estores apenas de posição (toldos/estores), não a venezianas de lâminas orientáveis.",
     "entities.switch_entities": "Entidades de Interruptor",
     "entities.open_switch": "Interruptor de abrir",
     "entities.close_switch": "Interruptor de fechar",
@@ -194,6 +197,9 @@ export const TRANSLATIONS = {
     "send_endpoint_stop.label": "Enviar sinal de paragem nos extremos",
     "send_endpoint_stop.helper":
       "Quando a cobertura chega totalmente aberta ou fechada, envia o pulso de paragem. Mantenha ativo para controladores que continuam a funcionar até receberem uma paragem (caso contrário a cobertura fica presa e os botões físicos deixam de responder). Desative se o seu motor para sozinho nos limites e um pulso de paragem adicional o faz mover para uma posição predefinida/favorita.",
+    "force_endpoint_redrive.label": "Reenviar sempre abrir/fechar nos extremos",
+    "force_endpoint_redrive.helper":
+      "Para estores sem retorno de posição que também podem ser movidos por um telecomando externo, pelo que o Home Assistant pode julgar erradamente que já estão totalmente abertos ou fechados. Quando ativo, um comando de abrir ou fechar é sempre executado durante o tempo total de deslocamento, mesmo que o Home Assistant pense que o estore já lá está — garantindo que o comando chega ao motor. Deixe inativo para estores que reportam a sua própria posição.",
     "more_info": "Mais informação",
     "timing.attribute_header": "Atributo",
     "timing.travel_attribute_header": "Atributo",
@@ -280,6 +286,9 @@ export const TRANSLATIONS = {
     "entities.reports_command_not_endpoint": "Zgłasza polecenia, a nie pozycje końcowe",
     "entities.reports_command_not_endpoint_helper":
       "Włącz dla rolet (np. niektórych rolet Tuya), których stan otwarta/zamknięta/nieznana jest echem polecenia, a nie rzeczywistą pozycją końcową — nie zgłaszają przejścia otwierania/zamykania ani pozycji. Stan jest traktowany jako polecenie otwórz/zamknij/zatrzymaj, a pozycja jest śledzona na podstawie czasu.",
+    "entities.invert": "Odwróć pozycję",
+    "entities.invert_helper":
+      "Odwraca oś pozycji: zgłasza 100 − pozycję opakowanej rolety i zamienia otwieranie/zamykanie. Użyj dla rolet działających odwrotnie, np. markizy, której encja bazowa zgłasza otwarte = rozwinięte. Dotyczy tylko osi pozycji; logika nachylenia pozostaje bez zmian — przeznaczone dla rolet wyłącznie pozycyjnych (markizy/rolety), a nie żaluzji z regulowanymi lamelami.",
     "entities.switch_entities": "Encje przełączników",
     "entities.open_switch": "Przełącznik otwierania",
     "entities.close_switch": "Przełącznik zamykania",
@@ -317,6 +326,10 @@ export const TRANSLATIONS = {
     "send_endpoint_stop.label": "Wysyłaj sygnał zatrzymania na krańcach",
     "send_endpoint_stop.helper":
       "Gdy roleta osiągnie pełne otwarcie lub zamknięcie, wyślij impuls zatrzymania. Pozostaw włączone dla sterowników, które działają, dopóki nie otrzymają zatrzymania (w przeciwnym razie roleta blokuje się, a fizyczne przyciski przestają reagować). Wyłącz, jeśli silnik sam zatrzymuje się na krańcach, a dodatkowe zatrzymanie powoduje przejście do zaprogramowanej/ulubionej pozycji.",
+    "force_endpoint_redrive.label":
+      "Zawsze ponownie wysyłaj otwórz/zamknij na krańcach",
+    "force_endpoint_redrive.helper":
+      "Dla rolet bez informacji zwrotnej o pozycji, które mogą być sterowane również zewnętrznym pilotem, przez co Home Assistant może błędnie sądzić, że są już całkowicie otwarte lub zamknięte. Po włączeniu polecenie otwarcia lub zamknięcia jest zawsze wykonywane przez pełny czas ruchu, nawet jeśli Home Assistant sądzi, że roleta już tam jest — dzięki czemu polecenie na pewno dotrze do silnika. Pozostaw wyłączone dla rolet zgłaszających własną pozycję.",
     "more_info": "Więcej informacji",
     "timing.attribute_header": "Atrybut",
     "timing.travel_attribute_header": "Atrybut",
