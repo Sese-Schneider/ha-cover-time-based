@@ -205,14 +205,33 @@ class _ParkedReversal:
     ``arrived`` resolves the moment the reversal enters the gap and ``release``
     lets it out, so tests rendezvous with it exactly rather than guessing how
     many event-loop turns it takes to get there.
+
+    ``start`` selects the entry point that reverses (the UI slider by default);
+    ``external`` runs it the way a wall switch does, with _triggered_externally
+    held for the whole call — including the settle gap — exactly as
+    _async_switch_state_changed's try/finally does.
     """
 
-    def __init__(self, cover):
+    def __init__(
+        self,
+        cover,
+        *,
+        start=None,
+        external=False,
+        closing=False,
+        commands_at_park=None,
+    ):
         self.cover = cover
         self.commands = []
         self.arrived = asyncio.Event()
         self._release = asyncio.Event()
         self._task = None
+        self._start = start or (lambda c: c.set_position(20))
+        self._external = external
+        self._closing = closing
+        self._commands_at_park = (
+            [SERVICE_STOP_COVER] if commands_at_park is None else commands_at_park
+        )
 
     async def _record(self, command, *args):
         self.commands.append(command)
@@ -222,14 +241,30 @@ class _ParkedReversal:
         self.arrived.set()
         await self._release.wait()
 
+    async def _as_external(self, coro):
+        """Hold the external flag across the whole call, settle gap included.
+
+        _async_switch_state_changed wraps its handler in exactly this
+        try/finally, so a command parked in the gap is still 'external' when
+        anything else lands on the cover meanwhile.
+        """
+        try:
+            await coro
+        finally:
+            self.cover._triggered_externally = False
+
     async def __aenter__(self):
         cover = self.cover
         cover.hass.states.get = MagicMock(
             side_effect=lambda eid: SimpleNamespace(state="off")
         )
         cover.travel_calc.set_position(40)
-        cover.travel_calc.start_travel_up()
-        cover._last_command = SERVICE_OPEN_COVER
+        if self._closing:
+            cover.travel_calc.start_travel_down()
+            cover._last_command = SERVICE_CLOSE_COVER
+        else:
+            cover.travel_calc.start_travel_up()
+            cover._last_command = SERVICE_OPEN_COVER
 
         self._real_handle = cover._async_handle_command
         self._patches = [
@@ -241,10 +276,14 @@ class _ParkedReversal:
             p.start()
 
         try:
-            # Reverse: opening at 40%, now told to go to 20%.
-            self._task = asyncio.create_task(cover.set_position(20))
+            # Reverse: opening at 40%, now told to go the other way.
+            coro = self._start(cover)
+            if self._external:
+                cover._triggered_externally = True
+                coro = self._as_external(coro)
+            self._task = asyncio.create_task(coro)
             await self.arrived.wait()
-            assert self.commands == [SERVICE_STOP_COVER]
+            assert self.commands == self._commands_at_park
         except BaseException:
             # __aexit__ never runs when __aenter__ raises, so without this the
             # module-level sleep patch would leak into every later test and the
@@ -378,3 +417,92 @@ async def test_device_feedback_during_the_settle_gap_does_not_abort(make_cover):
     # The reversal was the user's; the echo must not have cancelled it.
     assert reversal.commands == [SERVICE_STOP_COVER, SERVICE_CLOSE_COVER]
     assert reversal.cover.travel_calc._travel_to_position == 20
+
+
+# ---------------------------------------------------------------------------
+# The external-trigger reversals (wall switch / remote), which reach the same
+# settle gap from async_close_cover and async_open_cover rather than from
+# set_position. A UI click on a moving cover just stops it; only these external
+# entry points keep the legacy stop-and-reverse.
+# ---------------------------------------------------------------------------
+
+
+def _parked_external_close(make_cover):
+    """Opening at 40%, wall switch says close: stop, settle, then reverse."""
+    return _ParkedReversal(
+        _reversing_cover(make_cover),
+        start=lambda c: c.async_close_cover(),
+        external=True,
+        # async_stop_cover drives the relay via _send_stop, not
+        # _async_handle_command, so nothing is recorded on the way in.
+        commands_at_park=[],
+    )
+
+
+@pytest.mark.asyncio
+async def test_undisturbed_external_close_reversal_still_completes(make_cover):
+    """The guard must not cancel an external reversal nothing interrupted."""
+    async with _parked_external_close(make_cover) as reversal:
+        await reversal.resume()
+
+    assert SERVICE_CLOSE_COVER in reversal.commands
+    assert reversal.cover.travel_calc._travel_to_position == 0
+
+
+@pytest.mark.asyncio
+async def test_undisturbed_external_open_reversal_still_completes(make_cover):
+    """Mirror of the close case, entered from async_open_cover."""
+    reversal = _ParkedReversal(
+        _reversing_cover(make_cover),
+        start=lambda c: c.async_open_cover(),
+        external=True,
+        closing=True,
+        commands_at_park=[],
+    )
+    async with reversal:
+        await reversal.resume()
+
+    assert SERVICE_OPEN_COVER in reversal.commands
+    assert reversal.cover.travel_calc._travel_to_position == 100
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="_triggered_externally is ambient instance state, not task-scoped, so a"
+    " genuine stop inside an external reversal's settle gap is misread as a"
+    " device echo and dropped. Needs a scoping fix, not a guard tweak.",
+)
+@pytest.mark.asyncio
+async def test_stop_during_the_gap_cancels_an_external_close_reversal(make_cover):
+    """A stop landing inside an external reversal's settle gap must win.
+
+    Same requirement as the set_position reversal, reached from the wall-switch
+    path — and the harder case. _handle_stop only supersedes when
+    _triggered_externally is clear, but that flag is ambient instance state
+    held for the *whole* external call, settle gap included. A genuine stop
+    arriving in that window is therefore indistinguishable from a device echo:
+    it is dropped, and the parked reversal wakes and drives the cover up to
+    direction_change_delay seconds after the user said stop.
+    """
+    async with _parked_external_close(make_cover) as reversal:
+        # No flag fiddling: production leaves it set, which is the whole point.
+        await reversal.cover.async_stop_cover()
+        await reversal.resume()
+
+    assert SERVICE_CLOSE_COVER not in reversal.commands
+    assert not reversal.cover.travel_calc.is_traveling()
+
+
+@pytest.mark.asyncio
+async def test_newer_target_during_the_gap_supersedes_an_external_reversal(make_cover):
+    """A slider drag inside an external reversal's gap wins over it.
+
+    This route supersedes via _abandon_active_lifecycle, which is not gated on
+    _triggered_externally, so it holds where the stop route does not.
+    """
+    async with _parked_external_close(make_cover) as reversal:
+        await reversal.cover.set_position(60)
+        await reversal.resume()
+
+    assert SERVICE_CLOSE_COVER not in reversal.commands
+    assert reversal.cover.travel_calc._travel_to_position == 60
