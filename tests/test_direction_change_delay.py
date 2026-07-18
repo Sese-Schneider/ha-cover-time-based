@@ -8,6 +8,7 @@ is configurable; it defaults to the historical 1.0s.
 """
 
 import asyncio
+from contextlib import suppress
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -324,7 +325,11 @@ class _ParkedReversal:
         )
         if arrived in done:
             return
+        # Cancel *and* collect it, or the loop closes on a pending task and the
+        # "Task was destroyed" warning lands on whichever test runs next.
         arrived.cancel()
+        with suppress(asyncio.CancelledError):
+            await arrived
         # The task finished without ever parking: surface its exception, or say
         # so plainly if it simply returned.
         self._task.result()
