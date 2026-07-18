@@ -4,6 +4,7 @@ import asyncio
 import logging
 from abc import abstractmethod
 from asyncio import sleep
+from contextvars import ContextVar
 from datetime import timedelta
 
 from homeassistant.components.cover import (
@@ -56,6 +57,24 @@ from .tilt_strategies.planning import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# (task, cover) pairs for the external-state handlers currently running.
+#
+# One module-level var holding a set, rather than one var per entity: context
+# variables are never reclaimed, so creating them per instance would leak on
+# every integration reload.
+#
+# The task is part of the key, not incidental. A context is *copied into* every
+# task and timer callback created while it is active — and HA's interval timer
+# reschedules itself from inside that copy — so storing the flag in a
+# ContextVar alone hands it to the entire auto-updater chain for the life of
+# the movement, long after the handler that raised it returned. Pairing it with
+# the owning task means an inherited copy is still there but no longer matches,
+# which is exactly the scope we want: the handler's own awaits, nothing it
+# schedules. See CoverTimeBased._triggered_externally.
+_EXTERNAL_TRIGGER: ContextVar[frozenset] = ContextVar(
+    "cover_time_based_external_trigger", default=frozenset()
+)
 
 
 class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
@@ -145,11 +164,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         #     (sequential_close, dual_motor — not inline or sequential_open).
         self._tilt_restore_target: int | None = None
         self._tilt_restore_active: bool = False
+        # Identity for the active restore, bumped on every claim. The bool says
+        # only that *a* restore is live, which a restore resuming from an await
+        # cannot distinguish from its own — see _tilt_restore_superseded.
+        self._tilt_restore_epoch: int = 0
         self._pending_travel_target: int | None = None
         self._pending_travel_command: str | None = None
         self._pending_tilt_target: int | None = None
         self._pending_tilt_command: str | None = None
-        self._triggered_externally = False
         self._self_initiated_movement = True
         # True while the active movement drives a dedicated tilt motor (dual
         # motor), so auto-stop settles the tilt motor instead of travel.
@@ -475,7 +497,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # External trigger: stop the opposite-direction motion, settle,
             # then proceed with close (legacy reverse behavior).
             self._log("async_close_cover :: external close while opening, reversing")
-            await self.async_stop_cover()
+            # This stop is the reversal's own prelude, not a command to halt —
+            # superseding here would cancel the movement it is starting.
+            await self.async_stop_cover(supersede=False)
             if not await self._settle_before_reversing():
                 return
 
@@ -541,7 +565,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
         if self._triggered_externally and self._travel_axis_closing():
             self._log("async_open_cover :: external open while closing, reversing")
-            await self.async_stop_cover()
+            # Reversal prelude, not a halt command — see async_close_cover.
+            await self.async_stop_cover(supersede=False)
             if not await self._settle_before_reversing():
                 return
         # Mirror async_close_cover's skip-at-0 for covers that treat an endpoint
@@ -636,9 +661,72 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         await sleep(self._direction_change_delay_time)
 
+    @property
+    def _triggered_externally(self) -> bool:
+        """Whether *this* call is handling something the hardware did.
+
+        Set by the external-state dispatcher around its handler, and read all
+        over to suppress relay writes (never echo a command back at hardware
+        that is already doing it) and to pick external-trigger behaviour.
+
+        Scoped to the task that raised it. An external handler holds this
+        across every await it makes — including a reversal's whole settle gap —
+        so as plain instance state it leaked onto anything that ran meanwhile:
+        a UI stop landing in that window inherited the suppression and sent no
+        relay command at all, halting the tracker while the motor ran on. HA
+        dispatches each service call as its own task, so keying on the task
+        means the handler still sees it across its own awaits while a
+        concurrent caller does not.
+
+        Keying on the *task* rather than only on the context is what stops the
+        scope widening again the other way — see _EXTERNAL_TRIGGER.
+        """
+        return (asyncio.current_task(), self) in _EXTERNAL_TRIGGER.get()
+
+    @_triggered_externally.setter
+    def _triggered_externally(self, value: bool) -> None:
+        entry = (asyncio.current_task(), self)
+        current = _EXTERNAL_TRIGGER.get()
+        _EXTERNAL_TRIGGER.set(current | {entry} if value else current - {entry})
+
     def _supersede_movement(self) -> None:
         """Claim the movement, cancelling any reversal waiting out its settle."""
         self._movement_epoch += 1
+
+    def _claim_tilt_restore(self) -> int:
+        """Mark a tilt restore active and return its identity."""
+        self._tilt_restore_active = True
+        self._tilt_restore_epoch += 1
+        return self._tilt_restore_epoch
+
+    def _release_tilt_restore(self) -> None:
+        """Mark no restore active, cancelling any still parked on an await.
+
+        Deliberately leaves the epoch alone: releasing does not hand identity
+        to anyone, and the next claim bumps it anyway. That is why
+        _tilt_restore_superseded has to test the flag as well as the epoch.
+        """
+        self._tilt_restore_active = False
+
+    def _clear_multiphase_tilt_state(self) -> None:
+        """Drop every in-flight tilt phase — restore and pre-step alike."""
+        self._tilt_restore_target = None
+        self._release_tilt_restore()
+        self._pending_travel_target = None
+        self._pending_travel_command = None
+        self._pending_tilt_target = None
+        self._pending_tilt_command = None
+
+    def _tilt_restore_superseded(self, epoch: int) -> bool:
+        """Whether the restore holding ``epoch`` has been cancelled or replaced.
+
+        The active flag alone answers "is a restore live", not "is mine". A
+        restore cancelled while parked on an await, then replaced by a newer one
+        before it resumed, read its own True back and carried on — driving the
+        motor a second time and retargeting the tilt tracker at the goal it had
+        already been told to abandon.
+        """
+        return not self._tilt_restore_active or epoch != self._tilt_restore_epoch
 
     async def _settle_before_reversing(self) -> bool:
         """Await the settle gap; False if this movement was superseded.
@@ -658,8 +746,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return False
         return True
 
-    async def async_stop_cover(self, **kwargs):
-        """Turn the device stop."""
+    async def async_stop_cover(
+        self, *, supersede: bool = True, tilt_axis_reported: bool = False, **kwargs
+    ):
+        """Turn the device stop.
+
+        ``supersede`` defaults True so a stop arriving from HA (service call,
+        UI, automation) always claims the movement; the internal and
+        external-trigger callers that are echoes or reversal preludes pass
+        False. See _handle_stop.
+
+        ``tilt_axis_reported`` says the tilt relay is the one that reported,
+        so a stop must not be echoed back at it — see _should_stop_tilt_motor.
+        """
         self._require_configured()
         self._log("async_stop_cover")
         tilt_restore_was_active = self._tilt_restore_active
@@ -667,22 +766,53 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._pending_travel_target is not None
             or self._pending_tilt_target is not None
         )
+        stop_tilt = self._should_stop_tilt_motor(
+            tilt_restore_was_active or tilt_pre_step_was_active,
+            tilt_axis_reported=tilt_axis_reported,
+        )
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
-        self._handle_stop()
+        self._handle_stop(supersede=supersede)
         if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
         if not self._triggered_externally:
             await self._send_stop()
-            if (
-                tilt_restore_was_active or tilt_pre_step_was_active
-            ) and self._has_tilt_motor():
-                await self._send_tilt_stop()
+        if stop_tilt:
+            # _tilt_settle, not a bare stop: at 0%/100% the motor is already
+            # stopped on its limit switch and a momentary relay re-pulsed there
+            # starts it again.
+            await self._tilt_settle()
         self.async_write_ha_state()
         self._last_command = None
         await self._async_persist_position()
+
+    def _should_stop_tilt_motor(
+        self, tilt_phase_was_active: bool, *, tilt_axis_reported: bool
+    ) -> bool:
+        """Whether abandoning this movement leaves a tilt motor to take down.
+
+        Only dual-motor covers have a tilt motor of their own; elsewhere tilt
+        is the travel motor and _send_stop already covered it.
+
+        The relay suppression that guards _send_stop is about not echoing a
+        command back at hardware that already did it — which is true of the
+        relay the external event was about, and of no other. The tilt motor is
+        a separate relay we drive ourselves, so when a *travel* event abandons
+        a live tilt phase nothing else will ever stop it: the tracker halts,
+        the phase is forgotten, and the motor keeps running. Hence this is
+        deliberately not gated on _triggered_externally.
+
+        It is gated on ``tilt_axis_reported``, because when the tilt relay is
+        the one that reported, echoing a stop back at it is exactly the thing
+        the suppression exists to prevent — and on toggle hardware
+        _send_tilt_stop is a *pulse*, so it would start the motor moving again
+        rather than stop it.
+        """
+        return (
+            tilt_phase_was_active and self._has_tilt_motor() and not tilt_axis_reported
+        )
 
     async def async_close_cover_tilt(self, **kwargs):
         """Tilt the cover fully closed."""
@@ -709,10 +839,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("async_set_cover_tilt_position: %d", position)
             await self.set_tilt_position(position)
 
-    async def set_known_position(self, **kwargs):
-        """Set the cover to a known position (0=closed, 100=open)."""
+    async def set_known_position(self, *, supersede: bool = True, **kwargs):
+        """Set the cover to a known position (0=closed, 100=open).
+
+        Exposed as a service (a user resyncing the tracker is a real command,
+        hence the default) and used internally by wrapped covers to snap to a
+        position the device just reported, which is not — see _handle_stop.
+        """
         position = kwargs[ATTR_POSITION]
-        self._handle_stop()
+        self._handle_stop(supersede=supersede)
         self.travel_calc.set_position(position)
         if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
@@ -1581,7 +1716,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
             if self._tilt_restore_active:
                 self._log("auto_stop_if_necessary :: tilt restore complete")
-                self._tilt_restore_active = False
+                self._release_tilt_restore()
                 if self._has_tilt_motor():
                     await self._tilt_settle()
                 else:
@@ -1790,12 +1925,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
         # Always clear multi-phase state
-        self._tilt_restore_target = None
-        self._tilt_restore_active = False
-        self._pending_travel_target = None
-        self._pending_travel_command = None
-        self._pending_tilt_target = None
-        self._pending_tilt_command = None
+        self._clear_multiphase_tilt_state()
         # Each movement entry point funnels through here; default to a travel
         # move and let the tilt paths below opt in.
         self._moving_tilt_motor = False
@@ -1818,6 +1948,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self.stop_auto_updater()
 
         await self._async_handle_command(SERVICE_STOP_COVER)
+        # Deliberately still gated on _triggered_externally, unlike
+        # async_stop_cover. This route cannot tell which axis reported: the
+        # tilt entry points reach it too (async_open_cover_tilt ->
+        # _async_move_tilt_to_endpoint -> here), so firing on an external tilt
+        # event would echo a stop back at the very relay that reported — which
+        # on toggle hardware starts the motor rather than stopping it. Until
+        # the axis is threaded this far, suppressing is the safe direction.
         if self._has_tilt_motor() and not self._triggered_externally:
             await self._send_tilt_stop()
 
@@ -1830,30 +1967,33 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._log("_stop_travel_if_traveling :: also stopping tilt")
                 self.tilt_calc.stop()
 
-    def _handle_stop(self):
-        """Handle stop"""
-        # Every route that halts the cover lands here — both async_stop_cover
-        # implementations (the toggle override does not call super), plus the
-        # known-position resets — so this is where a stop claims the movement
-        # and keeps a reversal parked in its settle gap from driving afterwards.
-        #
-        # Only our own intent counts, never the device talking back. Passive
-        # routes land here too: a wrapped cover reporting its settled position
-        # snaps via set_known_position, and a switch-mode relay's unmarked off
-        # (a hardware interlock clearing the opposite relay) calls
-        # async_stop_cover. Both run with _triggered_externally set, and both
-        # can arrive inside the settle window — the wrapped self-echo
-        # suppressors are keyed on is_traveling(), which the reversal has
-        # already cleared. Treating those as supersessions would silently drop
-        # the user's move, or freeze the tracker while the motor runs.
-        if not self._triggered_externally:
+    def _handle_stop(self, *, supersede: bool = True):
+        """Handle stop.
+
+        ``supersede`` says whether this is a fresh command to halt the cover,
+        which claims the movement and so keeps a reversal parked in its settle
+        gap from driving afterwards. Every route that halts the cover lands
+        here — both async_stop_cover implementations (the toggle override does
+        not call super), plus the known-position resets.
+
+        Passive routes must pass ``supersede=False``: a wrapped cover reporting
+        its settled position snaps via set_known_position, and a switch-mode
+        relay's unmarked off (a hardware interlock clearing the opposite relay)
+        calls async_stop_cover. Both can arrive inside the settle window — the
+        wrapped self-echo suppressors are keyed on is_traveling(), which the
+        reversal has already cleared — and treating them as supersessions would
+        silently drop the user's move, or freeze the tracker while the motor
+        runs. So must the stop a reversal issues as its own prelude, which would
+        otherwise cancel the very movement it is starting.
+
+        The caller has to say so because _triggered_externally cannot: it is
+        ambient instance state held for the whole external call, settle gap
+        included, so inferring from it read a genuine stop landing in that gap
+        as a device echo and dropped it.
+        """
+        if supersede:
             self._supersede_movement()
-        self._tilt_restore_target = None
-        self._tilt_restore_active = False
-        self._pending_travel_target = None
-        self._pending_travel_command = None
-        self._pending_tilt_target = None
-        self._pending_tilt_command = None
+        self._clear_multiphase_tilt_state()
 
         if self.travel_calc.is_traveling():
             self._log("_handle_stop :: button stops cover movement")
@@ -2046,12 +2186,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # travel reached its target, re-armed only at the tail below), so no
         # re-entrant auto_stop_if_necessary can take the restore-complete branch
         # mid-startup — keep it that way if this ever moves.
-        self._tilt_restore_active = True
+        epoch = self._claim_tilt_restore()
 
         if self._tilt_strategy.uses_tilt_motor:
             # Dual motor: stop travel, then start the separate tilt motor.
             await self._async_handle_command(SERVICE_STOP_COVER)
-            if not self._tilt_restore_active:
+            if self._tilt_restore_superseded(epoch):
                 self._log("_start_tilt_restore :: cancelled before tilt motor start")
                 return
             if closing:
@@ -2067,7 +2207,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # restore pulse's stop command dropped by the relay, so the cover
             # overruns to its physical endpoint.
             await self._async_handle_command(SERVICE_STOP_COVER)
-            if not self._tilt_restore_active:
+            if self._tilt_restore_superseded(epoch):
                 # Cancelled while stopping — bail before the settle delay so we
                 # don't block the background task for a dead restore. The gap is
                 # the per-cover direction_change_delay, so it can be several
@@ -2075,17 +2215,50 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._log("_start_tilt_restore :: cancelled before settle delay")
                 return
             await self._direction_change_delay()
-            if not self._tilt_restore_active:
+            if self._tilt_restore_superseded(epoch):
                 self._log("_start_tilt_restore :: cancelled during settle delay")
                 return
             command = self._tilt_strategy.tilt_command_for(closing)
             await self._async_handle_command(command)
 
-        if not self._tilt_restore_active:
-            self._log("_start_tilt_restore :: cancelled during motor start")
+        if self._tilt_restore_superseded(epoch):
+            # The motor is already energized: whoever cancelled us sent their
+            # stop while we were awaiting this turn-on, so theirs went out
+            # first and ours landed after it. Nothing else will take it down —
+            # we are the only one that knows it went up — and on a latching
+            # relay that means a cover driving to its endpoint untracked.
+            self._log("_start_tilt_restore :: cancelled during motor start, stopping")
+            await self._stop_restore_motor()
             return
         self.tilt_calc.start_travel(restore_target)
         self.start_auto_updater()
+
+    async def _stop_restore_motor(self) -> None:
+        """Take down whichever motor the restore energized.
+
+        Only when nothing is tracking it. Superseders come in two kinds: a
+        stop, which leaves no movement behind and so leaves our turn-on running
+        with nobody to switch it off — the case this exists for — and a new
+        *movement*, which abandoned the lifecycle and then energized a motor of
+        its own. Stopping in the second case kills the replacement's motor
+        while its calculator animates on, which is the same tracker-
+        confidently-wrong desync approached from the other side. A live
+        calculator is exactly the difference between the two.
+
+        _tilt_settle rather than a bare stop because at 0%/100% the motor has
+        already stopped on its own limit switch and re-pulsing a momentary
+        relay there would start it moving again. A path added to avoid leaving
+        a motor running must not do that either.
+        """
+        if self.travel_calc.is_traveling() or (
+            self._has_tilt_support() and self.tilt_calc.is_traveling()
+        ):
+            self._log("_stop_restore_motor :: a movement is tracking, leaving it alone")
+            return
+        if self._has_tilt_motor():
+            await self._tilt_settle()
+        else:
+            await self._async_handle_command(SERVICE_STOP_COVER)
 
     # -----------------------------------------------------------------------
     # Relay command dispatch
@@ -2413,7 +2586,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log(
                 "_handle_external_tilt_state_change :: external tilt stop pulse detected"
             )
-            await self.async_stop_cover()
+            # A dedicated stop relay is a press, not a report — see
+            # SwitchCoverTimeBased._handle_external_state_change. It is the
+            # tilt hardware's own stop, so don't echo one back at it.
+            await self.async_stop_cover(tilt_axis_reported=True)
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle external state change. Override in subclasses for mode-specific behavior."""

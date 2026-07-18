@@ -71,7 +71,7 @@ class ToggleOppositeModeCover(ToggleBaseCover):
                 self._log(
                     "_handle_external_state_change :: open press while closing, stopping"
                 )
-                await self.async_stop_cover()
+                await self.async_stop_cover(supersede=False)
             elif not self.travel_calc.is_opening():
                 self._log("_handle_external_state_change :: external open press")
                 await self.async_open_cover()
@@ -81,7 +81,7 @@ class ToggleOppositeModeCover(ToggleBaseCover):
                 self._log(
                     "_handle_external_state_change :: close press while opening, stopping"
                 )
-                await self.async_stop_cover()
+                await self.async_stop_cover(supersede=False)
             elif not self.travel_calc.is_closing():
                 self._log("_handle_external_state_change :: external close press")
                 await self.async_close_cover()
@@ -100,7 +100,7 @@ class ToggleOppositeModeCover(ToggleBaseCover):
                     "_handle_external_tilt_state_change :: tilt open press while"
                     " tilt closing, stopping"
                 )
-                await self.async_stop_cover()
+                await self.async_stop_cover(supersede=False, tilt_axis_reported=True)
             elif not self.tilt_calc.is_opening():
                 self._log(
                     "_handle_external_tilt_state_change :: external tilt open press"
@@ -113,7 +113,7 @@ class ToggleOppositeModeCover(ToggleBaseCover):
                     "_handle_external_tilt_state_change :: tilt close press while"
                     " tilt opening, stopping"
                 )
-                await self.async_stop_cover()
+                await self.async_stop_cover(supersede=False, tilt_axis_reported=True)
             elif not self.tilt_calc.is_closing():
                 self._log(
                     "_handle_external_tilt_state_change :: external tilt close press"

@@ -161,8 +161,14 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             self._mark_switch_pending(entity_id, 1)
         await self._turn_off_relay(entity_id)
 
-    async def async_stop_cover(self, **kwargs):
-        """Stop the cover, only sending relay command if it was active."""
+    async def async_stop_cover(
+        self, *, supersede: bool = True, tilt_axis_reported: bool = False, **kwargs
+    ):
+        """Stop the cover, only sending relay command if it was active.
+
+        See CoverTimeBased.async_stop_cover for ``supersede`` and
+        ``tilt_axis_reported``.
+        """
         was_active = (
             self.is_opening
             or self.is_closing
@@ -171,19 +177,22 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         )
         tilt_restore_was_active = self._tilt_restore_active
         tilt_pre_step_was_active = self._pending_travel_target is not None
+        stop_tilt = was_active and self._should_stop_tilt_motor(
+            tilt_restore_was_active or tilt_pre_step_was_active,
+            tilt_axis_reported=tilt_axis_reported,
+        )
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
-        self._handle_stop()
+        self._handle_stop(supersede=supersede)
         if self._tilt_strategy is not None:
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
         if not self._triggered_externally and was_active:
             await self._send_stop()
-            if (
-                tilt_restore_was_active or tilt_pre_step_was_active
-            ) and self._has_tilt_motor():
-                await self._send_tilt_stop()
+        if stop_tilt:
+            # See CoverTimeBased.async_stop_cover — endpoint-safe teardown.
+            await self._tilt_settle()
         self.async_write_ha_state()
         self._last_command = None
         self._last_tilt_direction = None

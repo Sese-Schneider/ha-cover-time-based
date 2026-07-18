@@ -382,7 +382,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
                     "_handle_external_state_change :: wrapped cover stopped,"
                     " no position info"
                 )
-                await self.async_stop_cover()
+                await self.async_stop_cover(supersede=False)
             await self._maybe_snap_to_reported_tilt()
 
     async def _handle_command_state(self, new_val: str) -> None:
@@ -417,7 +417,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 await self.async_close_cover()
         elif new_val == STATE_UNKNOWN:
             self._log("_handle_command_state :: stop command")
-            await self.async_stop_cover()
+            await self.async_stop_cover(supersede=False)
         else:
             # STATE_UNAVAILABLE / anything else: not a command, ignore.
             self._log("_handle_command_state :: ignoring non-command state %s", new_val)
@@ -462,7 +462,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         to match the target at this instant.
         """
         self._log("_snap_to_position :: snapping to %d", target)
-        await self.set_known_position(position=target)
+        # The device reporting where it ended up, not a command — it must not
+        # cancel a reversal waiting out its settle gap.
+        await self.set_known_position(position=target, supersede=False)
         self._last_command = None
 
     def _wrapped_reported_position(self) -> int | None:

@@ -16,7 +16,12 @@ from types import SimpleNamespace
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+from custom_components.cover_time_based.cover import CONTROL_MODE_TOGGLE
+from homeassistant.const import (
+    SERVICE_CLOSE_COVER,
+    SERVICE_OPEN_COVER,
+    SERVICE_STOP_COVER,
+)
 
 
 # ===================================================================
@@ -2607,6 +2612,302 @@ class TestInlineTiltRestore:
         assert "open" not in events
         assert cover._tilt_restore_active is False
         assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_newer_restore_during_settle_delay_supersedes_the_stale_one(
+        self, make_cover
+    ):
+        """A restore that was cancelled must not resume behind its replacement.
+
+        The cancellation checks read a plain bool, so they only answer "is a
+        restore active", not "is *my* restore still the active one". A newer
+        restore claiming the cover during the old one's settle delay sets that
+        bool back to True, and the stale restore then sails through every check
+        it was supposed to fail: it drives the motor a second time and retargets
+        the tilt tracker at its own abandoned goal, leaving the tracker chasing
+        a position nothing is moving towards.
+        """
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(80)
+        cover.tilt_calc.set_position(100)
+
+        events = []
+        delays = {"n": 0}
+
+        async def record_open(*_a, **_k):
+            events.append("open")
+
+        async def newer_restore_during_delay(*_a, **_k):
+            delays["n"] += 1
+            if delays["n"] > 1:
+                return  # the replacement's own settle gap; nothing to inject
+            # A newer command lands mid-gap: it abandons the in-flight restore
+            # and, once its own travel finishes, starts a restore of its own.
+            await cover._abandon_active_lifecycle()
+            cover._tilt_restore_target = 50
+            await cover._start_tilt_restore()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(30)  # closing; restore target = tilt 100
+            cover.travel_calc.set_position(30)
+            cover.tilt_calc.set_position(0)
+
+            with (
+                patch.object(cover, "_send_open", side_effect=record_open),
+                patch.object(
+                    cover,
+                    "_direction_change_delay",
+                    side_effect=newer_restore_during_delay,
+                ),
+            ):
+                await cover.auto_stop_if_necessary()
+
+        # Only the replacement may have driven the motor and claimed the
+        # tracker; the stale restore's target (100) must be nowhere in sight.
+        assert events == ["open"]
+        assert cover.tilt_calc._travel_to_position == 50
+
+    @pytest.mark.asyncio
+    async def test_supersede_during_motor_start_does_not_latch_the_relay(
+        self, make_cover
+    ):
+        """A restore cancelled mid-turn-on must take its own relay back down.
+
+        The cancelling stop is sent while the restore is still awaiting its
+        turn-on, so it goes out *first* and is stale by the time the turn-on
+        lands. The restore then sees itself superseded and bails — leaving the
+        motor it just energized running with nothing tracking it. On a latching
+        relay that is a cover driving to its physical endpoint unattended.
+        """
+        cover = self._make_inline_cover(make_cover)
+        cover.travel_calc.set_position(80)
+        cover.tilt_calc.set_position(100)
+
+        stops = []
+
+        async def stop_lands_during_turn_on(command, *args):
+            if command == SERVICE_STOP_COVER:
+                stops.append("stop")
+            # The restore's own reversing turn-on: a stop arrives mid-await.
+            if command in (SERVICE_OPEN_COVER, SERVICE_CLOSE_COVER):
+                await cover.async_stop_cover()
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(30)  # closing; restore target = tilt 100
+            cover.travel_calc.set_position(30)
+            cover.tilt_calc.set_position(0)
+
+            with (
+                patch.object(cover, "_direction_change_delay", new_callable=AsyncMock),
+                patch.object(
+                    cover,
+                    "_async_handle_command",
+                    side_effect=stop_lands_during_turn_on,
+                ),
+            ):
+                await cover.auto_stop_if_necessary()
+
+        # Two stops: the one the restore issues before reversing, and the one it
+        # must issue on finding itself superseded after energizing the motor.
+        assert stops == ["stop", "stop"]
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_dual_motor_supersede_during_motor_start_stops_tilt_motor(
+        self, make_cover
+    ):
+        """Same race on a dedicated tilt motor takes the tilt relay down.
+
+        The shared-motor case above stops via the travel relay; here the
+        restore energized a separate tilt relay, so that is the one that must
+        come back down.
+        """
+        cover = _dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(30)
+        cover.tilt_calc.set_position(0)
+        # Drive the restore phase directly: dual-motor reaches it via a
+        # tilt-to-safe pre-step and its own travel, none of which is what this
+        # race is about.
+        cover._tilt_restore_target = 100
+
+        relay = []
+
+        async def turn_on(*_a, **_k):
+            # The cancelling stop goes out while we are still awaiting this
+            # turn-on, so it is recorded *before* the relay comes up.
+            await cover.async_stop_cover()
+            relay.append("on")
+
+        async def turn_off(*_a, **_k):
+            relay.append("off")
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_tilt_open", side_effect=turn_on),
+            patch.object(cover, "_send_tilt_close", side_effect=turn_on),
+            patch.object(cover, "_send_tilt_stop", side_effect=turn_off),
+        ):
+            await cover._start_tilt_restore()
+
+        # async_stop_cover's own tilt stop lands before the turn-on, so it
+        # cannot be what leaves the relay down — only the restore noticing it
+        # was superseded after energizing can.
+        assert relay[-1] == "off", relay
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_superseded_restore_does_not_stop_its_replacement(self, make_cover):
+        """Taking our own motor down must not take the next one down with it.
+
+        The teardown assumes the superseder was a plain stop, whose own stop
+        went out before our turn-on landed. But the usual superseder is a new
+        *movement* — every entry point abandons the lifecycle and then starts
+        its own motor. Firing a stop after that kills a motor the replacement
+        just energized and is actively tracking, which is the same
+        tracker-confidently-wrong desync this branch exists to remove, only
+        reached from the other side.
+        """
+        cover = _dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(30)
+        cover.tilt_calc.set_position(50)
+        cover._tilt_restore_target = 100
+
+        log = []
+
+        async def new_move_lands_during_turn_on(*_a, **_k):
+            log.append("restore:on")
+            # A new tilt movement claims the cover mid-turn-on and starts its
+            # own motor.
+            await cover.set_tilt_position(20)
+
+        async def replacement_on(*_a, **_k):
+            log.append("replacement:on")
+
+        async def stop(*_a, **_k):
+            log.append("stop")
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_send_tilt_open", side_effect=new_move_lands_during_turn_on
+            ),
+            patch.object(cover, "_send_tilt_close", side_effect=replacement_on),
+            patch.object(cover, "_send_tilt_stop", side_effect=stop),
+        ):
+            await cover._start_tilt_restore()
+
+        # The replacement is tracking to 20, so its motor must still be the
+        # last thing energized — no stop may land after it started.
+        assert cover.tilt_calc.is_traveling()
+        assert "replacement:on" in log, log
+        assert log[log.index("replacement:on") :] == ["replacement:on"], log
+
+    @pytest.mark.asyncio
+    async def test_supersede_at_a_tilt_endpoint_does_not_repulse_the_motor(
+        self, make_cover
+    ):
+        """Taking our own relay back down still has to respect the endpoints.
+
+        At 0%/100% a momentary-relay motor has already stopped on its own limit
+        switch, and re-pulsing the direction relay restarts it — which is why
+        the normal completion path goes through _tilt_settle rather than
+        sending a stop outright. The superseded path owes the same care: it was
+        added to avoid leaving a motor running, and must not achieve that by
+        starting one.
+        """
+        cover = _dual_motor_cover(make_cover, control_mode=CONTROL_MODE_TOGGLE)
+        assert cover._self_stops_at_endpoints()
+        cover.travel_calc.set_position(30)
+        cover.tilt_calc.set_position(100)  # already at the tilt endpoint
+        cover._tilt_restore_target = 0
+
+        async def stop_lands_during_turn_on(*_a, **_k):
+            await cover.async_stop_cover()
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_send_tilt_close", side_effect=stop_lands_during_turn_on
+            ),
+            patch.object(
+                cover, "_send_tilt_open", side_effect=stop_lands_during_turn_on
+            ),
+            patch.object(cover, "_send_tilt_stop", new_callable=AsyncMock) as tilt_stop,
+        ):
+            await cover._start_tilt_restore()
+            cover.tilt_calc.set_position(100)  # settled back on the endpoint
+            tilt_stop.reset_mock()
+            await cover._stop_restore_motor()
+
+        tilt_stop.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_external_travel_stop_also_stops_a_live_tilt_motor(self, make_cover):
+        """A stop is a stop: the tilt motor must come down with the travel one.
+
+        The relay suppression exists so we never echo a command back at
+        hardware that already did it. That reasoning covers the relay the
+        external event was about — and only that one. On a dual-motor cover the
+        tilt motor is a *separate* relay we are driving ourselves, so when a
+        travel-relay event abandons a live tilt phase, nothing else is ever
+        going to take it down: the tracker stops, the restore is forgotten, and
+        the tilt motor keeps running.
+        """
+        cover = _dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(30)
+        cover.tilt_calc.set_position(0)
+        cover._tilt_restore_target = 100
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_tilt_open", new_callable=AsyncMock),
+            patch.object(cover, "_send_tilt_close", new_callable=AsyncMock),
+            patch.object(cover, "_send_tilt_stop", new_callable=AsyncMock) as tilt_stop,
+        ):
+            await cover._start_tilt_restore()
+            assert cover.tilt_calc.is_traveling()  # tilt motor is running
+
+            # The travel relay reports off while the tilt motor runs on.
+            cover._triggered_externally = True
+            try:
+                await cover.async_stop_cover(supersede=False)
+            finally:
+                cover._triggered_externally = False
+
+        tilt_stop.assert_awaited_once()
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_external_tilt_stop_does_not_echo_back_at_the_tilt_relay(
+        self, make_cover
+    ):
+        """...but not when the tilt relay is the one that reported.
+
+        The counterpart to the test above, and the reason this cannot simply
+        always fire. On toggle hardware _send_tilt_stop is a *pulse*, so
+        echoing one back at a tilt motor that already stopped would start it
+        moving again — the opposite of a stop.
+        """
+        cover = _dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(30)
+        cover.tilt_calc.set_position(0)
+        cover._tilt_restore_target = 100
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_tilt_open", new_callable=AsyncMock),
+            patch.object(cover, "_send_tilt_close", new_callable=AsyncMock),
+            patch.object(cover, "_send_tilt_stop", new_callable=AsyncMock) as tilt_stop,
+        ):
+            await cover._start_tilt_restore()
+
+            cover._triggered_externally = True
+            try:
+                await cover.async_stop_cover(supersede=False, tilt_axis_reported=True)
+            finally:
+                cover._triggered_externally = False
+
+        tilt_stop.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_stop_during_initial_stop_bails_before_settle_delay(self, make_cover):
