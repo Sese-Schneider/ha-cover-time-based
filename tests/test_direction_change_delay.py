@@ -25,6 +25,7 @@ from custom_components.cover_time_based.cover import (
     CONF_DEFAULTS,
     CONF_DEVICES,
     CONF_OPEN_SWITCH_ENTITY_ID,
+    CONTROL_MODE_PULSE,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE_OPPOSITE,
     _create_cover_from_options,
@@ -206,38 +207,53 @@ class _ParkedReversal:
     lets it out, so tests rendezvous with it exactly rather than guessing how
     many event-loop turns it takes to get there.
 
-    ``start`` selects the entry point that reverses (the UI slider by default);
-    ``external`` runs it the way a wall switch does, with _triggered_externally
-    held for the whole call — including the settle gap — exactly as
-    _async_switch_state_changed's try/finally does.
+    By default the UI slider reverses it. ``external_press`` instead runs the
+    wall-switch entry point for that command, with _triggered_externally held
+    for the whole call — settle gap included — exactly as
+    _async_switch_state_changed's try/finally does. Everything else (which way
+    the cover was already moving, which entry point to call, what should have
+    been commanded by the time it parks) follows from that one choice, so no
+    caller can pair them inconsistently.
     """
 
-    def __init__(
-        self,
-        cover,
-        *,
-        start=None,
-        external=False,
-        closing=False,
-        commands_at_park=None,
-    ):
+    def __init__(self, cover, *, external_press=None):
         self.cover = cover
         self.commands = []
         self.arrived = asyncio.Event()
         self._release = asyncio.Event()
         self._task = None
-        self._start = start or (lambda c: c.set_position(20))
-        self._external = external
-        self._closing = closing
-        self._commands_at_park = (
-            [SERVICE_STOP_COVER] if commands_at_park is None else commands_at_park
-        )
+        self._slept_for = None
+        self._external_press = external_press
+        if external_press is None:
+            # Opening at 40%, slider dragged below it.
+            self._start = lambda c: c.set_position(20)
+            self._was_closing = False
+            # set_position stops via _async_handle_command, which we record.
+            self._commands_at_park = [SERVICE_STOP_COVER]
+        else:
+            closing = external_press == SERVICE_OPEN_COVER
+            # Press the real relay and let the mode's own handler decide what
+            # that means, rather than calling async_open/close_cover directly —
+            # otherwise the test proves only that the base guard works, not
+            # that any external trigger actually reaches it.
+            self._start = lambda c: c._handle_external_state_change(
+                c._open_switch_entity_id if closing else c._close_switch_entity_id,
+                "off",
+                "on",
+            )
+            # A reversal only happens against the opposite direction.
+            self._was_closing = closing
+            # The prelude stop runs with _triggered_externally set, so it goes
+            # out via _send_stop (itself suppressed) — never through
+            # _async_handle_command, which is what we record.
+            self._commands_at_park = []
 
     async def _record(self, command, *args):
         self.commands.append(command)
         return await self._real_handle(command, *args)
 
-    async def _gated_sleep(self, _seconds):
+    async def _gated_sleep(self, seconds):
+        self._slept_for = seconds
         self.arrived.set()
         await self._release.wait()
 
@@ -259,7 +275,7 @@ class _ParkedReversal:
             side_effect=lambda eid: SimpleNamespace(state="off")
         )
         cover.travel_calc.set_position(40)
-        if self._closing:
+        if self._was_closing:
             cover.travel_calc.start_travel_down()
             cover._last_command = SERVICE_CLOSE_COVER
         else:
@@ -276,13 +292,16 @@ class _ParkedReversal:
             p.start()
 
         try:
-            # Reverse: opening at 40%, now told to go the other way.
+            # Reverse: already moving at 40%, now told to go the other way.
             coro = self._start(cover)
-            if self._external:
+            if self._external_press is not None:
                 cover._triggered_externally = True
                 coro = self._as_external(coro)
             self._task = asyncio.create_task(coro)
-            await self.arrived.wait()
+            await self._wait_until_parked()
+            # The settle gap is the only sleep with this duration, so this
+            # pins us to it rather than to a startup delay or a run-on.
+            assert self._slept_for == cover._direction_change_delay_time
             assert self.commands == self._commands_at_park
         except BaseException:
             # __aexit__ never runs when __aenter__ raises, so without this the
@@ -291,6 +310,28 @@ class _ParkedReversal:
             await self._abort()
             raise
         return self
+
+    async def _wait_until_parked(self):
+        """Wait for the gap, but never outlive a reversal that never gets there.
+
+        A bare arrived.wait() hangs the whole suite if the entry point bails
+        before the gap (or raises), and there is no --timeout configured to cut
+        it short — so race the rendezvous against the task itself.
+        """
+        arrived = asyncio.ensure_future(self.arrived.wait())
+        done, _ = await asyncio.wait(
+            {arrived, self._task}, return_when=asyncio.FIRST_COMPLETED
+        )
+        if arrived in done:
+            return
+        arrived.cancel()
+        # The task finished without ever parking: surface its exception, or say
+        # so plainly if it simply returned.
+        self._task.result()
+        raise AssertionError(
+            "reversal completed without waiting out the settle gap"
+            f" (commands={self.commands})"
+        )
 
     async def resume(self):
         self._release.set()
@@ -405,9 +446,9 @@ async def test_device_feedback_during_the_settle_gap_does_not_abort(make_cover):
     freezes the tracker while the motor runs, which is the very desync the
     guard exists to prevent.
 
-    Those routes say so with supersede=False; test_wrapped_snap_during_the_gap
-    _does_not_abort drives one of them for real, so this stays a direct test of
-    the contract itself.
+    Those routes say so with supersede=False. This is the direct test of that
+    contract; test_wrapped_snap_does_not_claim_the_movement then checks a real
+    one of them still declares itself feedback.
     """
     async with _ParkedReversal(_reversing_cover(make_cover)) as reversal:
         await reversal.cover.async_stop_cover(supersede=False)
@@ -447,16 +488,29 @@ async def test_wrapped_snap_does_not_claim_the_movement(make_cover):
 # ---------------------------------------------------------------------------
 
 
-def _parked_external_close(make_cover):
-    """Opening at 40%, wall switch says close: stop, settle, then reverse."""
-    return _ParkedReversal(
-        _reversing_cover(make_cover),
-        start=lambda c: c.async_close_cover(),
-        external=True,
-        # async_stop_cover drives the relay via _send_stop, not
-        # _async_handle_command, so nothing is recorded on the way in.
-        commands_at_park=[],
+def _external_cover(make_cover):
+    """A mode whose external handler really does stop-settle-reverse.
+
+    Pulse mode drives async_open_cover/async_close_cover straight off a relay
+    pulse, so an opposite press while moving reaches the reversal branch.
+    Toggle-opposite does not — its handler stops on an opposite press and waits
+    for the next one — so it cannot stand in for a wall switch here.
+    """
+    return make_cover(
+        control_mode=CONTROL_MODE_PULSE,
+        stop_switch="switch.stop",
+        direction_change_delay=2.5,
     )
+
+
+def _parked_external(make_cover, press):
+    """Moving at 40%, wall switch presses the opposite button: stop, settle,
+    then reverse."""
+    return _ParkedReversal(_external_cover(make_cover), external_press=press)
+
+
+def _parked_external_close(make_cover):
+    return _parked_external(make_cover, SERVICE_CLOSE_COVER)
 
 
 @pytest.mark.asyncio
@@ -472,13 +526,7 @@ async def test_undisturbed_external_close_reversal_still_completes(make_cover):
 @pytest.mark.asyncio
 async def test_undisturbed_external_open_reversal_still_completes(make_cover):
     """Mirror of the close case, entered from async_open_cover."""
-    reversal = _ParkedReversal(
-        _reversing_cover(make_cover),
-        start=lambda c: c.async_open_cover(),
-        external=True,
-        closing=True,
-        commands_at_park=[],
-    )
+    reversal = _parked_external(make_cover, SERVICE_OPEN_COVER)
     async with reversal:
         await reversal.resume()
 
@@ -505,6 +553,30 @@ async def test_stop_during_the_gap_cancels_an_external_close_reversal(make_cover
 
     assert SERVICE_CLOSE_COVER not in reversal.commands
     assert not reversal.cover.travel_calc.is_traveling()
+
+
+@pytest.mark.asyncio
+async def test_wall_stop_press_during_the_gap_cancels_an_external_reversal(make_cover):
+    """A dedicated stop button is a command, even though it arrives externally.
+
+    The rest of the external handlers report what the hardware did — a relay
+    releasing, a wrapped cover settling — and must not cancel a reversal. A
+    stop *switch* is the opposite: it only ever fires because someone pressed
+    it. Lumping it in with the echoes let the press be swallowed by the settle
+    gap and the cover reverse anyway, seconds after the user said stop.
+
+    No relay stop is sent here, and that is correct: the stop relay the user
+    pressed is already doing that. What must happen is the reversal dropping.
+    """
+    async with _parked_external_close(make_cover) as reversal:
+        cover = reversal.cover
+        await cover._handle_external_state_change(
+            cover._stop_switch_entity_id, "off", "on"
+        )
+        await reversal.resume()
+
+    assert SERVICE_CLOSE_COVER not in reversal.commands
+    assert not cover.travel_calc.is_traveling()
 
 
 @pytest.mark.asyncio

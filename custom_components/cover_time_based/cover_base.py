@@ -653,6 +653,24 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._tilt_restore_epoch += 1
         return self._tilt_restore_epoch
 
+    def _release_tilt_restore(self) -> None:
+        """Mark no restore active, cancelling any still parked on an await.
+
+        Deliberately leaves the epoch alone: releasing does not hand identity
+        to anyone, and the next claim bumps it anyway. That is why
+        _tilt_restore_superseded has to test the flag as well as the epoch.
+        """
+        self._tilt_restore_active = False
+
+    def _clear_multiphase_tilt_state(self) -> None:
+        """Drop every in-flight tilt phase — restore and pre-step alike."""
+        self._tilt_restore_target = None
+        self._release_tilt_restore()
+        self._pending_travel_target = None
+        self._pending_travel_command = None
+        self._pending_tilt_target = None
+        self._pending_tilt_command = None
+
     def _tilt_restore_superseded(self, epoch: int) -> bool:
         """Whether the restore holding ``epoch`` has been cancelled or replaced.
 
@@ -1616,7 +1634,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
             if self._tilt_restore_active:
                 self._log("auto_stop_if_necessary :: tilt restore complete")
-                self._tilt_restore_active = False
+                self._release_tilt_restore()
                 if self._has_tilt_motor():
                     await self._tilt_settle()
                 else:
@@ -1825,12 +1843,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
         # Always clear multi-phase state
-        self._tilt_restore_target = None
-        self._tilt_restore_active = False
-        self._pending_travel_target = None
-        self._pending_travel_command = None
-        self._pending_tilt_target = None
-        self._pending_tilt_command = None
+        self._clear_multiphase_tilt_state()
         # Each movement entry point funnels through here; default to a travel
         # move and let the tilt paths below opt in.
         self._moving_tilt_motor = False
@@ -1884,20 +1897,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         runs. So must the stop a reversal issues as its own prelude, which would
         otherwise cancel the very movement it is starting.
 
-        This was once inferred from _triggered_externally rather than stated by
-        the caller. That flag is ambient instance state held for the whole
-        external call, settle gap included, so a genuine stop landing in an
-        external reversal's gap read as a device echo and was dropped — the
-        cover then moved seconds after the user said stop.
+        The caller has to say so because _triggered_externally cannot: it is
+        ambient instance state held for the whole external call, settle gap
+        included, so inferring from it read a genuine stop landing in that gap
+        as a device echo and dropped it.
         """
         if supersede:
             self._supersede_movement()
-        self._tilt_restore_target = None
-        self._tilt_restore_active = False
-        self._pending_travel_target = None
-        self._pending_travel_command = None
-        self._pending_tilt_target = None
-        self._pending_tilt_command = None
+        self._clear_multiphase_tilt_state()
 
         if self.travel_calc.is_traveling():
             self._log("_handle_stop :: button stops cover movement")
@@ -2457,7 +2464,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log(
                 "_handle_external_tilt_state_change :: external tilt stop pulse detected"
             )
-            await self.async_stop_cover(supersede=False)
+            # A dedicated stop relay is a press, not a report — see
+            # SwitchCoverTimeBased._handle_external_state_change.
+            await self.async_stop_cover()
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle external state change. Override in subclasses for mode-specific behavior."""

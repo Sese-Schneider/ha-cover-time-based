@@ -45,4 +45,6 @@ class SwitchCoverTimeBased(CoverTimeBased):
             await self.async_close_cover()
         elif entity_id == self._stop_switch_entity_id:
             self._log("_handle_external_state_change :: external stop pulse detected")
-            await self.async_stop_cover(supersede=False)
+            # A dedicated stop relay only pulses because someone pressed it, so
+            # unlike the rest of this handler it is a command, not a report.
+            await self.async_stop_cover()
