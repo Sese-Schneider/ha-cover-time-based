@@ -86,7 +86,7 @@ class ToggleModeCover(ToggleBaseCover):
                 self._log(
                     "_handle_external_tilt_state_change :: tilt open toggle while traveling, stopping"
                 )
-                await self.async_stop_cover(supersede=False)
+                await self.async_stop_cover(supersede=False, tilt_axis_reported=True)
             else:
                 self._log(
                     "_handle_external_tilt_state_change :: external tilt open toggle detected"
@@ -97,7 +97,7 @@ class ToggleModeCover(ToggleBaseCover):
                 self._log(
                     "_handle_external_tilt_state_change :: tilt close toggle while traveling, stopping"
                 )
-                await self.async_stop_cover(supersede=False)
+                await self.async_stop_cover(supersede=False, tilt_axis_reported=True)
             else:
                 self._log(
                     "_handle_external_tilt_state_change :: external tilt close toggle detected"

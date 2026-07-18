@@ -2755,6 +2755,74 @@ class TestInlineTiltRestore:
         assert not cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
+    async def test_external_travel_stop_also_stops_a_live_tilt_motor(self, make_cover):
+        """A stop is a stop: the tilt motor must come down with the travel one.
+
+        The relay suppression exists so we never echo a command back at
+        hardware that already did it. That reasoning covers the relay the
+        external event was about — and only that one. On a dual-motor cover the
+        tilt motor is a *separate* relay we are driving ourselves, so when a
+        travel-relay event abandons a live tilt phase, nothing else is ever
+        going to take it down: the tracker stops, the restore is forgotten, and
+        the tilt motor keeps running.
+        """
+        cover = _dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(30)
+        cover.tilt_calc.set_position(0)
+        cover._tilt_restore_target = 100
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_tilt_open", new_callable=AsyncMock),
+            patch.object(cover, "_send_tilt_close", new_callable=AsyncMock),
+            patch.object(cover, "_send_tilt_stop", new_callable=AsyncMock) as tilt_stop,
+        ):
+            await cover._start_tilt_restore()
+            assert cover.tilt_calc.is_traveling()  # tilt motor is running
+
+            # The travel relay reports off while the tilt motor runs on.
+            cover._triggered_externally = True
+            try:
+                await cover.async_stop_cover(supersede=False)
+            finally:
+                cover._triggered_externally = False
+
+        tilt_stop.assert_awaited_once()
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_external_tilt_stop_does_not_echo_back_at_the_tilt_relay(
+        self, make_cover
+    ):
+        """...but not when the tilt relay is the one that reported.
+
+        The counterpart to the test above, and the reason this cannot simply
+        always fire. On toggle hardware _send_tilt_stop is a *pulse*, so
+        echoing one back at a tilt motor that already stopped would start it
+        moving again — the opposite of a stop.
+        """
+        cover = _dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(30)
+        cover.tilt_calc.set_position(0)
+        cover._tilt_restore_target = 100
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_tilt_open", new_callable=AsyncMock),
+            patch.object(cover, "_send_tilt_close", new_callable=AsyncMock),
+            patch.object(cover, "_send_tilt_stop", new_callable=AsyncMock) as tilt_stop,
+        ):
+            await cover._start_tilt_restore()
+
+            cover._triggered_externally = True
+            try:
+                await cover.async_stop_cover(supersede=False, tilt_axis_reported=True)
+            finally:
+                cover._triggered_externally = False
+
+        tilt_stop.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_stop_during_initial_stop_bails_before_settle_delay(self, make_cover):
         """A stop during the restore's initial STOP bails before the settle delay.
 

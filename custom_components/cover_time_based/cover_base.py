@@ -733,13 +733,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return False
         return True
 
-    async def async_stop_cover(self, *, supersede: bool = True, **kwargs):
+    async def async_stop_cover(
+        self, *, supersede: bool = True, tilt_axis_reported: bool = False, **kwargs
+    ):
         """Turn the device stop.
 
         ``supersede`` defaults True so a stop arriving from HA (service call,
         UI, automation) always claims the movement; the internal and
         external-trigger callers that are echoes or reversal preludes pass
         False. See _handle_stop.
+
+        ``tilt_axis_reported`` says the tilt relay is the one that reported,
+        so a stop must not be echoed back at it — see _should_stop_tilt_motor.
         """
         self._require_configured()
         self._log("async_stop_cover")
@@ -747,6 +752,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt_pre_step_was_active = (
             self._pending_travel_target is not None
             or self._pending_tilt_target is not None
+        )
+        stop_tilt = self._should_stop_tilt_motor(
+            tilt_restore_was_active or tilt_pre_step_was_active,
+            tilt_axis_reported=tilt_axis_reported,
         )
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
@@ -757,13 +766,37 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
         if not self._triggered_externally:
             await self._send_stop()
-            if (
-                tilt_restore_was_active or tilt_pre_step_was_active
-            ) and self._has_tilt_motor():
-                await self._send_tilt_stop()
+        if stop_tilt:
+            await self._send_tilt_stop()
         self.async_write_ha_state()
         self._last_command = None
         await self._async_persist_position()
+
+    def _should_stop_tilt_motor(
+        self, tilt_phase_was_active: bool, *, tilt_axis_reported: bool
+    ) -> bool:
+        """Whether abandoning this movement leaves a tilt motor to take down.
+
+        Only dual-motor covers have a tilt motor of their own; elsewhere tilt
+        is the travel motor and _send_stop already covered it.
+
+        The relay suppression that guards _send_stop is about not echoing a
+        command back at hardware that already did it — which is true of the
+        relay the external event was about, and of no other. The tilt motor is
+        a separate relay we drive ourselves, so when a *travel* event abandons
+        a live tilt phase nothing else will ever stop it: the tracker halts,
+        the phase is forgotten, and the motor keeps running. Hence this is
+        deliberately not gated on _triggered_externally.
+
+        It is gated on ``tilt_axis_reported``, because when the tilt relay is
+        the one that reported, echoing a stop back at it is exactly the thing
+        the suppression exists to prevent — and on toggle hardware
+        _send_tilt_stop is a *pulse*, so it would start the motor moving again
+        rather than stop it.
+        """
+        return (
+            tilt_phase_was_active and self._has_tilt_motor() and not tilt_axis_reported
+        )
 
     async def async_close_cover_tilt(self, **kwargs):
         """Tilt the cover fully closed."""
@@ -2511,8 +2544,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 "_handle_external_tilt_state_change :: external tilt stop pulse detected"
             )
             # A dedicated stop relay is a press, not a report — see
-            # SwitchCoverTimeBased._handle_external_state_change.
-            await self.async_stop_cover()
+            # SwitchCoverTimeBased._handle_external_state_change. It is the
+            # tilt hardware's own stop, so don't echo one back at it.
+            await self.async_stop_cover(tilt_axis_reported=True)
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Handle external state change. Override in subclasses for mode-specific behavior."""
