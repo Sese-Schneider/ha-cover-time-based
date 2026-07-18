@@ -139,6 +139,63 @@ test("re-connecting does not adopt a selection the user cleared in this card", a
   expect(card._selectedEntity).toBe("");
 });
 
+test("clearing the device mid-load does not leave the card spinning", async () => {
+  let release;
+  const hass = makeHass({
+    ws: {
+      "config/entity_registry/list": () => [],
+      "config_entries/get": () => [],
+      "cover_time_based/get_config": () =>
+        new Promise((r) => {
+          release = () => r({ control_mode: "switch" });
+        }),
+    },
+  });
+  card = await mountCard(hass);
+  await card._entityListReady;
+
+  card._setSelectedEntity("cover.slow");
+  const load = card._loadConfig();
+  expect(card._loading).toBe(true);
+  // User clears the picker before the response lands. Nothing starts a newer
+  // load, so this request is the only one that can clear the spinner.
+  card._setSelectedEntity("");
+  release();
+  await load;
+
+  expect(card._loading).toBe(false);
+  expect(card._config).toBe(null);
+});
+
+test("a superseded load does not clear the spinner for the newer one", async () => {
+  const release = {};
+  const hass = makeHass({
+    ws: {
+      "config/entity_registry/list": () => [],
+      "config_entries/get": () => [],
+      "cover_time_based/get_config": ({ entity_id }) =>
+        new Promise((r) => {
+          release[entity_id] = () => r({ control_mode: "switch" });
+        }),
+    },
+  });
+  card = await mountCard(hass);
+  await card._entityListReady;
+
+  card._setSelectedEntity("cover.a");
+  const loadA = card._loadConfig();
+  card._setSelectedEntity("cover.b");
+  const loadB = card._loadConfig();
+
+  release["cover.a"]();
+  await loadA;
+  expect(card._loading).toBe(true); // cover.b is still loading
+
+  release["cover.b"]();
+  await loadB;
+  expect(card._loading).toBe(false);
+});
+
 test("a config response arriving after the device changed is discarded", async () => {
   let releaseFirst;
   const hass = makeHass({

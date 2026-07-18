@@ -54,6 +54,7 @@ class CoverTimeBasedCard extends LitElement {
     this._helpersLoaded = false;
     this._openHelp = null;
     this._selectionRestoreAttempted = false;
+    this._configLoadToken = 0;
   }
 
   // --- Translation support ---
@@ -223,6 +224,7 @@ class CoverTimeBasedCard extends LitElement {
   async _loadConfig() {
     const entityId = this._selectedEntity;
     if (!entityId || !this.hass) return;
+    const token = ++this._configLoadToken;
     this._loading = true;
     this._loadError = null;
     try {
@@ -233,8 +235,7 @@ class CoverTimeBasedCard extends LitElement {
       // The selection can change while this is in flight (the user picks
       // another device, or a restored selection races their pick). Applying a
       // stale response would bind one device's config to another — and the next
-      // autosave would then write those settings onto the wrong device. The
-      // newer load owns _loading and will clear it.
+      // autosave would then write those settings onto the wrong device.
       if (this._selectedEntity !== entityId) return;
       this._config = config;
     } catch (err) {
@@ -242,8 +243,13 @@ class CoverTimeBasedCard extends LitElement {
       console.error("Failed to load config:", err);
       this._config = null;
       this._loadError = this._t("yaml_warning");
+    } finally {
+      // Only the newest request owns the spinner: an older one must not clear
+      // it while a newer load is still running, but a request that was merely
+      // abandoned (the user cleared the picker, so nothing newer started) still
+      // has to, or the card spins forever.
+      if (token === this._configLoadToken) this._loading = false;
     }
-    this._loading = false;
   }
 
   _updateLocal(updates) {
