@@ -265,6 +265,13 @@ export function renderInputEntities(card, c) {
           c.assumed_state !== false,
           (e) => card._updateLocal({ assumed_state: e.target.checked }),
         )}
+        ${renderToggleWithHelp(
+          card,
+          "force_endpoint_redrive.label",
+          "force_endpoint_redrive.helper",
+          c.force_endpoint_redrive === true,
+          (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
+        )}
       </div>
     `;
   }
@@ -324,6 +331,13 @@ export function renderInputEntities(card, c) {
         "assumed_state.helper",
         c.assumed_state !== false,
         (e) => card._updateLocal({ assumed_state: e.target.checked }),
+      )}
+      ${renderToggleWithHelp(
+        card,
+        "force_endpoint_redrive.label",
+        "force_endpoint_redrive.helper",
+        c.force_endpoint_redrive === true,
+        (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
       )}
     </div>
   `;

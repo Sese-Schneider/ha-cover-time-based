@@ -65,6 +65,9 @@ export const EN = {
   "send_endpoint_stop.label": "Send stop signal at endpoints",
   "send_endpoint_stop.helper":
     "When your cover reaches fully open or closed, send the stop pulse. Keep this on for controllers that keep running until they receive a stop (the cover otherwise gets stuck and physical buttons stop responding). Turn it off if your motor stops itself at its limits and an extra stop makes it move to a preset/favourite position.",
+  "force_endpoint_redrive.label": "Always re-send open/close at the endpoints",
+  "force_endpoint_redrive.helper":
+    "For covers with no position feedback that can also be moved by an external remote, so Home Assistant may wrongly believe they are already fully open or closed. When on, an open or close command is always driven for the full travel time even if Home Assistant thinks the cover is already there — guaranteeing the command reaches the motor. Leave off for covers that report their own position.",
   "more_info": "More info",
   "timing.attribute_header": "Attribute",
   "timing.travel_attribute_header": "Travel Attribute",

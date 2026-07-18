@@ -17,6 +17,7 @@ from .cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_CONTROL_MODE,
     CONF_COVER_ENTITY_ID,
+    CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
@@ -48,6 +49,7 @@ from .cover import (
     DEFAULT_ASSUMED_STATE,
     DEFAULT_CLOSE_INCLUDES_TILT,
     DEFAULT_ENDPOINT_RUNON_TIME,
+    DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_IGNORE_REPORTED_POSITION,
     DEFAULT_INVERT,
@@ -67,6 +69,7 @@ _FIELD_MAP = {
     "pulse_time": CONF_PULSE_TIME,
     "relay_reports_off": CONF_RELAY_REPORTS_OFF,
     "send_endpoint_stop": CONF_SEND_ENDPOINT_STOP,
+    "force_endpoint_redrive": CONF_FORCE_ENDPOINT_REDRIVE,
     "open_switch_entity_id": CONF_OPEN_SWITCH_ENTITY_ID,
     "close_switch_entity_id": CONF_CLOSE_SWITCH_ENTITY_ID,
     "stop_switch_entity_id": CONF_STOP_SWITCH_ENTITY_ID,
@@ -223,6 +226,9 @@ async def ws_get_config(
                 CONF_CLOSE_INCLUDES_TILT, DEFAULT_CLOSE_INCLUDES_TILT
             ),
             "assumed_state": options.get(CONF_ASSUMED_STATE, DEFAULT_ASSUMED_STATE),
+            "force_endpoint_redrive": options.get(
+                CONF_FORCE_ENDPOINT_REDRIVE, DEFAULT_FORCE_ENDPOINT_REDRIVE
+            ),
         },
     )
 
@@ -245,6 +251,7 @@ async def ws_get_config(
         ),
         vol.Optional("relay_reports_off"): vol.Any(None, bool),
         vol.Optional("send_endpoint_stop"): vol.Any(None, bool),
+        vol.Optional("force_endpoint_redrive"): vol.Any(None, bool),
         vol.Optional("open_switch_entity_id"): vol.Any(str, None),
         vol.Optional("close_switch_entity_id"): vol.Any(str, None),
         vol.Optional("stop_switch_entity_id"): vol.Any(str, None),
