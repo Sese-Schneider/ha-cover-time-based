@@ -210,6 +210,7 @@ Select the attribute that you wish to calibrate. The available attributes depend
 | Travel time (close)  | Time in seconds for the cover to fully close                          |         |
 | Travel time (open)   | Time in seconds for the cover to fully open                           |         |
 | Travel startup delay | Motor startup compensation for travel (see below)                     | None    |
+| Direction change delay | Settle time between stopping and driving the other way when reversing (see below) | 1.0     |
 | Endpoint run-on time | Extra relay time at endpoints to reset position (Switch mode; Pulse when it sends the stop) | 2.0     |
 | Min movement time    | Minimum movement duration - blocks shorter movements to prevent drift | None    |
 
@@ -251,6 +252,18 @@ Under the **sequential closes-then-tilts-closed** and **sequential closes-then-t
 #### Min movement time
 
 Prevents position drift by blocking relay activations too brief to physically move the cover. Movements to 0% or 100% are always allowed. Recommended values: 0.5 - 1.5 seconds.
+
+#### Direction change delay
+
+Reversing a moving cover is never a single step: the motor is stopped, given a moment to come to rest, and only then driven the other way. This setting is that pause, and it defaults to **1.0 second**.
+
+**The problem:** motors differ in how long they take to stop. If the pause is shorter than yours needs, the reverse command arrives while the motor is still settling and is simply **ignored** — but the integration has already started counting the new movement. The result is a cover sitting motionless while its position ticks along to the target, leaving the entity out of sync with reality.
+
+**Symptom:** you send the cover to a position that requires a reversal — for example it is opening towards 75% and you select 25% — and the cover stops where it is while Home Assistant animates down to 25%.
+
+**The fix:** raise this value until reversals take reliably. Try 2 - 3 seconds; a good test is to stop the cover mid-travel by hand, count how long it takes to come to a complete rest, and use at least that. Leave it at 1.0 unless you see the symptom above.
+
+Note this pause also applies to the tilt-restore reversal on covers whose slats share the travel motor, so raising it lengthens that step too.
 
 ## Services
 
