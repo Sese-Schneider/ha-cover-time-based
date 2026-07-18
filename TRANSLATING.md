@@ -9,7 +9,7 @@ Cover Time Based has strings in two places, each with its own file layout. Both 
 | Surface | Files | Used for |
 |---|---|---|
 | Home Assistant backend | [`strings.json`](custom_components/cover_time_based/strings.json) and [`translations/<lang>.json`](custom_components/cover_time_based/translations/) | Config-flow titles and fields, Repairs issues, service descriptions — anything Home Assistant's own UI renders for us. |
-| Lovelace configuration card | [`frontend/cover-time-based-card.js`](custom_components/cover_time_based/frontend/cover-time-based-card.js) — the `EN` object near the top, and the `TRANSLATIONS = { en: EN, pt: {...}, pl: {...} }` block below it | Every string the card itself draws. |
+| Lovelace configuration card | [`frontend/translations.js`](custom_components/cover_time_based/frontend/translations.js) — the `EN` object at the top, and the `TRANSLATIONS = { en: EN, pt: {...}, pl: {...} }` block below it | Every string the card itself draws. |
 
 Currently supported languages: English (`en`), Portuguese (`pt`), Polish (`pl`).
 
@@ -26,7 +26,7 @@ Don't touch `strings.json` — it stays in English and is the developer source o
 
 ### Card
 
-In [`custom_components/cover_time_based/frontend/cover-time-based-card.js`](custom_components/cover_time_based/frontend/cover-time-based-card.js):
+In [`custom_components/cover_time_based/frontend/translations.js`](custom_components/cover_time_based/frontend/translations.js):
 
 1. Find the `TRANSLATIONS` object:
 
@@ -42,6 +42,10 @@ In [`custom_components/cover_time_based/frontend/cover-time-based-card.js`](cust
 
 The card falls back to English for any key you miss, so a partial translation will work — but the [audit below](#verifying-translations-are-in-sync) will flag what's missing.
 
+The card resolves a locale by trying the exact code first, then its base language, then English — so a `pt-BR` user reads the `pt` catalogue, and adding `de` also covers `de-AT` and `de-CH`. Add a region-specific key (`pt-BR`) only when that variant needs wording of its own.
+
+The `language_request.*` keys are deliberately **English-only**. They are the "your language isn't translated yet" banner, which by construction is only ever shown to users whose language has no catalogue — a translated copy would be unreachable.
+
 ## Adding a new translatable string
 
 When you add a new feature that introduces a new user-facing string:
@@ -54,7 +58,7 @@ When you add a new feature that introduces a new user-facing string:
 
 ### Card
 
-1. Add the key + English value to the `EN` object near the top of `cover-time-based-card.js`.
+1. Add the key + English value to the `EN` object at the top of `translations.js`.
 2. Add the same key with a translated value to **every other** language block inside the `TRANSLATIONS` object (`pt`, `pl`, …).
 3. Render the string with `this._t("your.key")`. It reads `hass.language` and falls back to English if a key or language is missing.
 
@@ -90,7 +94,7 @@ for path in sorted((base / "translations").glob("*.json")):
     other = all_keys(json.loads(path.read_text()))
     print(f"backend {path.stem}: missing={sorted(en_keys - other) or 'none'}  extra={sorted(other - en_keys) or 'none'}")
 
-card = (base / "frontend/cover-time-based-card.js").read_text()
+card = (base / "frontend/translations.js").read_text()
 def block(text, start):
     m = re.search(start, text)
     if not m: return ""
@@ -105,10 +109,13 @@ def keys_of(t): return set(re.findall(r'"([^"]+)":\s*"', t))
 
 en_card = keys_of(block(card, r"const EN\s*=\s*\{"))
 trans   = block(card, r"const TRANSLATIONS\s*=\s*\{")
+# The translation-request banner is English-only by design — see above.
+IGNORE = {k for k in en_card if k.startswith("language_request.")}
 for lang in re.findall(r"^\s{2}(\w+):\s*\{", trans, re.M):
     if lang == "en": continue
     other = keys_of(block(trans, rf"{lang}:\s*\{{"))
-    print(f"card    {lang}: missing={sorted(en_card - other) or 'none'}  extra={sorted(other - en_card) or 'none'}")
+    missing = sorted((en_card - IGNORE) - other)
+    print(f"card    {lang}: missing={missing or 'none'}  extra={sorted(other - en_card) or 'none'}")
 PY
 ```
 
