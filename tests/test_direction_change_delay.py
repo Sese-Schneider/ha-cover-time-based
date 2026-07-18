@@ -344,6 +344,16 @@ class _ParkedReversal:
             f" (commands={self.commands})"
         )
 
+    async def as_external_press(self, coro):
+        """Run ``coro`` the way the dispatcher runs a second wall press.
+
+        Its own task with the flag raised for the duration — so a press landing
+        inside the parked reversal's window is genuinely inside the external
+        window, which is the only condition under which these tests say
+        anything.
+        """
+        return await asyncio.create_task(self._as_external(coro))
+
     async def resume(self):
         self._release.set()
         await self._task
@@ -591,6 +601,47 @@ async def test_ui_stop_during_the_gap_actually_stops_the_relay(make_cover):
 
 
 @pytest.mark.asyncio
+async def test_the_external_flag_does_not_outlive_the_call_into_scheduled_work(
+    make_cover,
+):
+    """Task scoping must not become descendant-task scoping.
+
+    A context is *copied into* every task and timer callback created while it
+    is active, and HA's interval timer reschedules itself from inside the copy
+    — so a flag merely stored in a ContextVar propagates to the whole auto
+    updater chain and every auto_stop_if_necessary it spawns, for the life of
+    the movement. Externally-started moves would then suppress their own
+    endpoint relay stop, which on latching hardware leaves the relay energized.
+
+    Scoping it to the task that raised it, rather than to the context, is what
+    keeps it from being inherited. The suite's mock hass never builds a real
+    timer chain, so this drives the scheduling primitives directly.
+    """
+    cover = make_cover()
+    seen = {}
+
+    async def spawned():
+        seen["task"] = cover._triggered_externally
+
+    def timer_callback():
+        seen["timer"] = cover._triggered_externally
+
+    cover._triggered_externally = True
+    try:
+        assert cover._triggered_externally is True  # the handler's own view
+        asyncio.get_running_loop().call_later(0, timer_callback)
+        task = asyncio.create_task(spawned())
+        await task
+    finally:
+        cover._triggered_externally = False
+
+    await asyncio.sleep(0.01)
+
+    assert seen["task"] is False, "a spawned task inherited the flag"
+    assert seen["timer"] is False, "a timer callback inherited the flag"
+
+
+@pytest.mark.asyncio
 async def test_ui_move_during_the_gap_actually_drives_the_relay(make_cover):
     """The same leak, via _async_handle_command rather than _send_stop.
 
@@ -638,18 +689,25 @@ async def test_wall_stop_press_during_the_gap_cancels_an_external_reversal(make_
     it. Lumping it in with the echoes let the press be swallowed by the settle
     gap and the cover reverse anyway, seconds after the user said stop.
 
-    No relay stop is sent here, and that is correct: the stop relay the user
-    pressed is already doing that. What must happen is the reversal dropping.
+    The press must be driven inside the external window the dispatcher holds,
+    or the test proves nothing: the whole point is that this supersedes
+    *despite* arriving with the flag raised, and outside that window it would
+    pass on the old inferred behaviour too. No relay stop goes out as a result,
+    which is correct — the stop relay the user pressed is already doing that.
     """
     async with _parked_external_close(make_cover) as reversal:
         cover = reversal.cover
-        await cover._handle_external_state_change(
-            cover._stop_switch_entity_id, "off", "on"
-        )
+        with patch.object(cover, "_send_stop", new_callable=AsyncMock) as send_stop:
+            await reversal.as_external_press(
+                cover._handle_external_state_change(
+                    cover._stop_switch_entity_id, "off", "on"
+                )
+            )
         await reversal.resume()
 
     assert SERVICE_CLOSE_COVER not in reversal.commands
     assert not cover.travel_calc.is_traveling()
+    send_stop.assert_not_awaited()
 
 
 @pytest.mark.asyncio

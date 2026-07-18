@@ -191,7 +191,8 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         if not self._triggered_externally and was_active:
             await self._send_stop()
         if stop_tilt:
-            await self._send_tilt_stop()
+            # See CoverTimeBased.async_stop_cover — endpoint-safe teardown.
+            await self._tilt_settle()
         self.async_write_ha_state()
         self._last_command = None
         self._last_tilt_direction = None

@@ -58,10 +58,20 @@ from .tilt_strategies.planning import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# The covers whose external-state handler is running in the current context.
+# (task, cover) pairs for the external-state handlers currently running.
+#
 # One module-level var holding a set, rather than one var per entity: context
 # variables are never reclaimed, so creating them per instance would leak on
-# every integration reload. See CoverTimeBased._triggered_externally.
+# every integration reload.
+#
+# The task is part of the key, not incidental. A context is *copied into* every
+# task and timer callback created while it is active — and HA's interval timer
+# reschedules itself from inside that copy — so storing the flag in a
+# ContextVar alone hands it to the entire auto-updater chain for the life of
+# the movement, long after the handler that raised it returned. Pairing it with
+# the owning task means an inherited copy is still there but no longer matches,
+# which is exactly the scope we want: the handler's own awaits, nothing it
+# schedules. See CoverTimeBased._triggered_externally.
 _EXTERNAL_TRIGGER: ContextVar[frozenset] = ContextVar(
     "cover_time_based_external_trigger", default=frozenset()
 )
@@ -659,22 +669,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         over to suppress relay writes (never echo a command back at hardware
         that is already doing it) and to pick external-trigger behaviour.
 
-        Task-scoped, not instance-scoped. An external handler holds this across
-        every await it makes — including a reversal's whole settle gap — so as
-        plain instance state it leaked onto anything that ran meanwhile. A UI
-        stop landing in that window inherited the suppression and sent no relay
-        command at all, halting the tracker while the motor ran on. HA
-        dispatches each service call as its own task, and a task gets a copy of
-        the context at creation, so scoping it here means the dispatcher's
-        handler still sees it across its awaits while a concurrent caller
-        correctly does not.
+        Scoped to the task that raised it. An external handler holds this
+        across every await it makes — including a reversal's whole settle gap —
+        so as plain instance state it leaked onto anything that ran meanwhile:
+        a UI stop landing in that window inherited the suppression and sent no
+        relay command at all, halting the tracker while the motor ran on. HA
+        dispatches each service call as its own task, so keying on the task
+        means the handler still sees it across its own awaits while a
+        concurrent caller does not.
+
+        Keying on the *task* rather than only on the context is what stops the
+        scope widening again the other way — see _EXTERNAL_TRIGGER.
         """
-        return self in _EXTERNAL_TRIGGER.get()
+        return (asyncio.current_task(), self) in _EXTERNAL_TRIGGER.get()
 
     @_triggered_externally.setter
     def _triggered_externally(self, value: bool) -> None:
+        entry = (asyncio.current_task(), self)
         current = _EXTERNAL_TRIGGER.get()
-        _EXTERNAL_TRIGGER.set(current | {self} if value else current - {self})
+        _EXTERNAL_TRIGGER.set(current | {entry} if value else current - {entry})
 
     def _supersede_movement(self) -> None:
         """Claim the movement, cancelling any reversal waiting out its settle."""
@@ -767,7 +780,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if not self._triggered_externally:
             await self._send_stop()
         if stop_tilt:
-            await self._send_tilt_stop()
+            # _tilt_settle, not a bare stop: at 0%/100% the motor is already
+            # stopped on its limit switch and a momentary relay re-pulsed there
+            # starts it again.
+            await self._tilt_settle()
         self.async_write_ha_state()
         self._last_command = None
         await self._async_persist_position()
@@ -1932,6 +1948,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self.stop_auto_updater()
 
         await self._async_handle_command(SERVICE_STOP_COVER)
+        # Deliberately still gated on _triggered_externally, unlike
+        # async_stop_cover. This route cannot tell which axis reported: the
+        # tilt entry points reach it too (async_open_cover_tilt ->
+        # _async_move_tilt_to_endpoint -> here), so firing on an external tilt
+        # event would echo a stop back at the very relay that reported — which
+        # on toggle hardware starts the motor rather than stopping it. Until
+        # the axis is threaded this far, suppressing is the safe direction.
         if self._has_tilt_motor() and not self._triggered_externally:
             await self._send_tilt_stop()
 
@@ -2211,9 +2234,29 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self.start_auto_updater()
 
     async def _stop_restore_motor(self) -> None:
-        """Take down whichever motor the restore energized."""
-        if self._tilt_strategy.uses_tilt_motor:
-            await self._send_tilt_stop()
+        """Take down whichever motor the restore energized.
+
+        Only when nothing is tracking it. Superseders come in two kinds: a
+        stop, which leaves no movement behind and so leaves our turn-on running
+        with nobody to switch it off — the case this exists for — and a new
+        *movement*, which abandoned the lifecycle and then energized a motor of
+        its own. Stopping in the second case kills the replacement's motor
+        while its calculator animates on, which is the same tracker-
+        confidently-wrong desync approached from the other side. A live
+        calculator is exactly the difference between the two.
+
+        _tilt_settle rather than a bare stop because at 0%/100% the motor has
+        already stopped on its own limit switch and re-pulsing a momentary
+        relay there would start it moving again. A path added to avoid leaving
+        a motor running must not do that either.
+        """
+        if self.travel_calc.is_traveling() or (
+            self._has_tilt_support() and self.tilt_calc.is_traveling()
+        ):
+            self._log("_stop_restore_motor :: a movement is tracking, leaving it alone")
+            return
+        if self._has_tilt_motor():
+            await self._tilt_settle()
         else:
             await self._async_handle_command(SERVICE_STOP_COVER)
 
