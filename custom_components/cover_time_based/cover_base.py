@@ -20,6 +20,7 @@ from homeassistant.const import (
     SERVICE_OPEN_COVER,
     SERVICE_STOP_COVER,
     STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
 )
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
@@ -2550,6 +2551,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # -----------------------------------------------------------------------
     # External state change handlers
     # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _came_back_online(old_val) -> bool:
+        """Whether this transition is a target entity re-announcing itself.
+
+        Its integration reloaded, its device reconnected, or Home Assistant
+        restarted. Whatever state follows is the one that integration starts
+        up in — or the stale one it retained — rather than something the
+        hardware just did, so no mode should read it as a fresh event without
+        deciding it is trustworthy first.
+        """
+        return old_val in (STATE_UNAVAILABLE, STATE_UNKNOWN)
 
     def _is_stale_reappearance(self, old_val, new_val) -> bool:
         """Whether this transition is an unreliable relay (re)appearing.

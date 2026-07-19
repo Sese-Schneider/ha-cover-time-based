@@ -20,8 +20,6 @@ import time
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
-    STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
 )
 
 from .cover_switch import SwitchCoverTimeBased
@@ -212,10 +210,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         that report their OFF (the default) come back ``off``, so there is
         nothing to guard and a genuine ``off`` → ``on`` press is unambiguous.
         """
-        return not self._relay_reports_off and old_val in (
-            STATE_UNAVAILABLE,
-            STATE_UNKNOWN,
-        )
+        return not self._relay_reports_off and self._came_back_online(old_val)
 
     # --- Raw direction commands (calibration screen) ---
 

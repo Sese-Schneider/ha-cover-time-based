@@ -2211,3 +2211,124 @@ class TestWrappedCoverReportsCommandNotEndpoint:
             )
 
         stop_mock.assert_awaited_once()
+
+
+class TestWrappedCoverReappearance:
+    """A wrapped entity dropping out and returning must not move the tracker.
+
+    Issue #160: an inverted awning wrapping a no-feedback cover entity logged
+    `Non disponibile -> Chiuso -> Aperto` within the same second on every
+    dropout — the returning entity's bare `closed` was read as an endpoint and
+    snapped through _invert_position(0) to 100.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("invert", [True, False])
+    async def test_dropout_and_return_keeps_tracked_position(self, make_cover, invert):
+        cover = make_cover(cover_entity_id="cover.inner", invert=invert)
+        # Deliberately not an endpoint: seeded at 0 the buggy snap target and
+        # the correct answer coincide when invert is off, so the assertion
+        # would pass against the unfixed code.
+        cover.travel_calc.set_position(40)
+        _set_wrapped_state(cover, "unavailable", current_position=None)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "closed", "unavailable")
+            )
+            # The awning integration reloads and initialises to 'closed'.
+            _set_wrapped_state(cover, "closed", current_position=None)
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "unavailable", "closed")
+            )
+
+        assert cover.travel_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_returning_with_a_reported_position_is_trusted(self, make_cover):
+        cover = make_cover(cover_entity_id="cover.inner")
+        cover.travel_calc.set_position(0)
+        _set_wrapped_state(cover, "open", current_position=60)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_switch_state_changed(
+                _make_state_event(
+                    "cover.inner",
+                    "unavailable",
+                    "open",
+                    new_attributes={ATTR_CURRENT_POSITION: 60},
+                )
+            )
+
+        assert cover.travel_calc.current_position() == 60
+
+    @pytest.mark.asyncio
+    async def test_command_echo_dropout_and_return_runs_no_travel(self, make_cover):
+        """The command-echo half, end to end through the dispatcher: the
+        retained `closed` resurfacing must not start a timed travel."""
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            reports_command_not_endpoint=True,
+            invert=True,
+        )
+        cover.travel_calc.set_position(0)
+        _set_wrapped_state(cover, "closed", current_position=None)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "unavailable", "closed")
+            )
+
+        open_mock.assert_not_awaited()
+        close_mock.assert_not_awaited()
+        assert cover.travel_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_attribute_touch_after_the_return_does_not_snap(self, make_cover):
+        """A reconnect is more than one event: whatever attribute the entity
+        settles next must not snap us to the endpoint we just refused."""
+        cover = make_cover(cover_entity_id="cover.inner", invert=True)
+        cover.travel_calc.set_position(0)
+        _set_wrapped_state(cover, "closed", current_position=None)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "unavailable", "closed")
+            )
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "closed", "closed")
+            )
+
+        assert cover.travel_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_command_echo_two_step_reconnect_runs_no_travel(self, make_cover):
+        """unavailable -> unknown -> closed is one reconnect: the stop is
+        honoured, the retained `closed` behind it is not a command."""
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            reports_command_not_endpoint=True,
+            invert=True,
+        )
+        cover.travel_calc.set_position(0)
+        _set_wrapped_state(cover, "closed", current_position=None)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "unavailable", "unknown")
+            )
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "unknown", "closed")
+            )
+
+        open_mock.assert_not_awaited()
+        close_mock.assert_not_awaited()
+        assert cover.travel_calc.current_position() == 0
