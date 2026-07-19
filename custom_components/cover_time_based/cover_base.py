@@ -2267,25 +2267,39 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _async_handle_command(self, command, *_args):
         cmd = command
+        # Read once: the state below is decided on this value, and the log line
+        # has to report the same one the gates used. Nothing awaits before the
+        # gates, so this is the value each would have read for itself.
+        suppressed = self._triggered_externally
         if command == SERVICE_CLOSE_COVER:
             cmd = "CLOSE"
             self._state = False
             self._last_command = command
-            if not self._triggered_externally:
+            if not suppressed:
                 await self._send_close()
         elif command == SERVICE_OPEN_COVER:
             cmd = "OPEN"
             self._state = True
             self._last_command = command
-            if not self._triggered_externally:
+            if not suppressed:
                 await self._send_open()
         elif command == SERVICE_STOP_COVER:
             cmd = "STOP"
             self._state = True
-            if not self._triggered_externally:
+            if not suppressed:
                 await self._send_stop()
 
-        self._log("_async_handle_command :: %s", cmd)
+        # Say whether the relay actually fired. This line is in every debug log
+        # users send, and without the marker a command whose pulse went out and
+        # one that was swallowed by the external-trigger guard read identically
+        # — which made #153 undiagnosable from logs twice over.
+        self._log(
+            "_async_handle_command :: %s%s",
+            cmd,
+            " (suppressed: external trigger in flight, no relay command sent)"
+            if suppressed
+            else "",
+        )
         self.async_write_ha_state()
 
     @abstractmethod

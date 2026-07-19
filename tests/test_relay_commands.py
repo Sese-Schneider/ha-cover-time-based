@@ -8,6 +8,8 @@ those tests drain the task to verify the full call sequence. Toggle mode
 pulses a relay with a single turn_on and schedules no completion task.
 """
 
+import logging
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
@@ -1249,3 +1251,51 @@ class TestSwitchModeTiltPendingCounts:
         await cover._send_tilt_close()
 
         assert cover._pending_switch.get("switch.tilt_close") is None
+
+
+# ===================================================================
+# Suppressed relay writes are visible in the debug log
+# ===================================================================
+
+
+class TestSuppressedWriteLogging:
+    """A suppressed relay write must be distinguishable in the log.
+
+    _async_handle_command logs the command *after* the suppression gate, so a
+    command whose relay fired and one that was silently swallowed produced
+    byte-identical lines. Issue #153 was misdiagnosed twice over that ambiguity:
+    the log said CLOSE both when the pulse left and when it did not.
+    """
+
+    @pytest.mark.asyncio
+    async def test_suppressed_close_says_so_in_the_log(self, make_cover, caplog):
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH)
+        cover._triggered_externally = True
+
+        with (
+            caplog.at_level(
+                logging.DEBUG, logger="custom_components.cover_time_based.cover_base"
+            ),
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover._async_handle_command(SERVICE_CLOSE_COVER)
+
+        assert "CLOSE" in caplog.text
+        assert "suppressed" in caplog.text.lower(), (
+            "a swallowed relay write logs the same line as a real one"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_real_close_is_not_marked_suppressed(self, make_cover, caplog):
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH)
+
+        with (
+            caplog.at_level(
+                logging.DEBUG, logger="custom_components.cover_time_based.cover_base"
+            ),
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover._async_handle_command(SERVICE_CLOSE_COVER)
+
+        assert "CLOSE" in caplog.text
+        assert "suppressed" not in caplog.text.lower()
