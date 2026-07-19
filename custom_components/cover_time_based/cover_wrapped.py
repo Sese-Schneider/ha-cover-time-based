@@ -33,6 +33,9 @@ _LOGGER = logging.getLogger(__name__)
 
 _MOVING_STATES = {STATE_OPENING, STATE_CLOSING}
 _STOPPED_STATES = {STATE_OPEN, STATE_CLOSED}
+# The states a command-echo cover reports as a travel command (its `unknown`
+# is the stop command, and is deliberately not one of these).
+_COMMANDED_STATES = _MOVING_STATES | _STOPPED_STATES
 
 # After we issue a command to the wrapped cover, ignore external state
 # changes for this many seconds. Some wrapped covers (e.g. Tuya TS130F on
@@ -63,6 +66,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._reports_command_not_endpoint = reports_command_not_endpoint
         self._invert = invert
         self._last_self_command_time: float | None = None
+        # Set while a command-echo cover is mid-reconnect, so the retained
+        # state landing after the stop hop is not replayed as a command
+        # (see _is_stale_reappearance).
+        self._returning_from_unavailable = False
         self._native_position_driver = NativePositionDriver(self)
         self._timed_position_driver = TimedPositionDriver(self)
         self._native_tilt_driver = NativeTiltDriver(self)
@@ -374,9 +381,25 @@ class WrappedCoverTimeBased(CoverTimeBased):
             else:
                 await self.async_close_cover()
         elif new_val in _STOPPED_STATES:
-            target = self._wrapped_reported_position()
+            # A cover that has just come back online is announcing whatever its
+            # integration starts up in, which for one with no position feedback
+            # is a plain `closed` — not a report that it is at the 0% endpoint
+            # (100%, when inverted). Trust a position it actually reports; keep
+            # the position we tracked before it dropped out otherwise (#160).
+            came_back = self._came_back_online(old_val)
+            target = self._wrapped_reported_position(trust_closed=not came_back)
             if target is not None:
                 await self._snap_to_position(target)
+            elif came_back:
+                # Deliberately not async_stop_cover: a travel still running
+                # when the entity dropped out keeps running here. Its motor
+                # never stopped — an integration reload is not a stop — so the
+                # time-based estimate remains the best guess, where snapping
+                # to an endpoint we don't believe would be a worse one.
+                self._log(
+                    "_handle_external_state_change :: wrapped cover came back"
+                    " reporting no position, keeping the tracked position"
+                )
             elif old_val in _MOVING_STATES:
                 self._log(
                     "_handle_external_state_change :: wrapped cover stopped,"
@@ -449,7 +472,13 @@ class WrappedCoverTimeBased(CoverTimeBased):
         new_state = event.data.get("new_state")
         if new_state is None or new_state.state not in _STOPPED_STATES:
             return
-        target = self._wrapped_reported_position()
+        # Only the reported position, never the closed-state fallback: an
+        # attribute touch that carries no position says nothing new about
+        # endpoints (the transition *into* closed already snapped, above), and
+        # trusting it here would re-open issue #160 through the side door —
+        # a reappearance whose bare `closed` we just refused snaps anyway on
+        # whatever attribute the entity settles next.
+        target = self._wrapped_reported_position(trust_closed=False)
         if target is not None:
             await self._snap_to_position(target)
         await self._maybe_snap_to_reported_tilt()
@@ -467,7 +496,42 @@ class WrappedCoverTimeBased(CoverTimeBased):
         await self.set_known_position(position=target, supersede=False)
         self._last_command = None
 
-    def _wrapped_reported_position(self) -> int | None:
+    def _is_stale_reappearance(self, old_val, new_val) -> bool:
+        """A command-echo cover coming back online is not issuing a command.
+
+        With ``reports_command_not_endpoint`` the wrapped entity's state *is*
+        the last command it was given, so the open/closed it carries on the way
+        back is that retained value resurfacing rather than something anyone
+        just asked for. Replaying it would run a phantom timed travel — a full
+        open, when the cover is also inverted (issue #160).
+
+        ``unknown`` is this mode's *stop* command, so it can't be read as
+        evidence of having been away and is let through: it freezes the tracker
+        (and any auto-updater still running) rather than moving it. But a
+        reconnect commonly lands in two hops — ``unavailable -> unknown ->
+        <retained value>`` — as the entity becomes available before its first
+        message arrives, so the veto has to survive the intervening stop.
+        _returning_from_unavailable carries it across; without that, the
+        retained value in the second hop is replayed as a command. It is only
+        ever set by an ``unavailable ->`` transition, so an ordinary
+        stop-then-close (``unknown -> closed``, a real command pair) is
+        untouched.
+
+        Covers we read endpoints from are guarded in the handler instead — a
+        returning entity may still carry a trustworthy position, and vetoing
+        the whole transition here would throw that away along with the
+        opening/closing and tilt handling it also drives.
+        """
+        if not self._reports_command_not_endpoint:
+            return False
+        if old_val == STATE_UNAVAILABLE:
+            self._returning_from_unavailable = new_val == STATE_UNKNOWN
+            return new_val in _COMMANDED_STATES
+        still_returning = self._returning_from_unavailable and old_val == STATE_UNKNOWN
+        self._returning_from_unavailable = False
+        return still_returning and new_val in _COMMANDED_STATES
+
+    def _wrapped_reported_position(self, *, trust_closed: bool = True) -> int | None:
         """Return the wrapped cover's reported position, or None if unknown.
 
         Prefers the current_position attribute. Falls back to 0 for
@@ -476,6 +540,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
         attribute and the closed fallback are translated through
         _invert_position, so when self._invert is set the reported value is
         100 - position and the closed fallback becomes 100.
+
+        ``trust_closed=False`` drops that fallback, for a caller holding a
+        state it does not consider a real endpoint report (see the reappearance
+        handling in _handle_external_state_change).
         """
         state = self.hass.states.get(self._cover_entity_id)
         if state is None:
@@ -488,7 +556,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             attr_pos = state.attributes.get(ATTR_CURRENT_POSITION)
             if isinstance(attr_pos, (int, float)) and 0 <= attr_pos <= 100:
                 return self._invert_position(int(attr_pos))
-        if state.state == STATE_CLOSED:
+        if trust_closed and state.state == STATE_CLOSED:
             return self._invert_position(0)
         return None
 

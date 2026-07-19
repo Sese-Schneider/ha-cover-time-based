@@ -37,6 +37,7 @@ from custom_components.cover_time_based.const import (
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
+    CONF_INVERT,
     CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SEND_ENDPOINT_STOP,
 )
@@ -112,6 +113,7 @@ def make_cover(make_hass, _mock_position_store):
         force_time_based_position=None,
         reports_command_not_endpoint=None,
         force_endpoint_redrive=None,
+        invert=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -177,6 +179,8 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_REPORTS_COMMAND_NOT_ENDPOINT] = reports_command_not_endpoint
         if force_endpoint_redrive is not None:
             options[CONF_FORCE_ENDPOINT_REDRIVE] = force_endpoint_redrive
+        if invert is not None:
+            options[CONF_INVERT] = invert
 
         cover = _create_cover_from_options(
             options,

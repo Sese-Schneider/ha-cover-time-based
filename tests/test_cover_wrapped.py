@@ -1467,3 +1467,79 @@ class TestInvertOption:
         assert cover._invert_position(0) == 100
         assert cover._invert_position(30) == 70
         assert cover._invert_position(100) == 0
+
+
+class TestWrappedStaleReappearance:
+    """A wrapped entity coming back from unavailable/unknown is re-announcing
+    itself, not reporting an endpoint. Issue #160 follow-up: an inverted awning
+    whose no-feedback entity dropped out and returned reporting 'closed' was
+    snapped to _invert_position(0) == 100, flipping a closed cover to open in
+    the same second. Only a reported current_position is trusted on the way
+    back; the closed-state fallback is not.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("old_val", [STATE_UNAVAILABLE, "unknown"])
+    @pytest.mark.parametrize("invert", [True, False])
+    async def test_reappearing_closed_does_not_snap(self, old_val, invert):
+        cover = _make_wrapped_cover(invert=invert)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE, state="closed")
+        with patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock:
+            await cover._handle_external_state_change("cover.inner", old_val, "closed")
+        snap_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_reappearing_with_position_attribute_still_snaps(self):
+        # A device that reports where it actually is is trusted on the way back.
+        cover = _make_wrapped_cover()
+        _set_wrapped_features(cover, 7, state="open", current_position=70)
+        with patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock:
+            await cover._handle_external_state_change(
+                "cover.inner", STATE_UNAVAILABLE, "open"
+            )
+        snap_mock.assert_awaited_once_with(70)
+
+    @pytest.mark.asyncio
+    async def test_reappearing_moving_still_starts_movement(self):
+        # opening/closing on the way back is a real report, not a stale endpoint.
+        cover = _make_wrapped_cover()
+        cover.travel_calc.set_position(50)
+        cover._last_self_command_time = None
+        with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
+            await cover._handle_external_state_change(
+                "cover.inner", STATE_UNAVAILABLE, "opening"
+            )
+        open_mock.assert_awaited_once()
+
+    def test_command_echo_retained_travel_state_is_vetoed(self):
+        # The dispatcher's stale-reappearance hook takes the command-echo half:
+        # a retained open/closed resurfacing must not be replayed as a command.
+        cover = _make_wrapped_cover(reports_command_not_endpoint=True)
+        assert cover._is_stale_reappearance(STATE_UNAVAILABLE, "closed") is True
+        assert cover._is_stale_reappearance(STATE_UNAVAILABLE, "opening") is True
+
+    def test_command_echo_stop_on_reconnect_is_still_honoured(self):
+        # `unknown` is this mode's stop command, and freezing the tracker on
+        # reconnect is the behaviour we want to keep.
+        cover = _make_wrapped_cover(reports_command_not_endpoint=True)
+        assert cover._is_stale_reappearance(STATE_UNAVAILABLE, "unknown") is False
+
+    def test_command_echo_two_step_reconnect_is_vetoed_throughout(self):
+        # unavailable -> unknown -> <retained value> is one reconnect, not a
+        # stop followed by a command: the veto has to survive the stop hop.
+        cover = _make_wrapped_cover(reports_command_not_endpoint=True)
+        assert cover._is_stale_reappearance(STATE_UNAVAILABLE, "unknown") is False
+        assert cover._is_stale_reappearance("unknown", "closed") is True
+
+    def test_command_echo_ordinary_stop_then_close_is_a_real_command(self):
+        # The same unknown -> closed pair, with no dropout before it, is a
+        # genuine stop-then-close and must still be obeyed.
+        cover = _make_wrapped_cover(reports_command_not_endpoint=True)
+        assert cover._is_stale_reappearance("open", "unknown") is False
+        assert cover._is_stale_reappearance("unknown", "closed") is False
+
+    def test_endpoint_covers_are_not_vetoed_by_the_hook(self):
+        # They are guarded in the handler instead, so the transition must still
+        # reach it — a returning entity may carry a trustworthy position.
+        cover = _make_wrapped_cover()
+        assert cover._is_stale_reappearance(STATE_UNAVAILABLE, "closed") is False
