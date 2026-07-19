@@ -94,23 +94,46 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         call that doesn't change the entity's state (``turn_off`` on an
         already-off relay, ``turn_on`` on an already-on one) fires no event and
         so produces no echo to mark.
+
+        Each branch logs the relay's reported state and whether its ``turn_on``
+        can carry a rising edge, so a user-supplied debug log shows which
+        pulses could have moved the motor (issue #153).
         """
         is_on = self._switch_is_on(entity_id)
         if self._relay_reports_off and is_on:
             # Relay reports ON and we trust that report: release it first so the
             # following turn_on is a genuine OFF->ON edge. Two state changes
             # (off, then on) → two echoes.
+            self._log(
+                "_pulse_relay :: %s reports on, releasing first so the"
+                " turn_on is a rising edge",
+                entity_id,
+            )
             self._mark_switch_pending(entity_id, 2)
             await self._turn_off_relay(entity_id)
         elif not is_on:
             # Relay reports OFF: the turn_on produces a real OFF->ON edge → one
             # echo.
+            self._log(
+                "_pulse_relay :: %s reports off, turn_on is a rising edge",
+                entity_id,
+            )
             self._mark_switch_pending(entity_id, 1)
-        # else: relay_reports_off is disabled and the relay still *reports* ON
-        # (it never announced its self-release). The turn_on lands on an
-        # already-on entity, so HA emits no state change and no echo — marking
-        # one would orphan a pending count that could swallow the user's next
-        # genuine press until the safety timeout clears it.
+        else:
+            # relay_reports_off is disabled and the relay still *reports* ON
+            # (it never announced its self-release). The turn_on lands on an
+            # already-on entity, so HA emits no state change and no echo —
+            # marking one would orphan a pending count that could swallow the
+            # user's next genuine press until the safety timeout clears it.
+            # Log it: if the relay is also *physically* still on (a rapid
+            # re-pulse inside its own pulse window), this turn_on carries no
+            # edge and the motor never sees the command (issue #153).
+            self._log(
+                '_pulse_relay :: %s still reports on ("Relay reports its own'
+                ' OFF" disabled): no rising edge if the relay is physically'
+                " still on",
+                entity_id,
+            )
         await self.hass.services.async_call(
             "homeassistant",
             "turn_on",

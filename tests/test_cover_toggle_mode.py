@@ -14,6 +14,7 @@ restart), to guarantee the motor sees a genuine OFF->ON edge.
 """
 
 import asyncio
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -1283,3 +1284,76 @@ class TestToggleRelayDoesNotReportOff:
             _ha("turn_on", "switch.tilt_close"),
         ]
         assert cover._last_tilt_direction == "close"
+
+
+# ===================================================================
+# _pulse_relay logs the relay's reported state (issue #153 diagnostics)
+# ===================================================================
+
+
+class TestPulseRelayEdgeLogging:
+    """Every pulse logs the relay's reported state and the branch taken.
+
+    Issue #153: in toggle-opposite mode a reversal pulses the SAME relay
+    twice, separated only by ``direction_change_delay``. At 0s the blind does
+    not move, and the debug log could not distinguish "the ``turn_on`` landed
+    on a still-energised relay (no rising edge)" from "the edge was delivered
+    and the motor ignored it". ``_pulse_relay`` therefore records, for every
+    pulse, what state the relay *reported* and whether the ``turn_on`` can
+    carry a rising edge — so a single debug log from a failing run shows
+    which pulses could have moved the motor.
+
+    The three tests pin one branch each and deliberately vary one axis at a
+    time: same config, different relay state (test 1 vs 2); same relay
+    state, different config (test 1 vs 3). ``_pulse_relay`` lives on the
+    shared toggle base, so both **Toggle** and **Toggle (opposite button)**
+    — the mode #153 is about — emit these lines.
+    """
+
+    LOGGER = "custom_components.cover_time_based.cover_base"
+
+    @pytest.mark.asyncio
+    async def test_edgeless_pulse_logs_no_rising_edge(self, caplog):
+        """relay_reports_off disabled + relay stuck reporting ON: the pulse
+        may land on an already-energised relay — the log must say so."""
+        cover = _make_toggle_cover(relay_reports_off=False)
+        _hold_relay_on(cover, "switch.close")
+
+        with caplog.at_level(logging.DEBUG, logger=self.LOGGER):
+            await cover._send_close()
+
+        assert any(
+            "switch.close" in m and "no rising edge" in m for m in caplog.messages
+        ), "the potentially edge-less pulse is indistinguishable from a real one"
+
+    @pytest.mark.asyncio
+    async def test_off_relay_pulse_logs_rising_edge(self, caplog):
+        """Same config as above, but the relay reports OFF: the turn_on is a
+        genuine rising edge (relay_reports_off is irrelevant on this branch)."""
+        cover = _make_toggle_cover(relay_reports_off=False)
+        _all_relays_off(cover)
+
+        with caplog.at_level(logging.DEBUG, logger=self.LOGGER):
+            await cover._send_close()
+
+        assert any(
+            "switch.close" in m and "reports off" in m and "rising edge" in m
+            for m in caplog.messages
+        )
+        assert "no rising edge" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_release_first_pulse_logs_release(self, caplog):
+        """Same stuck-ON relay as the first test, but with relay_reports_off
+        enabled the report is trusted: released first, then a real edge."""
+        cover = _make_toggle_cover(relay_reports_off=True)
+        _hold_relay_on(cover, "switch.close")
+
+        with caplog.at_level(logging.DEBUG, logger=self.LOGGER):
+            await cover._send_close()
+
+        assert any(
+            "switch.close" in m and "releasing first" in m and "rising edge" in m
+            for m in caplog.messages
+        )
+        assert "no rising edge" not in caplog.text
