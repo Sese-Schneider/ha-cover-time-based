@@ -33,7 +33,6 @@ from custom_components.cover_time_based.cover import (
 )
 from custom_components.cover_time_based.const import (
     CONF_CLOSE_INCLUDES_TILT,
-    CONF_DIRECTION_CHANGE_DELAY,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
@@ -102,7 +101,6 @@ def make_cover(make_hass, _mock_position_store):
         tilt_startup_delay=None,
         endpoint_runon_time=None,
         min_movement_time=None,
-        direction_change_delay=None,
         tilt_open_switch=None,
         tilt_close_switch=None,
         tilt_stop_switch=None,
@@ -155,8 +153,6 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_ENDPOINT_RUNON_TIME] = endpoint_runon_time
         if min_movement_time is not None:
             options[CONF_MIN_MOVEMENT_TIME] = min_movement_time
-        if direction_change_delay is not None:
-            options[CONF_DIRECTION_CHANGE_DELAY] = direction_change_delay
         if tilt_open_switch is not None:
             options[CONF_TILT_OPEN_SWITCH] = tilt_open_switch
         if tilt_close_switch is not None:
