@@ -10,6 +10,7 @@
 import { test, expect, afterEach, vi } from "vitest";
 import { makeHass } from "./helpers/hass.mjs";
 import { mountCard, defineHaStubs } from "./helpers/mount.mjs";
+import { UNSHIPPED_LANG } from "./helpers/lang.mjs";
 
 defineHaStubs();
 let card;
@@ -24,7 +25,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 test("_t falls back through language → EN → raw key", async () => {
-  card = await mountCard(makeHass({ language: "de" }));
+  card = await mountCard(makeHass({ language: UNSHIPPED_LANG }));
   // A key present in EN renders the English string, never the raw key.
   expect(card._t("header")).not.toBe("header");
   expect(card._t("header")).toBe("Cover Time Based Configuration");

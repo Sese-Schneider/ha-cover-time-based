@@ -10,6 +10,7 @@ import {
   isLanguageSupported,
   translate,
 } from "../../custom_components/cover_time_based/frontend/translations.js";
+import { UNSHIPPED_LANG, UNSHIPPED_REGION } from "./helpers/lang.mjs";
 
 test("resolveLocale matches a shipped language exactly", () => {
   expect(resolveLocale("pt")).toBe("pt");
@@ -24,8 +25,8 @@ test("resolveLocale falls back to the base language for a region variant", () =>
 });
 
 test("resolveLocale returns empty string for an unshipped language", () => {
-  expect(resolveLocale("de")).toBe("");
-  expect(resolveLocale("de-AT")).toBe("");
+  expect(resolveLocale(UNSHIPPED_LANG)).toBe("");
+  expect(resolveLocale(UNSHIPPED_REGION)).toBe("");
 });
 
 test("resolveLocale returns empty string when the language is missing", () => {
@@ -42,7 +43,7 @@ test("isLanguageSupported treats a missing language as supported", () => {
 test("isLanguageSupported reflects whether a catalogue covers the locale", () => {
   expect(isLanguageSupported("pl")).toBe(true);
   expect(isLanguageSupported("pt-BR")).toBe(true);
-  expect(isLanguageSupported("de")).toBe(false);
+  expect(isLanguageSupported(UNSHIPPED_LANG)).toBe(false);
 });
 
 test("translate renders a region variant in its base catalogue", () => {
@@ -51,7 +52,7 @@ test("translate renders a region variant in its base catalogue", () => {
 });
 
 test("translate falls back to English for an unshipped language", () => {
-  expect(translate("de", "loading")).toBe("Loading...");
+  expect(translate(UNSHIPPED_LANG, "loading")).toBe("Loading...");
 });
 
 test("translate returns the key itself when no catalogue defines it", () => {
