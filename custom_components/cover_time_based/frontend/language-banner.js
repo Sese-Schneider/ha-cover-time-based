@@ -1,13 +1,14 @@
 /**
  * The "your language isn't translated yet" nudge shown in the config card.
  *
- * Cover Time Based ships card strings in English, Portuguese and Polish. A user
- * on any other language silently reads English with no hint that asking for a
- * translation is welcome. This module builds a one-time, per-locale dismissable
- * banner inviting them to open a prefilled GitHub issue.
+ * Cover Time Based ships card strings for only some languages — the catalogues
+ * in `TRANSLATIONS` are the authoritative list. A user on any other language
+ * silently reads English with no hint that asking for a translation is welcome.
+ * This module builds a one-time, per-locale dismissable banner inviting them to
+ * open a prefilled GitHub issue.
  *
- * Dismissals are stored per-locale rather than as a single flag: dismiss `de`,
- * switch HA to `fr`, then switch back, and a scalar store would have forgotten
+ * Dismissals are stored per-locale rather than as a single flag: dismiss `fr`,
+ * switch HA to `es`, then switch back, and a scalar store would have forgotten
  * the original dismissal and re-nagged. Storage is per-browser, and every access
  * is guarded — Safari private mode throws on localStorage, and a forgotten
  * dismissal is far better than a card that fails to render.

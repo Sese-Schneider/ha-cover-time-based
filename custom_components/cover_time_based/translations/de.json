@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zeitbasierten Rollladen hinzufügen",
+        "description": "Wähle einen Namen für deinen Rollladen. Füge nach dem Anlegen die Karte **Cover Time Based** zu einem Dashboard hinzu, um alle Einstellungen zu konfigurieren.",
+        "data": {
+          "name": "Name"
+        }
+      }
+    }
+  },
+  "issues": {
+    "card_installed": {
+      "title": "Aktualisiere deinen Browser, um die Cover-Time-Based-Karte anzuzeigen",
+      "description": "Die Cover-Time-Based-Dashboard-Karte wurde installiert. Home Assistant lädt Dashboard-Ressourcen nur beim Laden der Seite, daher fehlt die Karte in bereits geöffneten Browser-Sitzungen, bis du neu lädst — und oft hilft nur ein **vollständiges Neuladen**. Führe ein vollständiges Neuladen durch (**Strg+Umschalt+R** bzw. **⌘+Umschalt+R** unter macOS), um die Karte zu laden; falls weiterhin ein Konfigurationsfehler erscheint, leere den Browser-Cache und lade neu. Sobald die Karte erscheint, kannst du dieses Problem schließen."
+    },
+    "deprecated_yaml": {
+      "title": "Die YAML-Konfiguration ist veraltet",
+      "description": "Die Konfiguration von Cover Time Based über YAML ist veraltet und wird in einer zukünftigen Version entfernt.\n\nBitte entferne die YAML-Konfiguration und lege deine Rollläden über die Benutzeroberfläche neu an: **Einstellungen > Geräte & Dienste > Helfer > Helfer erstellen > Cover Time Based**."
+    }
+  },
+  "services": {
+    "set_known_position": {
+      "name": "Rollladenposition setzen",
+      "description": "Setzt intern eine bekannte Position für den Rollladen.",
+      "fields": {
+        "entity_id": {
+          "name": "Entitäts-ID",
+          "description": "Die Entitäts-ID des Rollladens, dessen Position gesetzt werden soll."
+        },
+        "position": {
+          "name": "Position",
+          "description": "Die Position des Rollladens, zwischen 0 und 100."
+        }
+      }
+    },
+    "set_known_tilt_position": {
+      "name": "Neigungsposition des Rollladens setzen",
+      "description": "Setzt intern eine bekannte Neigungsposition für den Rollladen.",
+      "fields": {
+        "entity_id": {
+          "name": "Entitäts-ID",
+          "description": "Die Entitäts-ID des Rollladens, dessen Neigungsposition gesetzt werden soll."
+        },
+        "position": {
+          "name": "Position",
+          "description": "Die Neigungsposition des Rollladens, zwischen 0 und 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Kalibrierung starten",
+      "description": "Startet einen Kalibrierungstest zur Messung eines Zeitparameters. Der Rollladen setzt sich in Bewegung — rufe stop_calibration auf, sobald die gewünschte Endlage erreicht ist.",
+      "fields": {
+        "entity_id": {
+          "name": "Entitäts-ID",
+          "description": "Der zu kalibrierende Rollladen"
+        },
+        "attribute": {
+          "name": "Attribut",
+          "description": "Der zu kalibrierende Zeitparameter"
+        },
+        "timeout": {
+          "name": "Zeitüberschreitung",
+          "description": "Sicherheits-Zeitüberschreitung in Sekunden — der Motor stoppt automatisch, wenn stop_calibration nicht aufgerufen wird"
+        },
+        "direction": {
+          "name": "Richtung",
+          "description": "Bewegungsrichtung während des Tests. Ohne Angabe wird sie anhand der aktuellen Position automatisch ermittelt"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Kalibrierung beenden",
+      "description": "Beendet einen laufenden Kalibrierungstest. Berechnet das Ergebnis und speichert es in der Konfiguration, sofern nicht abgebrochen wird.",
+      "fields": {
+        "entity_id": {
+          "name": "Entitäts-ID",
+          "description": "Der Rollladen, der kalibriert wird"
+        },
+        "cancel": {
+          "name": "Abbrechen",
+          "description": "Wenn wahr, werden die Testergebnisse verworfen und nicht gespeichert"
+        }
+      }
+    }
+  }
+}
