@@ -31,7 +31,7 @@ In [`custom_components/cover_time_based/frontend/translations.js`](custom_compon
 1. Find the `TRANSLATIONS` object:
 
    ```js
-   const TRANSLATIONS = {
+   export const TRANSLATIONS = {
      en: EN,
      pt: { ... },
      ...
