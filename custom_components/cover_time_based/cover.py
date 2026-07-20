@@ -46,7 +46,6 @@ from .const import (
     CONF_TRAVEL_TIME_OPEN,
     DEFAULT_ASSUMED_STATE,
     DEFAULT_CLOSE_INCLUDES_TILT,
-    DEFAULT_DIRECTION_CHANGE_DELAY,
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
@@ -125,6 +124,7 @@ TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_ENDPOINT_RUNON_TIME): cv.positive_float,
     vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
     vol.Optional(CONF_MIN_MOVEMENT_TIME): cv.positive_float,
+    # Accepted and ignored — see DIRECTION_CHANGE_DELAY in const.py.
     vol.Optional(CONF_DIRECTION_CHANGE_DELAY): cv.positive_float,
 }
 
@@ -174,9 +174,9 @@ DEFAULTS_SCHEMA = vol.Schema(
         vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
             cv.positive_float, None
         ),
-        vol.Optional(
-            CONF_DIRECTION_CHANGE_DELAY, default=DEFAULT_DIRECTION_CHANGE_DELAY
-        ): vol.Any(cv.positive_float, None),
+        # Accepted and ignored: keeps configs written against the 4.9.0
+        # release candidates loading (strict schema would reject the key).
+        vol.Optional(CONF_DIRECTION_CHANGE_DELAY): vol.Any(cv.positive_float, None),
     }
 )
 
@@ -234,7 +234,6 @@ _TIMING_DEFAULTS = {
     CONF_TILT_STARTUP_DELAY: None,
     CONF_ENDPOINT_RUNON_TIME: DEFAULT_ENDPOINT_RUNON_TIME,
     CONF_MIN_MOVEMENT_TIME: None,
-    CONF_DIRECTION_CHANGE_DELAY: DEFAULT_DIRECTION_CHANGE_DELAY,
 }
 
 
@@ -339,9 +338,6 @@ def _create_cover_from_options(options, device_id="", name=""):
             CONF_ENDPOINT_RUNON_TIME, DEFAULT_ENDPOINT_RUNON_TIME
         ),
         min_movement_time=options.get(CONF_MIN_MOVEMENT_TIME),
-        direction_change_delay=options.get(
-            CONF_DIRECTION_CHANGE_DELAY, DEFAULT_DIRECTION_CHANGE_DELAY
-        ),
         tilt_open_switch=options.get(CONF_TILT_OPEN_SWITCH),
         tilt_close_switch=options.get(CONF_TILT_CLOSE_SWITCH),
         tilt_stop_switch=options.get(CONF_TILT_STOP_SWITCH),

@@ -224,7 +224,6 @@ Select the attribute that you wish to calibrate. The available attributes depend
 | Travel time (close)  | Time in seconds for the cover to fully close                          |         |
 | Travel time (open)   | Time in seconds for the cover to fully open                           |         |
 | Travel startup delay | Motor startup compensation for travel (see below)                     | None    |
-| Direction change delay | Settle time between stopping and driving the other way when reversing (see below) | 1.0     |
 | Endpoint run-on time | Extra relay time at endpoints to reset position (Switch mode; Pulse when it sends the stop) | 2.0     |
 | Min movement time    | Minimum movement duration - blocks shorter movements to prevent drift | None    |
 
@@ -269,17 +268,39 @@ Under the **sequential closes-then-tilts-closed** and **sequential closes-then-t
 
 Prevents position drift by blocking relay activations too brief to physically move the cover. Movements to 0% or 100% are always allowed. Recommended values: 0.5 - 1.5 seconds.
 
-#### Direction change delay
+#### Reversing a moving cover
 
-Reversing a moving cover is never a single step: the motor is stopped, given a moment to come to rest, and only then driven the other way. This setting is that pause, and it defaults to **1.0 second**.
+Reversing is never a single step: the motor is stopped, given a moment to come
+to rest, and only then driven the other way. That pause is a fixed **1.0
+second** — the value every release has used — and is not configurable.
 
-**The problem:** motors differ in how long they take to stop. If the pause is shorter than yours needs, the reverse command arrives while the motor is still settling and is simply **ignored** — but the integration has already started counting the new movement. The result is a cover sitting motionless while its position ticks along to the target, leaving the entity out of sync with reality.
+It was briefly a per-cover setting during the 4.9.0 release candidates. That
+was a mistake: the hardware it was added for reverses correctly at 1.0s, and
+the only thing the setting demonstrably enabled was choosing a *shorter* gap,
+which breaks covers. A gap that is too short means the reverse command arrives
+before the motor has stopped — or, on momentary-relay hardware, before the
+relay has released — so it is ignored while the position tracker runs on,
+leaving the entity out of sync with the cover. Configs that still carry
+`direction_change_delay` keep loading; the value is ignored.
 
-**Symptom:** you send the cover to a position that requires a reversal — for example it is opening towards 75% and you select 25% — and the cover stops where it is while Home Assistant animates down to 25%.
+> [!WARNING]
+> In **Toggle (opposite button)** mode this desync does more than park the
+> cover. "Stop" in that mode is a pulse of the *opposite* relay, which stops a
+> moving motor — but on a motor that is already stopped it is simply a movement
+> command. So once the tracker and the cover disagree, the next stop can drive
+> the cover to its endpoint. This is inherent to the mode on hardware with no
+> position feedback.
 
-**The fix:** raise this value until reversals take reliably. Try 2 - 3 seconds; a good test is to stop the cover mid-travel by hand, count how long it takes to come to a complete rest, and use at least that. Leave it at 1.0 unless you see the symptom above.
+**If reversals do not take on your hardware,** the setting to change is on the
+device, not here: a momentary relay's own pulse length must be comfortably
+under a second (a few hundred milliseconds is typical — for example
+`pulse_length` on a Zigbee2MQTT relay). Motor manuals generally require this
+anyway. A device pulse approaching or exceeding one second leaves the relay
+still closed when the reverse command is sent, and no integration-side setting
+can compensate for that.
 
-Note this pause also applies to the tilt-restore reversal on covers whose slats share the travel motor, so raising it lengthens that step too.
+Note this pause also applies to the tilt-restore reversal on covers whose slats
+share the travel motor.
 
 ## Services
 
@@ -406,7 +427,7 @@ cover:
 | min_movement_time      | float   | _Optional_                                      | Minimum movement duration (seconds) - blocks shorter movements          | None    |
 | travel_startup_delay   | float   | _Optional_                                      | Motor startup time compensation (seconds) for travel movements          | None    |
 | tilt_startup_delay     | float   | _Optional_                                      | Motor startup time compensation (seconds) for tilt movements            | None    |
-| direction_change_delay | float   | _Optional_                                      | Settle gap (seconds) between stopping and driving the other way when reversing. Raise it if a reversal leaves the cover parked while the position keeps counting. Also applies to the tilt-restore reversal on shared-motor covers | 1.0     |
+| direction_change_delay | float   | _Deprecated_                                    | No longer configurable — accepted and ignored. The settle gap is fixed at 1.0s | 1.0     |
 | pulse_time             | float   | _Optional_                                      | Duration in seconds for button press in pulse mode                      | 1.0     |
 | relay_reports_off      | boolean | _Optional_                                      | Toggle mode: set false for pulse modules that never report their OFF    | true    |
 | send_endpoint_stop     | boolean | _Optional_                                      | Pulse mode: set false for auto-stop controllers that reposition on a stop received while stopped | true    |

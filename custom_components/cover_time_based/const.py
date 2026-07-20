@@ -13,13 +13,27 @@ CONF_ENDPOINT_RUNON_TIME = "endpoint_runon_time"
 CONF_MIN_MOVEMENT_TIME = "min_movement_time"
 DEFAULT_ENDPOINT_RUNON_TIME = 2.0
 
+# Retained only so configs written while the gap was briefly configurable keep
+# loading — the key is accepted and ignored. See DIRECTION_CHANGE_DELAY.
 CONF_DIRECTION_CHANGE_DELAY = "direction_change_delay"
 # Gap between the stop and the new direction when reversing a moving cover, so
-# the motor comes to rest before being driven the other way. Configurable
-# because motors differ: too short and the reverse command arrives while the
-# motor is still settling and is ignored, parking the cover while the position
-# tracker runs on to the target (issue #153 follow-up).
-DEFAULT_DIRECTION_CHANGE_DELAY = 1.0
+# the motor comes to rest before being driven the other way. Fixed, and equal
+# to the value every release has used.
+#
+# It was briefly per-cover configurable (4.9.0 release candidates only, never a
+# promoted release) on the theory that 1.0s was too short for some motors. That
+# did not survive the reporter's own hardware: it reverses correctly at 1.0s,
+# the value earlier versions already used. The knob's only demonstrated effect
+# was allowing values *below* 1.0s, which desync the cover — and in
+# toggle-opposite mode the desync is amplified, because a "stop" there is a
+# pulse of the opposite relay, which on an already-stopped motor is a movement
+# command that runs the cover to its endpoint (issue #153).
+#
+# 1.0s also dominates any legitimate relay pulse window: momentary-relay
+# firmware is documented to hold for well under a second, so whether a rapid
+# re-pulse fails because the relay has not released or because the motor has
+# not settled, this gap covers both.
+DIRECTION_CHANGE_DELAY = 1.0
 
 CONF_CLOSE_INCLUDES_TILT = "close_includes_tilt"
 DEFAULT_CLOSE_INCLUDES_TILT = True
