@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 """Validate translation files against the source strings.json.
 
-Catches the drift that matters: a string key that was renamed or removed in
-strings.json but left behind in a translations/<lang>.json (a "stale" key).
-Stale keys are ERRORS — they're dead weight that can mask typos and never
-surface to the user. Missing keys (a language that hasn't translated a string
-yet) are only WARNINGS — partial translations are normal and expected.
+Catches drift in both directions, and both are ERRORS:
+
+- a *stale* key, renamed or removed in strings.json but left behind in a
+  translations/<lang>.json — dead weight that can mask a typo and never
+  surfaces to the user;
+- a *missing* key, present in strings.json but absent from a catalogue — which
+  ships an untranslated string to that language with nothing to notice it.
+
+Missing keys used to be warnings, on the theory that partial translations are
+normal. In practice a warning nobody sees is how a language quietly rots: the
+English string lands, the catalogues are never updated, and every user of that
+language reads English with a green build. The card's catalogues have always
+been held to full parity by tests/frontend/translation_parity.test.mjs; this
+holds the Home Assistant strings to the same standard.
 
 Auto-detects the integration under custom_components/<component>/. Pass an
 explicit component dir as the first argument to override.
 
-Exit code: 1 if any stale keys are found, else 0.
+Exit code: 1 if any language is out of sync with strings.json, else 0.
 """
 
 from __future__ import annotations
@@ -76,14 +85,19 @@ def main() -> int:
             for k in stale:
                 print(f"      {k}")
         if missing:
-            print(f"  ⚠ {path.name}: {len(missing)} untranslated key(s)")
+            had_error = True
+            print(f"  ✗ {path.name}: {len(missing)} untranslated key(s):")
+            for k in missing:
+                print(f"      {k}")
 
     if had_error:
         print(
-            "\ncheck_translations: stale keys found — remove them or fix strings.json"
+            "\ncheck_translations: translations are out of sync with strings.json —"
+            "\n  stale keys: remove them, or restore them to strings.json"
+            "\n  untranslated keys: add them to every translations/<lang>.json"
         )
         return 1
-    print("check_translations: no stale keys ✓")
+    print("check_translations: translations in sync ✓")
     return 0
 
 

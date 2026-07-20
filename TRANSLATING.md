@@ -40,7 +40,7 @@ In [`custom_components/cover_time_based/frontend/translations.js`](custom_compon
 
 2. Add a `de:` entry mirroring the existing `pt:` and `pl:` blocks. Use the `EN` object above it as the master list of keys: copy every key across and translate its value.
 
-The card falls back to English for any key you miss, so a partial translation will work — but the [audit below](#verifying-translations-are-in-sync) will flag what's missing.
+A key you miss falls back to English at runtime, so a partial translation renders — but it will not pass CI. Both surfaces are held to complete catalogues: the card by `tests/frontend/translation_parity.test.mjs`, and the Home Assistant strings by `scripts/check_translations.py`, which the pre-push hook and CI both run. Translate every key, and use the [audit below](#verifying-translations-are-in-sync) to find any you've missed.
 
 The card resolves a locale by trying the exact code first, then its base language, then English — so a `pt-BR` user reads the `pt` catalogue, and adding `de` also covers `de-AT` and `de-CH`. Add a region-specific key (`pt-BR`) only when that variant needs wording of its own.
 
