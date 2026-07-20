@@ -597,19 +597,15 @@ test("pulse mode with send_endpoint_stop off timing table does NOT include endpo
   expect(inputs.length).toBe(4);
 });
 
-test.each([
-  ["switch", switchCfg],
-  ["pulse", pulseCfg],
-  ["toggle", toggleCfg],
-  ["toggle_opposite", toggleOppositeCfg],
-  ["wrapped", wrappedCfg],
-])("direction_change_delay row is gone in %s mode", async (_mode, cfg) => {
+test("direction_change_delay row is gone, even for an entry that still stores it", async () => {
   // The settle gap is fixed at 1.0s and no longer user-configurable, so the
-  // Timing tab must not offer it — including for an entry whose stored options
-  // still carry the key from a 4.9.0 release candidate.
+  // Timing tab must not offer it — including for a config entry written by a
+  // 4.9.0 release candidate, whose options still carry the key. One case is
+  // enough: the row was deleted from a static array that is not mode-gated,
+  // and per-mode row counts are covered in send_endpoint_stop.test.mjs.
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
-    config: cfg({ direction_change_delay: 3.5 }),
+    config: switchCfg({ direction_change_delay: 3.5 }),
     activeTab: "timing",
   });
   const row = [...card.shadowRoot.querySelectorAll("tr")].find(

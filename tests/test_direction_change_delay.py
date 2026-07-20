@@ -22,9 +22,12 @@ from homeassistant.const import (
     SERVICE_STOP_COVER,
 )
 
+import voluptuous as vol
+
 from custom_components.cover_time_based.const import (
     CONF_DIRECTION_CHANGE_DELAY,
     DIRECTION_CHANGE_DELAY,
+    DOMAIN,
 )
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -35,6 +38,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE_OPPOSITE,
+    PLATFORM_SCHEMA,
     _create_cover_from_options,
     devices_from_config,
 )
@@ -77,11 +81,25 @@ async def test_a_stored_option_no_longer_changes_the_gap():
     slept.assert_awaited_once_with(1.0)
 
 
-def test_yaml_carrying_the_removed_key_still_loads():
-    """Platform schemas are strict, so an unknown key would kill setup.
+def _validated(config):
+    """Put a YAML config through the real platform schema.
 
-    The key stays in the schema precisely so a YAML config written against the
-    rc keeps working -- accepted, then ignored.
+    ``devices_from_config`` does no validation at all — it happily accepts
+    invented keys — so calling it directly proves nothing about backward
+    compatibility. Home Assistant validates against PLATFORM_SCHEMA before the
+    platform ever sees the config, and that is what rejects unknown keys, so
+    it is what these tests have to go through.
+    """
+    return devices_from_config(PLATFORM_SCHEMA({"platform": DOMAIN, **config}))
+
+
+def test_yaml_carrying_the_removed_key_still_loads():
+    """Platform schemas are strict, so an unknown key kills setup outright.
+
+    The key stays in the schema precisely so a YAML config written against a
+    release candidate keeps working — accepted, then ignored. Delete the
+    schema entry and this fails with "extra keys not allowed", which is what
+    the affected user's log would say as their cover disappeared.
     """
     config = {
         CONF_DEFAULTS: {},
@@ -96,12 +114,33 @@ def test_yaml_carrying_the_removed_key_still_loads():
             },
         },
     }
-    devices = devices_from_config(config)
-    assert len(devices) == 1
+    assert len(_validated(config)) == 1
+
+
+def test_an_unknown_key_is_still_rejected():
+    """Proves the two BWC tests are not vacuous.
+
+    Without this they would keep passing if the schema were ever relaxed to
+    allow extra keys — demonstrating that nothing is validated rather than
+    that the retained entry is what keeps those configs loading.
+    """
+    config = {
+        CONF_DEFAULTS: {},
+        CONF_DEVICES: {
+            "blind1": {
+                "name": "Living Room",
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                "no_such_option": 1,
+            },
+        },
+    }
+    with pytest.raises(vol.Invalid):
+        _validated(config)
 
 
 def test_yaml_defaults_block_carrying_the_removed_key_still_loads():
-    """Same, via the defaults: block (which also accepted null)."""
+    """Same, via the defaults: block — which also has to keep accepting null."""
     config = {
         CONF_DEFAULTS: {CONF_DIRECTION_CHANGE_DELAY: None},
         CONF_DEVICES: {
@@ -112,7 +151,7 @@ def test_yaml_defaults_block_carrying_the_removed_key_still_loads():
             },
         },
     }
-    assert len(devices_from_config(config)) == 1
+    assert len(_validated(config)) == 1
 
 
 @pytest.mark.asyncio
@@ -343,8 +382,7 @@ async def test_stop_during_the_settle_gap_cancels_the_reversal(make_cover):
     The reversal stops the motor, waits out the gap, then drives the new
     direction. Nothing re-checked that the movement was still wanted, so a stop
     arriving during the gap was overridden when the coroutine resumed — the
-    cover moved *after* the user told it to stop, up to direction_change_delay
-    seconds later. Raising the gap for slow motors widens that window.
+    cover moved *after* the user told it to stop, up to a second later.
     """
     async with _ParkedReversal(_reversing_cover(make_cover)) as reversal:
         await reversal.cover.async_stop_cover()
@@ -472,7 +510,6 @@ def _external_cover(make_cover):
     return make_cover(
         control_mode=CONTROL_MODE_PULSE,
         stop_switch="switch.stop",
-        direction_change_delay=2.5,
     )
 
 
@@ -516,7 +553,7 @@ async def test_stop_during_the_gap_cancels_an_external_close_reversal(make_cover
     _triggered_externally, ambient instance state held for the *whole* external
     call, settle gap included; a genuine stop arriving in that window was
     therefore indistinguishable from a device echo, so it was dropped and the
-    parked reversal drove the cover up to direction_change_delay seconds after
+    parked reversal drove the cover up to a second after
     the user said stop. Callers now say which kind of stop they are.
     """
     async with _parked_external_close(make_cover) as reversal:

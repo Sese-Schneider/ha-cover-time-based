@@ -1295,10 +1295,12 @@ class TestPulseRelayEdgeLogging:
     """Every pulse logs the relay's reported state and the branch taken.
 
     Issue #153: in toggle-opposite mode a reversal pulses the SAME relay
-    twice, separated only by ``direction_change_delay``. At 0s the blind does
-    not move, and the debug log could not distinguish "the ``turn_on`` landed
-    on a still-energised relay (no rising edge)" from "the edge was delivered
-    and the motor ignored it". ``_pulse_relay`` therefore records, for every
+    twice, separated only by the settle gap. While that gap was briefly
+    configurable, a short one left the blind motionless, and the debug log
+    could not distinguish "the ``turn_on`` landed on a still-energised relay
+    (no rising edge)" from "the edge was delivered and the motor ignored it".
+    (The gap is fixed at 1.0s again, which covers both.) ``_pulse_relay``
+    therefore records, for every
     pulse, what state the relay *reported* and whether the ``turn_on`` can
     carry a rising edge — so a single debug log from a failing run shows
     which pulses could have moved the motor.
