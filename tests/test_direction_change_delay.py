@@ -1,10 +1,13 @@
-"""Tests for the configurable direction-change (stop->reverse settle) delay.
+"""Tests for the direction-change (stop->reverse settle) delay.
 
 Reversing a moving cover means stop, settle, then drive the new direction. The
-settle gap must outlast the motor's stop-settle time, or the reverse command is
-ignored while the position tracker keeps advancing (issue #153 follow-up: the
-blind stays put, the entity ticks on to the target). Motors differ, so the gap
-is configurable; it defaults to the historical 1.0s.
+gap is a fixed 1.0 second. It was briefly configurable per cover (never in a
+promoted release): the justification turned out to be wrong -- the reporter's
+hardware reverses correctly at 1.0s, which every prior version also used -- and
+the only thing the knob demonstrably enabled was setting it *below* 1.0s, which
+desyncs the cover and, in toggle-opposite mode, can drive it to its endpoint.
+The key is still accepted from YAML and the websocket API so existing configs
+load, but it is ignored.
 """
 
 import asyncio
@@ -19,7 +22,10 @@ from homeassistant.const import (
     SERVICE_STOP_COVER,
 )
 
-from custom_components.cover_time_based.const import CONF_DIRECTION_CHANGE_DELAY
+from custom_components.cover_time_based.const import (
+    CONF_DIRECTION_CHANGE_DELAY,
+    DIRECTION_CHANGE_DELAY,
+)
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_CONTROL_MODE,
@@ -46,17 +52,8 @@ def _switch_options(**extra):
 
 
 @pytest.mark.asyncio
-async def test_direction_change_delay_uses_configured_value(make_cover):
-    """A configured settle gap is what the reversal waits for."""
-    cover = make_cover(direction_change_delay=2.5)
-    with patch(SLEEP, new_callable=AsyncMock) as slept:
-        await cover._direction_change_delay()
-    slept.assert_awaited_once_with(2.5)
-
-
-@pytest.mark.asyncio
-async def test_direction_change_delay_defaults_to_one_second(make_cover):
-    """Unset keeps the historical 1.0s, so existing covers are unaffected."""
+async def test_the_settle_gap_is_a_fixed_one_second(make_cover):
+    """The historical 1.0s, now not configurable."""
     cover = make_cover()
     with patch(SLEEP, new_callable=AsyncMock) as slept:
         await cover._direction_change_delay()
@@ -64,16 +61,14 @@ async def test_direction_change_delay_defaults_to_one_second(make_cover):
 
 
 @pytest.mark.asyncio
-async def test_explicit_none_in_options_falls_back_to_the_default():
-    """An explicit None must not reach sleep().
+async def test_a_stored_option_no_longer_changes_the_gap():
+    """An rc tester's stored value must not shorten (or lengthen) the gap.
 
-    ``options.get(key, default)`` only substitutes the default for a *missing*
-    key, so a present-but-None value is handed straight through. Resolving it
-    at the boundary alone is therefore not enough; without the entity-side
-    fallback this raises TypeError from sleep(None) on every reversal.
+    Entries written while the option existed still carry the key; it is read
+    by nothing, so the gap stays 1.0s.
     """
     cover = _create_cover_from_options(
-        _switch_options(**{CONF_DIRECTION_CHANGE_DELAY: None}),
+        _switch_options(**{CONF_DIRECTION_CHANGE_DELAY: 0}),
         device_id="test",
         name="Test",
     )
@@ -82,15 +77,31 @@ async def test_explicit_none_in_options_falls_back_to_the_default():
     slept.assert_awaited_once_with(1.0)
 
 
-@pytest.mark.asyncio
-async def test_yaml_defaults_block_may_null_the_delay():
-    """The live route by which an explicit None reaches the entity.
+def test_yaml_carrying_the_removed_key_still_loads():
+    """Platform schemas are strict, so an unknown key would kill setup.
 
-    The YAML ``defaults:`` block accepts null, and ``_get_value`` returns it
-    verbatim into options. (The card cannot produce this — ws_update_config
-    pops the key on null — so this is the path that keeps the entity-side
-    fallback load-bearing.)
+    The key stays in the schema precisely so a YAML config written against the
+    rc keeps working -- accepted, then ignored.
     """
+    config = {
+        CONF_DEFAULTS: {},
+        CONF_DEVICES: {
+            "blind1": {
+                "name": "Living Room",
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                # 0 specifically: the value the release candidates were
+                # tested with, and the one that motivated the removal.
+                CONF_DIRECTION_CHANGE_DELAY: 0,
+            },
+        },
+    }
+    devices = devices_from_config(config)
+    assert len(devices) == 1
+
+
+def test_yaml_defaults_block_carrying_the_removed_key_still_loads():
+    """Same, via the defaults: block (which also accepted null)."""
     config = {
         CONF_DEFAULTS: {CONF_DIRECTION_CHANGE_DELAY: None},
         CONF_DEVICES: {
@@ -101,37 +112,13 @@ async def test_yaml_defaults_block_may_null_the_delay():
             },
         },
     }
-    cover = devices_from_config(config)[0]
-    with patch(SLEEP, new_callable=AsyncMock) as slept:
-        await cover._direction_change_delay()
-    slept.assert_awaited_once_with(1.0)
+    assert len(devices_from_config(config)) == 1
 
 
 @pytest.mark.asyncio
-async def test_zero_is_preserved_as_no_settle_gap():
-    """0 is a legitimate value and must not be coerced to the default."""
-    cover = _create_cover_from_options(
-        _switch_options(**{CONF_DIRECTION_CHANGE_DELAY: 0}),
-        device_id="test",
-        name="Test",
-    )
-    with patch(SLEEP, new_callable=AsyncMock) as slept:
-        await cover._direction_change_delay()
-    slept.assert_awaited_once_with(0)
-
-
-@pytest.mark.asyncio
-async def test_set_position_reversal_settles_for_the_configured_gap(make_cover):
-    """Regression guard for issue #153.
-
-    Reversing mid-travel via set_position (opening, then a lower target) must
-    wait the configured settle gap between the stop and the reverse command.
-    With the old hardcoded 1.0s the reverse landed while the motor was still
-    coming to rest, so the cover stayed put while the tracker ran on.
-    """
-    cover = make_cover(
-        control_mode=CONTROL_MODE_TOGGLE_OPPOSITE, direction_change_delay=2.5
-    )
+async def test_set_position_reversal_still_settles_between_stop_and_reverse(make_cover):
+    """Regression guard for issue #153: the gap must land *between* the two."""
+    cover = make_cover(control_mode=CONTROL_MODE_TOGGLE_OPPOSITE)
     cover.hass.states.get = MagicMock(
         side_effect=lambda eid: SimpleNamespace(state="off")
     )
@@ -140,10 +127,6 @@ async def test_set_position_reversal_settles_for_the_configured_gap(make_cover):
     cover.travel_calc.start_travel_up()
     cover._last_command = SERVICE_OPEN_COVER
 
-    # Record commands and sleeps on one timeline: the gap has to land *between*
-    # the stop and the reverse. Asserting only that sleep(2.5) happened would
-    # still pass if the settle were awaited after the reverse was already sent,
-    # which is exactly the ordering the fix depends on.
     events = []
     real_handle = cover._async_handle_command
 
@@ -163,42 +146,14 @@ async def test_set_position_reversal_settles_for_the_configured_gap(make_cover):
 
     assert (
         events.index(SERVICE_STOP_COVER)
-        < events.index("sleep:2.5")
+        < events.index("sleep:1.0")
         < events.index(SERVICE_CLOSE_COVER)
     )
 
 
-def test_configured_delay_is_wired_through_from_options():
-    """The option reaches the cover built by the factory."""
-    cover = _create_cover_from_options(
-        _switch_options(**{CONF_DIRECTION_CHANGE_DELAY: 3.0}),
-        device_id="test",
-        name="Test",
-    )
-    assert cover._direction_change_delay_time == 3.0
-
-
-def test_yaml_device_config_accepts_the_delay():
-    """YAML parity with the other timing options."""
-    config = {
-        CONF_DEFAULTS: {},
-        CONF_DEVICES: {
-            "blind1": {
-                "name": "Living Room",
-                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
-                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                CONF_DIRECTION_CHANGE_DELAY: 4.0,
-            },
-        },
-    }
-    devices = devices_from_config(config)
-    assert devices[0]._direction_change_delay_time == 4.0
-
-
-def test_omitted_option_leaves_the_default():
-    """An unset option falls back to the historical 1.0s."""
+def test_the_key_is_not_exposed_as_a_state_attribute():
     cover = _create_cover_from_options(_switch_options(), device_id="test", name="Test")
-    assert cover._direction_change_delay_time == 1.0
+    assert CONF_DIRECTION_CHANGE_DELAY not in cover.extra_state_attributes
 
 
 class _ParkedReversal:
@@ -308,7 +263,7 @@ class _ParkedReversal:
             await self._wait_until_parked()
             # The settle gap is the only sleep with this duration, so this
             # pins us to it rather than to a startup delay or a run-on.
-            assert self._slept_for == cover._direction_change_delay_time
+            assert self._slept_for == DIRECTION_CHANGE_DELAY
             assert self.commands == self._commands_at_park
         except BaseException:
             # __aexit__ never runs when __aenter__ raises, so without this the
@@ -378,9 +333,7 @@ class _ParkedReversal:
 
 
 def _reversing_cover(make_cover):
-    return make_cover(
-        control_mode=CONTROL_MODE_TOGGLE_OPPOSITE, direction_change_delay=2.5
-    )
+    return make_cover(control_mode=CONTROL_MODE_TOGGLE_OPPOSITE)
 
 
 @pytest.mark.asyncio
@@ -430,7 +383,6 @@ async def test_tilt_command_during_the_settle_gap_supersedes_the_reversal(make_c
     """
     cover = make_cover(
         control_mode=CONTROL_MODE_TOGGLE_OPPOSITE,
-        direction_change_delay=2.5,
         tilt_mode="inline",
         tilt_time_close=10,
         tilt_time_open=10,

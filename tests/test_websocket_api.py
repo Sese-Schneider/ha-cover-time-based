@@ -2403,11 +2403,16 @@ class TestForceEndpointRedriveRoundTrip:
         assert validated["force_endpoint_redrive"] is True
 
 
-class TestDirectionChangeDelay:
-    """The stop->reverse settle gap round-trips over the websocket API."""
+class TestDirectionChangeDelayRemoved:
+    """The settle gap is fixed at 1.0s and is no longer configurable.
+
+    The websocket key is still *accepted* so a browser holding a cached copy
+    of the old card does not get an error on save -- it is simply not mapped
+    to an option, so nothing is persisted.
+    """
 
     @pytest.mark.asyncio
-    async def test_update_config_saves_direction_change_delay(self):
+    async def test_a_stale_card_sending_the_key_is_accepted_and_ignored(self):
         hass, _, entity_reg = _make_hass(
             options={CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED}
         )
@@ -2428,23 +2433,33 @@ class TestDirectionChangeDelay:
                 },
             )
 
+        conn.send_error.assert_not_called()
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
-        assert new_options[CONF_DIRECTION_CHANGE_DELAY] == 2.5
+        assert CONF_DIRECTION_CHANGE_DELAY not in new_options
 
-    def test_field_map_contains_direction_change_delay(self):
+    def test_update_schema_still_accepts_the_key(self):
+        # The stale-card guarantee lives in the schema, and the handler test
+        # above calls the unwrapped coroutine, which bypasses it. Without this
+        # a schema tidy-up would make real websocket traffic from a cached
+        # card fail validation while every other test stayed green.
+        schema = ws_update_config._ws_schema
+        validated = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": "cover.x",
+                "direction_change_delay": 2.5,
+            }
+        )
+        assert validated["direction_change_delay"] == 2.5
+
+    def test_field_map_no_longer_contains_the_key(self):
         from custom_components.cover_time_based.websocket_api import _FIELD_MAP
 
-        assert _FIELD_MAP["direction_change_delay"] == CONF_DIRECTION_CHANGE_DELAY
+        assert "direction_change_delay" not in _FIELD_MAP
 
     @pytest.mark.asyncio
-    async def test_get_config_reports_the_effective_gap_when_unset(self):
-        """Unset must report 1.0, not null.
-
-        The card renders null as an empty box with a "not set" placeholder, so
-        reporting the raw option would hide the gap that is actually being
-        applied — from exactly the user who opened the Timing tab because a
-        reversal parked their cover.
-        """
+    async def test_get_config_no_longer_offers_the_key(self):
         hass, _, entity_reg = _make_hass(
             options={CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED}
         )
@@ -2464,50 +2479,5 @@ class TestDirectionChangeDelay:
                 },
             )
 
-        assert conn.send_result.call_args[0][1]["direction_change_delay"] == 1.0
-
-    @pytest.mark.asyncio
-    async def test_get_config_reports_a_stored_none_as_the_default(self):
-        """A present-but-None option also reports the effective gap.
-
-        The card cannot produce this (clearing pops the key), but a YAML-seeded
-        or hand-edited entry can, and `options.get` returns that None rather
-        than the default — so the null-check is what keeps the box populated.
-        """
-        hass, _, entity_reg = _make_hass(
-            options={
-                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
-                CONF_DIRECTION_CHANGE_DELAY: None,
-            }
-        )
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_get_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/get_config",
-                    "entity_id": ENTITY_ID,
-                },
-            )
-
-        assert conn.send_result.call_args[0][1]["direction_change_delay"] == 1.0
-
-    def test_update_schema_accepts_direction_change_delay(self):
-        # Guards the schema/_FIELD_MAP pair: without the schema entry the value
-        # is silently dropped before it ever reaches _FIELD_MAP.
-        schema = ws_update_config._ws_schema
-        validated = schema(
-            {
-                "id": 1,
-                "type": "cover_time_based/update_config",
-                "entity_id": "cover.x",
-                "direction_change_delay": 2.5,
-            }
-        )
-        assert validated["direction_change_delay"] == 2.5
+        result = conn.send_result.call_args[0][1]
+        assert "direction_change_delay" not in result
