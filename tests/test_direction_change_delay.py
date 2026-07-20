@@ -90,7 +90,9 @@ def test_yaml_carrying_the_removed_key_still_loads():
                 "name": "Living Room",
                 CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
                 CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
-                CONF_DIRECTION_CHANGE_DELAY: 4.0,
+                # 0 specifically: the value the release candidates were
+                # tested with, and the one that motivated the removal.
+                CONF_DIRECTION_CHANGE_DELAY: 0,
             },
         },
     }

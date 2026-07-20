@@ -179,12 +179,6 @@ async def ws_get_config(
     tilt_mode = options.get(CONF_TILT_MODE, "none")
     if tilt_mode == "sequential":
         tilt_mode = "sequential_close"
-    # Report the effective settle gap rather than the raw option. Entries that
-    # predate the option — and any whose field was cleared, which pops the key
-    # — have nothing stored, and sending None back renders an empty box for a
-    # gap that is in fact being applied, hiding it from the very user debugging
-    # a parked reversal. Matches endpoint_runon_time. Checked against None
-    # rather than falsiness because 0 is a legitimate "no settle gap".
     connection.send_result(
         msg["id"],
         {

@@ -2437,6 +2437,22 @@ class TestDirectionChangeDelayRemoved:
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert CONF_DIRECTION_CHANGE_DELAY not in new_options
 
+    def test_update_schema_still_accepts_the_key(self):
+        # The stale-card guarantee lives in the schema, and the handler test
+        # above calls the unwrapped coroutine, which bypasses it. Without this
+        # a schema tidy-up would make real websocket traffic from a cached
+        # card fail validation while every other test stayed green.
+        schema = ws_update_config._ws_schema
+        validated = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": "cover.x",
+                "direction_change_delay": 2.5,
+            }
+        )
+        assert validated["direction_change_delay"] == 2.5
+
     def test_field_map_no_longer_contains_the_key(self):
         from custom_components.cover_time_based.websocket_api import _FIELD_MAP
 
