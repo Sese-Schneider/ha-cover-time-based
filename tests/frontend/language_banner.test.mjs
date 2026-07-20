@@ -15,6 +15,7 @@ import {
 } from "../../custom_components/cover_time_based/frontend/language-banner.js";
 import { defineHaStubs, mountCard } from "./helpers/mount.mjs";
 import { makeHass } from "./helpers/hass.mjs";
+import { UNSHIPPED_LANG } from "./helpers/lang.mjs";
 
 defineHaStubs();
 
@@ -71,11 +72,11 @@ test("persistLangDismissed then loadDismissedLangs round-trips a locale", () => 
 });
 
 test("dismissing a second locale preserves the first", () => {
-  // A scalar store would forget "de": dismiss de, switch to fr, switch back,
+  // A scalar store would forget "fr": dismiss fr, switch to es, switch back,
   // and the nudge would reappear.
-  persistLangDismissed("de");
   persistLangDismissed("fr");
-  expect(loadDismissedLangs()).toEqual(["de", "fr"]);
+  persistLangDismissed("es");
+  expect(loadDismissedLangs()).toEqual(["fr", "es"]);
 });
 
 test("persistLangDismissed does not duplicate an already-dismissed locale", () => {
@@ -105,7 +106,7 @@ test("persistLangDismissed is a silent no-op when storage access throws", () => 
 });
 
 test("the banner renders for a language with no shipped translation", async () => {
-  const el = await mountCard(makeHass({ language: "de" }));
+  const el = await mountCard(makeHass({ language: UNSHIPPED_LANG }));
   expect(banner(el)).not.toBe(null);
 });
 
@@ -126,25 +127,27 @@ test("the banner does not render when the language is undeterminable", async () 
 });
 
 test("the banner names the language and links to a prefilled issue", async () => {
-  const el = await mountCard(makeHass({ language: "de" }));
+  const el = await mountCard(makeHass({ language: UNSHIPPED_LANG }));
   const text = banner(el).textContent;
-  expect(text).toContain(languageDisplayName("de"));
+  expect(text).toContain(languageDisplayName(UNSHIPPED_LANG));
   const href = banner(el).querySelector("a").getAttribute("href");
-  expect(href).toBe(buildTranslationRequestUrl("de", languageDisplayName("de")));
+  expect(href).toBe(
+    buildTranslationRequestUrl(UNSHIPPED_LANG, languageDisplayName(UNSHIPPED_LANG))
+  );
 });
 
 test("the banner does not render for a locale already dismissed in storage", async () => {
-  persistLangDismissed("de");
-  const el = await mountCard(makeHass({ language: "de" }));
+  persistLangDismissed(UNSHIPPED_LANG);
+  const el = await mountCard(makeHass({ language: UNSHIPPED_LANG }));
   expect(banner(el)).toBe(null);
 });
 
 test("clicking dismiss hides the banner and persists the locale", async () => {
-  const el = await mountCard(makeHass({ language: "de" }));
+  const el = await mountCard(makeHass({ language: UNSHIPPED_LANG }));
   banner(el).querySelector("ha-icon-button").click();
   await el.updateComplete;
   expect(banner(el)).toBe(null);
-  expect(loadDismissedLangs()).toContain("de");
+  expect(loadDismissedLangs()).toContain(UNSHIPPED_LANG);
 });
 
 test("dismissal sticks for the session when storage is unavailable", async () => {
@@ -152,7 +155,7 @@ test("dismissal sticks for the session when storage is unavailable", async () =>
   vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
     throw new Error("storage disabled");
   });
-  const el = await mountCard(makeHass({ language: "de" }));
+  const el = await mountCard(makeHass({ language: UNSHIPPED_LANG }));
   banner(el).querySelector("ha-icon-button").click();
   await el.updateComplete;
   expect(banner(el)).toBe(null);
