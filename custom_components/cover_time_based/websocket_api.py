@@ -246,8 +246,8 @@ async def ws_get_config(
                 CONTROL_MODE_TOGGLE_OPPOSITE,
             ]
         ),
-        vol.Optional("pulse_time"): vol.All(
-            vol.Coerce(float), vol.Range(min=0.1, max=10)
+        vol.Optional("pulse_time"): vol.Any(
+            None, vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10))
         ),
         vol.Optional("relay_reports_off"): vol.Any(None, bool),
         vol.Optional("send_endpoint_stop"): vol.Any(None, bool),

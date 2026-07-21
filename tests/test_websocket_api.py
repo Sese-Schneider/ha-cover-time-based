@@ -1284,6 +1284,46 @@ class TestTiltPositionLimitSchemaValidation:
             )
 
 
+class TestPulseTimeSchemaValidation:
+    """pulse_time was the only numeric ws field that couldn't be reset with
+    null, unlike its siblings (travel_time_close, endpoint_runon_time, ...)."""
+
+    def test_null_accepted_by_schema(self):
+        schema = ws_update_config._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": ENTITY_ID,
+                "pulse_time": None,
+            }
+        )
+        assert result["pulse_time"] is None
+
+    @pytest.mark.asyncio
+    async def test_null_pops_stored_key(self):
+        hass, config_entry, entity_reg = _make_hass(options={CONF_PULSE_TIME: 3.0})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "pulse_time": None,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert CONF_PULSE_TIME not in new_options
+
+
 # ---------------------------------------------------------------------------
 # ws_update_config — timing field validation
 # ---------------------------------------------------------------------------
