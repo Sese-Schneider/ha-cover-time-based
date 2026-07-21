@@ -31,6 +31,9 @@ class CalibrationMixin:
         hass: HomeAssistant
         _calibration: CalibrationState | None
         _tilt_strategy: Any
+        _tilt_mode_str: str | None
+        _tilt_open_switch_id: str | None
+        _tilt_close_switch_id: str | None
         _travel_time_close: float | None
         _travel_time_open: float | None
         _tilting_time_close: float | None
@@ -42,6 +45,10 @@ class CalibrationMixin:
 
         async def _async_handle_command(self, _command: str, *_args: Any) -> None: ...
         async def _send_stop(self) -> None: ...
+        async def _send_tilt_open(self) -> None: ...
+        async def _send_tilt_close(self) -> None: ...
+        async def _send_tilt_stop(self) -> None: ...
+        def _has_tilt_motor(self) -> bool: ...
         def async_write_ha_state(self) -> None: ...
         def _self_stops_at_endpoints(self) -> bool: ...
         def _cancel_startup_delay_task(self) -> None: ...
@@ -88,6 +95,7 @@ class CalibrationMixin:
 
         # Create state only after validation passes
         self._calibration = CalibrationState(attribute=attribute, timeout=timeout)
+        self._calibration.uses_tilt_motor = self._calibration_uses_tilt_motor(attribute)
         self._calibration.timeout_task = self.hass.async_create_task(
             self._calibration_timeout()
         )
@@ -124,6 +132,41 @@ class CalibrationMixin:
             return SERVICE_OPEN_COVER
         return SERVICE_CLOSE_COVER
 
+    def _calibration_uses_tilt_motor(self, attribute: str) -> bool:
+        if not attribute.startswith("tilt_"):
+            return False
+        if self._tilt_strategy is not None:
+            return self._tilt_strategy.uses_tilt_motor and self._has_tilt_motor()
+        # _tilt_strategy hasn't been resolved yet: _resolve_tilt_strategy
+        # (cover.py) only instantiates one once BOTH tilt times are set, and
+        # calibration is the only way to set them, so a freshly-configured
+        # dual-motor cover's very first tilt calibration runs with no
+        # strategy at all. Fall back to the raw configured tilt_mode string,
+        # mirroring _tilt_calibration_command's issue-#61 fallback below.
+        # _has_tilt_motor() itself requires _tilt_strategy, so this branch
+        # checks the switch ids directly instead of delegating to it.
+        return self._tilt_mode_str == "dual_motor" and bool(
+            self._tilt_open_switch_id and self._tilt_close_switch_id
+        )
+
+    async def _calibration_drive(self, move_command: str) -> None:
+        """Send the calibration move on the right motor."""
+        assert self._calibration is not None
+        if self._calibration.uses_tilt_motor:
+            if move_command == SERVICE_CLOSE_COVER:
+                await self._send_tilt_close()
+            else:
+                await self._send_tilt_open()
+        else:
+            await self._async_handle_command(move_command)
+
+    async def _calibration_stop(self) -> None:
+        assert self._calibration is not None
+        if self._calibration.uses_tilt_motor:
+            await self._send_tilt_stop()
+        else:
+            await self._send_stop()
+
     async def _start_simple_time_test(self, attribute, direction):
         """Start a simple travel/tilt time test by moving the cover."""
         assert self._calibration is not None
@@ -137,7 +180,7 @@ class CalibrationMixin:
         else:
             move_command = SERVICE_OPEN_COVER
         self._calibration.move_command = move_command
-        await self._async_handle_command(move_command)
+        await self._calibration_drive(move_command)
 
     def _tilt_calibration_command(self, closing_tilt: bool) -> str:
         """Resolve the relay direction for tilt calibration.
@@ -238,13 +281,13 @@ class CalibrationMixin:
                     target,
                 )
                 calc.start_travel(target)
-                await self._async_handle_command(move_command)
+                await self._calibration_drive(move_command)
 
                 # Wait for travel calculator to say position reached
                 while calc.current_position() != target:
                     await sleep(0.05)
 
-                await self._send_stop()
+                await self._calibration_stop()
                 calc.stop()
 
                 # Force position — motor fell short due to startup delay
@@ -263,7 +306,7 @@ class CalibrationMixin:
             self._calibration.final_step = True
             self.async_write_ha_state()
             self._calibration.continuous_start = time.monotonic()
-            await self._async_handle_command(move_command)
+            await self._calibration_drive(move_command)
 
             # Wait indefinitely until user calls stop_calibration
             while True:
@@ -350,7 +393,7 @@ class CalibrationMixin:
             # limit — a stop pulse there is a movement command (#153/#133), so
             # skip it. A timeout is never a user cancel.
             if not self._self_stops_at_endpoints():
-                await self._send_stop()
+                await self._calibration_stop()
             self._restore_calibration_startup_delay()
             self._calibration = None
             self.async_write_ha_state()
@@ -372,7 +415,7 @@ class CalibrationMixin:
         # limit — a stop pulse there is a movement command (#153/#133), so skip
         # it. Cancel always stops: the user is bailing mid-run.
         if cancel or not self._self_stops_at_endpoints():
-            await self._send_stop()
+            await self._calibration_stop()
 
         result = {}
         if not cancel:

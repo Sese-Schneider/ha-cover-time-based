@@ -43,3 +43,4 @@ class CalibrationState:
     saved_startup_delay: float | None = None
     timeout_task: Task | None = field(default=None, repr=False)
     automation_task: Task | None = field(default=None, repr=False)
+    uses_tilt_motor: bool = False

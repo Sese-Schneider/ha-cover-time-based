@@ -1086,3 +1086,162 @@ class TestStartCalibrationNeutralizesInFlightMove:
             assert cover._unsubscribe_auto_updater is None
 
             await cover.stop_calibration(cancel=True)
+
+
+class TestDualMotorTiltCalibrationDrivesTiltMotor:
+    """Task 10: dual-motor tilt calibration must drive the tilt motor.
+
+    _start_simple_time_test for tilt_time_* used to resolve straight to
+    _async_handle_command -> the travel relays. DualMotorTilt.can_calibrate_tilt()
+    is True and the card tells the user to watch the slats, but no
+    _send_tilt_* call existed anywhere in cover_calibration.py, so tilt
+    calibration silently drove the wrong motor and pinned tilt_calc at an
+    endpoint the slats never reached (probe test_b6, inverted).
+    """
+
+    @pytest.mark.asyncio
+    async def test_dual_motor_tilt_time_close_drives_tilt_relay(self, make_cover):
+        cover = make_cover(
+            control_mode="switch",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        assert cover._tilt_strategy.can_calibrate_tilt() is True
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_close", timeout=300.0)
+            calls = [
+                (c[0][1], c[0][2].get("entity_id"))
+                for c in cover.hass.services.async_call.call_args_list
+            ]
+
+            # The dedicated tilt motor was driven...
+            assert ("turn_on", "switch.tilt_close") in calls, calls
+            # ...and the (nonexistent-for-this-cover) travel relays were not.
+            travel_touches = [
+                c for c in calls if c[1] in ("switch.open", "switch.close")
+            ]
+            assert travel_touches == [], travel_touches
+
+            n = len(cover.hass.services.async_call.call_args_list)
+            await cover.stop_calibration(cancel=True)
+
+        stop_calls = [
+            (c[0][1], c[0][2].get("entity_id"))
+            for c in cover.hass.services.async_call.call_args_list[n:]
+        ]
+        # Stop went to the tilt relays (turn_off both), not a travel stop switch.
+        assert ("turn_off", "switch.tilt_open") in stop_calls, stop_calls
+        assert ("turn_off", "switch.tilt_close") in stop_calls, stop_calls
+
+    @pytest.mark.asyncio
+    async def test_dual_motor_tilt_startup_delay_drives_tilt_relay(self, make_cover):
+        """Same bug applies to the tilt_startup_delay overhead-test loop."""
+        cover = make_cover(
+            control_mode="switch",
+            tilt_time_close=1.0,
+            tilt_time_open=1.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        cover.tilt_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
+            await asyncio.sleep(0.05)
+            calls = [
+                (c[0][1], c[0][2].get("entity_id"))
+                for c in cover.hass.services.async_call.call_args_list
+            ]
+            tilt_touches = [
+                c for c in calls if c[1] in ("switch.tilt_open", "switch.tilt_close")
+            ]
+            travel_touches = [
+                c for c in calls if c[1] in ("switch.open", "switch.close")
+            ]
+
+            assert tilt_touches != [], calls
+            assert travel_touches == [], travel_touches
+
+            await cover.stop_calibration(cancel=True)
+
+    @pytest.mark.asyncio
+    async def test_sequential_tilt_calibration_unchanged_shared_motor(self, make_cover):
+        """Sequential (shared-motor) tilt calibration must be untouched by the
+        dispatcher: uses_tilt_motor is False, so it still falls through to the
+        travel relays it always used.
+        """
+        cover = make_cover(
+            travel_time_open=10.0,
+            travel_time_close=10.0,
+            tilt_time_open=2.0,
+            tilt_time_close=2.0,
+            tilt_mode="sequential",
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_close", timeout=60.0)
+            assert cover._calibration.uses_tilt_motor is False
+            calls = [
+                (c[0][1], c[0][2].get("entity_id"))
+                for c in cover.hass.services.async_call.call_args_list
+            ]
+            # SequentialCloseTilt (default): tilt-close -> motor CLOSE (down),
+            # same shared travel relay it always used.
+            assert ("turn_on", "switch.close") in calls, calls
+
+            await cover.stop_calibration(cancel=True)
+
+    @pytest.mark.asyncio
+    async def test_dual_motor_first_time_calibration_without_tilt_times_set(
+        self, make_cover
+    ):
+        """First-time tilt_time_close calibration on dual_motor must still
+        drive the tilt relay, even though _tilt_strategy hasn't been resolved.
+
+        _resolve_tilt_strategy (cover.py) only instantiates a TiltStrategy
+        once BOTH tilt_time_close and tilt_time_open are set. Calibration is
+        the only way to set them (no numeric options-flow field for tilt
+        times), so a freshly-configured dual_motor cover's very first
+        start_calibration(attribute="tilt_time_close") call runs with
+        _tilt_strategy is None. _calibration_uses_tilt_motor must fall back
+        to the raw configured tilt_mode string + the tilt switch ids, the
+        same way _tilt_calibration_command already falls back to
+        _tilt_mode_str for issue #61 (see
+        test_sequential_open_tilt_time_close_without_tilt_times_set above).
+        Without that fallback this silently drives the travel relay instead
+        of the tilt relay on the most common (first-run) calibration path.
+        """
+        cover = make_cover(
+            control_mode="switch",
+            # Neither tilt time set — user is calibrating for the first time.
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+        )
+        # Precondition: no strategy resolved yet.
+        assert cover._tilt_strategy is None
+        assert cover._tilt_mode_str == "dual_motor"
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_close", timeout=300.0)
+            calls = [
+                (c[0][1], c[0][2].get("entity_id"))
+                for c in cover.hass.services.async_call.call_args_list
+            ]
+
+            # The dedicated tilt motor was driven...
+            assert ("turn_on", "switch.tilt_close") in calls, calls
+            # ...and the travel relays were not.
+            travel_touches = [
+                c for c in calls if c[1] in ("switch.open", "switch.close")
+            ]
+            assert travel_touches == [], travel_touches
+
+            await cover.stop_calibration(cancel=True)
