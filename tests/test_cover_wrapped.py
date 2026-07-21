@@ -1702,6 +1702,13 @@ class TestWrappedSyncsToLivePositionAtStartup:
         await self._added_to_hass(cover)
 
         assert cover.travel_calc.current_position() == 70
+        # The corrected live position must be persisted too — otherwise a
+        # second restart with the underlying unavailable would restore the
+        # stale stored value (30) all over again.
+        _mock_position_store.async_save.assert_awaited_once()
+        entry_id, data = _mock_position_store.async_save.await_args.args
+        assert entry_id == cover._config_entry_id
+        assert data["position"] == 70
 
     @pytest.mark.asyncio
     async def test_ignore_reported_position_keeps_stored_value(
@@ -1714,6 +1721,8 @@ class TestWrappedSyncsToLivePositionAtStartup:
         await self._added_to_hass(cover)
 
         assert cover.travel_calc.current_position() == 30
+        # No divergence detected, so no spurious persist at startup.
+        _mock_position_store.async_save.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_unavailable_underlying_keeps_stored_value(
@@ -1728,6 +1737,7 @@ class TestWrappedSyncsToLivePositionAtStartup:
         await self._added_to_hass(cover)
 
         assert cover.travel_calc.current_position() == 30
+        _mock_position_store.async_save.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_bare_closed_at_startup_keeps_stored_value(
@@ -1743,3 +1753,19 @@ class TestWrappedSyncsToLivePositionAtStartup:
         await self._added_to_hass(cover)
 
         assert cover.travel_calc.current_position() == 30
+        _mock_position_store.async_save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_live_position_matches_stored_value_no_spurious_persist(
+        self, make_cover, _mock_position_store
+    ):
+        # live == stored: no divergence, so the sync branch never runs and the
+        # extra persist must not fire at startup.
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(cover_entity_id="cover.inner")
+        self._set_underlying_state(cover, state="open", current_position=30)
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 30
+        _mock_position_store.async_save.assert_not_awaited()

@@ -106,6 +106,11 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 live,
             )
             self.travel_calc.set_position(live)
+            # Persist the correction, not just the in-memory tracker: without
+            # this, a second restart with the underlying unavailable (or
+            # otherwise unable to report) would restore the now-stale stored
+            # snapshot all over again instead of the corrected live value.
+            await self._async_persist_position()
 
     def _are_entities_configured(self) -> bool:
         """Return True if the wrapped cover entity is configured."""
