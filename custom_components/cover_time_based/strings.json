@@ -25,10 +25,6 @@
       "name": "Set cover position",
       "description": "Sets a known position for the cover internally.",
       "fields": {
-        "entity_id": {
-          "name": "Entity ID",
-          "description": "The entity ID of the cover to set the position for."
-        },
         "position": {
           "name": "Position",
           "description": "The position of the cover, between 0 and 100."
@@ -39,11 +35,7 @@
       "name": "Set cover tilt position",
       "description": "Sets a known tilt position for the cover internally.",
       "fields": {
-        "entity_id": {
-          "name": "Entity ID",
-          "description": "The entity ID of the cover to set the tilt position for."
-        },
-        "position": {
+        "tilt_position": {
           "name": "Position",
           "description": "The tilt position of the cover, between 0 and 100."
         }

@@ -25,10 +25,6 @@
       "name": "Ustaw pozycję rolety",
       "description": "Ustawia wewnętrznie znaną pozycję rolety.",
       "fields": {
-        "entity_id": {
-          "name": "ID encji",
-          "description": "ID encji rolety, dla której należy ustawić pozycję."
-        },
         "position": {
           "name": "Pozycja",
           "description": "Pozycja rolety w zakresie od 0 do 100."
@@ -39,11 +35,7 @@
       "name": "Ustaw pozycję nachylenia rolety",
       "description": "Ustawia wewnętrznie znaną pozycję nachylenia rolety.",
       "fields": {
-        "entity_id": {
-          "name": "ID encji",
-          "description": "ID encji rolety, dla której należy ustawić pozycję nachylenia."
-        },
-        "position": {
+        "tilt_position": {
           "name": "Pozycja",
           "description": "Pozycja nachylenia rolety w zakresie od 0 do 100."
         }
