@@ -33,6 +33,7 @@ def _make_wrapped_cover(
     tilt_time_close=None,
     tilt_time_open=None,
     tilt_mode="none",
+    travel_startup_delay=None,
 ):
     """Create a WrappedCoverTimeBased wired to a mock hass."""
     tilt_strategy = None
@@ -56,7 +57,7 @@ def _make_wrapped_cover(
         travel_time_open=30,
         tilt_time_close=tilt_time_close,
         tilt_time_open=tilt_time_open,
-        travel_startup_delay=None,
+        travel_startup_delay=travel_startup_delay,
         tilt_startup_delay=None,
         endpoint_runon_time=None,
         min_movement_time=None,
@@ -1543,3 +1544,118 @@ class TestWrappedStaleReappearance:
         # reach it — a returning entity may carry a trustworthy position.
         cover = _make_wrapped_cover()
         assert cover._is_stale_reappearance(STATE_UNAVAILABLE, "closed") is False
+
+
+class TestStartupDelayEchoDoesNotHijackTimedMove:
+    """A lagged same-direction echo landing during the travel_startup_delay
+    window (travel_calc not yet traveling) must not hijack a self-initiated
+    timed move.
+
+    The #166 echo guard only matched while travel_calc.is_traveling(), so an
+    echo arriving in the startup-delay window slipped through to
+    async_open_cover -> _async_move_to_endpoint, whose flag assignment flipped
+    _self_initiated_movement to False. The in-flight move then read as external:
+    auto-stop skipped the relay stop and the underlying ran to its endpoint.
+
+    The fix recognises the echo during the startup-delay window too (guard) and
+    commits the move's own bookkeeping only once it starts acting (flag move).
+    """
+
+    def _prep(self, cover):
+        # Avoid scheduling a real auto-updater / writing state on the mock hass.
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_echo_during_startup_delay_keeps_flag_and_sends_stop(self):
+        # features = 15 == OPEN|CLOSE|SET_POSITION|STOP; force_time_based keeps
+        # the timed path (open_cover forwarded, tracker-driven auto-stop).
+        cover = _make_wrapped_cover(
+            force_time_based_position=True, travel_startup_delay=0.05
+        )
+        _set_wrapped_features(cover, 15, state="closed")
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        await cover.set_position(50)  # timed partial move, startup delay pending
+        assert cover._startup_delay_task is not None
+        assert not cover._startup_delay_task.done()
+        assert cover._self_initiated_movement is True
+        assert not cover.travel_calc.is_traveling()  # not started yet
+
+        # A lagged echo of our own open_cover arrives inside the delay window,
+        # past the bounce grace window and dispatched with _triggered_externally.
+        cover._last_self_command_time = None
+        cover._triggered_externally = True
+        try:
+            await cover._handle_external_state_change("cover.inner", "open", "opening")
+        finally:
+            cover._triggered_externally = False
+
+        # The in-flight move stays self-initiated (echo recognised, not obeyed).
+        assert cover._self_initiated_movement is True
+
+        # Let the startup delay complete and the move run to its target.
+        await asyncio.sleep(0.1)
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 50
+
+        # Tracker arrives: a self-initiated move sends the relay stop, so the
+        # underlying is halted at 50 rather than running on to the endpoint.
+        cover.travel_calc.update_position(50)
+        await cover.auto_stop_if_necessary()
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "stop_cover" in services
+
+    @pytest.mark.asyncio
+    async def test_control_no_echo_stop_is_sent(self):
+        """Control arm: the same move with no echo does send stop_cover."""
+        cover = _make_wrapped_cover(
+            force_time_based_position=True, travel_startup_delay=0.05
+        )
+        _set_wrapped_features(cover, 15, state="closed")
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        await cover.set_position(50)
+        await asyncio.sleep(0.1)
+        assert cover.travel_calc.is_traveling()
+
+        cover.travel_calc.update_position(50)
+        await cover.auto_stop_if_necessary()
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "stop_cover" in services
+
+    @pytest.mark.asyncio
+    async def test_control_external_opposite_report_still_tracked(self):
+        """Control arm: a genuine external move in the opposite direction during
+        the startup-delay window is not suppressed — it reaches the handler and
+        reverses (cancelling the pending same-direction startup delay).
+
+        Only the same-direction echo of our own command is swallowed; an
+        opposite-direction report is a real external reversal.
+        """
+        cover = _make_wrapped_cover(
+            force_time_based_position=True, travel_startup_delay=0.05
+        )
+        _set_wrapped_features(cover, 15, state="closed")
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        await cover.set_position(50)  # self-initiated open, startup delay pending
+        assert cover._startup_delay_task is not None
+        assert not cover._startup_delay_task.done()
+
+        # An external CLOSING report (opposite to our pending open) arrives in
+        # the window. It must fall through and be handled as a reversal.
+        cover._last_self_command_time = None
+        cover._triggered_externally = True
+        try:
+            await cover._handle_external_state_change("cover.inner", "open", "closing")
+        finally:
+            cover._triggered_externally = False
+
+        # The reversal cancelled the pending open's startup delay: the report
+        # was tracked, not swallowed.
+        assert cover._startup_delay_task is None or cover._startup_delay_task.done()

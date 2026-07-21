@@ -11,6 +11,7 @@ from homeassistant.components.cover import (
 )
 from homeassistant.const import (
     ATTR_SUPPORTED_FEATURES,
+    SERVICE_OPEN_COVER,
     STATE_CLOSED,
     STATE_CLOSING,
     STATE_OPEN,
@@ -351,16 +352,38 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # the same-direction echo of our own self-initiated move is suppressed;
         # an opposite-direction report is a genuine external reversal (e.g. the
         # wall switch pressed the other way) and still falls through below.
+        #
+        # The echo can also land *before* travel_calc starts, inside the
+        # travel_startup_delay window: guarding only on is_traveling() there let
+        # it slip through to async_open/close_cover -> _async_move_to_endpoint,
+        # which flipped _self_initiated_movement to False and dropped the auto-
+        # stop -> runaway to endpoint. So the guard covers the startup-delay
+        # window too, using the command we just issued for direction (the
+        # tracker's is unset until it starts traveling).
+        in_startup_window = (
+            self._startup_delay_task is not None and not self._startup_delay_task.done()
+        )
         if (
             new_val in _MOVING_STATES
             and self._self_initiated_movement
-            and self.travel_calc.is_traveling()
+            and (self.travel_calc.is_traveling() or in_startup_window)
         ):
+            echo_is_open = (new_val == STATE_OPENING) != self._invert
+            if in_startup_window and not self.travel_calc.is_traveling():
+                # Tracker not started yet, so its direction is unset — compare
+                # the echo against the command we just issued instead.
+                cmd_is_open = self._last_command == SERVICE_OPEN_COVER
+                if cmd_is_open == echo_is_open:
+                    self._log(
+                        "_handle_external_state_change :: ignoring self-driven %s"
+                        " during startup delay",
+                        new_val,
+                    )
+                    return
             # While traveling, is_opening() is the exact complement of
             # is_closing(), so comparing it to the echo's direction (both in our
             # frame) tells same- from opposite-direction directly.
-            echo_is_open = (new_val == STATE_OPENING) != self._invert
-            if self.travel_calc.is_opening() == echo_is_open:
+            elif self.travel_calc.is_opening() == echo_is_open:
                 self._log(
                     "_handle_external_state_change :: ignoring self-driven %s"
                     " during timed move",
