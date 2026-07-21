@@ -453,6 +453,14 @@ class WrappedCoverTimeBased(CoverTimeBased):
         Mid-travel attribute updates (state opening/closing) are ignored
         because their values may be stale or live depending on the device.
 
+        While a self-initiated timed move is in flight, reports are ignored
+        outright rather than checked for opening/closing: an underlying that
+        reports current_position but never opening/closing (e.g. an MQTT
+        position-topic-only cover) always looks "stopped" to that check, so
+        its mid-travel reports would otherwise snap the tracker and cancel
+        the pending auto-stop (see the is_traveling guard below). Native
+        (holds_itself) moves are unaffected and keep snapping.
+
         Command-echo covers (reports_command_not_endpoint) report no
         trustworthy position or endpoint, so we ignore their attribute-only
         updates entirely — mirroring the short-circuit in
@@ -468,6 +476,23 @@ class WrappedCoverTimeBased(CoverTimeBased):
         if self._reports_command_not_endpoint:
             return
         if self._in_bounce_grace_window():
+            return
+        # A self-initiated TIMED move in flight: the pending auto-stop is the
+        # only thing that will halt the underlying, and _snap_to_position would
+        # kill it (set_known_position -> _handle_stop -> stop_auto_updater).
+        # Underlyings that report positions without ever reporting
+        # opening/closing (e.g. MQTT position-topic-only) hit this mid-travel;
+        # their report describes a lagging past, not a settled present. Native
+        # moves keep snapping — the device holds itself.
+        if (
+            self.travel_calc.is_traveling()
+            and self._self_initiated_movement
+            and not self._position_driver().holds_itself
+        ):
+            self._log(
+                "_handle_external_attribute_change :: ignoring mid-timed-move"
+                " position report"
+            )
             return
         new_state = event.data.get("new_state")
         if new_state is None or new_state.state not in _STOPPED_STATES:

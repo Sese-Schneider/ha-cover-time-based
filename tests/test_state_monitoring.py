@@ -1003,6 +1003,78 @@ class TestWrappedCoverSnapToReportedPosition:
         assert cover._last_command is None
 
 
+class TestAttributeOnlyReportDuringTimedMove:
+    """An underlying that reports current_position mid-travel but never
+    opening/closing (e.g. an MQTT cover with a position topic only) stays in
+    a stopped state ("open") the whole time it is physically moving. A
+    timed (force_time_based_position) move forwards open_cover/close_cover
+    and relies on the pending auto-stop (a timed stop_cover) to halt the
+    underlying — there is no native endpoint to hold it. A mid-move
+    attribute-only position report from such a device must not be read as
+    "the cover has settled": snapping to it would stop the tracker
+    (set_known_position -> _handle_stop -> stop_auto_updater) and silently
+    cancel the pending stop_cover, running the underlying to its endpoint.
+    """
+
+    @pytest.mark.asyncio
+    async def test_mid_move_attr_report_does_not_kill_pending_auto_stop(
+        self, make_cover
+    ):
+        cover = make_cover(
+            cover_entity_id="cover.inner", force_time_based_position=True
+        )
+        cover.travel_calc.set_position(0)
+        _set_wrapped_state(cover, "open", current_position=0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(50)  # timed: open_cover forwarded, stop planned
+
+        assert cover.travel_calc.is_traveling()
+        assert cover._self_initiated_movement is True
+        sent = [c.args[1] for c in cover.hass.services.async_call.call_args_list]
+        assert "open_cover" in sent
+
+        # Device reports an intermediate, already-stale position ~partway in;
+        # its state stays "open" the whole move (no opening/closing ever).
+        cover._last_self_command_time = None  # past the bounce grace window
+        _set_wrapped_state(cover, "open", current_position=10)
+        event = _make_attribute_event("cover.inner", "open", 10)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_attribute_change(event)
+
+        # The tracker must still be traveling — the mid-move report is
+        # ignored rather than snapped, so the pending auto-stop survives.
+        assert cover.travel_calc.is_traveling()
+
+        # When the tracker reaches the target, auto-stop still sends the
+        # planned stop_cover — it was never cancelled.
+        cover.travel_calc.update_position(50)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.auto_stop_if_necessary()
+
+        sent = [c.args[1] for c in cover.hass.services.async_call.call_args_list]
+        assert "stop_cover" in sent
+
+    @pytest.mark.asyncio
+    async def test_settle_snap_with_no_move_in_flight_still_works(self, make_cover):
+        """Control: with no timed move in flight, a settle report from the
+        same kind of position-only underlying still snaps as before — only
+        the mid-move report is now suppressed."""
+        cover = make_cover(
+            cover_entity_id="cover.inner", force_time_based_position=True
+        )
+        cover.travel_calc.set_position(52)
+        _set_wrapped_state(cover, "open", current_position=100)
+
+        event = _make_attribute_event("cover.inner", "open", 100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._handle_external_attribute_change(event)
+
+        assert cover.travel_calc.current_position() == 100
+        assert not cover.travel_calc.is_traveling()
+
+
 class TestAttributeChangeHookDispatch:
     """The _async_switch_state_changed dispatcher must call the new
     _handle_external_attribute_change hook on attribute-only updates,
