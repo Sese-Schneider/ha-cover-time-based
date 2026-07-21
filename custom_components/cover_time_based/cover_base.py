@@ -1011,9 +1011,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # move tilt to safe before travel (interlock behavior); tracking the
         # pre-step keeps the integration's tilt_calc in sync with reality
         # without needing snap_trackers_to_physical to "correct" the tracker
-        # at stop time. _start_tilt_pre_step and _start_pending_travel already
-        # skip relay firing when _triggered_externally is True, so the
-        # integration only mirrors the physical motion in its calculators.
+        # at stop time. The pre-step phase (_start_tilt_pre_step /
+        # _start_travel_pre_step) runs on the handler's own task and skips
+        # relay firing on _triggered_externally; the continuation phase
+        # (_start_pending_travel / _start_pending_tilt) runs on the
+        # auto-updater's task and skips on _self_initiated_movement — the
+        # instance flag that survives across the phase boundary, unlike the
+        # task-scoped _triggered_externally. Either way the integration only
+        # mirrors the physical motion in its calculators for external moves.
         current_tilt = (
             self.tilt_calc.current_position() if self._tilt_strategy else None
         )
@@ -2208,6 +2213,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         the travel command. For external triggers (where hardware is doing
         the multi-phase motion itself), only updates the integration's
         trackers — the relays are left to the hardware.
+
+        The origin gate is the instance flag ``_self_initiated_movement``,
+        NOT ``_triggered_externally``: this continuation runs on the
+        auto-updater's own task (auto_updater_hook schedules it via
+        hass.async_create_task), and ``_triggered_externally`` is task-scoped,
+        so it is always False here regardless of how the move began.
+        ``_self_initiated_movement`` is set once at the entry point and
+        survives across the phase boundary, so it is the correct carrier.
         """
         target = self._pending_travel_target
         command = self._pending_travel_command
@@ -2222,7 +2235,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
         self._moving_tilt_motor = False
-        if not self._triggered_externally:
+        if self._self_initiated_movement:
             # Stop tilt motor and send travel command.
             await self._send_tilt_stop()
             await self._async_handle_command(command)
@@ -2270,8 +2283,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Start tilt after travel pre-step completes (dual_motor).
 
         Called by auto_stop_if_necessary when travel_calc reaches the
-        allowed position. Stops the travel motor, sends the tilt command,
-        and starts tracking with tilt_calc.
+        allowed position. For self-initiated moves: stops the travel motor,
+        sends the tilt command, and starts tracking with tilt_calc. For
+        external triggers (where the hardware is driving the multi-phase
+        motion itself), only starts tilt tracking — the relays are left to
+        the hardware.
+
+        The origin gate is the instance flag ``_self_initiated_movement``,
+        NOT ``_triggered_externally``: this continuation runs on the
+        auto-updater's own task, and ``_triggered_externally`` is task-scoped,
+        so it is always False here regardless of how the move began.
+        ``_self_initiated_movement`` is set once at the entry point and
+        survives across the phase boundary, so it is the correct carrier.
         """
         target = self._pending_tilt_target
         command = self._pending_tilt_command
@@ -2286,15 +2309,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
         # Stop travel motor
-        await self._async_handle_command(SERVICE_STOP_COVER)
+        if self._self_initiated_movement:
+            await self._async_handle_command(SERVICE_STOP_COVER)
 
         # Send tilt command and start tracking
         self._moving_tilt_motor = True
         closing_tilt = command == SERVICE_CLOSE_COVER
-        if closing_tilt:
-            await self._send_tilt_close()
-        else:
-            await self._send_tilt_open()
+        if self._self_initiated_movement:
+            if closing_tilt:
+                await self._send_tilt_close()
+            else:
+                await self._send_tilt_open()
         self._last_command = command
         self._begin_movement(
             target,
