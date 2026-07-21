@@ -113,10 +113,13 @@ def _script_in_non_pulse_mode(control_mode, options):
 
     Scripts are only supported in pulse mode (they auto-return to 'off',
     which switch/toggle modes misread as a stop). Every other mode rejects
-    them, keeping the rule simple and unequivocal. Wrapped mode never carries
-    switch-slot entities via the UI — the card clears them when the mode
-    changes (see _onControlModeChange) — so this rejection only fires on raw
-    API/YAML misuse. `options` is the merged config that would be persisted.
+    them, keeping the rule simple and unequivocal. The card clears the
+    wrapped-mode switch slots, and any script-valued switch slot left over
+    from pulse mode, whenever the control mode changes (see
+    _onControlModeChange / clearedEntitiesForMode / clearedScriptEntities in
+    cover-time-based-card.js and entity-filter.js) — so this rejection is a
+    backstop that mainly fires on raw API/YAML misuse the card's own clearing
+    can't reach. `options` is the merged config that would be persisted.
     """
     if control_mode == CONTROL_MODE_PULSE:
         return None

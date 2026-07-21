@@ -203,6 +203,36 @@ test("no save-bar when neither _saving nor _saveError", async () => {
   expect(card.shadowRoot.querySelector(".save-bar")).toBeNull();
 });
 
+// F4: a generic "Save failed" alone gives no clue why (e.g. a script entity
+// left in a switch slot after leaving pulse mode) — the server's detail
+// message is shown alongside the translated text so the cause is visible.
+test("_saveError with _saveErrorDetail shows the server's reason after the translated text", async () => {
+  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card._saveError = true;
+  card._saveErrorDetail = "Script entities are only supported in pulse mode (got script.ir_open)";
+  card.requestUpdate();
+  await card.updateComplete;
+  const saveBar = card.shadowRoot.querySelector(".save-bar");
+  expect(saveBar).not.toBeNull();
+  const text = saveBar.textContent;
+  expect(text).toContain("Save failed");
+  expect(text).toContain("Script entities are only supported in pulse mode (got script.ir_open)");
+  // The detail follows the translated text, not the other way round.
+  expect(text.indexOf("Save failed")).toBeLessThan(
+    text.indexOf("Script entities are only supported")
+  );
+});
+
+test("_saveError with empty _saveErrorDetail shows only the translated text", async () => {
+  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card._saveError = true;
+  card._saveErrorDetail = "";
+  card.requestUpdate();
+  await card.updateComplete;
+  const saveBar = card.shadowRoot.querySelector(".save-bar");
+  expect(saveBar.textContent.trim()).toBe("Save failed — value reverted");
+});
+
 test("device tab renders a fieldset, timing tab renders a borderless fieldset around the timing table", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
   expect(card.shadowRoot.querySelector("fieldset")).not.toBeNull();

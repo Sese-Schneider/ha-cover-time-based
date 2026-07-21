@@ -120,6 +120,39 @@ test("_onControlModeChange to toggle clears cover_entity_id and stop_switch_enti
   expect(updates[0].stop_switch_entity_id).toBeNull();
 });
 
+// F4: leaving pulse mode must not let a script entity survive in a switch
+// slot — every subsequent save is silently rejected by the backend otherwise.
+test("_onControlModeChange from pulse to toggle nulls a script-valued switch slot", async () => {
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "pulse", open_switch_entity_id: "script.ir_open" },
+  });
+  const updates = captureUpdates(card);
+  card._onControlModeChange({ target: { value: "toggle" } });
+  expect(updates[0].control_mode).toBe("toggle");
+  expect(updates[0].open_switch_entity_id).toBeNull();
+});
+
+test("_onControlModeChange from pulse to toggle leaves a switch-valued slot alone", async () => {
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "pulse", open_switch_entity_id: "switch.open" },
+  });
+  const updates = captureUpdates(card);
+  card._onControlModeChange({ target: { value: "toggle" } });
+  expect(updates[0].control_mode).toBe("toggle");
+  // switch.open is a valid value everywhere — must survive the mode switch
+  expect(updates[0].open_switch_entity_id).toBeUndefined();
+});
+
+test("_onControlModeChange staying on pulse does not touch script-valued slots", async () => {
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "pulse", open_switch_entity_id: "script.ir_open" },
+  });
+  const updates = captureUpdates(card);
+  card._onControlModeChange({ target: { value: "pulse" } });
+  expect(updates[0].control_mode).toBe("pulse");
+  expect(updates[0].open_switch_entity_id).toBeUndefined();
+});
+
 // ---------------------------------------------------------------------------
 // _onPulseTimeChange
 // ---------------------------------------------------------------------------

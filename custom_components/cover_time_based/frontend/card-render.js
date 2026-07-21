@@ -135,7 +135,11 @@ export function renderConfigSections(card) {
       ? html`<div class="save-bar"><span class="saving-indicator">${card._t("saving")}</span></div>`
       : ""}
     ${card._saveError
-      ? html`<div class="save-bar"><span class="save-error">${card._t("save_failed")}</span></div>`
+      ? html`<div class="save-bar"><span class="save-error"
+          >${card._t("save_failed")}${card._saveErrorDetail
+            ? html` — ${card._saveErrorDetail}`
+            : ""}</span
+        ></div>`
       : ""}
   `;
 }

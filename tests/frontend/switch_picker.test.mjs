@@ -11,6 +11,7 @@ import {
   switchLabelKey,
   showsPulseTime,
   clearedEntitiesForMode,
+  clearedScriptEntities,
   clearedTiltConfig,
   coverHasNativeTilt,
   coverConfirmedWithoutTilt,
@@ -128,6 +129,59 @@ test("coverConfirmedWithoutTilt only confirms for an available, tilt-less cover"
   assert.equal(coverConfirmedWithoutTilt({ state: "unknown", attributes: {} }), false);
   assert.equal(coverConfirmedWithoutTilt(null), false);
   assert.equal(coverConfirmedWithoutTilt(undefined), false);
+});
+
+// ---------------------------------------------------------------------------
+// clearedScriptEntities — pulse-only script entities must not survive a mode
+// switch (F4): a script left in a switch slot after leaving pulse mode makes
+// every subsequent save fail (the backend rejects script entities outside
+// pulse mode).
+// ---------------------------------------------------------------------------
+
+test("clearedScriptEntities nulls a script-valued open switch slot when leaving pulse mode", () => {
+  const config = { open_switch_entity_id: "script.ir_open" };
+  assert.deepEqual(clearedScriptEntities("toggle", config), {
+    open_switch_entity_id: null,
+  });
+});
+
+test("clearedScriptEntities leaves a switch-valued slot untouched", () => {
+  const config = { open_switch_entity_id: "switch.x" };
+  assert.deepEqual(clearedScriptEntities("toggle", config), {});
+});
+
+test("clearedScriptEntities checks every switch/tilt slot", () => {
+  const config = {
+    open_switch_entity_id: "script.open",
+    close_switch_entity_id: "script.close",
+    stop_switch_entity_id: "script.stop",
+    tilt_open_switch: "script.tilt_open",
+    tilt_close_switch: "script.tilt_close",
+    tilt_stop_switch: "script.tilt_stop",
+  };
+  assert.deepEqual(clearedScriptEntities("switch", config), {
+    open_switch_entity_id: null,
+    close_switch_entity_id: null,
+    stop_switch_entity_id: null,
+    tilt_open_switch: null,
+    tilt_close_switch: null,
+    tilt_stop_switch: null,
+  });
+});
+
+test("clearedScriptEntities returns {} when the mode stays pulse", () => {
+  const config = { open_switch_entity_id: "script.ir_open" };
+  assert.deepEqual(clearedScriptEntities("pulse", config), {});
+});
+
+test("clearedScriptEntities returns {} when there is no config yet", () => {
+  assert.deepEqual(clearedScriptEntities("toggle", null), {});
+  assert.deepEqual(clearedScriptEntities("toggle", undefined), {});
+});
+
+test("clearedScriptEntities returns {} when no slot holds a script entity", () => {
+  const config = { open_switch_entity_id: "switch.open", control_mode: "pulse" };
+  assert.deepEqual(clearedScriptEntities("switch", config), {});
 });
 
 test("toggle_opposite behaves like toggle for pickers and clearing", () => {

@@ -16,6 +16,7 @@ import {
   filterEntitiesByValidEntries,
   switchLabelKey,
   clearedEntitiesForMode,
+  clearedScriptEntities,
   clearedTiltConfig,
   coverHasNativeTilt,
   coverConfirmedWithoutTilt,
@@ -39,6 +40,7 @@ class CoverTimeBasedCard extends LitElement {
       _knownPosition: { type: String },
       _loadError: { type: String },
       _saveError: { type: Boolean },
+      _saveErrorDetail: { type: String },
       _openHelp: { type: String },
     };
   }
@@ -50,6 +52,7 @@ class CoverTimeBasedCard extends LitElement {
     this._loading = false;
     this._saving = false;
     this._saveError = false;
+    this._saveErrorDetail = "";
     this._activeTab = "device";
     this._knownPosition = "unknown";
     this._helpersLoaded = false;
@@ -341,6 +344,7 @@ class CoverTimeBasedCard extends LitElement {
     if (!this._selectedEntity || !this.hass || !this._config) return;
     this._saving = true;
     this._saveError = false;
+    this._saveErrorDetail = "";
     try {
       const { entry_id, ...fields } = this._config;
       await this.hass.callWS({
@@ -351,8 +355,15 @@ class CoverTimeBasedCard extends LitElement {
     } catch (err) {
       console.error("Failed to save config:", err);
       this._saveError = true;
+      // The generic translated "save_failed" text alone gives no clue why
+      // (e.g. a script entity left in a switch slot the backend rejects) —
+      // keep the server's message so the save-bar can show it alongside.
+      this._saveErrorDetail = err?.message || "";
       await this._loadConfig();
-      setTimeout(() => { this._saveError = false; }, 3000);
+      setTimeout(() => {
+        this._saveError = false;
+        this._saveErrorDetail = "";
+      }, 3000);
     }
     this._saving = false;
   }
@@ -425,8 +436,15 @@ class CoverTimeBasedCard extends LitElement {
   _onControlModeChange(e) {
     const mode = e.target.value;
     // Clear entities that don't belong to the new mode so they don't linger
-    // as stale config (see clearedEntitiesForMode).
-    const updates = { control_mode: mode, ...clearedEntitiesForMode(mode) };
+    // as stale config (see clearedEntitiesForMode), and null out any switch
+    // slot left holding a pulse-only script entity (see clearedScriptEntities)
+    // — the backend rejects those outside pulse mode and every subsequent
+    // save would otherwise fail silently.
+    const updates = {
+      control_mode: mode,
+      ...clearedEntitiesForMode(mode),
+      ...clearedScriptEntities(mode, this._config),
+    };
     // Dual-motor tilt on a wrapped cover delegates tilt to the underlying
     // entity, so it is only valid once a cover that supports tilt natively is
     // selected. Switching into wrapped mode can't carry a dual_motor selection
