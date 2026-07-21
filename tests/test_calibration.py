@@ -991,3 +991,65 @@ class TestMinMovementPulseLoop:
         assert cover._calibration is None
         assert result["attribute"] == "min_movement_time"
         assert result["value"] >= 0.2
+
+
+class TestCalibrationStopIdempotent:
+    """Task 8: on Finish/timeout, don't pulse a motor that already self-stopped.
+
+    The travel/tilt-time protocol is "press Finish when the cover reaches the
+    endpoint" — the motor has already self-stopped at its limit an instant
+    earlier on momentary hardware (toggle/pulse/wrapped). Sending a stop there
+    is itself a movement command: on toggle-opposite it pulses the *opposite*
+    relay = drives off (#153); on toggle same-button it restarts the motor; on
+    pulse with send_endpoint_stop=False it's a go-to-favourite reposition
+    (#133). Switch mode's latched relay is the one case that must still be
+    de-energized, and cancel always stops regardless of hardware — the user is
+    bailing mid-run and a running untracked motor is the worse failure.
+    """
+
+    @pytest.mark.asyncio
+    async def test_finish_calibration_no_stop_pulse_on_toggle_opposite(
+        self, make_cover
+    ):
+        """Finish on toggle-opposite must not pulse the opposite relay."""
+        cover = make_cover(control_mode="toggle_opposite")
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_close", timeout=300.0)
+            n = len(cover.hass.services.async_call.call_args_list)
+            await cover.stop_calibration()
+        calls = [
+            (c[0][1], c[0][2].get("entity_id"))
+            for c in cover.hass.services.async_call.call_args_list[n:]
+        ]
+        assert ("turn_on", "switch.open") not in calls, calls
+
+    @pytest.mark.asyncio
+    async def test_finish_calibration_switch_mode_still_stops(self, make_cover):
+        """Contrast: switch mode's latched relay must still de-energize on Finish."""
+        cover = make_cover(control_mode="switch")
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_close", timeout=300.0)
+            n = len(cover.hass.services.async_call.call_args_list)
+            await cover.stop_calibration()
+        calls = [
+            (c[0][1], c[0][2].get("entity_id"))
+            for c in cover.hass.services.async_call.call_args_list[n:]
+        ]
+        assert ("turn_off", "switch.close") in calls, calls
+        assert ("turn_off", "switch.open") in calls, calls
+
+    @pytest.mark.asyncio
+    async def test_cancel_calibration_toggle_opposite_still_stops(self, make_cover):
+        """Cancel always stops, even on self-stopping hardware."""
+        cover = make_cover(control_mode="toggle_opposite")
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_close", timeout=300.0)
+            n = len(cover.hass.services.async_call.call_args_list)
+            await cover.stop_calibration(cancel=True)
+        calls = [
+            (c[0][1], c[0][2].get("entity_id"))
+            for c in cover.hass.services.async_call.call_args_list[n:]
+        ]
+        assert ("turn_on", "switch.open") in calls, calls

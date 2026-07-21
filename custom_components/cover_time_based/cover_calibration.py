@@ -43,6 +43,7 @@ class CalibrationMixin:
         async def _async_handle_command(self, _command: str, *_args: Any) -> None: ...
         async def _send_stop(self) -> None: ...
         def async_write_ha_state(self) -> None: ...
+        def _self_stops_at_endpoints(self) -> bool: ...
 
     async def start_calibration(self, **kwargs):
         """Start a calibration test for the given attribute."""
@@ -334,7 +335,12 @@ class CalibrationMixin:
                 and not self._calibration.automation_task.done()
             ):
                 self._calibration.automation_task.cancel()
-            await self._send_stop()
+            # Stop the motor. On momentary hardware (toggle/pulse-no-endpoint-stop)
+            # the time-test protocol means the motor already self-stopped at its
+            # limit — a stop pulse there is a movement command (#153/#133), so
+            # skip it. A timeout is never a user cancel.
+            if not self._self_stops_at_endpoints():
+                await self._send_stop()
             self._restore_calibration_startup_delay()
             self._calibration = None
             self.async_write_ha_state()
@@ -351,8 +357,12 @@ class CalibrationMixin:
         # Cancel timeout/automation tasks
         self._cancel_calibration_tasks()
 
-        # Stop the motor
-        await self._send_stop()
+        # Stop the motor. On momentary hardware (toggle/pulse-no-endpoint-stop)
+        # the time-test protocol means the motor already self-stopped at its
+        # limit — a stop pulse there is a movement command (#153/#133), so skip
+        # it. Cancel always stops: the user is bailing mid-run.
+        if cancel or not self._self_stops_at_endpoints():
+            await self._send_stop()
 
         result = {}
         if not cancel:
