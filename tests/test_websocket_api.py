@@ -1242,6 +1242,48 @@ class TestControlModeSchemaValidation:
         assert result["control_mode"] == CONTROL_MODE_TOGGLE_OPPOSITE
 
 
+class TestTiltPositionLimitSchemaValidation:
+    """safe_tilt_position / max_tilt_allowed_position used bare `int`, which
+    voluptuous checks with isinstance — rejecting valid JSON floats like
+    50.0 (isinstance(50.0, int) is False) while admitting bool (isinstance
+    (True, int) is True, since bool subclasses int). Coerce(int) fixes the
+    float rejection; no sibling ws field guards against bool, so that
+    admission is left as-is rather than inventing a new validation style.
+    """
+
+    @pytest.mark.parametrize(
+        "field", ["safe_tilt_position", "max_tilt_allowed_position"]
+    )
+    def test_float_value_accepted(self, field):
+        schema = ws_update_config._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": ENTITY_ID,
+                field: 50.0,
+            }
+        )
+        assert result[field] == 50
+
+    @pytest.mark.parametrize(
+        "field", ["safe_tilt_position", "max_tilt_allowed_position"]
+    )
+    def test_out_of_range_still_rejected(self, field):
+        import voluptuous as vol
+
+        schema = ws_update_config._ws_schema
+        with pytest.raises(vol.Invalid):
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    field: 150.0,
+                }
+            )
+
+
 # ---------------------------------------------------------------------------
 # ws_update_config — timing field validation
 # ---------------------------------------------------------------------------

@@ -301,10 +301,10 @@ async def ws_get_config(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
         vol.Optional("safe_tilt_position"): vol.Any(
-            None, vol.All(int, vol.Range(min=0, max=100))
+            None, vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
         ),
         vol.Optional("max_tilt_allowed_position"): vol.Any(
-            None, vol.All(int, vol.Range(min=0, max=100))
+            None, vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
         ),
         vol.Optional("tilt_open_switch"): vol.Any(str, None),
         vol.Optional("tilt_close_switch"): vol.Any(str, None),
