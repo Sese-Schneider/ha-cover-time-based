@@ -8,7 +8,8 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.components.cover import ATTR_CURRENT_POSITION
+from homeassistant.const import STATE_CLOSED, STATE_UNAVAILABLE
 
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
 
@@ -1659,3 +1660,86 @@ class TestStartupDelayEchoDoesNotHijackTimedMove:
         # The reversal cancelled the pending open's startup delay: the report
         # was tracked, not swallowed.
         assert cover._startup_delay_task is None or cover._startup_delay_task.done()
+
+
+class TestWrappedSyncsToLivePositionAtStartup:
+    """B12: on restart the tracker restores from the PositionStore, but the
+    underlying may have been moved (app/remote) while HA was down. Trust a
+    live reported position over the stored snapshot at startup — but not a
+    bare `closed` (the untrustworthy reappearance shape #160 guards against),
+    an unavailable underlying, or when ignore_reported_position is set.
+    """
+
+    @staticmethod
+    def _set_underlying_state(cover, *, state="open", current_position=None):
+        st = MagicMock()
+        st.state = state
+        attrs = {}
+        if current_position is not None:
+            attrs[ATTR_CURRENT_POSITION] = current_position
+        st.attributes = attrs
+        cover.hass.states.get = lambda eid: (
+            st if eid == cover._cover_entity_id else None
+        )
+        return st
+
+    @staticmethod
+    async def _added_to_hass(cover):
+        with patch(
+            "custom_components.cover_time_based.cover_wrapped.async_track_state_change_event",
+            return_value=MagicMock(),
+        ):
+            await cover.async_added_to_hass()
+
+    @pytest.mark.asyncio
+    async def test_syncs_to_live_position_on_restart(
+        self, make_cover, _mock_position_store
+    ):
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(cover_entity_id="cover.inner")
+        self._set_underlying_state(cover, state="open", current_position=70)
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 70
+
+    @pytest.mark.asyncio
+    async def test_ignore_reported_position_keeps_stored_value(
+        self, make_cover, _mock_position_store
+    ):
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(cover_entity_id="cover.inner", ignore_reported_position=True)
+        self._set_underlying_state(cover, state="open", current_position=70)
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 30
+
+    @pytest.mark.asyncio
+    async def test_unavailable_underlying_keeps_stored_value(
+        self, make_cover, _mock_position_store
+    ):
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(cover_entity_id="cover.inner")
+        self._set_underlying_state(
+            cover, state=STATE_UNAVAILABLE, current_position=None
+        )
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 30
+
+    @pytest.mark.asyncio
+    async def test_bare_closed_at_startup_keeps_stored_value(
+        self, make_cover, _mock_position_store
+    ):
+        # A bare `closed` with no position attribute is exactly the
+        # untrustworthy reappearance shape #160 guards against — trust_closed
+        # must stay False at startup too.
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(cover_entity_id="cover.inner")
+        self._set_underlying_state(cover, state=STATE_CLOSED, current_position=None)
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 30

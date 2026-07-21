@@ -95,6 +95,18 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 )
             )
 
+        # The cover may have been moved (app/remote) while HA was down; the
+        # store's snapshot is then stale and the first timed move would run
+        # the wrong distance in possibly the wrong direction. Trust a live
+        # reported position over the stored one at startup.
+        live = self._wrapped_reported_position(trust_closed=False)
+        if live is not None and live != self.travel_calc.current_position():
+            self._log(
+                "async_added_to_hass :: syncing to underlying's live position %d",
+                live,
+            )
+            self.travel_calc.set_position(live)
+
     def _are_entities_configured(self) -> bool:
         """Return True if the wrapped cover entity is configured."""
         return bool(self._cover_entity_id)
