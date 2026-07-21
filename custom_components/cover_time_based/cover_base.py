@@ -650,7 +650,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         pending opposite-direction startup delay, an external sequential close),
         so seeding the opposite endpoint always reaches the full-travel branch.
         Keep that exclusion in sync if those guards ever change.
+
+        Validates BEFORE seeding the opposite endpoint: _async_move_to_endpoint
+        performs the same _require_travel_time / _require_movement_target_available
+        checks itself further down its own path, so this is belt-and-braces
+        pre-validation, not duplicated logic that can drift out of sync — its
+        only job is to keep a failed command from mutating travel_calc first.
+        Without it, a raise from either check (e.g. the switch entity going
+        unavailable) left the tracker seeded at the opposite endpoint with no
+        movement ever started to correct it, so a stale/wrong position got
+        persisted on the next state write. _self_initiated_movement is
+        refreshed first (mirroring _async_move_to_endpoint's own first line)
+        so _require_movement_target_available's gate sees this call's trigger
+        source rather than a value left over from a previous movement.
         """
+        closing = target == 0
+        self._self_initiated_movement = not self._triggered_externally
+        self._require_travel_time(closing)
+        self._require_movement_target_available(self._movement_target(closing))
+
         opposite = 100 if target == 0 else 0
         self._log(
             "_force_full_redrive :: target=%d modeled from opposite=%d",
