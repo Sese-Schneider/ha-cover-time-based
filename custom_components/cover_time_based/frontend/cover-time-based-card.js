@@ -528,16 +528,23 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   async _onStopCalibration(cancel = false) {
+    const entityId = this._selectedEntity;
     this._knownPosition = "unknown";
     this._calibratingOverride = false;
     this.requestUpdate();
     try {
       const result = await this.hass.callWS({
         type: "cover_time_based/stop_calibration",
-        entity_id: this._selectedEntity,
+        entity_id: entityId,
         cancel,
       });
-      if (!cancel && result?.attribute) {
+      // The selection can change while this WS call is in flight (the user
+      // finishes calibrating one cover and quickly switches the picker to
+      // another before the result arrives). Applying a stale result would
+      // merge one device's measured time into another's config - and the
+      // next autosave would then write it there. Mirrors the guard in
+      // _loadConfig.
+      if (!cancel && result?.attribute && this._selectedEntity === entityId) {
         const configKey = ATTRIBUTE_TO_CONFIG[result.attribute];
         if (configKey) this._updateLocal({ [configKey]: result.value });
       }
