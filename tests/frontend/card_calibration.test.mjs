@@ -550,8 +550,9 @@ test("RACE: _isCalibrating() stays true when the override is set but calibration
 
 test("live entity picker: switching device clears _sawCalibrationActive alongside _calibratingOverride", async () => {
   // The device picker's @value-changed handler lives inline in
-  // card-render.js's renderEntityPicker (the _onEntityChange method on the
-  // card class is dead code - nothing wires it up). This exercises the real,
+  // card-render.js's renderEntityPicker (there is no separate method on the
+  // card class — an earlier _onEntityChange method was dead code nothing
+  // wired up, and has since been removed). This exercises the real,
   // rendered picker rather than calling a method the running card never
   // calls, so it proves the reset actually fires on the live path.
   card = await mountCard(makeHass(), { selectedEntity: "cover.a" });

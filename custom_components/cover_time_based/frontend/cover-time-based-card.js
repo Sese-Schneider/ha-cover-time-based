@@ -451,15 +451,6 @@ class CoverTimeBasedCard extends LitElement {
 
   // --- Event handlers ---
 
-  _onEntityChange(e) {
-    const newValue = e.detail?.value || e.target?.value || "";
-    this._setSelectedEntity(newValue);
-    this._config = null;
-    if (this._selectedEntity) {
-      this._loadConfig();
-    }
-  }
-
   _onControlModeChange(e) {
     const mode = e.target.value;
     // Clear entities that don't belong to the new mode so they don't linger
