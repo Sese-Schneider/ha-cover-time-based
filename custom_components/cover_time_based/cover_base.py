@@ -725,6 +725,29 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return False
         return True
 
+    async def _stop_displaced_movement_for_tilt(
+        self, was_tilt_motor_move: bool
+    ) -> None:
+        """Stop whatever a tilt command is displacing, on the right axis.
+
+        A moving dedicated tilt motor gets a tilt stop ONLY — routing through
+        the travel STOP would pulse an idle travel relay off a stale
+        ``_last_command``, which on toggle hardware is a movement command
+        (#153). Shared-motor tilt (and a genuinely moving travel axis) keeps
+        the travel STOP.
+
+        ``was_tilt_motor_move`` is captured by the caller *before*
+        ``_abandon_active_lifecycle`` resets ``_moving_tilt_motor``; the flag
+        is already False by the time the direction-change branches run, so the
+        decision has to be passed in rather than read off the instance here.
+        """
+        if was_tilt_motor_move and not self.travel_calc.is_traveling():
+            await self._send_tilt_stop()
+        else:
+            await self._async_handle_command(SERVICE_STOP_COVER)
+            if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
+                await self._send_tilt_stop()
+
     async def async_stop_cover(
         self, *, supersede: bool = True, tilt_axis_reported: bool = False, **kwargs
     ):
@@ -999,6 +1022,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def _async_move_tilt_to_endpoint(self, target):
         """Move tilt to an endpoint (0=fully closed, 100=fully open)."""
         self._self_initiated_movement = not self._triggered_externally
+        # Capture before _abandon_active_lifecycle resets it — see
+        # _stop_displaced_movement_for_tilt.
+        was_tilt_motor_move = self._moving_tilt_motor
         await self._abandon_active_lifecycle()
 
         closing = target == 0
@@ -1015,12 +1041,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     "_async_move_tilt_to_endpoint :: direction change, cancelling startup delay"
                 )
                 self._cancel_startup_delay_task()
-                await self._async_handle_command(SERVICE_STOP_COVER)
-                if (
-                    self._tilt_strategy is not None
-                    and self._tilt_strategy.uses_tilt_motor
-                ):
-                    await self._send_tilt_stop()
+                # Mirror the travel counterpart: cancelling a pending
+                # startup-delay move on a direction change stops the axis and
+                # returns — a second press then drives the new direction. Route
+                # the stop through the axis-aware helper so a dedicated tilt
+                # motor is not stopped via a travel STOP off a stale
+                # _last_command (#153).
+                await self._stop_displaced_movement_for_tilt(was_tilt_motor_move)
+                self._last_command = None
+                return
             else:
                 self._log(
                     "_async_move_tilt_to_endpoint :: startup delay already active, not restarting"
@@ -1037,7 +1066,39 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         current_tilt = self.tilt_calc.current_position()
         if current_tilt is not None and current_tilt == target:
+            if self.tilt_calc.is_traveling():
+                # The animation is momentarily sitting on the target while still
+                # travelling away from it (a reversal landing on the endpoint it
+                # is leaving). A press for that endpoint is a user stop, not a
+                # no-op — the old early-return left the motor running.
+                await self.async_stop_cover(tilt_axis_reported=False)
             return
+
+        # In-motion reversal: the new tilt direction opposes the tilt already in
+        # flight. A reversal is never a single step — stop the axis, let it come
+        # to rest (settle gap), then drive the other way (#147/#153). Bail if a
+        # stop or newer target claimed the movement inside the gap. Only for
+        # self-driven moves: an external reversal was already stopped-and-turned
+        # by the hardware, so firing a stop here would just mark phantom relay
+        # echoes and swallow the user's next press — we only retrack it.
+        if (
+            not self._triggered_externally
+            and self.tilt_calc.is_traveling()
+            and self.tilt_calc.is_closing() != closing
+        ):
+            self._log(
+                "_async_move_tilt_to_endpoint :: in-motion reversal, stop + settle"
+            )
+            self.tilt_calc.stop()
+            if self.travel_calc.is_traveling():
+                self.travel_calc.stop()
+            self.stop_auto_updater()
+            await self._stop_displaced_movement_for_tilt(was_tilt_motor_move)
+            if not await self._settle_before_reversing():
+                return
+            current_tilt = self.tilt_calc.current_position()
+            if current_tilt is not None and current_tilt == target:
+                return
 
         if current_tilt is None:
             current_tilt = 100 if closing else 0
@@ -1227,6 +1288,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def set_tilt_position(self, position):
         """Move cover tilt to a designated position."""
         self._self_initiated_movement = not self._triggered_externally
+        # Capture before _abandon_active_lifecycle resets it: a dedicated tilt
+        # motor being displaced must get an axis-aware stop, not a travel STOP
+        # off a stale _last_command (#153) — see _stop_displaced_movement_for_tilt.
+        was_tilt_motor_move = self._moving_tilt_motor
         await self._abandon_active_lifecycle()
         current = self.tilt_calc.current_position()
         target = position
@@ -1259,14 +1324,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
 
         if is_direction_change:
+            was_moving = (
+                self.tilt_calc.is_traveling() or self.travel_calc.is_traveling()
+            )
             if self.tilt_calc.is_traveling():
                 self.tilt_calc.stop()
             if self.travel_calc.is_traveling():
                 self.travel_calc.stop()
             self.stop_auto_updater()
-            await self._async_handle_command(SERVICE_STOP_COVER)
-            if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
-                await self._send_tilt_stop()
+            await self._stop_displaced_movement_for_tilt(was_tilt_motor_move)
+            # A reversal is stop → settle → go: give the motor (or momentary
+            # relay) time to come to rest before driving the other way, and bail
+            # if a stop/newer target claimed the movement inside the gap.
+            if was_moving and not await self._settle_before_reversing():
+                return
             current = self.tilt_calc.current_position()
             if target == current:
                 return
