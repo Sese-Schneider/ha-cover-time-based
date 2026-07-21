@@ -265,10 +265,33 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         for timer in self._pending_switch_timers.values():
             timer()
         self._pending_switch_timers.clear()
+        # Cancel the two ghost timers: the endpoint run-on stop and the
+        # startup-delay arming. Left alive across a reload (every card save
+        # reloads the entry) they later fire real relay commands against the
+        # reloaded entity — a late STOP that kills the new movement, or a
+        # re-armed auto-updater that persists a ghost position.
+        self._cancel_startup_delay_task()
+        self._cancel_delay_task()
         if self._calibration is not None:
+            # A reload/unload mid-calibration (integration reload, HA restart,
+            # config-entry unload — a card save is rejected while a calibration
+            # runs) would otherwise cancel the calibration's safety timeout AND
+            # leave the motor running with nothing left to stop it. Calibration
+            # was driving the motor, so a stop here is a stop of our own
+            # movement — but only on hardware that does NOT self-stop at its
+            # endpoints. Switch mode (False) always stops, de-energizing the
+            # latched relay (the real bug). Momentary hardware (toggle/pulse)
+            # has already self-stopped at its limit, and a "stop" there is
+            # itself a movement command (#153/#133), so it is skipped — the
+            # same idempotency rule as _calibration_timeout / stop_calibration
+            # (Tasks 8/10).
             self._restore_calibration_startup_delay()
             self._cancel_calibration_tasks()
-            self._calibration = None
+            try:
+                if not self._self_stops_at_endpoints():
+                    await self._calibration_stop()
+            finally:
+                self._calibration = None
 
     # -----------------------------------------------------------------------
     # Properties
