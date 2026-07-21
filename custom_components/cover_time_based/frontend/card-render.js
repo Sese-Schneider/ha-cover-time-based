@@ -151,7 +151,7 @@ export function renderControlMode(card, c) {
   return html`
     <div class="section">
       <div class="field-label">${card._t("control_mode.label")}</div>
-      <select class="ha-select" @change=${card._onControlModeChange}>
+      <select class="ha-select" id="control-mode-select" @change=${card._onControlModeChange}>
         <option value="wrapped" ?selected=${mode === "wrapped"}>
           ${card._t("control_mode.wrapped")}
         </option>
@@ -379,7 +379,7 @@ export function renderTiltSupport(card, c) {
   return html`
     <div class="section">
       <div class="field-label">${card._t("tilt.label")}</div>
-      <select class="ha-select" @change=${card._onTiltModeChange}>
+      <select class="ha-select" id="tilt-mode-select" @change=${card._onTiltModeChange}>
         <option value="none" ?selected=${tiltMode === "none"}>
           ${card._t("tilt.none")}
         </option>

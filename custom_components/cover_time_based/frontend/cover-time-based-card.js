@@ -208,17 +208,30 @@ class CoverTimeBasedCard extends LitElement {
    * applied it yet) would immediately clear the override it just set.
    */
   updated(changedProperties) {
-    if (!changedProperties.has("hass")) return;
-    const active = this._getEntityState()?.attributes?.calibration_active === true;
-    if (active) this._sawCalibrationActive = true;
-    else if (this._sawCalibrationActive && this._calibratingOverride === true) {
-      // Backend calibration ended without us (timeout / reload / other tab):
-      // yield back to ground truth instead of showing Calibration Active forever.
-      this._calibratingOverride = undefined;
-      this._sawCalibrationActive = false;
-      this.requestUpdate();
+    if (changedProperties.has("hass")) {
+      const active = this._getEntityState()?.attributes?.calibration_active === true;
+      if (active) this._sawCalibrationActive = true;
+      else if (this._sawCalibrationActive && this._calibratingOverride === true) {
+        // Backend calibration ended without us (timeout / reload / other tab):
+        // yield back to ground truth instead of showing Calibration Active forever.
+        this._calibratingOverride = undefined;
+        this._sawCalibrationActive = false;
+        this.requestUpdate();
+      }
+      if (!active && !this._isCalibrating()) this._sawCalibrationActive = false;
     }
-    if (!active && !this._isCalibrating()) this._sawCalibrationActive = false;
+
+    // Native <select>s: ?selected only sets defaultSelected, which a
+    // user-dirtied option ignores. Re-assert the value imperatively.
+    const syncs = [
+      ["#position-select", this._knownPosition],
+      ["#control-mode-select", this._config?.control_mode || "switch"],
+      ["#tilt-mode-select", this._config?.tilt_mode || "none"],
+    ];
+    for (const [sel, value] of syncs) {
+      const el = this.shadowRoot?.querySelector(sel);
+      if (el && el.value !== value) el.value = value;
+    }
   }
 
   async _loadEntityList() {
