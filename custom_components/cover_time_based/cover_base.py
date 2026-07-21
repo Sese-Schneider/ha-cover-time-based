@@ -256,9 +256,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     )
                 )
 
+    async def _cancel_background_pulses(self) -> None:
+        """Cancel any background relay-pulse completions on removal.
+
+        No-op in the base class. Pulse mode overrides this to cancel its
+        in-flight ``_complete_pulse`` tasks and turn the affected relays off,
+        so a relay caught mid-pulse is not left latched ON.
+        """
+        return
+
     async def async_will_remove_from_hass(self):
         """Clean up when entity is removed."""
         self.stop_auto_updater()
+        await self._cancel_background_pulses()
         for unsub in self._state_listener_unsubs:
             unsub()
         self._state_listener_unsubs.clear()
@@ -2661,6 +2671,28 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_switch_timers[entity_id] = async_call_later(
             self.hass, 5, _clear_pending
         )
+
+    def _unmark_switch_pending(self, entity_id, count=1):
+        """Drop ``count`` pending echo transitions previously marked.
+
+        Used when a state-change echo we pre-counted will no longer arrive —
+        e.g. a scheduled relay ``turn_off`` gets cancelled before it fires, so
+        its deferred OFF echo never happens. Mirrors the decrement in
+        ``_async_switch_state_changed`` (clamp at zero, drop the key and cancel
+        the safety timer when it reaches zero) so a stale count can never linger
+        and swallow a genuine press.
+        """
+        current = self._pending_switch.get(entity_id, 0)
+        if current <= 0:
+            return
+        remaining = current - count
+        if remaining > 0:
+            self._pending_switch[entity_id] = remaining
+            return
+        del self._pending_switch[entity_id]
+        timer = self._pending_switch_timers.pop(entity_id, None)
+        if timer:
+            timer()
 
     async def _async_switch_state_changed(self, event):
         """Handle state changes on monitored switch entities."""
