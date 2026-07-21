@@ -75,6 +75,22 @@ class PulseModeCover(SwitchCoverTimeBased):
         """
         return not self._send_endpoint_stop
 
+    async def _settle_external_endpoint(self) -> None:
+        """Pulse the dedicated stop relay after an externally-triggered move
+        reaches an endpoint, when send_endpoint_stop is on.
+
+        A latching controller (#129) needs the stop pulse or it stays stuck
+        "moving" even for wall-button moves. The stop is a separate relay that
+        can never restart the motor, so this is safe; with send_endpoint_stop
+        off (#133 go-to-favourite hardware) the base no-op stands.
+
+        endpoint_runon_time deferral is not modeled on this external path (only
+        the self-initiated path defers via _delay_task) — it can be added later
+        if a user asks.
+        """
+        if self._send_endpoint_stop:
+            await self._send_stop()
+
     # --- Pulse-completion registry -----------------------------------------
 
     async def _complete_pulse(self, entity_id):

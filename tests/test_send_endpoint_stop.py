@@ -267,3 +267,72 @@ async def test_switch_ignores_send_endpoint_stop(make_cover):
     the option."""
     cover = make_cover(control_mode=CONTROL_MODE_SWITCH, send_endpoint_stop=False)
     assert cover._self_stops_at_endpoints() is False
+
+
+# ---------------------------------------------------------------------------
+# 6. Externally-triggered (wall-button) moves must also get the endpoint stop
+#    (#129) — auto_stop_if_necessary's external branch used to end in the base
+#    no-op _settle_external_endpoint, never consulting _self_stops_at_endpoints
+#    / send_endpoint_stop.
+# ---------------------------------------------------------------------------
+
+
+async def _external_open(cover):
+    """Simulate a wall-button open: wrap async_open_cover in _triggered_externally,
+    the flag pattern used throughout the suite for externally-triggered moves."""
+    cover._triggered_externally = True
+    try:
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+    finally:
+        cover._triggered_externally = False
+
+
+@pytest.mark.asyncio
+async def test_external_pulse_open_gets_endpoint_stop(make_cover):
+    """A wall-button (externally-triggered) open that reaches 100% must still
+    pulse the stop relay when send_endpoint_stop=True. Without the fix, a
+    latching controller (#129) never receives its stop for wall-button moves
+    and stays stuck "moving", blocking the next press."""
+    cover = _make_pulse(make_cover, send_endpoint_stop=True, endpoint_runon_time=0)
+    cover.travel_calc.set_position(0)
+
+    await _external_open(cover)
+    assert cover._self_initiated_movement is False
+    assert cover.travel_calc.is_traveling()
+
+    cover.travel_calc.set_position(100)  # the wall-driven motor arrives
+    cover.hass.services.async_call.reset_mock()
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.auto_stop_if_necessary()
+
+    stop_on = _relay_turn_on(cover, "switch.stop")
+    assert stop_on, (
+        "external wall-button move to an endpoint must still pulse the stop "
+        "relay when send_endpoint_stop=True (#129)"
+    )
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_external_pulse_open_option_off_no_endpoint_stop(make_cover):
+    """CONTRAST: with send_endpoint_stop=False the external move must NOT get a
+    stop pulse at the endpoint either — that hardware self-stops, and a stop
+    pulse received while stopped is read as go-to-favourite (#133)."""
+    cover = _make_pulse(make_cover, send_endpoint_stop=False, endpoint_runon_time=0)
+    cover.travel_calc.set_position(0)
+
+    await _external_open(cover)
+    assert cover._self_initiated_movement is False
+
+    cover.travel_calc.set_position(100)
+    cover.hass.services.async_call.reset_mock()
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.auto_stop_if_necessary()
+
+    stop_on = _relay_turn_on(cover, "switch.stop")
+    assert stop_on == [], (
+        "send_endpoint_stop=False must skip the endpoint stop on the external "
+        "path too (#133)"
+    )
+    await _cancel_tasks(cover)
