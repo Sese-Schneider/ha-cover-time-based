@@ -363,7 +363,15 @@ class CoverTimeBasedCard extends LitElement {
 
   _scheduleAutoSave() {
     if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
-    this._autoSaveTimer = setTimeout(() => this._autoSave(), 500);
+    this._autoSaveTimer = setTimeout(() => {
+      // Null out BEFORE calling _autoSave: _flushAutoSave() treats a non-null
+      // _autoSaveTimer as "a save is pending". Leaving the elapsed timer id in
+      // place here would make a later flush (disconnect, or the device-picker
+      // handler before a switch) fire a duplicate update_config for a save
+      // that already went through.
+      this._autoSaveTimer = null;
+      this._autoSave();
+    }, 500);
   }
 
   async _autoSave() {

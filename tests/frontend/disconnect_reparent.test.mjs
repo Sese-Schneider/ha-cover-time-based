@@ -156,3 +156,30 @@ test("(iv) editing then switching the device picker flushes the pending edit for
   await card.updateComplete;
   expect(card._config.travel_time_close).toBe(7); // B's own config, not A's edit
 });
+
+// ---------------------------------------------------------------------------
+// (v) a NORMAL debounced save that already fired must not be re-flushed:
+// _flushAutoSave uses _autoSaveTimer as its "a save is pending" signal, so
+// the debounce callback must null it out before calling _autoSave - otherwise
+// the stale, already-elapsed timer id makes a later flush (disconnect, or
+// the picker handler before a device switch) fire a duplicate update_config.
+// ---------------------------------------------------------------------------
+
+test("(v) flushing after the debounced save already fired does not send a duplicate update_config", async () => {
+  const hass = makeHass();
+  card = await mountCard(hass, { selectedEntity: "cover.a", config: { ...CONFIG_A } });
+  vi.useFakeTimers();
+
+  card._updateLocal({ travel_time_close: 42 }); // schedules autosave in 500ms
+  await vi.advanceTimersByTimeAsync(500); // let the debounced save actually fire
+
+  let saves = updateConfigCalls(hass);
+  expect(saves).toHaveLength(1);
+  expect(saves[0].travel_time_close).toBe(42);
+
+  card._flushAutoSave(); // must be a no-op: nothing is pending anymore
+  await vi.advanceTimersByTimeAsync(0);
+
+  saves = updateConfigCalls(hass);
+  expect(saves).toHaveLength(1); // still just the one save, not a duplicate
+});
