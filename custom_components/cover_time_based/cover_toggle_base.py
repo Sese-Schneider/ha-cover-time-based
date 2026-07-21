@@ -201,9 +201,10 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         stop_tilt = was_active and self._should_stop_tilt_motor(
             tilt_restore_was_active
             or tilt_pre_step_was_active
-            or self._moving_tilt_motor,          # plain dual-motor tilt move
+            or self._moving_tilt_motor,  # plain dual-motor tilt move
             tilt_axis_reported=tilt_axis_reported,
         )
+        travel_was_moving = self.travel_calc.is_traveling()
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
         self._handle_stop(supersede=supersede)
@@ -212,6 +213,17 @@ class ToggleBaseCover(SwitchCoverTimeBased):
                 self.travel_calc, self.tilt_calc
             )
         if not self._triggered_externally and was_active:
+            await self._send_stop()
+        elif (
+            tilt_axis_reported
+            and travel_was_moving
+            and self._self_initiated_movement
+            and was_active
+        ):
+            # The TILT relay reported, not the travel relay. The travel motor
+            # is one we drive ourselves and nothing external stopped it —
+            # suppressing here strands a latched relay (switch mode) or a
+            # running motor. Mirror image of _should_stop_tilt_motor.
             await self._send_stop()
         if stop_tilt:
             # See CoverTimeBased.async_stop_cover — endpoint-safe teardown.
