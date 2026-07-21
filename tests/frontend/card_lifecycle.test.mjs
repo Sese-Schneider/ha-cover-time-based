@@ -76,6 +76,32 @@ test("_loadEntityList swallows errors and sets _configEntryEntities to []", asyn
   expect(errSpy).toHaveBeenCalled();
 });
 
+test("_loadEntityList error path re-renders so the (now-empty) picker replaces stale UI", async () => {
+  // Without a requestUpdate() call in the catch, _configEntryEntities is reset
+  // internally but Lit never schedules a re-render (it isn't a reactive
+  // property) — the picker keeps showing whatever it rendered last, e.g. a
+  // stale entity list from a previous successful load.
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const hass = makeHass({
+    ws: {
+      "config/entity_registry/list": () => { throw new Error("boom"); },
+    },
+  });
+  card = await mountCard(hass);
+  // Seed stale data as if a previous successful load had populated the picker,
+  // then force a render so it's actually reflected before the failing call.
+  card._configEntryEntities = ["cover.stale"];
+  card.requestUpdate();
+  await card.updateComplete;
+
+  const updateSpy = vi.spyOn(card, "requestUpdate");
+  await card._loadEntityList();
+
+  expect(card._configEntryEntities).toEqual([]);
+  expect(updateSpy).toHaveBeenCalled();
+  expect(errSpy).toHaveBeenCalled();
+});
+
 // ---------------------------------------------------------------------------
 // _loadConfig — success path
 // ---------------------------------------------------------------------------

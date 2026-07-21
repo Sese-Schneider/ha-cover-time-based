@@ -257,6 +257,11 @@ class CoverTimeBasedCard extends LitElement {
         err
       );
       this._configEntryEntities = [];
+      // _configEntryEntities isn't a reactive Lit property, so without this
+      // the picker keeps showing whatever it last rendered (e.g. a stale
+      // entity list from an earlier successful load) instead of the empty
+      // list just set above.
+      this.requestUpdate();
     }
   }
 
