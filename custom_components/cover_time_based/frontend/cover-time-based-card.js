@@ -16,6 +16,7 @@ import {
   filterEntitiesByValidEntries,
   switchLabelKey,
   clearedEntitiesForMode,
+  clearedScriptEntities,
   clearedTiltConfig,
   coverHasNativeTilt,
   coverConfirmedWithoutTilt,
@@ -39,6 +40,7 @@ class CoverTimeBasedCard extends LitElement {
       _knownPosition: { type: String },
       _loadError: { type: String },
       _saveError: { type: Boolean },
+      _saveErrorDetail: { type: String },
       _openHelp: { type: String },
     };
   }
@@ -50,6 +52,7 @@ class CoverTimeBasedCard extends LitElement {
     this._loading = false;
     this._saving = false;
     this._saveError = false;
+    this._saveErrorDetail = "";
     this._activeTab = "device";
     this._knownPosition = "unknown";
     this._helpersLoaded = false;
@@ -182,7 +185,53 @@ class CoverTimeBasedCard extends LitElement {
     saveSelectedEntity(entityId);
   }
 
+  /**
+   * Tracks ground truth for _isCalibrating() alongside _calibratingOverride.
+   *
+   * _calibratingOverride is set optimistically the moment the user acts
+   * (start/stop calibration) so the UI updates before the WS round trip
+   * completes, and _isCalibrating() trusts it over the entity's
+   * calibration_active attribute. That trust has to expire when calibration
+   * ends on the backend without the card driving it - the 300s safety
+   * timeout, an entry reload, or another browser tab finishing it - or the
+   * card is stuck showing "Calibration Active" until the user next hits an
+   * error.
+   *
+   * _sawCalibrationActive is a latch: it only flips true once the attribute
+   * has actually been observed true, and that is what lets this tell apart
+   * "the attribute hasn't shown up in hass yet" (the start_calibration
+   * WS call is still in flight - keep showing calibrating, the override is
+   * doing its job) from "the attribute WAS true and has since gone away"
+   * (the backend ended it - resync to ground truth). Without the latch, the
+   * first hass update after _onStartCalibration flips the override (which
+   * always finds the attribute still absent, since the backend hasn't
+   * applied it yet) would immediately clear the override it just set.
+   */
   updated(changedProperties) {
+    if (changedProperties.has("hass")) {
+      const active = this._getEntityState()?.attributes?.calibration_active === true;
+      if (active) this._sawCalibrationActive = true;
+      else if (this._sawCalibrationActive && this._calibratingOverride === true) {
+        // Backend calibration ended without us (timeout / reload / other tab):
+        // yield back to ground truth instead of showing Calibration Active forever.
+        this._calibratingOverride = undefined;
+        this._sawCalibrationActive = false;
+        this.requestUpdate();
+      }
+      if (!active && !this._isCalibrating()) this._sawCalibrationActive = false;
+    }
+
+    // Native <select>s: ?selected only sets defaultSelected, which a
+    // user-dirtied option ignores. Re-assert the value imperatively.
+    const syncs = [
+      ["#position-select", this._knownPosition],
+      ["#control-mode-select", this._config?.control_mode || "switch"],
+      ["#tilt-mode-select", this._config?.tilt_mode || "none"],
+    ];
+    for (const [sel, value] of syncs) {
+      const el = this.shadowRoot?.querySelector(sel);
+      if (el && el.value !== value) el.value = value;
+    }
   }
 
   async _loadEntityList() {
@@ -208,14 +257,48 @@ class CoverTimeBasedCard extends LitElement {
         err
       );
       this._configEntryEntities = [];
+      // _configEntryEntities isn't a reactive Lit property, so without this
+      // the picker keeps showing whatever it last rendered (e.g. a stale
+      // entity list from an earlier successful load) instead of the empty
+      // list just set above.
+      this.requestUpdate();
     }
+  }
+
+  /**
+   * Flushes a pending debounced autosave immediately instead of losing it.
+   * Used both here (disconnect) and by the device-picker handler in
+   * card-render.js, which must save the outgoing entity's edit before
+   * swapping _selectedEntity/_config to the newly-picked one.
+   *
+   * _autoSave is async and callers here can't await it (disconnectedCallback
+   * can't be async; the picker handler needs the read of _selectedEntity/
+   * _config to happen synchronously, before it reassigns them) - that's fine,
+   * the WS call is already in flight by the time this returns.
+   */
+  _flushAutoSave() {
+    if (!this._autoSaveTimer) return;
+    clearTimeout(this._autoSaveTimer);
+    this._autoSaveTimer = null;
+    this._autoSave(); // reads current _selectedEntity/_config - call BEFORE swapping them
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
+    // While calibrating, _autoSave defers itself (Task 24) rather than
+    // saving - there is nothing timing-locked worth flushing, and flushing
+    // here would just re-arm the timer on an element that may be gone for
+    // good. Check calibration first and skip the flush in that case.
     if (this._isCalibrating()) {
-      this._onStopCalibration(true);
+      // HA re-parents cards on layout changes; a synchronous re-connect means
+      // the user didn't leave. Only cancel if still detached next tick.
+      setTimeout(() => {
+        if (!this.isConnected && this._isCalibrating()) {
+          this._onStopCalibration(true);
+        }
+      }, 0);
+    } else {
+      this._flushAutoSave();
     }
   }
 
@@ -254,7 +337,16 @@ class CoverTimeBasedCard extends LitElement {
       if (this._selectedEntity !== entityId) return;
       console.error("Failed to load config:", err);
       this._config = null;
-      this._loadError = this._t("yaml_warning");
+      // Only a genuinely unconfigured entity (the backend's ws_get_config
+      // sends error code "not_found" when the entity has no config entry —
+      // see websocket_api.py) warrants the YAML-migration lecture. Any other
+      // failure (a dropped connection, a transient server error, ...) is
+      // unrelated to YAML config and should say so generically instead of
+      // sending the user off on a wild goose chase to "migrate" an entity
+      // that is already fine.
+      this._loadError = this._t(
+        err?.code === "not_found" ? "yaml_warning" : "load_failed"
+      );
     } finally {
       // Only the newest request owns the spinner: an older one must not clear
       // it while a newer load is still running, but a request that was merely
@@ -271,13 +363,23 @@ class CoverTimeBasedCard extends LitElement {
 
   _scheduleAutoSave() {
     if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
-    this._autoSaveTimer = setTimeout(() => this._autoSave(), 500);
+    this._autoSaveTimer = setTimeout(() => {
+      // Null out BEFORE calling _autoSave: _flushAutoSave() treats a non-null
+      // _autoSaveTimer as "a save is pending". Leaving the elapsed timer id in
+      // place here would make a later flush (disconnect, or the device-picker
+      // handler before a switch) fire a duplicate update_config for a save
+      // that already went through.
+      this._autoSaveTimer = null;
+      this._autoSave();
+    }, 500);
   }
 
   async _autoSave() {
+    if (this._isCalibrating()) { this._scheduleAutoSave(); return; }
     if (!this._selectedEntity || !this.hass || !this._config) return;
     this._saving = true;
     this._saveError = false;
+    this._saveErrorDetail = "";
     try {
       const { entry_id, ...fields } = this._config;
       await this.hass.callWS({
@@ -288,8 +390,15 @@ class CoverTimeBasedCard extends LitElement {
     } catch (err) {
       console.error("Failed to save config:", err);
       this._saveError = true;
+      // The generic translated "save_failed" text alone gives no clue why
+      // (e.g. a script entity left in a switch slot the backend rejects) —
+      // keep the server's message so the save-bar can show it alongside.
+      this._saveErrorDetail = err?.message || "";
       await this._loadConfig();
-      setTimeout(() => { this._saveError = false; }, 3000);
+      setTimeout(() => {
+        this._saveError = false;
+        this._saveErrorDetail = "";
+      }, 3000);
     }
     this._saving = false;
   }
@@ -350,20 +459,18 @@ class CoverTimeBasedCard extends LitElement {
 
   // --- Event handlers ---
 
-  _onEntityChange(e) {
-    const newValue = e.detail?.value || e.target?.value || "";
-    this._setSelectedEntity(newValue);
-    this._config = null;
-    if (this._selectedEntity) {
-      this._loadConfig();
-    }
-  }
-
   _onControlModeChange(e) {
     const mode = e.target.value;
     // Clear entities that don't belong to the new mode so they don't linger
-    // as stale config (see clearedEntitiesForMode).
-    const updates = { control_mode: mode, ...clearedEntitiesForMode(mode) };
+    // as stale config (see clearedEntitiesForMode), and null out any switch
+    // slot left holding a pulse-only script entity (see clearedScriptEntities)
+    // — the backend rejects those outside pulse mode and every subsequent
+    // save would otherwise fail silently.
+    const updates = {
+      control_mode: mode,
+      ...clearedEntitiesForMode(mode),
+      ...clearedScriptEntities(mode, this._config),
+    };
     // Dual-motor tilt on a wrapped cover delegates tilt to the underlying
     // entity, so it is only valid once a cover that supports tilt natively is
     // selected. Switching into wrapped mode can't carry a dual_motor selection
@@ -472,6 +579,11 @@ class CoverTimeBasedCard extends LitElement {
 
     this._calibratingAttribute = attrSelect.value;
     this._calibratingOverride = undefined;
+    // Fresh calibration attempt: any previously-seen calibration_active from
+    // an earlier run must not let updated() treat this round's still-absent
+    // attribute as "the backend just ended it" before the WS call above even
+    // lands.
+    this._sawCalibrationActive = false;
 
     try {
       await this.hass.callWS({
@@ -489,16 +601,23 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   async _onStopCalibration(cancel = false) {
+    const entityId = this._selectedEntity;
     this._knownPosition = "unknown";
     this._calibratingOverride = false;
     this.requestUpdate();
     try {
       const result = await this.hass.callWS({
         type: "cover_time_based/stop_calibration",
-        entity_id: this._selectedEntity,
+        entity_id: entityId,
         cancel,
       });
-      if (!cancel && result?.attribute) {
+      // The selection can change while this WS call is in flight (the user
+      // finishes calibrating one cover and quickly switches the picker to
+      // another before the result arrives). Applying a stale result would
+      // merge one device's measured time into another's config - and the
+      // next autosave would then write it there. Mirrors the guard in
+      // _loadConfig.
+      if (!cancel && result?.attribute && this._selectedEntity === entityId) {
         const configKey = ATTRIBUTE_TO_CONFIG[result.attribute];
         if (configKey) this._updateLocal({ [configKey]: result.value });
       }

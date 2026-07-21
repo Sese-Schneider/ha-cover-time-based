@@ -35,32 +35,102 @@ function captureUpdates(c) {
 }
 
 // ---------------------------------------------------------------------------
-// _onEntityChange
+// Device picker — the real @value-changed handler inline in card-render.js's
+// renderEntityPicker(). (There is no _onEntityChange method on the card class
+// any more — it was dead code nothing wired up; these tests exercise the
+// live, rendered picker instead, the way
+// "live entity picker: switching device clears..." in card_calibration.test.mjs
+// already does.)
 // ---------------------------------------------------------------------------
 
-test("_onEntityChange with a value sets _selectedEntity, nulls _config, calls _loadConfig", async () => {
+function firePickerValueChanged(card, detail) {
+  const picker = card.shadowRoot.querySelector("ha-entity-picker");
+  picker.dispatchEvent(new CustomEvent("value-changed", { detail }));
+  return picker;
+}
+
+test("picker value-changed with a value sets _selectedEntity, nulls _config, calls _loadConfig", async () => {
   card = await mountCard(makeHass(), { config: { control_mode: "switch" } });
   const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
-  card._onEntityChange({ detail: { value: "cover.living_room" } });
+  firePickerValueChanged(card, { value: "cover.living_room" });
   expect(card._selectedEntity).toBe("cover.living_room");
   expect(card._config).toBeNull();
   expect(loadSpy).toHaveBeenCalledTimes(1);
 });
 
-test("_onEntityChange with empty value sets _selectedEntity but does NOT call _loadConfig", async () => {
+test("picker value-changed with empty value sets _selectedEntity but does NOT call _loadConfig", async () => {
   card = await mountCard(makeHass(), { config: { control_mode: "switch" }, selectedEntity: "cover.x" });
   const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
-  card._onEntityChange({ detail: { value: "" } });
+  firePickerValueChanged(card, { value: "" });
   expect(card._selectedEntity).toBe("");
   expect(card._config).toBeNull();
   expect(loadSpy).not.toHaveBeenCalled();
 });
 
-test("_onEntityChange reads e.target.value as fallback", async () => {
-  card = await mountCard(makeHass());
+test("picker value-changed with the currently-selected entity is a no-op", async () => {
+  // The live handler short-circuits when the picker fires with the value it
+  // already has (e.g. a spurious change event) — the dead _onEntityChange
+  // method never had this guard at all.
+  card = await mountCard(makeHass(), { config: { control_mode: "switch" }, selectedEntity: "cover.x" });
   const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
-  card._onEntityChange({ target: { value: "cover.bedroom" } });
-  expect(card._selectedEntity).toBe("cover.bedroom");
+  const flushSpy = vi.spyOn(card, "_flushAutoSave");
+  firePickerValueChanged(card, { value: "cover.x" });
+  expect(card._selectedEntity).toBe("cover.x");
+  expect(loadSpy).not.toHaveBeenCalled();
+  expect(flushSpy).not.toHaveBeenCalled();
+});
+
+test("picker value-changed to a new entity flushes the outgoing edit and resets load error/position/tab/calibration latches", async () => {
+  card = await mountCard(makeHass(), { config: { control_mode: "switch" }, selectedEntity: "cover.old" });
+  const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
+  const flushSpy = vi.spyOn(card, "_flushAutoSave").mockImplementation(() => {});
+  card._loadError = "stale error";
+  card._knownPosition = "open";
+  card._activeTab = "calibration";
+  card._calibratingOverride = false;
+  card._sawCalibrationActive = true;
+
+  firePickerValueChanged(card, { value: "cover.new" });
+
+  expect(flushSpy).toHaveBeenCalledTimes(1);
+  expect(card._selectedEntity).toBe("cover.new");
+  expect(card._config).toBeNull();
+  expect(card._loadError).toBeNull();
+  expect(card._knownPosition).toBe("unknown");
+  expect(card._calibratingOverride).toBeUndefined();
+  expect(card._sawCalibrationActive).toBe(false);
+  expect(card._activeTab).toBe("device");
+  expect(loadSpy).toHaveBeenCalledTimes(1);
+});
+
+test("picker value-changed while calibrating and the user cancels the confirm reverts the picker and leaves the selection untouched", async () => {
+  window.confirm = vi.fn(() => false);
+  card = await mountCard(makeHass(), { config: { control_mode: "switch" }, selectedEntity: "cover.x" });
+  const stopSpy = vi.spyOn(card, "_onStopCalibration").mockResolvedValue(undefined);
+  const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
+  card._calibratingOverride = true; // _isCalibrating() === true
+
+  const picker = firePickerValueChanged(card, { value: "cover.new" });
+
+  expect(window.confirm).toHaveBeenCalled();
+  expect(picker.value).toBe("cover.x"); // reverted
+  expect(card._selectedEntity).toBe("cover.x"); // unchanged
+  expect(stopSpy).not.toHaveBeenCalled();
+  expect(loadSpy).not.toHaveBeenCalled();
+});
+
+test("picker value-changed while calibrating and the user confirms stops calibration and proceeds with the swap", async () => {
+  window.confirm = vi.fn(() => true);
+  card = await mountCard(makeHass(), { config: { control_mode: "switch" }, selectedEntity: "cover.x" });
+  const stopSpy = vi.spyOn(card, "_onStopCalibration").mockResolvedValue(undefined);
+  const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
+  card._calibratingOverride = true; // _isCalibrating() === true
+
+  firePickerValueChanged(card, { value: "cover.new" });
+
+  expect(window.confirm).toHaveBeenCalled();
+  expect(stopSpy).toHaveBeenCalledWith(true);
+  expect(card._selectedEntity).toBe("cover.new");
   expect(loadSpy).toHaveBeenCalledTimes(1);
 });
 
@@ -118,6 +188,39 @@ test("_onControlModeChange to toggle clears cover_entity_id and stop_switch_enti
   expect(updates[0].control_mode).toBe("toggle");
   expect(updates[0].cover_entity_id).toBeNull();
   expect(updates[0].stop_switch_entity_id).toBeNull();
+});
+
+// F4: leaving pulse mode must not let a script entity survive in a switch
+// slot — every subsequent save is silently rejected by the backend otherwise.
+test("_onControlModeChange from pulse to toggle nulls a script-valued switch slot", async () => {
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "pulse", open_switch_entity_id: "script.ir_open" },
+  });
+  const updates = captureUpdates(card);
+  card._onControlModeChange({ target: { value: "toggle" } });
+  expect(updates[0].control_mode).toBe("toggle");
+  expect(updates[0].open_switch_entity_id).toBeNull();
+});
+
+test("_onControlModeChange from pulse to toggle leaves a switch-valued slot alone", async () => {
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "pulse", open_switch_entity_id: "switch.open" },
+  });
+  const updates = captureUpdates(card);
+  card._onControlModeChange({ target: { value: "toggle" } });
+  expect(updates[0].control_mode).toBe("toggle");
+  // switch.open is a valid value everywhere — must survive the mode switch
+  expect(updates[0].open_switch_entity_id).toBeUndefined();
+});
+
+test("_onControlModeChange staying on pulse does not touch script-valued slots", async () => {
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "pulse", open_switch_entity_id: "script.ir_open" },
+  });
+  const updates = captureUpdates(card);
+  card._onControlModeChange({ target: { value: "pulse" } });
+  expect(updates[0].control_mode).toBe("pulse");
+  expect(updates[0].open_switch_entity_id).toBeUndefined();
 });
 
 // ---------------------------------------------------------------------------

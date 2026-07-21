@@ -209,6 +209,85 @@ test("_scheduleAutoSave debounces: only fires once after multiple rapid updates"
 });
 
 // ---------------------------------------------------------------------------
+// F1: _autoSave defers (does not drop) while a calibration is in progress
+// ---------------------------------------------------------------------------
+
+test("F1: _updateLocal during calibration does NOT send update_config after the debounce window", async () => {
+  vi.useFakeTimers();
+  const hass = makeHass({
+    states: {
+      "cover.x": {
+        state: "opening",
+        attributes: { calibration_active: true, calibration_attribute: "travel_time_close" },
+      },
+    },
+  });
+  card = await mountCard(hass, {
+    selectedEntity: "cover.x",
+    config: { control_mode: "switch", travel_time_close: 10 },
+  });
+  expect(card._isCalibrating()).toBe(true);
+
+  card._updateLocal({ travel_time_close: 33 });
+  await vi.advanceTimersByTimeAsync(600);
+
+  const saves = hass.callWS.mock.calls
+    .map(([arg]) => arg)
+    .filter((a) => a.type === "cover_time_based/update_config");
+  expect(saves).toHaveLength(0);
+  // The edit is not dropped — it stays merged in local config, ready to save
+  // once calibration ends.
+  expect(card._config.travel_time_close).toBe(33);
+});
+
+test("F1: _autoSave re-schedules itself (via _scheduleAutoSave) instead of saving while calibrating", async () => {
+  vi.useFakeTimers();
+  const hass = makeHass({
+    states: { "cover.x": { state: "open", attributes: { calibration_active: true } } },
+  });
+  card = await mountCard(hass, {
+    selectedEntity: "cover.x",
+    config: { control_mode: "switch" },
+  });
+  const scheduleSpy = vi.spyOn(card, "_scheduleAutoSave");
+
+  await card._autoSave();
+
+  expect(hass.callWS).not.toHaveBeenCalledWith(
+    expect.objectContaining({ type: "cover_time_based/update_config" })
+  );
+  expect(scheduleSpy).toHaveBeenCalledTimes(1);
+});
+
+test("F1: once calibration ends, a deferred autosave goes through", async () => {
+  vi.useFakeTimers();
+  const hass = makeHass({
+    states: { "cover.x": { state: "open", attributes: { calibration_active: true } } },
+  });
+  card = await mountCard(hass, {
+    selectedEntity: "cover.x",
+    config: { control_mode: "switch", travel_time_close: 10 },
+  });
+
+  card._updateLocal({ travel_time_close: 33 });
+  await vi.advanceTimersByTimeAsync(600);
+  let saves = hass.callWS.mock.calls
+    .map(([arg]) => arg)
+    .filter((a) => a.type === "cover_time_based/update_config");
+  expect(saves).toHaveLength(0);
+
+  // Calibration finishes — ground truth now says no calibration is active.
+  card.hass = { ...hass, states: { "cover.x": { state: "open", attributes: {} } } };
+  await vi.advanceTimersByTimeAsync(600);
+
+  saves = hass.callWS.mock.calls
+    .map(([arg]) => arg)
+    .filter((a) => a.type === "cover_time_based/update_config");
+  expect(saves).toHaveLength(1);
+  expect(saves[0].travel_time_close).toBe(33);
+});
+
+// ---------------------------------------------------------------------------
 // _getEntityState
 // ---------------------------------------------------------------------------
 

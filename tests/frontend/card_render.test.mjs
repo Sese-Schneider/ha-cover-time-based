@@ -203,13 +203,47 @@ test("no save-bar when neither _saving nor _saveError", async () => {
   expect(card.shadowRoot.querySelector(".save-bar")).toBeNull();
 });
 
-test("device tab renders a fieldset, timing tab does not", async () => {
+// F4: a generic "Save failed" alone gives no clue why (e.g. a script entity
+// left in a switch slot after leaving pulse mode) — the server's detail
+// message is shown alongside the translated text so the cause is visible.
+test("_saveError with _saveErrorDetail shows the server's reason after the translated text", async () => {
+  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card._saveError = true;
+  card._saveErrorDetail = "Script entities are only supported in pulse mode (got script.ir_open)";
+  card.requestUpdate();
+  await card.updateComplete;
+  const saveBar = card.shadowRoot.querySelector(".save-bar");
+  expect(saveBar).not.toBeNull();
+  const text = saveBar.textContent;
+  expect(text).toContain("Save failed");
+  expect(text).toContain("Script entities are only supported in pulse mode (got script.ir_open)");
+  // The detail follows the translated text, not the other way round.
+  expect(text.indexOf("Save failed")).toBeLessThan(
+    text.indexOf("Script entities are only supported")
+  );
+});
+
+test("_saveError with empty _saveErrorDetail shows only the translated text", async () => {
+  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card._saveError = true;
+  card._saveErrorDetail = "";
+  card.requestUpdate();
+  await card.updateComplete;
+  const saveBar = card.shadowRoot.querySelector(".save-bar");
+  expect(saveBar.textContent.trim()).toBe("Save failed — value reverted");
+});
+
+test("device tab renders a fieldset, timing tab renders a borderless fieldset around the timing table", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
   expect(card.shadowRoot.querySelector("fieldset")).not.toBeNull();
 
   card.remove();
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
-  expect(card.shadowRoot.querySelector("fieldset")).toBeNull();
+  const fieldset = card.shadowRoot.querySelector("fieldset");
+  expect(fieldset).not.toBeNull();
+  expect(fieldset.classList.contains("borderless")).toBe(true);
+  // The timing table lives inside this fieldset (F1: so it locks with it).
+  expect(fieldset.querySelector(".timing-table")).not.toBeNull();
 });
 
 test("entity info row shows the selectedEntity string", async () => {
@@ -744,6 +778,81 @@ test("position section absent while calibrating", async () => {
   });
   // _isCalibrating() returns true → _renderPositionReset is NOT called
   expect(card.shadowRoot.querySelector("#position-select")).toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// F1: timing table locked during calibration (fieldset disabled), calibration
+// Finish/Cancel controls remain OUTSIDE the disabled fieldset and clickable.
+// ---------------------------------------------------------------------------
+
+test("F1: while calibrating, every .timing-input is inside a disabled fieldset", async () => {
+  card = await mountCard(makeHass({
+    states: {
+      "cover.x": {
+        state: "open",
+        attributes: { calibration_active: true, calibration_attribute: "travel_time_close" },
+      },
+    },
+  }), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
+
+  expect(card._isCalibrating()).toBe(true);
+  const inputs = [...card.shadowRoot.querySelectorAll(".timing-input")];
+  expect(inputs.length).toBeGreaterThan(0);
+  for (const input of inputs) {
+    const fieldset = input.closest("fieldset");
+    expect(fieldset).not.toBeNull();
+    expect(fieldset.disabled).toBe(true);
+  }
+});
+
+test("F1: while calibrating, the Cancel/Finish calibration buttons stay OUTSIDE the disabled fieldset", async () => {
+  card = await mountCard(makeHass({
+    states: {
+      "cover.x": {
+        state: "open",
+        attributes: { calibration_active: true, calibration_attribute: "travel_time_close" },
+      },
+    },
+  }), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
+
+  const calActive = card.shadowRoot.querySelector(".calibration-active");
+  expect(calActive).not.toBeNull();
+  // Not nested inside any fieldset at all, so it can never be disabled by one.
+  expect(calActive.closest("fieldset")).toBeNull();
+  const buttons = calActive.querySelectorAll("ha-button");
+  expect(buttons.length).toBe(2);
+});
+
+test("timing tab fieldset is NOT disabled when not saving and not calibrating", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
+  const fieldset = card.shadowRoot.querySelector("fieldset");
+  expect(fieldset).not.toBeNull();
+  expect(fieldset.disabled).toBe(false);
+});
+
+test("timing tab fieldset is disabled while _saving=true (even without calibrating)", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
+  card._saving = true;
+  card.requestUpdate();
+  await card.updateComplete;
+  const fieldset = card.shadowRoot.querySelector("fieldset");
+  expect(fieldset.disabled).toBe(true);
 });
 
 // ---------------------------------------------------------------------------

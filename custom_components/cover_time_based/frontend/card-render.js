@@ -60,11 +60,19 @@ export function renderEntityPicker(card) {
               card._onStopCalibration(true);
             }
           }
+          // Flush any pending debounced edit to the OUTGOING entity before
+          // swapping _selectedEntity/_config over to the new one - _autoSave
+          // reads both, so this must run before either changes.
+          card._flushAutoSave();
           card._setSelectedEntity(newEntity);
           card._config = null;
           card._loadError = null;
           card._knownPosition = "unknown";
           card._calibratingOverride = undefined;
+          // The seen-it latch belongs to the entity that was selected when it
+          // was set; switching devices must not carry it (or the override)
+          // over onto the newly-selected entity's calibration state.
+          card._sawCalibrationActive = false;
           card._activeTab = "device";
           if (card._selectedEntity) card._loadConfig();
         }}
@@ -116,16 +124,22 @@ export function renderConfigSections(card) {
           </fieldset>
         `
       : html`
-          ${calibrating ? "" : renderPositionReset(card)}
+          <fieldset class="borderless" ?disabled=${disabled}>
+            ${calibrating ? "" : renderPositionReset(card)}
+            ${renderTimingTable(card, c)}
+          </fieldset>
           ${renderCalibration(card, calibrating)}
-          ${renderTimingTable(card, c)}
         `}
 
     ${card._saving
       ? html`<div class="save-bar"><span class="saving-indicator">${card._t("saving")}</span></div>`
       : ""}
     ${card._saveError
-      ? html`<div class="save-bar"><span class="save-error">${card._t("save_failed")}</span></div>`
+      ? html`<div class="save-bar"><span class="save-error"
+          >${card._t("save_failed")}${card._saveErrorDetail
+            ? html` — ${card._saveErrorDetail}`
+            : ""}</span
+        ></div>`
       : ""}
   `;
 }
@@ -137,7 +151,7 @@ export function renderControlMode(card, c) {
   return html`
     <div class="section">
       <div class="field-label">${card._t("control_mode.label")}</div>
-      <select class="ha-select" @change=${card._onControlModeChange}>
+      <select class="ha-select" id="control-mode-select" @change=${card._onControlModeChange}>
         <option value="wrapped" ?selected=${mode === "wrapped"}>
           ${card._t("control_mode.wrapped")}
         </option>
@@ -365,7 +379,7 @@ export function renderTiltSupport(card, c) {
   return html`
     <div class="section">
       <div class="field-label">${card._t("tilt.label")}</div>
-      <select class="ha-select" @change=${card._onTiltModeChange}>
+      <select class="ha-select" id="tilt-mode-select" @change=${card._onTiltModeChange}>
         <option value="none" ?selected=${tiltMode === "none"}>
           ${card._t("tilt.none")}
         </option>

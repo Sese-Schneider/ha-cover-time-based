@@ -112,6 +112,57 @@ test("_autoSave on failure sets _saveError, reloads config, then clears _saveErr
   expect(card._saveError).toBe(false);
 });
 
+test("_autoSave on failure stores the server's error message in _saveErrorDetail", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(console, "error").mockImplementation(() => {});
+
+  const hass = makeHass({
+    ws: {
+      "cover_time_based/update_config": () => {
+        throw new Error(
+          "Script entities are only supported in pulse mode (got script.ir_open)"
+        );
+      },
+      "cover_time_based/get_config": () => ({ control_mode: "toggle" }),
+    },
+  });
+
+  card = await mountCard(hass, {
+    selectedEntity: "cover.test",
+    config: { control_mode: "toggle" },
+  });
+
+  await card._autoSave();
+
+  expect(card._saveErrorDetail).toBe(
+    "Script entities are only supported in pulse mode (got script.ir_open)"
+  );
+});
+
+test("_autoSave on failure with no err.message falls back to an empty _saveErrorDetail", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(console, "error").mockImplementation(() => {});
+
+  const hass = makeHass({
+    ws: {
+      "cover_time_based/update_config": () => {
+        // eslint-disable-next-line no-throw-literal
+        throw "boom"; // a non-Error throw has no .message
+      },
+      "cover_time_based/get_config": () => ({ control_mode: "toggle" }),
+    },
+  });
+
+  card = await mountCard(hass, {
+    selectedEntity: "cover.test",
+    config: { control_mode: "toggle" },
+  });
+
+  await card._autoSave();
+
+  expect(card._saveErrorDetail).toBe("");
+});
+
 test("_autoSave on failure still ends with _saving false", async () => {
   vi.useFakeTimers();
   const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});

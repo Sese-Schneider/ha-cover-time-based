@@ -125,3 +125,22 @@ export function clearedEntitiesForMode(mode) {
   }
   return updates;
 }
+
+/**
+ * Null out script-valued switch slots when leaving pulse mode — scripts are
+ * pulse-only (the backend rejects them anywhere else), and keeping them makes
+ * every subsequent save fail with no visible cause.
+ */
+export function clearedScriptEntities(mode, config) {
+  if (mode === "pulse" || !config) return {};
+  const updates = {};
+  for (const key of [
+    "open_switch_entity_id", "close_switch_entity_id", "stop_switch_entity_id",
+    "tilt_open_switch", "tilt_close_switch", "tilt_stop_switch",
+  ]) {
+    if (typeof config[key] === "string" && config[key].startsWith("script.")) {
+      updates[key] = null;
+    }
+  }
+  return updates;
+}

@@ -187,6 +187,109 @@ test("_onStopCalibration error path swallows the error (console.error is expecte
 });
 
 // ---------------------------------------------------------------------------
+// _onStopCalibration cross-device write (F2)
+//
+// Finish on A + a quick switch to B before the stop_calibration WS reply
+// arrives must NOT merge A's measured value into B's config. _loadConfig
+// already re-checks _selectedEntity against a captured entityId after its
+// await (L284/287); _onStopCalibration's result-apply block needs the same
+// guard. Adapted from docs/audit/2026-07-21-audit-probes/f2_crosswrite.probe.mjs.
+// ---------------------------------------------------------------------------
+
+const CROSSWRITE_CONFIG_A = {
+  control_mode: "switch",
+  open_switch_entity_id: "switch.ao",
+  close_switch_entity_id: "switch.ac",
+  travel_time_close: 5,
+};
+const CROSSWRITE_CONFIG_B = {
+  control_mode: "switch",
+  open_switch_entity_id: "switch.bo",
+  close_switch_entity_id: "switch.bc",
+  travel_time_close: 7,
+};
+
+test("finish-then-switch: A's calibration result is NOT written onto B (F2)", async () => {
+  let resolveStop;
+  const hass = makeHass({
+    states: { "cover.a": { attributes: {} }, "cover.b": { attributes: {} } },
+    ws: {
+      "cover_time_based/get_config": ({ entity_id }) =>
+        entity_id === "cover.b" ? { ...CROSSWRITE_CONFIG_B } : { ...CROSSWRITE_CONFIG_A },
+      "cover_time_based/stop_calibration": () =>
+        new Promise((res) => { resolveStop = res; }),
+    },
+  });
+  card = await mountCard(hass, { selectedEntity: "cover.a", config: { ...CROSSWRITE_CONFIG_A } });
+  card._calibratingOverride = true;
+
+  // User clicks Finish on A - the WS call is in flight (motor stop + result
+  // computation server-side).
+  const finishP = card._onStopCalibration(false);
+
+  // The override flips to false synchronously, so the picker switch below
+  // runs without the "confirm cancel calibration" guard.
+  expect(card._isCalibrating()).toBe(false);
+  const picker = card.shadowRoot.querySelector("ha-entity-picker");
+  picker.dispatchEvent(new CustomEvent("value-changed", { detail: { value: "cover.b" } }));
+
+  // B's config loads (fast, as get_config usually is) before A's stop_calibration
+  // call resolves.
+  await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  await card.updateComplete;
+  expect(card._selectedEntity).toBe("cover.b");
+  expect(card._config.travel_time_close).toBe(7);
+
+  try {
+    vi.useFakeTimers();
+    // Now A's stop-calibration result arrives, after the switch to B.
+    resolveStop({ attribute: "travel_time_close", value: 99.9 });
+    await finishP;
+
+    // A's measured value must NOT be merged into the card's now-current (B)
+    // config.
+    expect(card._config.travel_time_close).toBe(7);
+    expect(card._config.open_switch_entity_id).toBe("switch.bo");
+
+    await vi.advanceTimersByTimeAsync(600);
+    const saves = hass.callWS.mock.calls
+      .map(([a]) => a)
+      .filter((a) => a.type === "cover_time_based/update_config");
+    // No autosave may target B while carrying A's measurement.
+    expect(saves.find((s) => s.entity_id === "cover.b" && s.travel_time_close === 99.9)).toBeUndefined();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("finish without switching: the result IS applied and autosaved to the calibrated cover (contrast)", async () => {
+  const hass = makeHass({
+    states: { "cover.a": { attributes: {} } },
+    ws: {
+      "cover_time_based/stop_calibration": () => ({ attribute: "travel_time_close", value: 42 }),
+    },
+  });
+  card = await mountCard(hass, { selectedEntity: "cover.a", config: { ...CROSSWRITE_CONFIG_A } });
+  card._calibratingOverride = true;
+
+  try {
+    vi.useFakeTimers();
+    await card._onStopCalibration(false);
+    expect(card._config.travel_time_close).toBe(42);
+
+    await vi.advanceTimersByTimeAsync(600);
+    const saves = hass.callWS.mock.calls
+      .map(([a]) => a)
+      .filter((a) => a.type === "cover_time_based/update_config");
+    expect(saves).toHaveLength(1);
+    expect(saves[0].entity_id).toBe("cover.a");
+    expect(saves[0].travel_time_close).toBe(42);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // _onCoverCommand
 // ---------------------------------------------------------------------------
 
@@ -394,4 +497,76 @@ test("_onPositionPresetChange error path swallows the error (console.error is ex
   // Must NOT throw
   await expect(card._onPositionPresetChange("open")).resolves.toBeUndefined();
   expect(errSpy).toHaveBeenCalled();
+});
+
+// ---------------------------------------------------------------------------
+// _isCalibrating() / updated() — resync to backend ground truth (F6)
+//
+// _isCalibrating() short-circuits on _calibratingOverride before ever reading
+// the state attribute. Once the override is true, a backend-side end of
+// calibration (the 300s safety timeout, an entry reload, another browser tab
+// finishing it) must not leave the card showing "Calibration Active" forever.
+// updated() tracks whether calibration_active was ever actually observed
+// true (_sawCalibrationActive) so it can tell "the attribute hasn't shown up
+// yet" (start-WS-roundtrip race - keep showing calibrating) apart from "the
+// attribute WAS true and has now gone away" (backend ended it - resync).
+// ---------------------------------------------------------------------------
+
+test("_isCalibrating() resyncs to false when backend calibration ends without the card driving it", async () => {
+  card = await mountCard(makeHass({ states: { "cover.x": { attributes: {} } } }), {
+    selectedEntity: "cover.x",
+  });
+  card._calibratingOverride = true;
+
+  // Backend attribute appears true - the card records having seen it.
+  card.hass = makeHass({ states: { "cover.x": { attributes: { calibration_active: true } } } });
+  await card.updateComplete;
+  expect(card._sawCalibrationActive).toBe(true);
+  expect(card._isCalibrating()).toBe(true);
+
+  // Backend calibration ends (300s timeout / reload / another tab) - the card
+  // never called _onStopCalibration itself, so nothing else would have
+  // cleared _calibratingOverride.
+  card.hass = makeHass({ states: { "cover.x": { attributes: {} } } });
+  await card.updateComplete;
+
+  expect(card._calibratingOverride).toBeUndefined();
+  expect(card._isCalibrating()).toBe(false);
+});
+
+test("RACE: _isCalibrating() stays true when the override is set but calibration_active has never yet been observed (start-WS roundtrip)", async () => {
+  card = await mountCard(makeHass({ states: { "cover.x": { attributes: {} } } }), {
+    selectedEntity: "cover.x",
+  });
+  // Mirrors _onStartCalibration flipping the override right after a
+  // successful start_calibration WS reply, before the entity's
+  // calibration_active attribute has appeared in hass.states at all.
+  card._calibratingOverride = true;
+  card.hass = makeHass({ states: { "cover.x": { attributes: {} } } });
+  await card.updateComplete;
+
+  expect(card._isCalibrating()).toBe(true);
+});
+
+test("live entity picker: switching device clears _sawCalibrationActive alongside _calibratingOverride", async () => {
+  // The device picker's @value-changed handler lives inline in
+  // card-render.js's renderEntityPicker (there is no separate method on the
+  // card class — an earlier _onEntityChange method was dead code nothing
+  // wired up, and has since been removed). This exercises the real,
+  // rendered picker rather than calling a method the running card never
+  // calls, so it proves the reset actually fires on the live path.
+  card = await mountCard(makeHass(), { selectedEntity: "cover.a" });
+  // Simulate a calibration the card had already latched onto (the attribute
+  // was observed true at least once, per the updated() hook above) before
+  // the user switches to a different device mid-calibration.
+  card._calibratingOverride = true;
+  card._sawCalibrationActive = true;
+
+  const picker = card.shadowRoot.querySelector("ha-entity-picker");
+  picker.dispatchEvent(
+    new CustomEvent("value-changed", { detail: { value: "cover.b" } })
+  );
+
+  expect(card._calibratingOverride).toBeUndefined();
+  expect(card._sawCalibrationActive).toBe(false);
 });

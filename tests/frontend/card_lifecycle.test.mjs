@@ -76,6 +76,32 @@ test("_loadEntityList swallows errors and sets _configEntryEntities to []", asyn
   expect(errSpy).toHaveBeenCalled();
 });
 
+test("_loadEntityList error path re-renders so the (now-empty) picker replaces stale UI", async () => {
+  // Without a requestUpdate() call in the catch, _configEntryEntities is reset
+  // internally but Lit never schedules a re-render (it isn't a reactive
+  // property) — the picker keeps showing whatever it rendered last, e.g. a
+  // stale entity list from a previous successful load.
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const hass = makeHass({
+    ws: {
+      "config/entity_registry/list": () => { throw new Error("boom"); },
+    },
+  });
+  card = await mountCard(hass);
+  // Seed stale data as if a previous successful load had populated the picker,
+  // then force a render so it's actually reflected before the failing call.
+  card._configEntryEntities = ["cover.stale"];
+  card.requestUpdate();
+  await card.updateComplete;
+
+  const updateSpy = vi.spyOn(card, "requestUpdate");
+  await card._loadEntityList();
+
+  expect(card._configEntryEntities).toEqual([]);
+  expect(updateSpy).toHaveBeenCalled();
+  expect(errSpy).toHaveBeenCalled();
+});
+
 // ---------------------------------------------------------------------------
 // _loadConfig — success path
 // ---------------------------------------------------------------------------
@@ -100,12 +126,38 @@ test("_loadConfig sets _config and clears _loading/_loadError on success", async
 // _loadConfig — failure path
 // ---------------------------------------------------------------------------
 
-test("_loadConfig sets _loadError to yaml_warning string and nulls _config on failure", async () => {
+test("_loadConfig on a transient/unknown WS failure sets _loadError to the generic load_failed string", async () => {
   // The card intentionally calls console.error on this path — that is expected behavior.
   const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     ws: {
+      // A plain Error with no .code — e.g. a dropped connection or an
+      // unexpected server exception — is NOT "this entity has no config
+      // entry", so it must not show the YAML-migration lecture.
       "cover_time_based/get_config": () => { throw new Error("network fail"); },
+    },
+  });
+  card = await mountCard(hass);
+  card._selectedEntity = "cover.my_cover";
+  card._config = { some: "data" };
+  await card._loadConfig();
+  expect(card._config).toBeNull();
+  expect(card._loadError).toBe(card._t("load_failed"));
+  expect(card._loading).toBe(false);
+  expect(errSpy).toHaveBeenCalled();
+});
+
+test("_loadConfig on a 'not_found' WS error sets _loadError to the yaml_warning string", async () => {
+  // The card intentionally calls console.error on this path — that is expected behavior.
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const hass = makeHass({
+    ws: {
+      // Mirrors ws_get_config's connection.send_error(msg["id"], "not_found", ...)
+      // in websocket_api.py — home-assistant-js-websocket rejects callWS with
+      // the raw `{code, message}` error object, not an Error instance.
+      "cover_time_based/get_config": () => {
+        throw { code: "not_found", message: "Entity not found or not a config entry entity" };
+      },
     },
   });
   card = await mountCard(hass);
@@ -137,29 +189,51 @@ test("_loadConfig returns early without calling callWS when _selectedEntity is e
 });
 
 // ---------------------------------------------------------------------------
-// disconnectedCallback — timer cleared + calibration cancelled
+// disconnectedCallback — calibration cancel is deferred to next tick, and
+// the pending-edit flush is skipped while calibrating (Task 27 / F5 + F7:
+// HA re-parents cards synchronously on layout changes, so a same-tick
+// disconnect+reconnect must not be treated as "the user left").
 // ---------------------------------------------------------------------------
 
-test("disconnectedCallback clears autoSaveTimer and calls _onStopCalibration(true) when calibrating", async () => {
+test("disconnectedCallback does NOT cancel calibration synchronously, and skips the autosave flush, while calibrating", async () => {
   vi.useFakeTimers();
   const hass = makeHass();
   card = await mountCard(hass);
 
-  // Plant a fake timer so clearTimeout has something to find
+  // Plant a fake timer so we can prove it survives the synchronous call.
   const timer = setTimeout(() => {}, 9999);
   card._autoSaveTimer = timer;
 
   // Force the calibrating state via the override flag
   card._calibratingOverride = true;
 
-  // Spy on the methods we want to assert
-  const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
   const stopCalSpy = vi.spyOn(card, "_onStopCalibration").mockResolvedValue(undefined);
+  const flushSpy = vi.spyOn(card, "_flushAutoSave");
 
-  card.disconnectedCallback();
+  document.body.removeChild(card); // actually detach, so isConnected reflects it
 
-  expect(clearTimeoutSpy).toHaveBeenCalledWith(timer);
+  // Synchronously: no cancel yet (a same-tick reconnect must be able to
+  // cancel this pending check), and the flush is skipped entirely - nothing
+  // pending during calibration is savable (_autoSave just re-defers).
+  expect(stopCalSpy).not.toHaveBeenCalled();
+  expect(flushSpy).not.toHaveBeenCalled();
+  expect(card._autoSaveTimer).toBe(timer);
+
+  // Still detached on the next tick -> the cancel fires now.
+  await vi.advanceTimersByTimeAsync(0);
   expect(stopCalSpy).toHaveBeenCalledWith(true);
+  card = null;
+});
+
+test("disconnectedCallback flushes the pending autosave when NOT calibrating", async () => {
+  const hass = makeHass();
+  card = await mountCard(hass);
+  const flushSpy = vi.spyOn(card, "_flushAutoSave");
+
+  document.body.removeChild(card);
+
+  expect(flushSpy).toHaveBeenCalled();
+  card = null;
 });
 
 // ---------------------------------------------------------------------------
