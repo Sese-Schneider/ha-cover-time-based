@@ -1053,3 +1053,36 @@ class TestCalibrationStopIdempotent:
             for c in cover.hass.services.async_call.call_args_list[n:]
         ]
         assert ("turn_on", "switch.open") in calls, calls
+
+
+class TestStartCalibrationNeutralizesInFlightMove:
+    """Task 9: starting calibration must neutralize an in-flight tracked move.
+
+    Calibration drives the motors directly, so a still-armed auto-updater
+    from a prior set_position move would fire auto_stop_if_necessary ->
+    a relay STOP the instant the *old* target is reached, corrupting the
+    calibration in progress (probe test_b9, inverted).
+    """
+
+    @pytest.mark.asyncio
+    async def test_start_calibration_neutralizes_inflight_move(self, make_cover):
+        cover = make_cover(
+            control_mode="switch",
+            travel_time_close=0.4,
+            travel_time_open=0.4,
+        )
+        cover.travel_calc.set_position(0)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(50)  # in-flight timed move
+            assert cover.travel_calc.is_traveling()
+            assert cover._unsubscribe_auto_updater is not None
+
+            await cover.start_calibration(attribute="travel_time_open", timeout=300.0)
+
+            # The in-flight move must be neutralized immediately: the old
+            # move's tracker stopped and its auto-updater unsubscribed, so
+            # it can never fire a stop mid-measurement.
+            assert not cover.travel_calc.is_traveling()
+            assert cover._unsubscribe_auto_updater is None
+
+            await cover.stop_calibration(cancel=True)
