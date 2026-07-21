@@ -3596,36 +3596,49 @@ class TestExternalMovementSkipsTiltPlanning:
         """When the external pre-step finishes (tilt_calc reaches safe), the
         integration must NOT fire any relay — the hardware is already moving
         on its own. Travel tracking should still start so the integration
-        mirrors the second phase."""
+        mirrors the second phase.
+
+        This reproduces the *real* task topology: the external flag is set on
+        the handler's own task (inside ``external_open``), and the phase
+        continuation runs on a *different* task via ``create_task`` — exactly
+        like auto_updater_hook's ``hass.async_create_task``. On that fresh task
+        the task-scoped ``_triggered_externally`` is already False, so only the
+        instance flag ``_self_initiated_movement`` can carry the origin across
+        the boundary. (An earlier version of this test hand-set
+        ``_triggered_externally = True`` around a direct ``_start_pending_travel``
+        call — a state production never provides — which masked the bug.)
+        """
         cover = self._make_dual_motor_cover(make_cover)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
 
-        cover._triggered_externally = True
-        try:
-            with patch.object(cover, "async_write_ha_state"):
+        async def external_open():
+            cover._triggered_externally = True
+            try:
                 await cover.async_open_cover()
-        finally:
-            cover._triggered_externally = False
+            finally:
+                cover._triggered_externally = False
 
-        # Pre-step in flight. Now simulate tilt reaching safe.
+        with patch.object(cover, "async_write_ha_state"):
+            await asyncio.get_event_loop().create_task(external_open())
+
+        # Pre-step in flight; the move is recorded as NOT self-initiated.
+        assert cover._pending_travel_target == 100
+        assert cover._self_initiated_movement is False
+
+        n_before = len(cover.hass.services.async_call.call_args_list)
+
+        # Pre-step completes (tilt reaches safe). The continuation runs on its
+        # own task, just like auto_updater_hook does.
         cover.tilt_calc.set_position(50)
-        # Re-enter external context for the auto-stop fire.
-        cover._triggered_externally = True
-        cover._self_initiated_movement = False
-        try:
-            with patch.object(cover, "async_write_ha_state"):
-                await cover._start_pending_travel.__wrapped__(cover) if hasattr(
-                    cover._start_pending_travel, "__wrapped__"
-                ) else await cover._start_pending_travel()
-        finally:
-            cover._triggered_externally = False
+        with patch.object(cover, "async_write_ha_state"):
+            await asyncio.get_event_loop().create_task(cover.auto_stop_if_necessary())
 
         # Travel tracking now started.
         assert cover.travel_calc.is_traveling()
         assert cover.travel_calc._travel_to_position == 100
-        # No relay commands fired during pending-travel transition.
-        calls = cover.hass.services.async_call.call_args_list
+        # No relay commands fired during the pending-travel transition.
+        calls = cover.hass.services.async_call.call_args_list[n_before:]
         triggering_calls = [
             c
             for c in calls

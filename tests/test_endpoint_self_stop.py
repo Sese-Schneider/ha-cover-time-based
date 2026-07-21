@@ -806,11 +806,17 @@ async def test_switch_dual_motor_external_tilt_can_reverse_twice(make_cover):
 @pytest.mark.asyncio
 async def test_switch_dual_motor_external_open_continues_into_travel(make_cover):
     """External cover-open on a dual-motor cover must continue into the travel
-    phase after the tilt pre-step — a single click should open, not stall.
+    phase after the tilt pre-step — a single click should open, not stall — but
+    stay track-only: the hardware is driving both phases, so the continuation
+    must NOT fire any relay.
 
     The pre-step arms ``_pending_travel_target``; when it completes, the
-    external branch of auto-stop must start the travel phase instead of
-    returning early.
+    external branch of auto-stop must start the travel *tracking* (clearing the
+    pending target and beginning travel_calc) instead of returning early — and
+    without echoing an open command back at hardware that is already moving.
+    The origin is carried across the phase boundary by the instance flag
+    ``_self_initiated_movement`` (False here), not the task-scoped
+    ``_triggered_externally``.
     """
     cover = _make_dual_motor(make_cover, control_mode=CONTROL_MODE_SWITCH)
     cover._self_initiated_movement = False  # externally triggered move
@@ -828,12 +834,14 @@ async def test_switch_dual_motor_external_open_continues_into_travel(make_cover)
     assert cover._pending_travel_target is None, (
         "external tilt pre-step must continue into the travel phase"
     )
-    open_on = [
-        c
-        for c in _ha_calls(cover)
-        if c.args[1] == "turn_on" and c.args[2].get("entity_id") == "switch.open"
-    ]
-    assert open_on, "the travel phase must drive the cover-open relay"
+    # Travel phase is now *tracked* (proves it did not stall) ...
+    assert cover.travel_calc.is_traveling()
+    assert cover.travel_calc._travel_to_position == 100
+    # ... but no relay is driven — the hardware is doing the travel itself.
+    relay_calls = [(c.args[1], c.args[2].get("entity_id")) for c in _ha_calls(cover)]
+    assert relay_calls == [], (
+        "external continuation must not fire relays: %s" % relay_calls
+    )
     await _cancel_tasks(cover)
 
 
@@ -862,10 +870,10 @@ async def test_switch_dual_motor_external_open_can_be_stopped(make_cover):
     """After an external cover-open continues into travel, switching the
     cover-open relay back OFF must stop the cover.
 
-    Continuing the pre-step re-drives _send_open on the already-on relay; the
-    relay doesn't flip so no echo arrives. If _send_open had queued a pending
-    echo, the user's OFF (stop) event would be filtered and the cover would
-    keep opening.
+    The external continuation is now track-only: it does not re-drive
+    _send_open on the already-on relay, so no pending echo is queued for it.
+    The user's OFF (stop) event is therefore processed rather than filtered as
+    an echo, and the cover stops instead of continuing to open.
     """
     cover = _make_dual_motor(make_cover, control_mode=CONTROL_MODE_SWITCH)
     cover._self_initiated_movement = False  # externally triggered move
