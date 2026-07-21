@@ -167,9 +167,14 @@ DEFAULTS_SCHEMA = vol.Schema(
         vol.Optional(CONF_TILT_STARTUP_DELAY, default=None): vol.Any(
             cv.positive_float, None
         ),
-        vol.Optional(
-            CONF_ENDPOINT_RUNON_TIME, default=DEFAULT_ENDPOINT_RUNON_TIME
-        ): vol.Any(cv.positive_float, None),
+        # No materialized default here (unlike a naive default=None): voluptuous
+        # would still pre-populate the key with None, which is indistinguishable
+        # from "the user explicitly cleared it" and blocks _migrate_yaml_keys'
+        # "only if new key absent" guard for the legacy travel_delay_at_end name.
+        # Leaving the key genuinely absent when unset lets the migration run,
+        # and _TIMING_DEFAULTS still supplies the DEFAULT_ENDPOINT_RUNON_TIME
+        # (2.0s) fallback further down the pipeline.
+        vol.Optional(CONF_ENDPOINT_RUNON_TIME): vol.Any(cv.positive_float, None),
         vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
         vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
             cv.positive_float, None
