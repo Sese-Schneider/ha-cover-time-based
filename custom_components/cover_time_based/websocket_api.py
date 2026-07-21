@@ -389,7 +389,7 @@ async def ws_update_config(
         "type": "cover_time_based/start_calibration",
         vol.Required("entity_id"): str,
         vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
-        vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1)),
+        vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1, max=600)),
         vol.Optional("direction"): vol.In(["open", "close"]),
     }
 )

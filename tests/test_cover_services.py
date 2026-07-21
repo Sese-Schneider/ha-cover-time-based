@@ -1,6 +1,7 @@
 """Tests for cover.py service registration and resolve_entity."""
 
 import pytest
+import voluptuous as vol
 from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.exceptions import HomeAssistantError
@@ -175,3 +176,52 @@ class TestServiceHandlers:
             await handler(service_call)
 
         mock_entity.stop_calibration.assert_awaited_once_with(cancel=False)
+
+
+# ---------------------------------------------------------------------------
+# start_calibration service schema — timeout ceiling
+# ---------------------------------------------------------------------------
+
+
+class TestStartCalibrationServiceSchemaValidation:
+    """services.yaml advertises a 600s max timeout; the service schema
+    registered here must enforce it too (it previously only enforced a
+    minimum of 1, matching the same gap fixed in the ws schema)."""
+
+    @staticmethod
+    def _get_schema():
+        hass = MagicMock()
+        hass.services.has_service.return_value = False
+        hass.services.async_register = MagicMock()
+
+        platform = MagicMock()
+        platform.hass = hass
+
+        _register_services(platform)
+
+        for call in hass.services.async_register.call_args_list:
+            if call[0][1] == SERVICE_START_CALIBRATION:
+                return call[1]["schema"]
+        raise AssertionError("start_calibration service was not registered")
+
+    def test_timeout_over_600_rejected(self):
+        schema = self._get_schema()
+        with pytest.raises(vol.Invalid):
+            schema(
+                {
+                    "entity_id": "cover.test",
+                    "attribute": "travel_time_close",
+                    "timeout": 100000,
+                }
+            )
+
+    def test_timeout_within_range_accepted(self):
+        schema = self._get_schema()
+        validated = schema(
+            {
+                "entity_id": "cover.test",
+                "attribute": "travel_time_close",
+                "timeout": 100,
+            }
+        )
+        assert validated["timeout"] == 100.0

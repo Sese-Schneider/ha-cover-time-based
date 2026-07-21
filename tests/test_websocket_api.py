@@ -1659,6 +1659,39 @@ class TestWsStartCalibration:
         assert conn.send_error.call_args[0][1] == "failed"
 
 
+class TestWsStartCalibrationTimeoutSchemaValidation:
+    """services.yaml advertises a 600s max timeout; the ws schema must
+    enforce it too (it previously only enforced a minimum of 1)."""
+
+    def test_timeout_over_600_rejected(self):
+        import voluptuous as vol
+
+        schema = ws_start_calibration._ws_schema
+        with pytest.raises(vol.Invalid):
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/start_calibration",
+                    "entity_id": ENTITY_ID,
+                    "attribute": "travel_time_close",
+                    "timeout": 100000,
+                }
+            )
+
+    def test_timeout_within_range_accepted(self):
+        schema = ws_start_calibration._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/start_calibration",
+                "entity_id": ENTITY_ID,
+                "attribute": "travel_time_close",
+                "timeout": 100,
+            }
+        )
+        assert result["timeout"] == 100.0
+
+
 # ---------------------------------------------------------------------------
 # ws_stop_calibration
 # ---------------------------------------------------------------------------

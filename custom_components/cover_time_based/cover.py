@@ -540,7 +540,7 @@ def _register_services(platform):
                     vol.Required("entity_id"): cv.entity_id,
                     vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
                     vol.Required("timeout"): vol.All(
-                        vol.Coerce(float), vol.Range(min=1)
+                        vol.Coerce(float), vol.Range(min=1, max=600)
                     ),
                     vol.Optional("direction"): vol.In(["open", "close"]),
                 }
