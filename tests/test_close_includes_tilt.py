@@ -1,8 +1,11 @@
 """Tests for close_includes_tilt option and the related changes to
 async_close_cover (resync-skip when settled at 0).
 
-These tests use mocked _async_move_to_endpoint and _async_move_tilt_to_endpoint
-to assert orchestration rather than running real motor timing.
+Most tests here mock _async_move_to_endpoint and _async_move_tilt_to_endpoint
+to assert orchestration rather than running real motor timing. The dual-motor
+tests that exercise the tilt pre-step planner (TestDualMotor) run for real —
+mocking _async_move_to_endpoint would bypass _plan_tilt_for_travel entirely
+and hide bugs in how it honors close_includes_tilt.
 """
 
 import pytest
@@ -263,6 +266,10 @@ class TestDualMotor:
 
     @pytest.mark.asyncio
     async def test_dual_motor_option_false_leaves_tilt_at_safe(self, make_cover):
+        """Tilt already at safe: real planner runs (no mocked
+        _async_move_to_endpoint) — travel proceeds directly, no tilt motor
+        pre-step is needed (nothing to move), and no trailing restore is
+        scheduled since close_includes_tilt is off."""
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -273,22 +280,46 @@ class TestDualMotor:
             close_includes_tilt=False,
         )
         cover.travel_calc.set_position(100)
-        cover.tilt_calc.set_position(100)
+        cover.tilt_calc.set_position(100)  # already at safe
 
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(
-                cover, "_async_move_to_endpoint", new_callable=AsyncMock
-            ) as mock_travel,
-            patch.object(
-                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
-            ) as mock_tilt,
-        ):
+        with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover()
 
-        mock_travel.assert_awaited_once_with(target=0)
-        mock_tilt.assert_not_awaited()
+        # Travel started for real (no pre-step needed: tilt is already safe).
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 0
+        # Tilt motor never engaged.
+        assert not cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc.current_position() == 100
         assert cover._tilt_restore_target is None
+
+    @pytest.mark.asyncio
+    async def test_option_false_close_from_unsafe_tilt_restores_to_safe(
+        self, make_cover
+    ):
+        """The buggy case: tilt is NOT at safe when the close starts, so the
+        dual-motor pre-step drives it to safe first. With close_includes_tilt
+        off, the close must travel only — the slats stay at the safe position
+        the pre-step put them at, not get driven on to 0."""
+        cover = make_cover(
+            travel_time_close=5.0,
+            travel_time_open=5.0,
+            tilt_time_close=1.0,
+            tilt_time_open=1.0,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            safe_tilt_position=100,
+            close_includes_tilt=False,
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(30)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover()
+
+        assert cover._pending_travel_target == 0  # tilt-to-safe pre-step running
+        assert cover._tilt_restore_target == 100  # stays at safe, NOT driven to 0
 
 
 class TestUnaffectedStrategies:

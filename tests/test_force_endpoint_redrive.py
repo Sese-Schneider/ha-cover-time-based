@@ -11,6 +11,7 @@ import pytest
 from unittest.mock import patch
 
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
@@ -216,3 +217,55 @@ async def test_force_close_dual_motor_runs_safe_pre_step(make_cover):
     assert tilt_open_on, "dual-motor force-close must run the safe-tilt pre-step first"
     assert cover._pending_travel_target == 0
     assert cover._pending_travel_command == SERVICE_CLOSE_COVER
+
+
+@pytest.mark.asyncio
+async def test_force_redrive_failed_validation_does_not_corrupt_tracker(make_cover):
+    """issue #167 follow-up: _force_full_redrive used to seed the opposite
+    endpoint (travel_calc.set_position(100)) BEFORE validating that the
+    movement target is available. A failed redrive from settled-0 must raise
+    without leaving the tracker corrupted at the seeded opposite endpoint —
+    that corrupt position would otherwise be persisted on the next state
+    write, with no feedback to correct it."""
+    cover = make_cover(force_endpoint_redrive=True)  # switch mode
+    cover.travel_calc.set_position(0)  # settled closed
+    # Make the movement target unavailable.
+    cover.hass.states.get.return_value = None
+
+    with patch.object(cover, "async_write_ha_state"):
+        with pytest.raises(HomeAssistantError):
+            await cover.async_close_cover()
+
+    assert cover.travel_calc.current_position() == 0, (
+        "tracker must not be corrupted to the opposite endpoint by a failed redrive"
+    )
+
+
+@pytest.mark.asyncio
+async def test_force_redrive_validates_even_with_stale_self_initiated_flag(make_cover):
+    """Guards the _self_initiated_movement refresh in _force_full_redrive.
+
+    _require_movement_target_available only checks availability when
+    _self_initiated_movement is True. That flag is not reset at the top of
+    async_close_cover/async_open_cover — it's left over from whatever
+    movement last ran (e.g. False, from a prior externally-triggered move
+    that settled at this endpoint). If _force_full_redrive didn't refresh it
+    before validating, a stale False would make the availability check a
+    silent no-op, letting a failed redrive corrupt the tracker exactly like
+    the bug this task fixes — just gated behind trigger-history instead of
+    always. Simulate that stale precondition directly."""
+    cover = make_cover(force_endpoint_redrive=True)  # switch mode
+    cover.travel_calc.set_position(0)  # settled closed
+    # Make the movement target unavailable.
+    cover.hass.states.get.return_value = None
+    # Simulate a prior externally-triggered movement leaving this flag stale.
+    cover._self_initiated_movement = False
+
+    with patch.object(cover, "async_write_ha_state"):
+        with pytest.raises(HomeAssistantError):
+            await cover.async_close_cover()
+
+    assert cover.travel_calc.current_position() == 0, (
+        "tracker must not be corrupted to the opposite endpoint by a failed "
+        "redrive, even when _self_initiated_movement was left stale-False"
+    )

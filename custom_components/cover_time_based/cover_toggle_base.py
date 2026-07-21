@@ -250,6 +250,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         self.async_write_ha_state()
         self._last_command = None
         self._last_tilt_direction = None
+        await self._async_persist_position()
 
     def _on_tilt_motor_move_complete(self) -> None:
         """Clear the stale-direction bookkeeping once a tilt-motor move ends.
