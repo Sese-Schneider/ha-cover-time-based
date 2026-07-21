@@ -178,3 +178,125 @@ async def test_external_tilt_stop_still_releases_travel_relay_toggle(
         for c in cover.hass.services.async_call.call_args_list[n:]
     ]
     assert ("turn_on", expected_relay) in calls, calls
+
+
+@pytest.mark.asyncio
+async def test_abandon_travel_prestep_does_not_pulse_idle_tilt_relay(make_cover):
+    """Audit finding B4: a stale ``_last_tilt_direction`` must not pulse an
+    idle tilt motor when a travel pre-step is abandoned.
+
+    Sequence:
+    1. Tilt opens to its endpoint (100) and completes via auto-stop. Toggle
+       hardware self-stops at the tilt endpoint, so ``_tilt_settle`` skips the
+       relay stop and (before this fix) ``_last_tilt_direction`` was left
+       stale at "open".
+    2. A tilt command above ``max_tilt_allowed_position`` starts a *travel*
+       pre-step (dual_motor): travel runs first, the tilt motor stays idle.
+    3. A new command (``set_position``) abandons the pre-step. Before this
+       fix, ``_abandon_active_lifecycle`` unconditionally fired
+       ``_send_tilt_stop()``, which — keyed off the stale "open" direction —
+       pulsed ``switch.tilt_open`` on an idle motor: an untracked movement
+       (a #153-class phantom pulse). After the fix the tilt stop is gated on
+       the tilt motor actually having been driven, so no pulse fires.
+    """
+    cover = make_cover(
+        control_mode="toggle",
+        travel_time_close=0.2,
+        travel_time_open=0.2,
+        tilt_time_close=0.2,
+        tilt_time_open=0.2,
+        tilt_mode="dual_motor",
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        safe_tilt_position=100,
+        max_tilt_allowed_position=50,
+    )
+    cover.travel_calc.set_position(40)
+    cover.tilt_calc.set_position(30)
+
+    with patch.object(cover, "async_write_ha_state"):
+        # 1. Tilt move to the tilt endpoint (100). Completes via auto-stop:
+        #    _tilt_settle skips the stop at the endpoint (toggle self-stops).
+        await cover.async_open_cover_tilt()
+        assert cover._last_tilt_direction == "open"
+        await asyncio.sleep(0.3)
+        await cover.auto_stop_if_necessary()
+
+        # 2. Travel pre-step: tilt requested above max_tilt_allowed_position,
+        #    so travel runs first; tilt motor is idle in this phase.
+        cover.travel_calc.set_position(80)
+        await cover.set_tilt_position(20)
+        assert cover._pending_tilt_target == 20  # travel pre-step active
+        assert not cover.tilt_calc.is_traveling()  # tilt motor NOT running
+
+        # 3. New command abandons the pre-step.
+        n = len(cover.hass.services.async_call.call_args_list)
+        await cover.set_position(70)
+
+    calls = _tilt_switch_calls(cover, n)
+    assert ("turn_on", "switch.tilt_open") not in calls, calls
+
+
+@pytest.mark.asyncio
+async def test_tilt_restore_completion_clears_stale_direction(make_cover):
+    """Audit finding B4 (gap found in review): a tilt-restore phase that lands
+    exactly at a tilt endpoint must also clear ``_last_tilt_direction``.
+
+    ``_on_tilt_motor_move_complete`` was only wired up at the two sites the
+    original brief named (the plain dual-motor tilt-move settle branch and
+    the externally-triggered completion branch). The ``_tilt_restore_active``
+    completion branch in ``auto_stop_if_necessary`` also calls
+    ``_tilt_settle()`` to end a tilt-motor drive, and can equally land at an
+    endpoint (0/100) and take the self-stop-skip path there — leaving the
+    direction stale for the same reason B4 originally found. A stale
+    direction is read with no idle-motor gate by the toggle
+    ``_raw_direction_command`` override that the calibration screen drives,
+    so this is the same #153-class phantom-pulse hazard, just reached via a
+    different lifecycle phase.
+
+    Sequence (dual-motor toggle, ``close_includes_tilt`` — the default —
+    drives tilt to 0 after travel):
+    1. ``async_close_cover()`` starts the tilt pre-step (30 -> safe 100).
+    2. Pre-step completes -> travel phase starts (50 -> 0), restore target
+       queued at 0.
+    3. Travel completes -> ``_start_tilt_restore`` drives the tilt motor
+       closed (100 -> 0), setting ``_last_tilt_direction = "close"``.
+    4. Restore completes with tilt exactly at 0 (a tilt endpoint) ->
+       ``_tilt_settle`` takes the self-stop-skip path (toggle self-stops at
+       its limit) -> the ``_tilt_restore_active`` branch must still clear the
+       stale direction.
+    """
+    cover = make_cover(
+        control_mode="toggle",
+        travel_time_close=0.2,
+        travel_time_open=0.2,
+        tilt_time_close=0.2,
+        tilt_time_open=0.2,
+        tilt_mode="dual_motor",
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        close_includes_tilt=True,
+    )
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(30)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_close_cover()  # tilt pre-step: 30 -> 100 (safe)
+        assert cover.tilt_calc.is_traveling()
+        await asyncio.sleep(0.3)
+        await cover.auto_stop_if_necessary()  # pre-step complete -> travel starts
+        assert cover.travel_calc.is_traveling()
+        assert cover._tilt_restore_target == 0
+
+        await asyncio.sleep(0.3)
+        await cover.auto_stop_if_necessary()  # travel complete -> tilt restore starts
+        assert cover._tilt_restore_active is True
+        assert cover.tilt_calc.is_traveling()
+        assert cover._last_tilt_direction == "close"
+
+        await asyncio.sleep(0.3)
+        await cover.auto_stop_if_necessary()  # restore completes at endpoint 0
+
+    assert cover._tilt_restore_active is False
+    assert cover.tilt_calc.current_position() == 0
+    assert cover._last_tilt_direction is None

@@ -234,6 +234,20 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         self._last_command = None
         self._last_tilt_direction = None
 
+    def _on_tilt_motor_move_complete(self) -> None:
+        """Clear the stale-direction bookkeeping once a tilt-motor move ends.
+
+        A tilt move completing at a tilt endpoint takes ``_tilt_settle``'s
+        self-stop skip (the motor self-stops there, so no relay stop is
+        sent) and so never reaches ``async_stop_cover``'s own
+        ``_last_tilt_direction = None`` above. Without this hook the stale
+        direction survives into a later ``_abandon_active_lifecycle`` call
+        and — keyed off that stale direction — ``_send_tilt_stop`` would
+        pulse the direction relay even though the tilt motor is idle
+        (audit finding B4, a #153-class phantom pulse).
+        """
+        self._last_tilt_direction = None
+
     # --- Stale-reappearance guard ---
 
     def _is_stale_reappearance(self, old_val, new_val) -> bool:
