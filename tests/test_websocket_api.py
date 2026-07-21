@@ -1242,6 +1242,88 @@ class TestControlModeSchemaValidation:
         assert result["control_mode"] == CONTROL_MODE_TOGGLE_OPPOSITE
 
 
+class TestTiltPositionLimitSchemaValidation:
+    """safe_tilt_position / max_tilt_allowed_position used bare `int`, which
+    voluptuous checks with isinstance — rejecting valid JSON floats like
+    50.0 (isinstance(50.0, int) is False) while admitting bool (isinstance
+    (True, int) is True, since bool subclasses int). Coerce(int) fixes the
+    float rejection; no sibling ws field guards against bool, so that
+    admission is left as-is rather than inventing a new validation style.
+    """
+
+    @pytest.mark.parametrize(
+        "field", ["safe_tilt_position", "max_tilt_allowed_position"]
+    )
+    def test_float_value_accepted(self, field):
+        schema = ws_update_config._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": ENTITY_ID,
+                field: 50.0,
+            }
+        )
+        assert result[field] == 50
+
+    @pytest.mark.parametrize(
+        "field", ["safe_tilt_position", "max_tilt_allowed_position"]
+    )
+    def test_out_of_range_still_rejected(self, field):
+        import voluptuous as vol
+
+        schema = ws_update_config._ws_schema
+        with pytest.raises(vol.Invalid):
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    field: 150.0,
+                }
+            )
+
+
+class TestPulseTimeSchemaValidation:
+    """pulse_time was the only numeric ws field that couldn't be reset with
+    null, unlike its siblings (travel_time_close, endpoint_runon_time, ...)."""
+
+    def test_null_accepted_by_schema(self):
+        schema = ws_update_config._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": ENTITY_ID,
+                "pulse_time": None,
+            }
+        )
+        assert result["pulse_time"] is None
+
+    @pytest.mark.asyncio
+    async def test_null_pops_stored_key(self):
+        hass, config_entry, entity_reg = _make_hass(options={CONF_PULSE_TIME: 3.0})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "pulse_time": None,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert CONF_PULSE_TIME not in new_options
+
+
 # ---------------------------------------------------------------------------
 # ws_update_config — timing field validation
 # ---------------------------------------------------------------------------
@@ -1575,6 +1657,39 @@ class TestWsStartCalibration:
 
         conn.send_error.assert_called_once()
         assert conn.send_error.call_args[0][1] == "failed"
+
+
+class TestWsStartCalibrationTimeoutSchemaValidation:
+    """services.yaml advertises a 600s max timeout; the ws schema must
+    enforce it too (it previously only enforced a minimum of 1)."""
+
+    def test_timeout_over_600_rejected(self):
+        import voluptuous as vol
+
+        schema = ws_start_calibration._ws_schema
+        with pytest.raises(vol.Invalid):
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/start_calibration",
+                    "entity_id": ENTITY_ID,
+                    "attribute": "travel_time_close",
+                    "timeout": 100000,
+                }
+            )
+
+    def test_timeout_within_range_accepted(self):
+        schema = ws_start_calibration._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/start_calibration",
+                "entity_id": ENTITY_ID,
+                "attribute": "travel_time_close",
+                "timeout": 100,
+            }
+        )
+        assert result["timeout"] == 100.0
 
 
 # ---------------------------------------------------------------------------

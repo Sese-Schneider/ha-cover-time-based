@@ -246,8 +246,8 @@ async def ws_get_config(
                 CONTROL_MODE_TOGGLE_OPPOSITE,
             ]
         ),
-        vol.Optional("pulse_time"): vol.All(
-            vol.Coerce(float), vol.Range(min=0.1, max=10)
+        vol.Optional("pulse_time"): vol.Any(
+            None, vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10))
         ),
         vol.Optional("relay_reports_off"): vol.Any(None, bool),
         vol.Optional("send_endpoint_stop"): vol.Any(None, bool),
@@ -301,10 +301,10 @@ async def ws_get_config(
             None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
         ),
         vol.Optional("safe_tilt_position"): vol.Any(
-            None, vol.All(int, vol.Range(min=0, max=100))
+            None, vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
         ),
         vol.Optional("max_tilt_allowed_position"): vol.Any(
-            None, vol.All(int, vol.Range(min=0, max=100))
+            None, vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
         ),
         vol.Optional("tilt_open_switch"): vol.Any(str, None),
         vol.Optional("tilt_close_switch"): vol.Any(str, None),
@@ -389,7 +389,7 @@ async def ws_update_config(
         "type": "cover_time_based/start_calibration",
         vol.Required("entity_id"): str,
         vol.Required("attribute"): vol.In(CALIBRATABLE_ATTRIBUTES),
-        vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1)),
+        vol.Required("timeout"): vol.All(vol.Coerce(float), vol.Range(min=1, max=600)),
         vol.Optional("direction"): vol.In(["open", "close"]),
     }
 )

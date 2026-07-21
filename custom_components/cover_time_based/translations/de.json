@@ -25,10 +25,6 @@
       "name": "Rollladenposition setzen",
       "description": "Setzt intern eine bekannte Position für den Rollladen.",
       "fields": {
-        "entity_id": {
-          "name": "Entitäts-ID",
-          "description": "Die Entitäts-ID des Rollladens, dessen Position gesetzt werden soll."
-        },
         "position": {
           "name": "Position",
           "description": "Die Position des Rollladens, zwischen 0 und 100."
@@ -39,11 +35,7 @@
       "name": "Neigungsposition des Rollladens setzen",
       "description": "Setzt intern eine bekannte Neigungsposition für den Rollladen.",
       "fields": {
-        "entity_id": {
-          "name": "Entitäts-ID",
-          "description": "Die Entitäts-ID des Rollladens, dessen Neigungsposition gesetzt werden soll."
-        },
-        "position": {
+        "tilt_position": {
           "name": "Position",
           "description": "Die Neigungsposition des Rollladens, zwischen 0 und 100."
         }

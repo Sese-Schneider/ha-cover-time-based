@@ -308,10 +308,9 @@ share the travel motor.
 
 Manually set the internal position of a cover. Useful for correcting drift.
 
-| Field     | Description                 |
-| --------- | --------------------------- |
-| entity_id | The cover entity            |
-| position  | The position to set (0-100) |
+| Field    | Description                 |
+| -------- | --------------------------- |
+| position | The position to set (0-100) |
 
 ### `cover_time_based.set_known_tilt_position`
 
@@ -319,7 +318,6 @@ Manually set the internal tilt position of a cover.
 
 | Field         | Description                      |
 | ------------- | -------------------------------- |
-| entity_id     | The cover entity                 |
 | tilt_position | The tilt position to set (0-100) |
 
 ### `cover_time_based.start_calibration`
