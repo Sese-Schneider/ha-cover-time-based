@@ -60,6 +60,10 @@ export function renderEntityPicker(card) {
               card._onStopCalibration(true);
             }
           }
+          // Flush any pending debounced edit to the OUTGOING entity before
+          // swapping _selectedEntity/_config over to the new one - _autoSave
+          // reads both, so this must run before either changes.
+          card._flushAutoSave();
           card._setSelectedEntity(newEntity);
           card._config = null;
           card._loadError = null;

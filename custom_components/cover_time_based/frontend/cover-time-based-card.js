@@ -244,11 +244,40 @@ class CoverTimeBasedCard extends LitElement {
     }
   }
 
+  /**
+   * Flushes a pending debounced autosave immediately instead of losing it.
+   * Used both here (disconnect) and by the device-picker handler in
+   * card-render.js, which must save the outgoing entity's edit before
+   * swapping _selectedEntity/_config to the newly-picked one.
+   *
+   * _autoSave is async and callers here can't await it (disconnectedCallback
+   * can't be async; the picker handler needs the read of _selectedEntity/
+   * _config to happen synchronously, before it reassigns them) - that's fine,
+   * the WS call is already in flight by the time this returns.
+   */
+  _flushAutoSave() {
+    if (!this._autoSaveTimer) return;
+    clearTimeout(this._autoSaveTimer);
+    this._autoSaveTimer = null;
+    this._autoSave(); // reads current _selectedEntity/_config - call BEFORE swapping them
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
+    // While calibrating, _autoSave defers itself (Task 24) rather than
+    // saving - there is nothing timing-locked worth flushing, and flushing
+    // here would just re-arm the timer on an element that may be gone for
+    // good. Check calibration first and skip the flush in that case.
     if (this._isCalibrating()) {
-      this._onStopCalibration(true);
+      // HA re-parents cards on layout changes; a synchronous re-connect means
+      // the user didn't leave. Only cancel if still detached next tick.
+      setTimeout(() => {
+        if (!this.isConnected && this._isCalibrating()) {
+          this._onStopCalibration(true);
+        }
+      }, 0);
+    } else {
+      this._flushAutoSave();
     }
   }
 

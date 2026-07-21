@@ -137,29 +137,51 @@ test("_loadConfig returns early without calling callWS when _selectedEntity is e
 });
 
 // ---------------------------------------------------------------------------
-// disconnectedCallback — timer cleared + calibration cancelled
+// disconnectedCallback — calibration cancel is deferred to next tick, and
+// the pending-edit flush is skipped while calibrating (Task 27 / F5 + F7:
+// HA re-parents cards synchronously on layout changes, so a same-tick
+// disconnect+reconnect must not be treated as "the user left").
 // ---------------------------------------------------------------------------
 
-test("disconnectedCallback clears autoSaveTimer and calls _onStopCalibration(true) when calibrating", async () => {
+test("disconnectedCallback does NOT cancel calibration synchronously, and skips the autosave flush, while calibrating", async () => {
   vi.useFakeTimers();
   const hass = makeHass();
   card = await mountCard(hass);
 
-  // Plant a fake timer so clearTimeout has something to find
+  // Plant a fake timer so we can prove it survives the synchronous call.
   const timer = setTimeout(() => {}, 9999);
   card._autoSaveTimer = timer;
 
   // Force the calibrating state via the override flag
   card._calibratingOverride = true;
 
-  // Spy on the methods we want to assert
-  const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
   const stopCalSpy = vi.spyOn(card, "_onStopCalibration").mockResolvedValue(undefined);
+  const flushSpy = vi.spyOn(card, "_flushAutoSave");
 
-  card.disconnectedCallback();
+  document.body.removeChild(card); // actually detach, so isConnected reflects it
 
-  expect(clearTimeoutSpy).toHaveBeenCalledWith(timer);
+  // Synchronously: no cancel yet (a same-tick reconnect must be able to
+  // cancel this pending check), and the flush is skipped entirely - nothing
+  // pending during calibration is savable (_autoSave just re-defers).
+  expect(stopCalSpy).not.toHaveBeenCalled();
+  expect(flushSpy).not.toHaveBeenCalled();
+  expect(card._autoSaveTimer).toBe(timer);
+
+  // Still detached on the next tick -> the cancel fires now.
+  await vi.advanceTimersByTimeAsync(0);
   expect(stopCalSpy).toHaveBeenCalledWith(true);
+  card = null;
+});
+
+test("disconnectedCallback flushes the pending autosave when NOT calibrating", async () => {
+  const hass = makeHass();
+  card = await mountCard(hass);
+  const flushSpy = vi.spyOn(card, "_flushAutoSave");
+
+  document.body.removeChild(card);
+
+  expect(flushSpy).toHaveBeenCalled();
+  card = null;
 });
 
 // ---------------------------------------------------------------------------
