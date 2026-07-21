@@ -280,6 +280,12 @@ export const cardStyles = css`
         pointer-events: none;
       }
 
+      fieldset.borderless {
+        border: none;
+        padding: 0;
+        margin: 0;
+      }
+
       /* Timing table */
       .timing-table {
         width: 100%;

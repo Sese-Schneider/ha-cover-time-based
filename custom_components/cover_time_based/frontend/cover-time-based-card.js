@@ -275,6 +275,7 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   async _autoSave() {
+    if (this._isCalibrating()) { this._scheduleAutoSave(); return; }
     if (!this._selectedEntity || !this.hass || !this._config) return;
     this._saving = true;
     this._saveError = false;

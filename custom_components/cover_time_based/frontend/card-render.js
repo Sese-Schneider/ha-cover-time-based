@@ -116,9 +116,11 @@ export function renderConfigSections(card) {
           </fieldset>
         `
       : html`
-          ${calibrating ? "" : renderPositionReset(card)}
+          <fieldset class="borderless" ?disabled=${disabled}>
+            ${calibrating ? "" : renderPositionReset(card)}
+            ${renderTimingTable(card, c)}
+          </fieldset>
           ${renderCalibration(card, calibrating)}
-          ${renderTimingTable(card, c)}
         `}
 
     ${card._saving
