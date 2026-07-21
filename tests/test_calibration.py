@@ -464,7 +464,7 @@ class TestMotorOverheadCalibration:
 
     @pytest.mark.asyncio
     async def test_tilt_overhead_calculation(self, make_cover):
-        """Tilt overhead uses 3 steps, so expected_remaining = 0.7 * total_time."""
+        """Tilt overhead uses 3 steps of 20% each, so expected_remaining = 0.4 * total_time."""
         cover = make_cover(tilt_time_close=10.0, tilt_time_open=10.0)
         mock_entry = MagicMock()
         mock_entry.options = {}
@@ -477,13 +477,33 @@ class TestMotorOverheadCalibration:
             await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
             # Simulate 3 stepped moves completed, then continuous phase
             cover._calibration.step_count = 3
-            # expected_remaining = (1 - 3/10) * 10 = 7.0s
-            # Continuous phase started 10s ago: 7s expected + 3s overhead (3*1.0)
+            # expected_remaining = (1 - 3*20/100) * 10 = 4.0s
+            # Continuous phase started 10s ago: 4s expected + 6s overhead (3*2.0)
             cover._calibration.continuous_start = time_mod.monotonic() - 10.0
             result = await cover.stop_calibration()
 
-        # overhead = (10.0 - 7.0) / 3 = 1.0
-        assert result["value"] == pytest.approx(1.0, abs=0.1)
+        # overhead = (10.0 - 4.0) / 3 = 2.0
+        assert result["value"] == pytest.approx(2.0, abs=0.1)
+
+    @pytest.mark.asyncio
+    async def test_tilt_overhead_uses_actual_step_size(self, make_cover):
+        """Tilt steps 20% at a time (not travel's 10%); overhead must use that."""
+        cover = make_cover(
+            tilt_time_close=10.0, tilt_time_open=10.0, tilt_mode="inline"
+        )
+        cover.tilt_calc.set_position(100)
+
+        import time as time_mod
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
+            # 3 steps x 20% -> 60% stepped, 40% remaining. Physical truth with a
+            # 0.6s per-start overhead: continuous = 0.4*10 + 3*0.6 = 5.8s.
+            cover._calibration.step_count = 3
+            cover._calibration.continuous_start = time_mod.monotonic() - 5.8
+            result = await cover.stop_calibration()
+
+        assert result["value"] == pytest.approx(0.6, abs=0.05)
 
 
 class TestMinMovementTimeCalibration:
@@ -781,13 +801,13 @@ class TestCalibrationResultOpenDirection:
             assert cover._calibration.move_command == SERVICE_OPEN_COVER
             # Simulate 3 stepped moves completed, then continuous phase
             cover._calibration.step_count = 3
-            # expected_remaining = (1 - 3/10) * 10 = 7.0s
-            # Continuous phase started 10s ago: 7s expected + 3s overhead (3*1.0)
+            # expected_remaining = (1 - 3*20/100) * 10 = 4.0s
+            # Continuous phase started 10s ago: 4s expected + 6s overhead (3*2.0)
             cover._calibration.continuous_start = time_mod.monotonic() - 10.0
             result = await cover.stop_calibration()
 
-        # overhead = (10.0 - 7.0) / 3 = 1.0
-        assert result["value"] == pytest.approx(1.0, abs=0.1)
+        # overhead = (10.0 - 4.0) / 3 = 2.0
+        assert result["value"] == pytest.approx(2.0, abs=0.1)
 
 
 class TestCalibrationResultTotalTimeNone:

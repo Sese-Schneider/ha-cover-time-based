@@ -242,6 +242,7 @@ class CalibrationMixin:
         step_pct = 100 // total_divisions
         step_duration = travel_time * step_pct / 100
         self._calibration.step_duration = step_duration
+        self._calibration.step_pct = step_pct
         self._calibration.move_command = move_command
 
         self._calibration.automation_task = self.hass.async_create_task(
@@ -503,8 +504,11 @@ class CalibrationMixin:
             pulse_time = getattr(self, "_pulse_time", None)
             if pulse_time:
                 continuous_time -= pulse_time
-            # Each step covers 1/10 of travel; remaining depends on step count
-            expected_remaining = (1.0 - step_count / 10.0) * total_time
+            # Each step covers step_pct% of travel; remaining depends on step
+            # count and the actual per-step size for this axis (travel steps
+            # 10% at a time, tilt steps 20% at a time).
+            step_pct = self._calibration.step_pct or 10
+            expected_remaining = (1.0 - step_count * step_pct / 100.0) * total_time
             overhead = (continuous_time - expected_remaining) / step_count
             _LOGGER.debug(
                 "overhead calculation: total_time=%.2f, step_count=%d, "
