@@ -298,6 +298,26 @@ class CalibrationMixin:
         except asyncio.CancelledError:
             pass
 
+    def _restore_calibration_startup_delay(self) -> None:
+        """Put back the startup delay an overhead test zeroed."""
+        if self._calibration is None:
+            return
+        if self._calibration.saved_startup_delay is not None:
+            if "tilt" in self._calibration.attribute:
+                self._tilt_startup_delay = self._calibration.saved_startup_delay
+            else:
+                self._travel_startup_delay = self._calibration.saved_startup_delay
+
+    def _cancel_calibration_tasks(self) -> None:
+        """Cancel any live timeout/automation tasks for the current calibration."""
+        assert self._calibration is not None
+        for task in (
+            self._calibration.timeout_task,
+            self._calibration.automation_task,
+        ):
+            if task is not None and not task.done():
+                task.cancel()
+
     async def _calibration_timeout(self):
         """Handle calibration timeout."""
         assert self._calibration is not None
@@ -315,6 +335,7 @@ class CalibrationMixin:
             ):
                 self._calibration.automation_task.cancel()
             await self._send_stop()
+            self._restore_calibration_startup_delay()
             self._calibration = None
             self.async_write_ha_state()
         except asyncio.CancelledError:
@@ -327,19 +348,8 @@ class CalibrationMixin:
 
         cancel = kwargs.get("cancel", False)
 
-        # Cancel timeout task
-        if (
-            self._calibration.timeout_task is not None
-            and not self._calibration.timeout_task.done()
-        ):
-            self._calibration.timeout_task.cancel()
-
-        # Cancel automation task
-        if (
-            self._calibration.automation_task is not None
-            and not self._calibration.automation_task.done()
-        ):
-            self._calibration.automation_task.cancel()
+        # Cancel timeout/automation tasks
+        self._cancel_calibration_tasks()
 
         # Stop the motor
         await self._send_stop()
@@ -355,12 +365,7 @@ class CalibrationMixin:
             self._set_position_after_calibration(self._calibration)
 
         # Restore startup delay that was zeroed during overhead test
-        if self._calibration.saved_startup_delay is not None:
-            attr = self._calibration.attribute
-            if "tilt" in attr:
-                self._tilt_startup_delay = self._calibration.saved_startup_delay
-            else:
-                self._travel_startup_delay = self._calibration.saved_startup_delay
+        self._restore_calibration_startup_delay()
 
         self._calibration = None
         self.async_write_ha_state()

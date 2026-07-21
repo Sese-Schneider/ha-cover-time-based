@@ -266,16 +266,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             timer()
         self._pending_switch_timers.clear()
         if self._calibration is not None:
-            if (
-                self._calibration.timeout_task
-                and not self._calibration.timeout_task.done()
-            ):
-                self._calibration.timeout_task.cancel()
-            if (
-                self._calibration.automation_task
-                and not self._calibration.automation_task.done()
-            ):
-                self._calibration.automation_task.cancel()
+            self._restore_calibration_startup_delay()
+            self._cancel_calibration_tasks()
             self._calibration = None
 
     # -----------------------------------------------------------------------

@@ -627,6 +627,28 @@ class TestCalibrationTimeout:
         assert cover._calibration is None
         assert automation_task.done()  # Should be cancelled
 
+    @pytest.mark.asyncio
+    async def test_timeout_restores_startup_delay(self, make_cover):
+        """Timeout during an overhead test must restore the startup delay.
+
+        `_start_overhead_test` zeroes `_travel_startup_delay` (saving it to
+        `_calibration.saved_startup_delay`) so the tracker doesn't compensate
+        during the test. Only `stop_calibration` used to restore it — a
+        timeout left the delay permanently zeroed, silently drifting the
+        tracked position forever after.
+        """
+        cover = make_cover(travel_startup_delay=0.5)
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_startup_delay", timeout=0.05
+            )
+            assert cover._travel_startup_delay is None  # zeroed for the test
+            assert cover._calibration.saved_startup_delay == 0.5
+            await asyncio.sleep(0.4)  # timeout fires
+        assert cover._calibration is None
+        assert cover._travel_startup_delay == 0.5
+
 
 class TestOverheadFallbackTravelTime:
     """Test fallback travel_time selection in _start_overhead_test (lines 141, 152)."""
