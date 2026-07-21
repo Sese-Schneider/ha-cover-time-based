@@ -65,6 +65,10 @@ export function renderEntityPicker(card) {
           card._loadError = null;
           card._knownPosition = "unknown";
           card._calibratingOverride = undefined;
+          // The seen-it latch belongs to the entity that was selected when it
+          // was set; switching devices must not carry it (or the override)
+          // over onto the newly-selected entity's calibration state.
+          card._sawCalibrationActive = false;
           card._activeTab = "device";
           if (card._selectedEntity) card._loadConfig();
         }}

@@ -182,7 +182,40 @@ class CoverTimeBasedCard extends LitElement {
     saveSelectedEntity(entityId);
   }
 
+  /**
+   * Tracks ground truth for _isCalibrating() alongside _calibratingOverride.
+   *
+   * _calibratingOverride is set optimistically the moment the user acts
+   * (start/stop calibration) so the UI updates before the WS round trip
+   * completes, and _isCalibrating() trusts it over the entity's
+   * calibration_active attribute. That trust has to expire when calibration
+   * ends on the backend without the card driving it - the 300s safety
+   * timeout, an entry reload, or another browser tab finishing it - or the
+   * card is stuck showing "Calibration Active" until the user next hits an
+   * error.
+   *
+   * _sawCalibrationActive is a latch: it only flips true once the attribute
+   * has actually been observed true, and that is what lets this tell apart
+   * "the attribute hasn't shown up in hass yet" (the start_calibration
+   * WS call is still in flight - keep showing calibrating, the override is
+   * doing its job) from "the attribute WAS true and has since gone away"
+   * (the backend ended it - resync to ground truth). Without the latch, the
+   * first hass update after _onStartCalibration flips the override (which
+   * always finds the attribute still absent, since the backend hasn't
+   * applied it yet) would immediately clear the override it just set.
+   */
   updated(changedProperties) {
+    if (!changedProperties.has("hass")) return;
+    const active = this._getEntityState()?.attributes?.calibration_active === true;
+    if (active) this._sawCalibrationActive = true;
+    else if (this._sawCalibrationActive && this._calibratingOverride === true) {
+      // Backend calibration ended without us (timeout / reload / other tab):
+      // yield back to ground truth instead of showing Calibration Active forever.
+      this._calibratingOverride = undefined;
+      this._sawCalibrationActive = false;
+      this.requestUpdate();
+    }
+    if (!active && !this._isCalibrating()) this._sawCalibrationActive = false;
   }
 
   async _loadEntityList() {
@@ -473,6 +506,11 @@ class CoverTimeBasedCard extends LitElement {
 
     this._calibratingAttribute = attrSelect.value;
     this._calibratingOverride = undefined;
+    // Fresh calibration attempt: any previously-seen calibration_active from
+    // an earlier run must not let updated() treat this round's still-absent
+    // attribute as "the backend just ended it" before the WS call above even
+    // lands.
+    this._sawCalibrationActive = false;
 
     try {
       await this.hass.callWS({

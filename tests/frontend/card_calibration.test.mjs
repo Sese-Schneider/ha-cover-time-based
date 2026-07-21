@@ -395,3 +395,74 @@ test("_onPositionPresetChange error path swallows the error (console.error is ex
   await expect(card._onPositionPresetChange("open")).resolves.toBeUndefined();
   expect(errSpy).toHaveBeenCalled();
 });
+
+// ---------------------------------------------------------------------------
+// _isCalibrating() / updated() — resync to backend ground truth (F6)
+//
+// _isCalibrating() short-circuits on _calibratingOverride before ever reading
+// the state attribute. Once the override is true, a backend-side end of
+// calibration (the 300s safety timeout, an entry reload, another browser tab
+// finishing it) must not leave the card showing "Calibration Active" forever.
+// updated() tracks whether calibration_active was ever actually observed
+// true (_sawCalibrationActive) so it can tell "the attribute hasn't shown up
+// yet" (start-WS-roundtrip race - keep showing calibrating) apart from "the
+// attribute WAS true and has now gone away" (backend ended it - resync).
+// ---------------------------------------------------------------------------
+
+test("_isCalibrating() resyncs to false when backend calibration ends without the card driving it", async () => {
+  card = await mountCard(makeHass({ states: { "cover.x": { attributes: {} } } }), {
+    selectedEntity: "cover.x",
+  });
+  card._calibratingOverride = true;
+
+  // Backend attribute appears true - the card records having seen it.
+  card.hass = makeHass({ states: { "cover.x": { attributes: { calibration_active: true } } } });
+  await card.updateComplete;
+  expect(card._sawCalibrationActive).toBe(true);
+  expect(card._isCalibrating()).toBe(true);
+
+  // Backend calibration ends (300s timeout / reload / another tab) - the card
+  // never called _onStopCalibration itself, so nothing else would have
+  // cleared _calibratingOverride.
+  card.hass = makeHass({ states: { "cover.x": { attributes: {} } } });
+  await card.updateComplete;
+
+  expect(card._calibratingOverride).toBeUndefined();
+  expect(card._isCalibrating()).toBe(false);
+});
+
+test("RACE: _isCalibrating() stays true when the override is set but calibration_active has never yet been observed (start-WS roundtrip)", async () => {
+  card = await mountCard(makeHass({ states: { "cover.x": { attributes: {} } } }), {
+    selectedEntity: "cover.x",
+  });
+  // Mirrors _onStartCalibration flipping the override right after a
+  // successful start_calibration WS reply, before the entity's
+  // calibration_active attribute has appeared in hass.states at all.
+  card._calibratingOverride = true;
+  card.hass = makeHass({ states: { "cover.x": { attributes: {} } } });
+  await card.updateComplete;
+
+  expect(card._isCalibrating()).toBe(true);
+});
+
+test("live entity picker: switching device clears _sawCalibrationActive alongside _calibratingOverride", async () => {
+  // The device picker's @value-changed handler lives inline in
+  // card-render.js's renderEntityPicker (the _onEntityChange method on the
+  // card class is dead code - nothing wires it up). This exercises the real,
+  // rendered picker rather than calling a method the running card never
+  // calls, so it proves the reset actually fires on the live path.
+  card = await mountCard(makeHass(), { selectedEntity: "cover.a" });
+  // Simulate a calibration the card had already latched onto (the attribute
+  // was observed true at least once, per the updated() hook above) before
+  // the user switches to a different device mid-calibration.
+  card._calibratingOverride = true;
+  card._sawCalibrationActive = true;
+
+  const picker = card.shadowRoot.querySelector("ha-entity-picker");
+  picker.dispatchEvent(
+    new CustomEvent("value-changed", { detail: { value: "cover.b" } })
+  );
+
+  expect(card._calibratingOverride).toBeUndefined();
+  expect(card._sawCalibrationActive).toBe(false);
+});
