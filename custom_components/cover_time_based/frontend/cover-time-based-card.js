@@ -337,7 +337,16 @@ class CoverTimeBasedCard extends LitElement {
       if (this._selectedEntity !== entityId) return;
       console.error("Failed to load config:", err);
       this._config = null;
-      this._loadError = this._t("yaml_warning");
+      // Only a genuinely unconfigured entity (the backend's ws_get_config
+      // sends error code "not_found" when the entity has no config entry —
+      // see websocket_api.py) warrants the YAML-migration lecture. Any other
+      // failure (a dropped connection, a transient server error, ...) is
+      // unrelated to YAML config and should say so generically instead of
+      // sending the user off on a wild goose chase to "migrate" an entity
+      // that is already fine.
+      this._loadError = this._t(
+        err?.code === "not_found" ? "yaml_warning" : "load_failed"
+      );
     } finally {
       // Only the newest request owns the spinner: an older one must not clear
       // it while a newer load is still running, but a request that was merely

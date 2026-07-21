@@ -126,12 +126,38 @@ test("_loadConfig sets _config and clears _loading/_loadError on success", async
 // _loadConfig — failure path
 // ---------------------------------------------------------------------------
 
-test("_loadConfig sets _loadError to yaml_warning string and nulls _config on failure", async () => {
+test("_loadConfig on a transient/unknown WS failure sets _loadError to the generic load_failed string", async () => {
   // The card intentionally calls console.error on this path — that is expected behavior.
   const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     ws: {
+      // A plain Error with no .code — e.g. a dropped connection or an
+      // unexpected server exception — is NOT "this entity has no config
+      // entry", so it must not show the YAML-migration lecture.
       "cover_time_based/get_config": () => { throw new Error("network fail"); },
+    },
+  });
+  card = await mountCard(hass);
+  card._selectedEntity = "cover.my_cover";
+  card._config = { some: "data" };
+  await card._loadConfig();
+  expect(card._config).toBeNull();
+  expect(card._loadError).toBe(card._t("load_failed"));
+  expect(card._loading).toBe(false);
+  expect(errSpy).toHaveBeenCalled();
+});
+
+test("_loadConfig on a 'not_found' WS error sets _loadError to the yaml_warning string", async () => {
+  // The card intentionally calls console.error on this path — that is expected behavior.
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const hass = makeHass({
+    ws: {
+      // Mirrors ws_get_config's connection.send_error(msg["id"], "not_found", ...)
+      // in websocket_api.py — home-assistant-js-websocket rejects callWS with
+      // the raw `{code, message}` error object, not an Error instance.
+      "cover_time_based/get_config": () => {
+        throw { code: "not_found", message: "Entity not found or not a config entry entity" };
+      },
     },
   });
   card = await mountCard(hass);
