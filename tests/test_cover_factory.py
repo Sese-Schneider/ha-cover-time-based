@@ -532,6 +532,82 @@ class TestDefaultsSchemaLegacyEndpointRunonMigration:
 
 
 # ===================================================================
+# input_mode reachability in strict YAML schemas
+# ===================================================================
+
+
+class TestInputModeSchemaValidation:
+    """`input_mode` is read by _resolve_control_mode (cover.py) to pick
+    switch/pulse/toggle/toggle_opposite, but every strict YAML schema
+    rejected it as an unknown key — making the override unreachable from
+    real YAML (only from tests that call devices_from_config directly,
+    bypassing PLATFORM_SCHEMA validation)."""
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            CONTROL_MODE_SWITCH,
+            CONTROL_MODE_PULSE,
+            CONTROL_MODE_TOGGLE,
+            CONTROL_MODE_TOGGLE_OPPOSITE,
+        ],
+    )
+    def test_switch_cover_schema_accepts_input_mode(self, value):
+        import voluptuous as vol
+        from custom_components.cover_time_based.cover import SWITCH_COVER_SCHEMA
+
+        validated = vol.Schema(SWITCH_COVER_SCHEMA)(
+            {
+                "name": "Test",
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                "input_mode": value,
+            }
+        )
+        assert validated["input_mode"] == value
+
+    def test_switch_cover_schema_rejects_unknown_input_mode(self):
+        import voluptuous as vol
+        from custom_components.cover_time_based.cover import SWITCH_COVER_SCHEMA
+
+        with pytest.raises(vol.Invalid):
+            vol.Schema(SWITCH_COVER_SCHEMA)(
+                {
+                    "name": "Test",
+                    CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                    CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                    "input_mode": "bogus_mode",
+                }
+            )
+
+    def test_defaults_schema_accepts_input_mode(self):
+        from custom_components.cover_time_based.cover import DEFAULTS_SCHEMA
+
+        validated = DEFAULTS_SCHEMA({"input_mode": CONTROL_MODE_TOGGLE})
+        assert validated["input_mode"] == CONTROL_MODE_TOGGLE
+
+    def test_input_mode_reachable_through_full_platform_schema_pipeline(self):
+        """End-to-end: a real YAML device with input_mode: toggle must
+        actually produce a ToggleModeCover, not be rejected by PLATFORM_SCHEMA."""
+        from custom_components.cover_time_based.cover import PLATFORM_SCHEMA
+
+        raw = {
+            "platform": "cover_time_based",
+            CONF_DEVICES: {
+                "blind1": {
+                    "name": "Test",
+                    CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                    CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                    "input_mode": CONTROL_MODE_TOGGLE,
+                },
+            },
+        }
+        validated = PLATFORM_SCHEMA(raw)
+        devices = devices_from_config(validated)
+        assert isinstance(devices[0], ToggleModeCover)
+
+
+# ===================================================================
 # async_setup_platform (deprecated YAML)
 # ===================================================================
 

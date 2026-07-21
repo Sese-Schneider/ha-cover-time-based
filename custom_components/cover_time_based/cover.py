@@ -99,6 +99,17 @@ CONTROL_MODE_PULSE = "pulse"
 CONTROL_MODE_TOGGLE = "toggle"
 CONTROL_MODE_TOGGLE_OPPOSITE = "toggle_opposite"
 
+# Explicit YAML override for control_mode, read by _resolve_control_mode().
+# "wrapped" is excluded: that mode is resolved earlier from cover_entity_id
+# and never consults input_mode (see _resolve_control_mode below).
+CONF_INPUT_MODE = "input_mode"
+INPUT_MODE_VALUES = [
+    CONTROL_MODE_SWITCH,
+    CONTROL_MODE_PULSE,
+    CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_TOGGLE_OPPOSITE,
+]
+
 CONF_PULSE_TIME = "pulse_time"
 DEFAULT_PULSE_TIME = 1.0
 
@@ -134,6 +145,7 @@ SWITCH_COVER_SCHEMA = {
     vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.entity_id,
     vol.Optional(CONF_STOP_SWITCH_ENTITY_ID, default=None): vol.Any(cv.entity_id, None),
     vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
+    vol.Optional(CONF_INPUT_MODE): vol.In(INPUT_MODE_VALUES),
     vol.Optional(CONF_PULSE_TIME): cv.positive_float,
     vol.Optional(CONF_RELAY_REPORTS_OFF): cv.boolean,
     vol.Optional(CONF_SEND_ENDPOINT_STOP): cv.boolean,
@@ -149,6 +161,7 @@ ENTITY_COVER_SCHEMA = {
 DEFAULTS_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
+        vol.Optional(CONF_INPUT_MODE): vol.In(INPUT_MODE_VALUES),
         vol.Optional(CONF_TRAVELLING_TIME_DOWN, default=None): vol.Any(
             cv.positive_float, None
         ),
@@ -258,7 +271,7 @@ def _resolve_control_mode(config, defaults, has_cover_entity):
         return CONTROL_MODE_WRAPPED
 
     # Explicit input_mode takes precedence
-    explicit = config.pop("input_mode", None) or defaults.get("input_mode")
+    explicit = config.pop(CONF_INPUT_MODE, None) or defaults.get(CONF_INPUT_MODE)
     if explicit:
         config.pop(CONF_IS_BUTTON, None)
         return explicit
