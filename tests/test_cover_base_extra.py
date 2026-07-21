@@ -559,6 +559,15 @@ class TestTiltEndpointStartupDelay:
 
     @pytest.mark.asyncio
     async def test_tilt_direction_change_cancels_startup_delay(self, make_cover):
+        """A direction change inside the tilt startup-delay window stops and waits.
+
+        Mirrors the travel counterpart (``_async_move_to_endpoint``): cancelling a
+        pending startup-delay move on a direction change stops the axis, clears
+        ``_last_command`` and returns — it does NOT fall through into an immediate
+        opposite command. Falling through drove the tilt the other way with no
+        stop and no settle (audit Task 3); a second press now drives the new
+        direction, going through the normal stop→settle→go reversal.
+        """
         cover = make_cover(
             tilt_time_close=5.0,
             tilt_time_open=5.0,
@@ -580,10 +589,11 @@ class TestTiltEndpointStartupDelay:
         # Let the cancellation finalize
         await asyncio.sleep(0)
 
-        # Original startup delay should have been cancelled;
-        # a new one was created for the open direction
+        # Original startup delay is cancelled, the move stops, _last_command is
+        # cleared, and no new movement is started (a second press drives open).
         assert original_task.done() or original_task.cancelled()
-        assert cover._last_command == SERVICE_OPEN_COVER
+        assert cover._last_command is None
+        assert cover._startup_delay_task is None
 
     @pytest.mark.asyncio
     async def test_tilt_same_direction_during_startup_delay_skips(self, make_cover):
