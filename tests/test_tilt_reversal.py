@@ -108,3 +108,37 @@ async def test_tilt_press_at_current_animated_position_stops(make_cover):
             cover.async_open_cover_tilt()
         )  # press open: current(100) == target(100), still moving
     assert not cover.tilt_calc.is_traveling()
+
+
+@pytest.mark.asyncio
+async def test_set_position_during_shared_motor_tilt_does_not_repulse(make_cover):
+    """set_position must not re-pulse a motor already running a shared-motor tilt move.
+
+    Audit Task 5A: a shared-motor (inline/sequential) tilt move runs the SAME
+    physical motor with only ``tilt_calc`` traveling. ``set_position``'s
+    ``already_moving_same_dir`` and its direction-change stop check keyed only
+    on ``travel_calc.is_traveling()``, so a same-direction ``set_position``
+    call while a shared-motor tilt move was in flight re-issued the start
+    command. On toggle hardware a second pulse of the same direction switch
+    while the motor is running is read as STOP; the later auto-stop pulse
+    then restarts the motor unsupervised.
+    """
+    cover = make_cover(
+        control_mode="toggle",
+        tilt_time_close=2.0,
+        tilt_time_open=2.0,
+        tilt_mode="inline",
+    )
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(0)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover_tilt()  # motor running up (shared)
+        assert cover.tilt_calc.is_traveling()
+        n = len(cover.hass.services.async_call.call_args_list)
+        await cover.set_position(80)  # same direction
+    calls = [
+        (c[0][1], c[0][2].get("entity_id"))
+        for c in cover.hass.services.async_call.call_args_list[n:]
+    ]
+    assert ("turn_on", "switch.open") not in calls, calls
+    assert cover.travel_calc.is_traveling()  # retargeted, not re-pulsed

@@ -1202,7 +1202,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if not should_proceed:
             return
 
-        if is_direction_change and self.travel_calc.is_traveling():
+        # A shared-motor (inline/sequential) tilt move drives the same physical
+        # motor as travel, with only tilt_calc traveling. Dual-motor tilt is
+        # excluded — its tilt motor is independent of travel. Direction
+        # comparability holds because a shared-motor tilt move set
+        # _last_command to the motor direction it drives (tilt_command_for).
+        shared_motor_tilt_traveling = (
+            self._has_tilt_support()
+            and not self._tilt_strategy.uses_tilt_motor
+            and self.tilt_calc.is_traveling()
+        )
+
+        if is_direction_change and (
+            self.travel_calc.is_traveling() or shared_motor_tilt_traveling
+        ):
             self._log("set_position :: stopping active travel movement")
             self.travel_calc.stop()
             self.stop_auto_updater()
@@ -1234,8 +1247,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # tracker (a later auto-stop pulse then restarts it and runs the cover
         # to the endpoint). Tilt coupling is still recomputed below for the new
         # target before we retarget.
-        already_moving_same_dir = (
-            not is_direction_change and self.travel_calc.is_traveling()
+        already_moving_same_dir = not is_direction_change and (
+            self.travel_calc.is_traveling() or shared_motor_tilt_traveling
         )
 
         current_tilt = (
