@@ -3,7 +3,7 @@
 import asyncio
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, AsyncMock, MagicMock
 
 
 class TestConfigEntryAccess:
@@ -666,6 +666,63 @@ class TestCalibrationTimeout:
             assert cover._travel_startup_delay is None  # zeroed for the test
             assert cover._calibration.saved_startup_delay == 0.5
             await asyncio.sleep(0.4)  # timeout fires
+        assert cover._calibration is None
+        assert cover._travel_startup_delay == 0.5
+
+
+class TestCalibrationRestoreOnStopFailure:
+    """Corroborated review finding (whole-branch review + Copilot on PR #193).
+
+    Both `_calibration_timeout` and `stop_calibration` ran the startup-delay
+    restore and `_calibration = None` teardown *after* the gated relay stop
+    (and, in `stop_calibration`, after the result computation). If that stop
+    is a relay service call that raises, the restore is skipped — leaving
+    the startup delay permanently zeroed, i.e. exactly the silent drift bug
+    Task 7 exists to prevent — and `_calibration` is left non-None, wedging
+    calibration forever. `async_will_remove_from_hass` already restores
+    before clearing; these two paths must do the same via try/finally.
+    """
+
+    @pytest.mark.asyncio
+    async def test_timeout_restores_startup_delay_when_stop_raises(self, make_cover):
+        """A raise from _calibration_stop during timeout must not skip restore."""
+        cover = make_cover(travel_startup_delay=0.5)
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            with patch.object(
+                cover,
+                "_calibration_stop",
+                AsyncMock(side_effect=RuntimeError("relay offline")),
+            ):
+                await cover.start_calibration(
+                    attribute="travel_startup_delay", timeout=0.02
+                )
+                assert cover._travel_startup_delay is None  # zeroed for the test
+                timeout_task = cover._calibration.timeout_task
+                with pytest.raises(RuntimeError, match="relay offline"):
+                    await timeout_task
+        assert cover._calibration is None
+        assert cover._travel_startup_delay == 0.5
+
+    @pytest.mark.asyncio
+    async def test_stop_calibration_restores_startup_delay_when_stop_raises(
+        self, make_cover
+    ):
+        """A raise from _calibration_stop during Finish must not skip restore."""
+        cover = make_cover(travel_startup_delay=0.5)
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(
+                attribute="travel_startup_delay", timeout=300.0
+            )
+            assert cover._travel_startup_delay is None  # zeroed for the test
+            with patch.object(
+                cover,
+                "_calibration_stop",
+                AsyncMock(side_effect=RuntimeError("relay offline")),
+            ):
+                with pytest.raises(RuntimeError, match="relay offline"):
+                    await cover.stop_calibration()
         assert cover._calibration is None
         assert cover._travel_startup_delay == 0.5
 

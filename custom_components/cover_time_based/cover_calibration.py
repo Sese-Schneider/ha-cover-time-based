@@ -389,14 +389,21 @@ class CalibrationMixin:
                 and not self._calibration.automation_task.done()
             ):
                 self._calibration.automation_task.cancel()
-            # Stop the motor. On momentary hardware (toggle/pulse-no-endpoint-stop)
-            # the time-test protocol means the motor already self-stopped at its
-            # limit — a stop pulse there is a movement command (#153/#133), so
-            # skip it. A timeout is never a user cancel.
-            if not self._self_stops_at_endpoints():
-                await self._calibration_stop()
-            self._restore_calibration_startup_delay()
-            self._calibration = None
+            try:
+                # Stop the motor. On momentary hardware
+                # (toggle/pulse-no-endpoint-stop) the time-test protocol
+                # means the motor already self-stopped at its limit — a stop
+                # pulse there is a movement command (#153/#133), so skip it.
+                # A timeout is never a user cancel.
+                if not self._self_stops_at_endpoints():
+                    await self._calibration_stop()
+            finally:
+                # Always undo the startup-delay zeroing and clear the
+                # calibration state, even if the relay stop above raised —
+                # otherwise the delay stays silently zeroed forever, i.e.
+                # the exact drift the Task 7 fix exists to prevent.
+                self._restore_calibration_startup_delay()
+                self._calibration = None
             self.async_write_ha_state()
         except asyncio.CancelledError:
             _LOGGER.debug("_calibration_timeout :: cancelled")
@@ -411,27 +418,31 @@ class CalibrationMixin:
         # Cancel timeout/automation tasks
         self._cancel_calibration_tasks()
 
-        # Stop the motor. On momentary hardware (toggle/pulse-no-endpoint-stop)
-        # the time-test protocol means the motor already self-stopped at its
-        # limit — a stop pulse there is a movement command (#153/#133), so skip
-        # it. Cancel always stops: the user is bailing mid-run.
-        if cancel or not self._self_stops_at_endpoints():
-            await self._calibration_stop()
-
         result = {}
-        if not cancel:
-            value = self._calculate_calibration_result()
-            result["attribute"] = self._calibration.attribute
-            result["value"] = value
+        try:
+            # Stop the motor. On momentary hardware (toggle/pulse-no-endpoint-stop)
+            # the time-test protocol means the motor already self-stopped at its
+            # limit — a stop pulse there is a movement command (#153/#133), so skip
+            # it. Cancel always stops: the user is bailing mid-run.
+            if cancel or not self._self_stops_at_endpoints():
+                await self._calibration_stop()
 
-            # For successful completion, update the tracked position to
-            # reflect where the cover ended up (at an endpoint).
-            self._set_position_after_calibration(self._calibration)
+            if not cancel:
+                value = self._calculate_calibration_result()
+                result["attribute"] = self._calibration.attribute
+                result["value"] = value
 
-        # Restore startup delay that was zeroed during overhead test
-        self._restore_calibration_startup_delay()
+                # For successful completion, update the tracked position to
+                # reflect where the cover ended up (at an endpoint).
+                self._set_position_after_calibration(self._calibration)
+        finally:
+            # Always undo the startup-delay zeroing and clear the calibration
+            # state, even if the relay stop or result computation above
+            # raised — otherwise the delay stays silently zeroed forever,
+            # i.e. the exact drift the Task 7 fix exists to prevent.
+            self._restore_calibration_startup_delay()
+            self._calibration = None
 
-        self._calibration = None
         self.async_write_ha_state()
         return result
 
