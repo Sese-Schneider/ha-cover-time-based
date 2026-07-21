@@ -1516,6 +1516,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         ):
             if target in (0, 100):
                 restore = target
+                if target == 0 and not self._close_includes_tilt:
+                    # close_includes_tilt off: close travels only; the slats
+                    # stay at the safe position the pre-step drove them to.
+                    restore = tilt_target
             elif self._tilt_strategy.allows_tilt_at_position(target):
                 restore = current_tilt
             else:
@@ -1523,12 +1527,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self._start_tilt_pre_step(tilt_target, target, command, restore)
             return tilt_target, pre_step_delay, True
 
-        # Dual motor: pre-step skipped, but still snap tilt to endpoint
+        # Dual motor: pre-step skipped, but still snap tilt to endpoint.
+        # Same close_includes_tilt guard as above: on a close with the option
+        # off, don't schedule a restore to 0 — leave tilt at the safe position.
         if (
             tilt_target is not None
             and self._tilt_strategy.uses_tilt_motor
             and target in (0, 100)
             and current_tilt != target
+            and not (target == 0 and not self._close_includes_tilt)
         ):
             self._tilt_restore_target = target
 
