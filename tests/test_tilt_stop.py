@@ -65,6 +65,114 @@ async def test_stop_cover_releases_plain_tilt_motor_move(make_cover):
     assert offs, "stop must de-energize the running tilt relay"
 
 
+# Travel-relay events that must NEVER fire when only the tilt axis moved: on
+# toggle/toggle_opposite the travel "stop" is a *pulse* of a travel direction
+# relay (#153), and on pulse send_endpoint_stop=False it is a go-to-favourite
+# reposition (#133). switch.stop is pulse mode's dedicated travel-stop relay.
+_TRAVEL_TURN_ON = [
+    ("turn_on", "switch.open"),
+    ("turn_on", "switch.close"),
+    ("turn_on", "switch.stop"),
+]
+
+
+def _all_calls(cover, start=0):
+    return [
+        (c[0][1], c[0][2].get("entity_id"))
+        for c in cover.hass.services.async_call.call_args_list[start:]
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stop_method", ["async_stop_cover_tilt", "async_stop_cover"])
+@pytest.mark.parametrize(
+    "control_mode,extra",
+    [
+        ("toggle", {}),
+        ("toggle_opposite", {}),
+        (
+            "pulse",
+            dict(
+                send_endpoint_stop=False,
+                stop_switch="switch.stop",
+                tilt_stop_switch="switch.tilt_stop",
+            ),
+        ),
+    ],
+    ids=["toggle", "toggle_opposite", "pulse-no-endpoint-stop"],
+)
+async def test_stop_during_plain_tilt_move_does_not_pulse_travel_relay(
+    make_cover, control_mode, extra, stop_method
+):
+    """Coverage gap M-T1: STOP / STOP_TILT during a *plain* dual-motor tilt move
+    must not pulse the idle TRAVEL relay on momentary hardware.
+
+    A plain dual-motor tilt move drives only the tilt motor; the travel motor
+    sits idle, yet ``_last_command`` is left at the travel open/close command
+    (``DualMotorTilt`` inherits ``tilt_command_for``). Task 1 made
+    ``async_stop_cover_tilt`` delegate to ``async_stop_cover``, whose internal
+    travel ``_send_stop`` was ungated on travel activity — so pressing STOP(_TILT)
+    pulsed a stopped travel motor: a movement command on toggle hardware (#153),
+    a go-to-favourite on pulse ``send_endpoint_stop=False`` (#133). The tilt axis
+    is still settled by ``_tilt_settle`` in parallel; only the travel pulse is
+    the defect.
+    """
+    cover = make_cover(control_mode=control_mode, **DUAL, **extra)
+    assert cover._has_tilt_motor()
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(30)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(80)
+        # Plain tilt move: tilt motor running, travel idle, but _last_command
+        # left at the travel command — the phantom-pulse precondition.
+        assert cover.tilt_calc.is_traveling() and cover._moving_tilt_motor
+        assert not cover.travel_calc.is_traveling()
+        assert cover._last_command == SERVICE_OPEN_COVER
+        n = len(cover.hass.services.async_call.call_args_list)
+        await getattr(cover, stop_method)()
+
+    calls = _all_calls(cover, n)
+    for phantom in _TRAVEL_TURN_ON:
+        assert phantom not in calls, (control_mode, stop_method, calls)
+    # The tilt axis is still settled: tracker stopped and its relay was actioned.
+    assert not cover.tilt_calc.is_traveling()
+    tilt_actioned = _tilt_switch_calls(cover, n) or [
+        c for c in calls if c[1] == "switch.tilt_stop"
+    ]
+    assert tilt_actioned, (control_mode, stop_method, calls)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stop_method", ["async_stop_cover_tilt", "async_stop_cover"])
+async def test_switch_mode_stop_during_plain_tilt_still_deenergizes_travel(
+    make_cover, stop_method
+):
+    """Switch-mode contrast to the momentary test above: the latched travel relay
+    must ALWAYS be de-energized on stop, even during a plain tilt move.
+
+    Switch mode's ``_self_stops_at_endpoints()`` is False, so the self-stop gate
+    that suppresses the momentary phantom must NOT suppress the switch-mode
+    ``turn_off`` — its behaviour is unchanged (finding: switch → turn_off only).
+    """
+    cover = make_cover(control_mode=CONTROL_MODE_SWITCH, **DUAL)
+    assert cover._has_tilt_motor()
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(30)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(80)
+        assert cover.tilt_calc.is_traveling() and cover._moving_tilt_motor
+        n = len(cover.hass.services.async_call.call_args_list)
+        await getattr(cover, stop_method)()
+
+    calls = _all_calls(cover, n)
+    # Travel relay is de-energized (never a pulse in switch mode) — unchanged.
+    assert ("turn_off", "switch.open") in calls, calls
+    assert ("turn_off", "switch.close") in calls, calls
+    assert not any(c[0] == "turn_on" for c in calls), calls
+
+
 @pytest.mark.asyncio
 async def test_stop_cover_tilt_stops_tilt_move(make_cover):
     """cover.stop_cover_tilt must actually stop tilt (STOP_TILT is advertised)."""

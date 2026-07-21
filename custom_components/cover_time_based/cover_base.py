@@ -782,7 +782,23 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
-        if not self._triggered_externally:
+        if not self._triggered_externally and not (
+            self._has_tilt_motor()
+            and self._self_stops_at_endpoints()
+            and not travel_was_moving
+        ):
+            # Skip the internal TRAVEL stop only for a dual-motor cover whose
+            # travel axis did not move (a plain tilt move): it leaves
+            # _last_command at the travel command (DualMotorTilt inherits
+            # tilt_command_for) while the travel motor is idle, so an ungated
+            # _send_stop pulses a stopped travel motor — a movement command on
+            # toggle (#153), a go-to-favourite on pulse send_endpoint_stop=False
+            # (#133). Everything else is unchanged: switch mode
+            # (_self_stops_at_endpoints False) always de-energizes its latched
+            # relay; non-dual-motor covers (no _has_tilt_motor — wrapped,
+            # single-motor) keep sending _send_stop, and a genuine dual-motor
+            # mid-travel stop (travel_was_moving) still fires. The tilt axis is
+            # settled by _tilt_settle below, independently of this.
             await self._send_stop()
         elif tilt_axis_reported and travel_was_moving and self._self_initiated_movement:
             # The TILT relay reported, not the travel relay. The travel motor

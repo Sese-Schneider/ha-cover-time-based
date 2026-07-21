@@ -212,7 +212,24 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
-        if not self._triggered_externally and was_active:
+        if (
+            not self._triggered_externally
+            and was_active
+            and not (
+                self._has_tilt_motor()
+                and self._self_stops_at_endpoints()
+                and not travel_was_moving
+            )
+        ):
+            # Skip the internal TRAVEL stop only for a dual-motor cover whose
+            # travel axis did not move (a plain tilt move): _last_command stays
+            # at the travel command while the travel motor is idle, and toggle
+            # _send_stop PULSES that relay — on a stopped motor a pulse is itself
+            # a movement command (#153). Non-dual-motor toggle covers keep
+            # sending _send_stop unchanged, and a dual-motor mid-travel stop
+            # (travel_was_moving) still fires. See CoverTimeBased.async_stop_cover.
+            # (Toggle modes are always momentary, so _self_stops_at_endpoints is
+            # True here; the term mirrors the base gate.)
             await self._send_stop()
         elif (
             tilt_axis_reported
