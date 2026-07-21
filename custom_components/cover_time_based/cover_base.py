@@ -2647,6 +2647,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._tilt_close_switch_id,
             self._tilt_stop_switch_id,
         )
+        if is_tilt and not self._has_tilt_support():
+            # Tilt switches can be wired before tilt times are calibrated (a
+            # supported pre-calibration state — dual_motor chosen, tilt
+            # switches configured, tilt times not yet set): _tilt_strategy is
+            # None and tilt_calc doesn't exist yet. Every mode's external-tilt
+            # handler reads one or the other, so ignore the press here rather
+            # than crash in each of them separately.
+            self._log(
+                "_async_switch_state_changed :: tilt event on %s ignored —"
+                " tilt not calibrated yet (no tilt times)",
+                entity_id,
+            )
+            return
         self._triggered_externally = True
         try:
             if is_tilt:

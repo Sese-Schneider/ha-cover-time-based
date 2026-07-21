@@ -3,9 +3,33 @@
 import asyncio
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from homeassistant.const import SERVICE_OPEN_COVER
+
+from custom_components.cover_time_based.cover import (
+    CONTROL_MODE_PULSE,
+    CONTROL_MODE_SWITCH,
+    CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_TOGGLE_OPPOSITE,
+)
+
+
+def _make_state_event(entity_id, old_state, new_state):
+    """Create a mock state change event like HA fires (see test_state_monitoring)."""
+    old = MagicMock()
+    old.state = old_state
+    old.attributes = {}
+    new = MagicMock()
+    new.state = new_state
+    new.attributes = {}
+    event = MagicMock()
+    event.data = {
+        "entity_id": entity_id,
+        "old_state": old,
+        "new_state": new,
+    }
+    return event
 
 
 def _tilt_switch_calls(cover, start=0):
@@ -300,3 +324,48 @@ async def test_tilt_restore_completion_clears_stale_direction(make_cover):
     assert cover._tilt_restore_active is False
     assert cover.tilt_calc.current_position() == 0
     assert cover._last_tilt_direction is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "control_mode",
+    [
+        CONTROL_MODE_SWITCH,
+        CONTROL_MODE_TOGGLE,
+        CONTROL_MODE_TOGGLE_OPPOSITE,
+        CONTROL_MODE_PULSE,
+    ],
+)
+async def test_external_tilt_press_before_tilt_calibration_does_not_crash(
+    make_cover, control_mode
+):
+    """Audit Task 5: dual_motor + tilt switches wired, but tilt times NOT yet
+    set is a supported pre-calibration state — ``_tilt_strategy`` is ``None``
+    and ``tilt_calc`` doesn't exist. An external press on a tilt switch must
+    not crash any of the four mode dispatchers.
+
+    Driven through ``_async_switch_state_changed`` (the real listener HA
+    invokes on a state-change event — registered unconditionally for
+    ``_tilt_open_switch_id``/``_tilt_close_switch_id``/``_tilt_stop_switch_id``
+    in ``async_added_to_hass``), not the mode-specific
+    ``_handle_external_tilt_state_change`` directly, so the test exercises
+    the guard actually added at the dispatch site rather than bypassing it.
+    """
+    kwargs = dict(
+        control_mode=control_mode,
+        tilt_mode="dual_motor",
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+    )
+    if control_mode == CONTROL_MODE_PULSE:
+        # Pulse mode requires a dedicated stop switch, and its tilt axis has
+        # its own dedicated stop relay too (see DUAL fixtures above).
+        kwargs["stop_switch"] = "switch.stop"
+        kwargs["tilt_stop_switch"] = "switch.tilt_stop"
+
+    cover = make_cover(**kwargs)
+    assert not cover._has_tilt_support()
+
+    event = _make_state_event("switch.tilt_open", "off", "on")
+    with patch.object(cover, "async_write_ha_state"):
+        await cover._async_switch_state_changed(event)  # must not raise
