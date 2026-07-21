@@ -13,6 +13,8 @@ Audit Task 3 — three probe-confirmed defects, one coherent fix:
 duplication is intentional per the plan.
 """
 
+import asyncio
+
 import pytest
 from unittest.mock import patch
 
@@ -142,3 +144,75 @@ async def test_set_position_during_shared_motor_tilt_does_not_repulse(make_cover
     ]
     assert ("turn_on", "switch.open") not in calls, calls
     assert cover.travel_calc.is_traveling()  # retargeted, not re-pulsed
+
+
+# ---------------------------------------------------------------------------
+# Audit Task 5B — lifecycle stops must respect the endpoint/self-stop gating.
+#
+# Two probe-reproduced sites sent a *travel* STOP to a motor that is idle or
+# self-stopped at its limit. On toggle-opposite (momentary) hardware a travel
+# STOP is a *pulse* of the opposite travel relay; firing it while the travel
+# motor is stopped is itself a movement command (#153) / go-to-favourite (#133).
+# The invariant under test: no travel-relay ``turn_on`` from a stop path while
+# the travel motor is idle or self-stopped.
+# ---------------------------------------------------------------------------
+
+
+DUAL_TO = dict(
+    control_mode="toggle_opposite",
+    travel_time_close=0.2,
+    travel_time_open=0.2,
+    tilt_time_close=0.2,
+    tilt_time_open=0.2,
+    tilt_mode="dual_motor",
+    tilt_open_switch="switch.tilt_open",
+    tilt_close_switch="switch.tilt_close",
+    safe_tilt_position=100,
+)
+
+
+@pytest.mark.asyncio
+async def test_tilt_restore_at_endpoint_sends_no_travel_pulse(make_cover):
+    cover = make_cover(**DUAL_TO)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(30)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_close_cover()  # pre-step → travel → restore
+        # run the lifecycle to completion
+        for _ in range(30):
+            await asyncio.sleep(0.05)
+            await cover.auto_stop_if_necessary()
+            if (
+                cover.travel_calc.current_position() == 0
+                and not cover._tilt_restore_active
+                and cover._tilt_restore_target is None
+                and not cover.tilt_calc.is_traveling()
+            ):
+                break
+    travel_pulses = [
+        (c[0][1], c[0][2].get("entity_id"))
+        for c in cover.hass.services.async_call.call_args_list
+        if c[0][1] == "turn_on"
+        and c[0][2].get("entity_id") in ("switch.open", "switch.close")
+    ]
+    # exactly the initial close pulse — no restore-boundary stop pulse
+    assert travel_pulses == [("turn_on", "switch.close")], travel_pulses
+
+
+@pytest.mark.asyncio
+async def test_abandon_tilt_prestep_sends_no_travel_pulse(make_cover):
+    cover = make_cover(**{**DUAL_TO, "travel_time_close": 5.0, "travel_time_open": 5.0})
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(30)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(20)  # tilt-to-safe pre-step running
+        assert cover._pending_travel_target == 20
+        assert not cover.travel_calc.is_traveling()  # travel motor idle
+        n = len(cover.hass.services.async_call.call_args_list)
+        await cover.set_position(70)  # abandons the pre-step
+    calls = [
+        (c[0][1], c[0][2].get("entity_id"))
+        for c in cover.hass.services.async_call.call_args_list[n:]
+    ]
+    unexpected = [c for c in calls if c == ("turn_on", "switch.open")]
+    assert not unexpected, calls

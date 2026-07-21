@@ -2003,6 +2003,29 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._delay_task = None
             raise
 
+    async def _stop_travel_relay_if_needed(self, *, travel_was_running: bool) -> None:
+        """Send the travel STOP unless it would be a movement command.
+
+        Momentary hardware self-stops at its limits, and a 'stop' pulse to a
+        stopped motor is a movement command (#153) or a go-to-favourite (#133).
+        Skip when the travel axis never ran under this lifecycle, or when it is
+        settled at an endpoint the motor self-stopped at. Switch mode
+        (_self_stops_at_endpoints False) always de-energizes.
+        """
+        if not self._self_stops_at_endpoints():
+            await self._async_handle_command(SERVICE_STOP_COVER)
+            return
+        if not travel_was_running:
+            self._log("_stop_travel_relay_if_needed :: travel idle, skipping stop")
+            return
+        if self._at_endpoint(self.travel_calc.current_position()):
+            self._log(
+                "_stop_travel_relay_if_needed :: self-stopped at endpoint,"
+                " skipping stop"
+            )
+            return
+        await self._async_handle_command(SERVICE_STOP_COVER)
+
     async def _abandon_active_lifecycle(self):
         """Abandon any active multi-phase tilt lifecycle (pre-step, restore).
 
@@ -2030,6 +2053,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # _last_tilt_direction is a #153-class hazard (audit finding B4).
         was_tilt_motor = self._moving_tilt_motor
         was_tilt_traveling = self._has_tilt_support() and self.tilt_calc.is_traveling()
+        # Captured before the calculator stops below: the travel stop at the
+        # bottom must reflect whether the travel motor was actually driven under
+        # this lifecycle. A dual-motor tilt pre-step never starts the travel
+        # motor, so its abandon must not pulse a travel relay off a stale
+        # _last_command at an idle motor (#153 / #133, audit Task 5B). A pending
+        # run-on delay counts as still-driving (switch mode only).
+        travel_was_running = self.travel_calc.is_traveling() or (
+            self._delay_task is not None and not self._delay_task.done()
+        )
 
         # Always clear multi-phase state
         self._clear_multiphase_tilt_state()
@@ -2054,7 +2086,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self.tilt_calc.stop()
         self.stop_auto_updater()
 
-        await self._async_handle_command(SERVICE_STOP_COVER)
+        await self._stop_travel_relay_if_needed(travel_was_running=travel_was_running)
         # Deliberately still gated on _triggered_externally, unlike
         # async_stop_cover. This route cannot tell which axis reported: the
         # tilt entry points reach it too (async_open_cover_tilt ->
@@ -2274,7 +2306,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 current_tilt,
                 restore_target,
             )
-            await self._async_handle_command(SERVICE_STOP_COVER)
+            # Restore only runs after a travel phase, so the travel axis did run;
+            # the endpoint check inside the helper skips the stop when the motor
+            # self-stopped at its limit (a stop pulse there is a #153/#133 move).
+            await self._stop_travel_relay_if_needed(travel_was_running=True)
             self._last_command = None
             return
 
@@ -2300,8 +2335,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         epoch = self._claim_tilt_restore()
 
         if self._tilt_strategy.uses_tilt_motor:
-            # Dual motor: stop travel, then start the separate tilt motor.
-            await self._async_handle_command(SERVICE_STOP_COVER)
+            # Dual motor: stop travel, then start the separate tilt motor. The
+            # travel motor self-stopped if travel just reached an endpoint, so
+            # gate the stop (a pulse there re-opens the cover untracked — #153).
+            await self._stop_travel_relay_if_needed(travel_was_running=True)
             if self._tilt_restore_superseded(epoch):
                 self._log("_start_tilt_restore :: cancelled before tilt motor start")
                 return
