@@ -746,7 +746,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             or self._pending_tilt_target is not None
         )
         stop_tilt = self._should_stop_tilt_motor(
-            tilt_restore_was_active or tilt_pre_step_was_active,
+            tilt_restore_was_active
+            or tilt_pre_step_was_active
+            or self._moving_tilt_motor,          # plain dual-motor tilt move
             tilt_axis_reported=tilt_axis_reported,
         )
         self._cancel_startup_delay_task()
@@ -763,6 +765,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # stopped on its limit switch and a momentary relay re-pulsed there
             # starts it again.
             await self._tilt_settle()
+        self._moving_tilt_motor = False
+        self._moving_tilt = False
         self.async_write_ha_state()
         self._last_command = None
         await self._async_persist_position()
@@ -792,6 +796,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         return (
             tilt_phase_was_active and self._has_tilt_motor() and not tilt_axis_reported
         )
+
+    async def async_stop_cover_tilt(self, **kwargs):
+        """Stop tilt movement (STOP_TILT service/button).
+
+        Delegates to the full stop: on shared-motor strategies the tilt phase
+        IS the travel motor, and on dual-motor async_stop_cover now settles a
+        running tilt motor too (see _should_stop_tilt_motor).
+        """
+        await self.async_stop_cover(**kwargs)
 
     async def async_close_cover_tilt(self, **kwargs):
         """Tilt the cover fully closed."""

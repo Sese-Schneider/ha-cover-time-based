@@ -4,6 +4,10 @@
 
 - **German (`de`) translation**: the integration now ships German alongside English, Portuguese and Polish, across both translated surfaces — the Home Assistant strings (the config flow, the Repairs notices and the service descriptions) and every string the **Cover Time Based** configuration card draws, including the option helper text. German-speaking users get it automatically from Home Assistant's own language setting, and the regional variants `de-AT` and `de-CH` resolve to the same catalogue. The "your language isn't translated yet" banner no longer appears for them.
 
+### Fixes
+
+- **Dual-motor covers: stopping the cover now actually stops a running tilt motor, and the dedicated tilt-stop button works**: on a cover with a **separate tilt motor**, a plain tilt move (`set_tilt_position`, tilt open/close) tracked only that a tilt motor was running internally — `async_stop_cover` never consulted that state, so a user stop froze the position tracker but left the tilt relay energized and the motor running unattended. Separately, the `STOP_TILT` service/button was advertised but never implemented, so pressing it was a silent no-op. `async_stop_cover` now also settles a plain dual-motor tilt move (unless the tilt relay itself is the one reporting, where a stop must not be echoed back at it), and `async_stop_cover_tilt` is implemented by delegating to the same stop — including on shared-motor tilt strategies, where the tilt phase is the travel motor and the existing stop already covers it.
+
 ## 4.9.0 (2026-07-20)
 
 ### Features

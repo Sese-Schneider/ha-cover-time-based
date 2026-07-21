@@ -199,7 +199,9 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         tilt_restore_was_active = self._tilt_restore_active
         tilt_pre_step_was_active = self._pending_travel_target is not None
         stop_tilt = was_active and self._should_stop_tilt_motor(
-            tilt_restore_was_active or tilt_pre_step_was_active,
+            tilt_restore_was_active
+            or tilt_pre_step_was_active
+            or self._moving_tilt_motor,          # plain dual-motor tilt move
             tilt_axis_reported=tilt_axis_reported,
         )
         self._cancel_startup_delay_task()
@@ -214,6 +216,8 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         if stop_tilt:
             # See CoverTimeBased.async_stop_cover — endpoint-safe teardown.
             await self._tilt_settle()
+        self._moving_tilt_motor = False
+        self._moving_tilt = False
         self.async_write_ha_state()
         self._last_command = None
         self._last_tilt_direction = None
