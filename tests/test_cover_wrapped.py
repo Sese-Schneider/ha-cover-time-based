@@ -8,7 +8,8 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.components.cover import ATTR_CURRENT_POSITION
+from homeassistant.const import STATE_CLOSED, STATE_UNAVAILABLE
 
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
 
@@ -33,6 +34,7 @@ def _make_wrapped_cover(
     tilt_time_close=None,
     tilt_time_open=None,
     tilt_mode="none",
+    travel_startup_delay=None,
 ):
     """Create a WrappedCoverTimeBased wired to a mock hass."""
     tilt_strategy = None
@@ -56,7 +58,7 @@ def _make_wrapped_cover(
         travel_time_open=30,
         tilt_time_close=tilt_time_close,
         tilt_time_open=tilt_time_open,
-        travel_startup_delay=None,
+        travel_startup_delay=travel_startup_delay,
         tilt_startup_delay=None,
         endpoint_runon_time=None,
         min_movement_time=None,
@@ -1543,3 +1545,227 @@ class TestWrappedStaleReappearance:
         # reach it — a returning entity may carry a trustworthy position.
         cover = _make_wrapped_cover()
         assert cover._is_stale_reappearance(STATE_UNAVAILABLE, "closed") is False
+
+
+class TestStartupDelayEchoDoesNotHijackTimedMove:
+    """A lagged same-direction echo landing during the travel_startup_delay
+    window (travel_calc not yet traveling) must not hijack a self-initiated
+    timed move.
+
+    The #166 echo guard only matched while travel_calc.is_traveling(), so an
+    echo arriving in the startup-delay window slipped through to
+    async_open_cover -> _async_move_to_endpoint, whose flag assignment flipped
+    _self_initiated_movement to False. The in-flight move then read as external:
+    auto-stop skipped the relay stop and the underlying ran to its endpoint.
+
+    The fix recognises the echo during the startup-delay window too (guard) and
+    commits the move's own bookkeeping only once it starts acting (flag move).
+    """
+
+    def _prep(self, cover):
+        # Avoid scheduling a real auto-updater / writing state on the mock hass.
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_echo_during_startup_delay_keeps_flag_and_sends_stop(self):
+        # features = 15 == OPEN|CLOSE|SET_POSITION|STOP; force_time_based keeps
+        # the timed path (open_cover forwarded, tracker-driven auto-stop).
+        cover = _make_wrapped_cover(
+            force_time_based_position=True, travel_startup_delay=0.05
+        )
+        _set_wrapped_features(cover, 15, state="closed")
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        await cover.set_position(50)  # timed partial move, startup delay pending
+        assert cover._startup_delay_task is not None
+        assert not cover._startup_delay_task.done()
+        assert cover._self_initiated_movement is True
+        assert not cover.travel_calc.is_traveling()  # not started yet
+
+        # A lagged echo of our own open_cover arrives inside the delay window,
+        # past the bounce grace window and dispatched with _triggered_externally.
+        cover._last_self_command_time = None
+        cover._triggered_externally = True
+        try:
+            await cover._handle_external_state_change("cover.inner", "open", "opening")
+        finally:
+            cover._triggered_externally = False
+
+        # The in-flight move stays self-initiated (echo recognised, not obeyed).
+        assert cover._self_initiated_movement is True
+
+        # Let the startup delay complete and the move run to its target.
+        await asyncio.sleep(0.1)
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 50
+
+        # Tracker arrives: a self-initiated move sends the relay stop, so the
+        # underlying is halted at 50 rather than running on to the endpoint.
+        cover.travel_calc.update_position(50)
+        await cover.auto_stop_if_necessary()
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "stop_cover" in services
+
+    @pytest.mark.asyncio
+    async def test_control_no_echo_stop_is_sent(self):
+        """Control arm: the same move with no echo does send stop_cover."""
+        cover = _make_wrapped_cover(
+            force_time_based_position=True, travel_startup_delay=0.05
+        )
+        _set_wrapped_features(cover, 15, state="closed")
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        await cover.set_position(50)
+        await asyncio.sleep(0.1)
+        assert cover.travel_calc.is_traveling()
+
+        cover.travel_calc.update_position(50)
+        await cover.auto_stop_if_necessary()
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "stop_cover" in services
+
+    @pytest.mark.asyncio
+    async def test_control_external_opposite_report_still_tracked(self):
+        """Control arm: a genuine external move in the opposite direction during
+        the startup-delay window is not suppressed — it reaches the handler and
+        reverses (cancelling the pending same-direction startup delay).
+
+        Only the same-direction echo of our own command is swallowed; an
+        opposite-direction report is a real external reversal.
+        """
+        cover = _make_wrapped_cover(
+            force_time_based_position=True, travel_startup_delay=0.05
+        )
+        _set_wrapped_features(cover, 15, state="closed")
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        await cover.set_position(50)  # self-initiated open, startup delay pending
+        assert cover._startup_delay_task is not None
+        assert not cover._startup_delay_task.done()
+
+        # An external CLOSING report (opposite to our pending open) arrives in
+        # the window. It must fall through and be handled as a reversal.
+        cover._last_self_command_time = None
+        cover._triggered_externally = True
+        try:
+            await cover._handle_external_state_change("cover.inner", "open", "closing")
+        finally:
+            cover._triggered_externally = False
+
+        # The reversal cancelled the pending open's startup delay: the report
+        # was tracked, not swallowed.
+        assert cover._startup_delay_task is None or cover._startup_delay_task.done()
+
+
+class TestWrappedSyncsToLivePositionAtStartup:
+    """B12: on restart the tracker restores from the PositionStore, but the
+    underlying may have been moved (app/remote) while HA was down. Trust a
+    live reported position over the stored snapshot at startup — but not a
+    bare `closed` (the untrustworthy reappearance shape #160 guards against),
+    an unavailable underlying, or when ignore_reported_position is set.
+    """
+
+    @staticmethod
+    def _set_underlying_state(cover, *, state="open", current_position=None):
+        st = MagicMock()
+        st.state = state
+        attrs = {}
+        if current_position is not None:
+            attrs[ATTR_CURRENT_POSITION] = current_position
+        st.attributes = attrs
+        cover.hass.states.get = lambda eid: (
+            st if eid == cover._cover_entity_id else None
+        )
+        return st
+
+    @staticmethod
+    async def _added_to_hass(cover):
+        with patch(
+            "custom_components.cover_time_based.cover_wrapped.async_track_state_change_event",
+            return_value=MagicMock(),
+        ):
+            await cover.async_added_to_hass()
+
+    @pytest.mark.asyncio
+    async def test_syncs_to_live_position_on_restart(
+        self, make_cover, _mock_position_store
+    ):
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(cover_entity_id="cover.inner")
+        self._set_underlying_state(cover, state="open", current_position=70)
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 70
+        # The corrected live position must be persisted too — otherwise a
+        # second restart with the underlying unavailable would restore the
+        # stale stored value (30) all over again.
+        _mock_position_store.async_save.assert_awaited_once()
+        entry_id, data = _mock_position_store.async_save.await_args.args
+        assert entry_id == cover._config_entry_id
+        assert data["position"] == 70
+
+    @pytest.mark.asyncio
+    async def test_ignore_reported_position_keeps_stored_value(
+        self, make_cover, _mock_position_store
+    ):
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(cover_entity_id="cover.inner", ignore_reported_position=True)
+        self._set_underlying_state(cover, state="open", current_position=70)
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 30
+        # No divergence detected, so no spurious persist at startup.
+        _mock_position_store.async_save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unavailable_underlying_keeps_stored_value(
+        self, make_cover, _mock_position_store
+    ):
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(cover_entity_id="cover.inner")
+        self._set_underlying_state(
+            cover, state=STATE_UNAVAILABLE, current_position=None
+        )
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 30
+        _mock_position_store.async_save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_bare_closed_at_startup_keeps_stored_value(
+        self, make_cover, _mock_position_store
+    ):
+        # A bare `closed` with no position attribute is exactly the
+        # untrustworthy reappearance shape #160 guards against — trust_closed
+        # must stay False at startup too.
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(cover_entity_id="cover.inner")
+        self._set_underlying_state(cover, state=STATE_CLOSED, current_position=None)
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 30
+        _mock_position_store.async_save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_live_position_matches_stored_value_no_spurious_persist(
+        self, make_cover, _mock_position_store
+    ):
+        # live == stored: no divergence, so the sync branch never runs and the
+        # extra persist must not fire at startup.
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(cover_entity_id="cover.inner")
+        self._set_underlying_state(cover, state="open", current_position=30)
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 30
+        _mock_position_store.async_save.assert_not_awaited()

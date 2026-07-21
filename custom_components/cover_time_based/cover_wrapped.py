@@ -11,6 +11,7 @@ from homeassistant.components.cover import (
 )
 from homeassistant.const import (
     ATTR_SUPPORTED_FEATURES,
+    SERVICE_OPEN_COVER,
     STATE_CLOSED,
     STATE_CLOSING,
     STATE_OPEN,
@@ -93,6 +94,23 @@ class WrappedCoverTimeBased(CoverTimeBased):
                     self._async_switch_state_changed,
                 )
             )
+
+        # The cover may have been moved (app/remote) while HA was down; the
+        # store's snapshot is then stale and the first timed move would run
+        # the wrong distance in possibly the wrong direction. Trust a live
+        # reported position over the stored one at startup.
+        live = self._wrapped_reported_position(trust_closed=False)
+        if live is not None and live != self.travel_calc.current_position():
+            self._log(
+                "async_added_to_hass :: syncing to underlying's live position %d",
+                live,
+            )
+            self.travel_calc.set_position(live)
+            # Persist the correction, not just the in-memory tracker: without
+            # this, a second restart with the underlying unavailable (or
+            # otherwise unable to report) would restore the now-stale stored
+            # snapshot all over again instead of the corrected live value.
+            await self._async_persist_position()
 
     def _are_entities_configured(self) -> bool:
         """Return True if the wrapped cover entity is configured."""
@@ -351,16 +369,38 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # the same-direction echo of our own self-initiated move is suppressed;
         # an opposite-direction report is a genuine external reversal (e.g. the
         # wall switch pressed the other way) and still falls through below.
+        #
+        # The echo can also land *before* travel_calc starts, inside the
+        # travel_startup_delay window: guarding only on is_traveling() there let
+        # it slip through to async_open/close_cover -> _async_move_to_endpoint,
+        # which flipped _self_initiated_movement to False and dropped the auto-
+        # stop -> runaway to endpoint. So the guard covers the startup-delay
+        # window too, using the command we just issued for direction (the
+        # tracker's is unset until it starts traveling).
+        in_startup_window = (
+            self._startup_delay_task is not None and not self._startup_delay_task.done()
+        )
         if (
             new_val in _MOVING_STATES
             and self._self_initiated_movement
-            and self.travel_calc.is_traveling()
+            and (self.travel_calc.is_traveling() or in_startup_window)
         ):
+            echo_is_open = (new_val == STATE_OPENING) != self._invert
+            if in_startup_window and not self.travel_calc.is_traveling():
+                # Tracker not started yet, so its direction is unset — compare
+                # the echo against the command we just issued instead.
+                cmd_is_open = self._last_command == SERVICE_OPEN_COVER
+                if cmd_is_open == echo_is_open:
+                    self._log(
+                        "_handle_external_state_change :: ignoring self-driven %s"
+                        " during startup delay",
+                        new_val,
+                    )
+                    return
             # While traveling, is_opening() is the exact complement of
             # is_closing(), so comparing it to the echo's direction (both in our
             # frame) tells same- from opposite-direction directly.
-            echo_is_open = (new_val == STATE_OPENING) != self._invert
-            if self.travel_calc.is_opening() == echo_is_open:
+            elif self.travel_calc.is_opening() == echo_is_open:
                 self._log(
                     "_handle_external_state_change :: ignoring self-driven %s"
                     " during timed move",
@@ -453,6 +493,14 @@ class WrappedCoverTimeBased(CoverTimeBased):
         Mid-travel attribute updates (state opening/closing) are ignored
         because their values may be stale or live depending on the device.
 
+        While a self-initiated timed move is in flight, reports are ignored
+        outright rather than checked for opening/closing: an underlying that
+        reports current_position but never opening/closing (e.g. an MQTT
+        position-topic-only cover) always looks "stopped" to that check, so
+        its mid-travel reports would otherwise snap the tracker and cancel
+        the pending auto-stop (see the is_traveling guard below). Native
+        (holds_itself) moves are unaffected and keep snapping.
+
         Command-echo covers (reports_command_not_endpoint) report no
         trustworthy position or endpoint, so we ignore their attribute-only
         updates entirely — mirroring the short-circuit in
@@ -468,6 +516,23 @@ class WrappedCoverTimeBased(CoverTimeBased):
         if self._reports_command_not_endpoint:
             return
         if self._in_bounce_grace_window():
+            return
+        # A self-initiated TIMED move in flight: the pending auto-stop is the
+        # only thing that will halt the underlying, and _snap_to_position would
+        # kill it (set_known_position -> _handle_stop -> stop_auto_updater).
+        # Underlyings that report positions without ever reporting
+        # opening/closing (e.g. MQTT position-topic-only) hit this mid-travel;
+        # their report describes a lagging past, not a settled present. Native
+        # moves keep snapping — the device holds itself.
+        if (
+            self.travel_calc.is_traveling()
+            and self._self_initiated_movement
+            and not self._position_driver().holds_itself
+        ):
+            self._log(
+                "_handle_external_attribute_change :: ignoring mid-timed-move"
+                " position report"
+            )
             return
         new_state = event.data.get("new_state")
         if new_state is None or new_state.state not in _STOPPED_STATES:

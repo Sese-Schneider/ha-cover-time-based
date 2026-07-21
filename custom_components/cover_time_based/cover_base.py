@@ -952,7 +952,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _async_move_to_endpoint(self, target):
         """Move cover to an endpoint (0=fully closed, 100=fully open)."""
-        self._self_initiated_movement = not self._triggered_externally
+        # NB: _self_initiated_movement is assigned only once this call is
+        # committed to acting, past the startup-delay early-returns below.
+        # A same-direction command that reaches an already-active startup delay
+        # (e.g. an underlying's lagged echo of our own move, issue #165) returns
+        # from the "not restarting" branch without touching the flag, so it
+        # cannot flip an in-flight self-initiated move to "external" and drop
+        # its auto-stop. The sequential-redirect below delegates to
+        # set_tilt_position, which sets the flag itself.
 
         # External close on sequential hardware runs the full journey:
         # the motor drives all the way past cover-closed to the articulated
@@ -999,6 +1006,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     "_async_move_to_endpoint :: startup delay already active, not restarting"
                 )
                 return
+
+        # Committed to acting: now claim the movement's bookkeeping.
+        self._self_initiated_movement = not self._triggered_externally
 
         current = self.travel_calc.current_position()
         if current is not None and current == target:
@@ -1085,7 +1095,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     async def _async_move_tilt_to_endpoint(self, target):
         """Move tilt to an endpoint (0=fully closed, 100=fully open)."""
-        self._self_initiated_movement = not self._triggered_externally
+        # As in _async_move_to_endpoint: assign _self_initiated_movement only
+        # once committed to acting, past the "startup delay already active, not
+        # restarting" early-return below, so a same-direction command reaching
+        # an active startup delay can't flip an in-flight self-initiated move to
+        # "external". _abandon_active_lifecycle does not read the flag.
         # Capture before _abandon_active_lifecycle resets it — see
         # _stop_displaced_movement_for_tilt.
         was_tilt_motor_move = self._moving_tilt_motor
@@ -1119,6 +1133,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     "_async_move_tilt_to_endpoint :: startup delay already active, not restarting"
                 )
                 return
+
+        # Committed to acting (a direction change above falls through to here):
+        # now claim the movement's bookkeeping.
+        self._self_initiated_movement = not self._triggered_externally
 
         relay_was_on = self._cancel_delay_task()
         if relay_was_on:

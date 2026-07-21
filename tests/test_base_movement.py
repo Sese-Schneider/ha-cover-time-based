@@ -1017,6 +1017,81 @@ class TestStartupDelayConflict:
         assert cover._startup_delay_task is task1
 
     @pytest.mark.asyncio
+    async def test_external_same_dir_in_startup_window_keeps_self_initiated(
+        self, make_cover
+    ):
+        """Layer (b), isolated from the wrapped echo guard: the funnel commits
+        `_self_initiated_movement` only once past the "startup delay already
+        active, not restarting" early-return.
+
+        A self-initiated open is in flight in its startup-delay window. A
+        SAME-direction command then arrives externally and reaches
+        `_async_move_to_endpoint`, hitting the not-restarting early-return. The
+        in-flight move must stay self-initiated (its auto-stop is not dropped).
+        This is a plain switch cover, so it proves the guard protects every
+        mode, not just wrapped covers. RED if the flag assignment is moved back
+        to the top of the funnel.
+        """
+        cover = make_cover(travel_startup_delay=20.0)
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()  # self-initiated open
+        task1 = cover._startup_delay_task
+        assert task1 is not None and not task1.done()
+        assert cover._self_initiated_movement is True
+        assert cover._last_command == SERVICE_OPEN_COVER
+
+        # Same-direction command, externally triggered, inside the window.
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._async_move_to_endpoint(target=100)
+        finally:
+            cover._triggered_externally = False
+
+        # The not-restarting early-return committed no bookkeeping: the in-flight
+        # self-initiated move was NOT flipped to external, and the pending
+        # startup delay is untouched.
+        assert cover._self_initiated_movement is True
+        assert cover._startup_delay_task is task1
+        assert not cover._startup_delay_task.done()
+
+    @pytest.mark.asyncio
+    async def test_external_same_dir_tilt_in_startup_window_keeps_self_initiated(
+        self, make_cover
+    ):
+        """Layer (b) for the tilt funnel: `_async_move_tilt_to_endpoint` also
+        commits `_self_initiated_movement` only past its not-restarting
+        early-return. Mirrors the travel-funnel test above."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_startup_delay=20.0,
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_close_cover_tilt()  # self-initiated tilt close
+        task1 = cover._startup_delay_task
+        assert task1 is not None and not task1.done()
+        assert cover._self_initiated_movement is True
+
+        # Same-direction tilt command, externally triggered, inside the window.
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._async_move_tilt_to_endpoint(target=0)
+        finally:
+            cover._triggered_externally = False
+
+        # Not-restarting early-return took the same branch; the flag survives.
+        assert cover._self_initiated_movement is True
+        assert cover._startup_delay_task is task1
+        assert not cover._startup_delay_task.done()
+
+    @pytest.mark.asyncio
     async def test_set_position_during_startup_delay_same_direction_skips(
         self, make_cover
     ):
