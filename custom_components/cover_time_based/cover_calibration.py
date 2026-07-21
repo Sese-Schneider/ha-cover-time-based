@@ -31,6 +31,9 @@ class CalibrationMixin:
         hass: HomeAssistant
         _calibration: CalibrationState | None
         _tilt_strategy: Any
+        _tilt_mode_str: str | None
+        _tilt_open_switch_id: str | None
+        _tilt_close_switch_id: str | None
         _travel_time_close: float | None
         _travel_time_open: float | None
         _tilting_time_close: float | None
@@ -42,7 +45,15 @@ class CalibrationMixin:
 
         async def _async_handle_command(self, _command: str, *_args: Any) -> None: ...
         async def _send_stop(self) -> None: ...
+        async def _send_tilt_open(self) -> None: ...
+        async def _send_tilt_close(self) -> None: ...
+        async def _send_tilt_stop(self) -> None: ...
+        def _has_tilt_motor(self) -> bool: ...
         def async_write_ha_state(self) -> None: ...
+        def _self_stops_at_endpoints(self) -> bool: ...
+        def _cancel_startup_delay_task(self) -> None: ...
+        def _cancel_delay_task(self) -> bool: ...
+        def _handle_stop(self, *, supersede: bool = True) -> None: ...
 
     async def start_calibration(self, **kwargs):
         """Start a calibration test for the given attribute."""
@@ -75,8 +86,16 @@ class CalibrationMixin:
                     "Tilt time must be configured before calibrating startup delay"
                 )
 
+        # Neutralize any in-flight tracked movement: calibration drives the
+        # motors directly, and a still-armed auto-updater would fire a relay
+        # STOP mid-measurement when the old target is reached.
+        self._cancel_startup_delay_task()
+        self._cancel_delay_task()
+        self._handle_stop()
+
         # Create state only after validation passes
         self._calibration = CalibrationState(attribute=attribute, timeout=timeout)
+        self._calibration.uses_tilt_motor = self._calibration_uses_tilt_motor(attribute)
         self._calibration.timeout_task = self.hass.async_create_task(
             self._calibration_timeout()
         )
@@ -113,6 +132,41 @@ class CalibrationMixin:
             return SERVICE_OPEN_COVER
         return SERVICE_CLOSE_COVER
 
+    def _calibration_uses_tilt_motor(self, attribute: str) -> bool:
+        if not attribute.startswith("tilt_"):
+            return False
+        if self._tilt_strategy is not None:
+            return self._tilt_strategy.uses_tilt_motor and self._has_tilt_motor()
+        # _tilt_strategy hasn't been resolved yet: _resolve_tilt_strategy
+        # (cover.py) only instantiates one once BOTH tilt times are set, and
+        # calibration is the only way to set them, so a freshly-configured
+        # dual-motor cover's very first tilt calibration runs with no
+        # strategy at all. Fall back to the raw configured tilt_mode string,
+        # mirroring _tilt_calibration_command's issue-#61 fallback below.
+        # _has_tilt_motor() itself requires _tilt_strategy, so this branch
+        # checks the switch ids directly instead of delegating to it.
+        return self._tilt_mode_str == "dual_motor" and bool(
+            self._tilt_open_switch_id and self._tilt_close_switch_id
+        )
+
+    async def _calibration_drive(self, move_command: str) -> None:
+        """Send the calibration move on the right motor."""
+        assert self._calibration is not None
+        if self._calibration.uses_tilt_motor:
+            if move_command == SERVICE_CLOSE_COVER:
+                await self._send_tilt_close()
+            else:
+                await self._send_tilt_open()
+        else:
+            await self._async_handle_command(move_command)
+
+    async def _calibration_stop(self) -> None:
+        assert self._calibration is not None
+        if self._calibration.uses_tilt_motor:
+            await self._send_tilt_stop()
+        else:
+            await self._send_stop()
+
     async def _start_simple_time_test(self, attribute, direction):
         """Start a simple travel/tilt time test by moving the cover."""
         assert self._calibration is not None
@@ -126,7 +180,7 @@ class CalibrationMixin:
         else:
             move_command = SERVICE_OPEN_COVER
         self._calibration.move_command = move_command
-        await self._async_handle_command(move_command)
+        await self._calibration_drive(move_command)
 
     def _tilt_calibration_command(self, closing_tilt: bool) -> str:
         """Resolve the relay direction for tilt calibration.
@@ -188,6 +242,7 @@ class CalibrationMixin:
         step_pct = 100 // total_divisions
         step_duration = travel_time * step_pct / 100
         self._calibration.step_duration = step_duration
+        self._calibration.step_pct = step_pct
         self._calibration.move_command = move_command
 
         self._calibration.automation_task = self.hass.async_create_task(
@@ -227,13 +282,13 @@ class CalibrationMixin:
                     target,
                 )
                 calc.start_travel(target)
-                await self._async_handle_command(move_command)
+                await self._calibration_drive(move_command)
 
                 # Wait for travel calculator to say position reached
                 while calc.current_position() != target:
                     await sleep(0.05)
 
-                await self._send_stop()
+                await self._calibration_stop()
                 calc.stop()
 
                 # Force position — motor fell short due to startup delay
@@ -252,7 +307,7 @@ class CalibrationMixin:
             self._calibration.final_step = True
             self.async_write_ha_state()
             self._calibration.continuous_start = time.monotonic()
-            await self._async_handle_command(move_command)
+            await self._calibration_drive(move_command)
 
             # Wait indefinitely until user calls stop_calibration
             while True:
@@ -298,6 +353,26 @@ class CalibrationMixin:
         except asyncio.CancelledError:
             pass
 
+    def _restore_calibration_startup_delay(self) -> None:
+        """Put back the startup delay an overhead test zeroed."""
+        if self._calibration is None:
+            return
+        if self._calibration.saved_startup_delay is not None:
+            if "tilt" in self._calibration.attribute:
+                self._tilt_startup_delay = self._calibration.saved_startup_delay
+            else:
+                self._travel_startup_delay = self._calibration.saved_startup_delay
+
+    def _cancel_calibration_tasks(self) -> None:
+        """Cancel any live timeout/automation tasks for the current calibration."""
+        assert self._calibration is not None
+        for task in (
+            self._calibration.timeout_task,
+            self._calibration.automation_task,
+        ):
+            if task is not None and not task.done():
+                task.cancel()
+
     async def _calibration_timeout(self):
         """Handle calibration timeout."""
         assert self._calibration is not None
@@ -314,8 +389,21 @@ class CalibrationMixin:
                 and not self._calibration.automation_task.done()
             ):
                 self._calibration.automation_task.cancel()
-            await self._send_stop()
-            self._calibration = None
+            try:
+                # Stop the motor. On momentary hardware
+                # (toggle/pulse-no-endpoint-stop) the time-test protocol
+                # means the motor already self-stopped at its limit — a stop
+                # pulse there is a movement command (#153/#133), so skip it.
+                # A timeout is never a user cancel.
+                if not self._self_stops_at_endpoints():
+                    await self._calibration_stop()
+            finally:
+                # Always undo the startup-delay zeroing and clear the
+                # calibration state, even if the relay stop above raised —
+                # otherwise the delay stays silently zeroed forever, i.e.
+                # the exact drift the Task 7 fix exists to prevent.
+                self._restore_calibration_startup_delay()
+                self._calibration = None
             self.async_write_ha_state()
         except asyncio.CancelledError:
             _LOGGER.debug("_calibration_timeout :: cancelled")
@@ -327,42 +415,34 @@ class CalibrationMixin:
 
         cancel = kwargs.get("cancel", False)
 
-        # Cancel timeout task
-        if (
-            self._calibration.timeout_task is not None
-            and not self._calibration.timeout_task.done()
-        ):
-            self._calibration.timeout_task.cancel()
-
-        # Cancel automation task
-        if (
-            self._calibration.automation_task is not None
-            and not self._calibration.automation_task.done()
-        ):
-            self._calibration.automation_task.cancel()
-
-        # Stop the motor
-        await self._send_stop()
+        # Cancel timeout/automation tasks
+        self._cancel_calibration_tasks()
 
         result = {}
-        if not cancel:
-            value = self._calculate_calibration_result()
-            result["attribute"] = self._calibration.attribute
-            result["value"] = value
+        try:
+            # Stop the motor. On momentary hardware (toggle/pulse-no-endpoint-stop)
+            # the time-test protocol means the motor already self-stopped at its
+            # limit — a stop pulse there is a movement command (#153/#133), so skip
+            # it. Cancel always stops: the user is bailing mid-run.
+            if cancel or not self._self_stops_at_endpoints():
+                await self._calibration_stop()
 
-            # For successful completion, update the tracked position to
-            # reflect where the cover ended up (at an endpoint).
-            self._set_position_after_calibration(self._calibration)
+            if not cancel:
+                value = self._calculate_calibration_result()
+                result["attribute"] = self._calibration.attribute
+                result["value"] = value
 
-        # Restore startup delay that was zeroed during overhead test
-        if self._calibration.saved_startup_delay is not None:
-            attr = self._calibration.attribute
-            if "tilt" in attr:
-                self._tilt_startup_delay = self._calibration.saved_startup_delay
-            else:
-                self._travel_startup_delay = self._calibration.saved_startup_delay
+                # For successful completion, update the tracked position to
+                # reflect where the cover ended up (at an endpoint).
+                self._set_position_after_calibration(self._calibration)
+        finally:
+            # Always undo the startup-delay zeroing and clear the calibration
+            # state, even if the relay stop or result computation above
+            # raised — otherwise the delay stays silently zeroed forever,
+            # i.e. the exact drift the Task 7 fix exists to prevent.
+            self._restore_calibration_startup_delay()
+            self._calibration = None
 
-        self._calibration = None
         self.async_write_ha_state()
         return result
 
@@ -435,8 +515,11 @@ class CalibrationMixin:
             pulse_time = getattr(self, "_pulse_time", None)
             if pulse_time:
                 continuous_time -= pulse_time
-            # Each step covers 1/10 of travel; remaining depends on step count
-            expected_remaining = (1.0 - step_count / 10.0) * total_time
+            # Each step covers step_pct% of travel; remaining depends on step
+            # count and the actual per-step size for this axis (travel steps
+            # 10% at a time, tilt steps 20% at a time).
+            step_pct = self._calibration.step_pct or 10
+            expected_remaining = (1.0 - step_count * step_pct / 100.0) * total_time
             overhead = (continuous_time - expected_remaining) / step_count
             _LOGGER.debug(
                 "overhead calculation: total_time=%.2f, step_count=%d, "

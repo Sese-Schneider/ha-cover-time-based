@@ -35,6 +35,7 @@ class CalibrationState:
     timeout: float
     started_at: float = field(default_factory=time.monotonic)
     step_count: int = 0
+    step_pct: int | None = None
     final_step: bool = False
     step_duration: float | None = None
     last_pulse_duration: float | None = None
@@ -43,3 +44,4 @@ class CalibrationState:
     saved_startup_delay: float | None = None
     timeout_task: Task | None = field(default=None, repr=False)
     automation_task: Task | None = field(default=None, repr=False)
+    uses_tilt_motor: bool = False
