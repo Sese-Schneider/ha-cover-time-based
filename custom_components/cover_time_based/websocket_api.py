@@ -324,6 +324,18 @@ async def ws_update_config(
         connection.send_error(msg["id"], "not_found", error or "Config entry not found")
         return
 
+    # Reject saving while a calibration is running: a save reloads the
+    # config entry, and a reload mid-calibration destroys the session.
+    entity = resolve_entity_or_none(hass, msg["entity_id"])
+    if entity is not None and entity._calibration is not None:
+        connection.send_error(
+            msg["id"],
+            "calibration_active",
+            "Configuration cannot be saved while a calibration is running;"
+            " finish or cancel it first.",
+        )
+        return
+
     # Reject wrapping another cover_time_based entity
     cover_entity_id = msg.get("cover_entity_id")
     if cover_entity_id:

@@ -1385,6 +1385,82 @@ class TestWsUpdateConfigWrappedSelf:
         conn.send_result.assert_called_once()
 
 
+class TestWsUpdateConfigCalibrationGuard:
+    """ws_update_config must reject saves while a calibration is running.
+
+    A card save reloads the config entry (async_update_entry triggers a
+    reload), and a reload mid-calibration destroys the session. Reject the
+    save instead.
+    """
+
+    @pytest.mark.asyncio
+    async def test_rejects_when_calibration_active(self):
+        hass, config_entry, _ = _make_hass(
+            options={CONF_CONTROL_MODE: CONTROL_MODE_SWITCH}
+        )
+        conn = _make_connection()
+        entity = MagicMock()
+        entity._calibration = MagicMock()  # not None — calibration active
+
+        with (
+            patch(
+                "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+                return_value=(config_entry, None),
+            ),
+            patch(
+                "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
+                return_value=entity,
+            ),
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "control_mode": CONTROL_MODE_WRAPPED,
+                },
+            )
+
+        conn.send_error.assert_called_once()
+        assert conn.send_error.call_args[0][1] == "calibration_active"
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_allows_when_no_calibration_active(self):
+        hass, config_entry, _ = _make_hass(
+            options={CONF_CONTROL_MODE: CONTROL_MODE_SWITCH}
+        )
+        conn = _make_connection()
+        entity = MagicMock()
+        entity._calibration = None
+
+        with (
+            patch(
+                "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+                return_value=(config_entry, None),
+            ),
+            patch(
+                "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
+                return_value=entity,
+            ),
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "control_mode": CONTROL_MODE_WRAPPED,
+                },
+            )
+
+        conn.send_result.assert_called_once_with(1, {"success": True})
+        hass.config_entries.async_update_entry.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # ws_start_calibration
 # ---------------------------------------------------------------------------
