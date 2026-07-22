@@ -144,10 +144,12 @@ class CalibrationMixin:
         # strategy at all. Fall back to the raw configured tilt_mode string,
         # mirroring _tilt_calibration_command's issue-#61 fallback below.
         # _has_tilt_motor() itself requires _tilt_strategy, so this branch
-        # checks the switch ids directly instead of delegating to it.
-        return self._tilt_mode_str == "dual_motor" and bool(
-            self._tilt_open_switch_id and self._tilt_close_switch_id
-        )
+        # delegates to _has_dual_motor_tilt_route(), which is overridden per
+        # cover type: the base checks dedicated tilt switch ids, while a wrapped
+        # cover (no tilt switch ids — tilt routes through the underlying) admits
+        # the route whenever it wraps a cover entity. A hard-coded switch-id
+        # check here would misfire for wrapped and drive the whole shade.
+        return self._tilt_mode_str == "dual_motor" and self._has_dual_motor_tilt_route()
 
     async def _calibration_drive(self, move_command: str) -> None:
         """Send the calibration move on the right motor."""

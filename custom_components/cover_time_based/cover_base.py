@@ -2604,6 +2604,21 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             and bool(self._tilt_open_switch_id and self._tilt_close_switch_id)
         )
 
+    def _has_dual_motor_tilt_route(self) -> bool:
+        """Whether a dual-motor tilt actuator is wired up, independent of the
+        resolved TiltStrategy.
+
+        Used by calibration's strategy-None bootstrap: the very first tilt
+        calibration on a freshly-configured dual_motor cover runs before a
+        TiltStrategy exists (calibration is the only way to set the tilt times
+        _resolve_tilt_strategy needs), so it can't consult _has_tilt_motor.
+        The base cover drives dedicated tilt switches, so the route exists iff
+        both are configured; WrappedCoverTimeBased overrides this since it
+        routes tilt through the underlying cover, not tilt switch ids (mirrors
+        the _has_tilt_motor base/override split).
+        """
+        return bool(self._tilt_open_switch_id and self._tilt_close_switch_id)
+
     async def _send_tilt_open(self) -> None:
         """Send open to the tilt motor (bypasses position tracker).
 

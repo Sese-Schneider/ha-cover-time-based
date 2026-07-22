@@ -1322,3 +1322,51 @@ class TestDualMotorTiltCalibrationDrivesTiltMotor:
             assert travel_touches == [], travel_touches
 
             await cover.stop_calibration(cancel=True)
+
+    @pytest.mark.asyncio
+    async def test_wrapped_dual_motor_first_time_calibration_drives_tilt_service(
+        self, make_cover
+    ):
+        """A WRAPPED dual_motor cover's first-time tilt calibration must drive
+        the underlying's close_cover_tilt, not close_cover (the whole shade).
+
+        Same strategy-None bootstrap as the switch-based test above, but wrapped
+        covers route tilt through the underlying cover entity and have NO tilt
+        switch ids. The Task-10 fallback gated on tilt switch ids, so it
+        returned False for wrapped -> _calibration_drive took the travel branch
+        -> _send_close -> the underlying's close_cover ran the whole shade,
+        while the card told the user to watch the slats. The fallback must
+        mirror the wrapped _has_tilt_motor override (which drops the switch-id
+        requirement), not the switch-based base one.
+        """
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            # Neither tilt time set — user is calibrating for the first time.
+            tilt_mode="dual_motor",
+        )
+        # Precondition: no strategy resolved yet (both tilt times unset).
+        assert cover._tilt_strategy is None
+        assert cover._tilt_mode_str == "dual_motor"
+
+        # The underlying advertises native tilt so _send_tilt_close delegates
+        # rather than skipping (CoverEntityFeature OPEN_TILT|CLOSE_TILT = 16|32).
+        underlying = MagicMock()
+        underlying.state = "open"
+        underlying.attributes = {"supported_features": 1 | 2 | 8 | 16 | 32}
+        cover.hass.states.get = (
+            lambda eid: underlying if eid == "cover.inner" else None
+        )
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_close", timeout=300.0)
+            calls = [
+                (c[0][0], c[0][1], c[0][2].get("entity_id"))
+                for c in cover.hass.services.async_call.call_args_list
+            ]
+
+            # The underlying tilt service was driven...
+            assert ("cover", "close_cover_tilt", "cover.inner") in calls, calls
+            # ...and the whole-shade travel service was NOT.
+            assert ("cover", "close_cover", "cover.inner") not in calls, calls
+
+            await cover.stop_calibration(cancel=True)
