@@ -524,6 +524,11 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # opening/closing (e.g. MQTT position-topic-only) hit this mid-travel;
         # their report describes a lagging past, not a settled present. Native
         # moves keep snapping — the device holds itself.
+        # This guard keys on is_traveling() and intentionally does NOT extend
+        # into the startup-delay window: there is no auto-updater to kill there,
+        # and the delay-fire's own auto-stop still catches the target. (The
+        # state-channel guard, by contrast, does extend into it via
+        # in_startup_window — see _handle_external_state_change.)
         if (
             self.travel_calc.is_traveling()
             and self._self_initiated_movement

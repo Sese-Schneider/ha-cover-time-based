@@ -56,9 +56,9 @@ export function renderEntityPicker(card) {
               card.requestUpdate();
               return;
             }
-            if (card._isCalibrating()) {
-              card._onStopCalibration(true);
-            }
+            // Confirmed: nothing between the outer guard and here changes
+            // calibration state, so no redundant re-check — just cancel.
+            card._onStopCalibration(true);
           }
           // Flush any pending debounced edit to the OUTGOING entity before
           // swapping _selectedEntity/_config over to the new one - _autoSave
