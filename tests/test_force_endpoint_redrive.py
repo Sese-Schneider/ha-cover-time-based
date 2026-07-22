@@ -294,7 +294,9 @@ async def test_force_redrive_failing_tilt_prestep_does_not_corrupt_tracker(make_
         force_endpoint_redrive=True,
     )
     cover.travel_calc.set_position(0)  # believed fully closed (settled)
-    cover.tilt_calc.set_position(0)  # slats NOT at safe (100) -> pre-step drives tilt_open
+    cover.tilt_calc.set_position(
+        0
+    )  # slats NOT at safe (100) -> pre-step drives tilt_open
 
     # The tilt-to-safe pre-step raises (e.g. the tilt service errors) AFTER the
     # seed and after the pending fields are set.

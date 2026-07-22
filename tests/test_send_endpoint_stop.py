@@ -270,7 +270,9 @@ async def test_pulse_dual_motor_tilt_restore_gates_travel_stop(
 
     stop_on = _relay_turn_on(cover, "switch.stop")
     if expect_travel_stop:
-        assert stop_on, "option on: travel stop must pulse at the restore boundary (#129)"
+        assert stop_on, (
+            "option on: travel stop must pulse at the restore boundary (#129)"
+        )
     else:
         assert stop_on == [], (
             "option off: travel stop must be skipped at the restore boundary (#133/#153)"

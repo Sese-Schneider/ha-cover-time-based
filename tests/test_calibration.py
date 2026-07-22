@@ -1353,9 +1353,7 @@ class TestDualMotorTiltCalibrationDrivesTiltMotor:
         underlying = MagicMock()
         underlying.state = "open"
         underlying.attributes = {"supported_features": 1 | 2 | 8 | 16 | 32}
-        cover.hass.states.get = (
-            lambda eid: underlying if eid == "cover.inner" else None
-        )
+        cover.hass.states.get = lambda eid: underlying if eid == "cover.inner" else None
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(attribute="tilt_time_close", timeout=300.0)

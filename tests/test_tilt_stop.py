@@ -495,7 +495,9 @@ async def test_plain_tilt_move_settling_at_endpoint_does_not_pulse_tilt_relay(
 
 
 @pytest.mark.asyncio
-async def test_switch_mode_plain_tilt_move_at_endpoint_still_deenergizes_tilt(make_cover):
+async def test_switch_mode_plain_tilt_move_at_endpoint_still_deenergizes_tilt(
+    make_cover,
+):
     """Switch-mode contrast to the momentary endpoint test: switch mode's
     latched tilt relay must ALWAYS be de-energized when a tilt move settles,
     even exactly at a tilt endpoint (``_self_stops_at_endpoints`` is False, so
