@@ -294,6 +294,16 @@ class CoverTimeBasedCard extends LitElement {
       // the user didn't leave. Only cancel if still detached next tick.
       setTimeout(() => {
         if (!this.isConnected && this._isCalibrating()) {
+          // Clear any armed autosave first: _autoSave defers (re-arms) while
+          // calibrating, so a timer is usually pending. Cancelling calibration
+          // below flips _isCalibrating() false, and a leftover armed timer
+          // would then elapse and run _autoSave -> update_config on this
+          // detached element. A re-parent keeps the timer (this branch is only
+          // reached on a true removal). See disconnect_reparent test (vi).
+          if (this._autoSaveTimer) {
+            clearTimeout(this._autoSaveTimer);
+            this._autoSaveTimer = null;
+          }
           this._onStopCalibration(true);
         }
       }, 0);
