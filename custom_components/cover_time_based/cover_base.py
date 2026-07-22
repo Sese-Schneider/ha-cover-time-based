@@ -1026,7 +1026,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
                 return
 
-        # Committed to acting: now claim the movement's bookkeeping.
+        # Committed to acting: now claim the movement's bookkeeping. Unlike the
+        # tilt funnel (_async_move_tilt_to_endpoint, which sets this flag then
+        # runs a post-flag in-motion reversal), the travel funnel's only
+        # direction change is the startup-delay cancel above, which returns
+        # before this line — so on that path _self_initiated_movement is left
+        # stale. Benign: the cover is fully stopped there and the next funnel
+        # call overwrites the flag.
         self._self_initiated_movement = not self._triggered_externally
 
         current = self.travel_calc.current_position()
@@ -1449,7 +1455,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self._stop_displaced_movement_for_tilt(was_tilt_motor_move)
             # A reversal is stop → settle → go: give the motor (or momentary
             # relay) time to come to rest before driving the other way, and bail
-            # if a stop/newer target claimed the movement inside the gap.
+            # if a stop/newer target claimed the movement inside the gap. This
+            # settle is intentionally NOT gated on _triggered_externally: the
+            # dual-motor drive below (_send_tilt_close/open) is itself ungated on
+            # external, so an external redirect reaching here (e.g. a sequential
+            # external close) still drives the motor and must get its rest gap —
+            # reversing a physical cover too fast can trip its supply. Do not
+            # "optimise" this to skip the settle when external.
             if was_moving and not await self._settle_before_reversing():
                 return
             current = self.tilt_calc.current_position()
@@ -1978,7 +1990,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 # The motor self-stops at its physical limit switch. Sending a
                 # stop here is redundant (and for toggle re-pulses → restart),
                 # so skip the relay stop and any run-on; just settle the
-                # tracker. Run-on (below) is therefore switch-mode only.
+                # tracker. The run-on (below) is therefore reached only by
+                # hardware that does NOT self-stop at its endpoints — switch
+                # mode, and pulse with send_endpoint_stop enabled.
                 self._log(
                     "auto_stop_if_necessary :: motor self-stops at endpoint"
                     " (position=%d), no relay stop",
@@ -2166,7 +2180,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # this lifecycle. A dual-motor tilt pre-step never starts the travel
         # motor, so its abandon must not pulse a travel relay off a stale
         # _last_command at an idle motor (#153 / #133, audit Task 5B). A pending
-        # run-on delay counts as still-driving (switch mode only).
+        # run-on delay counts as still-driving (any mode with an endpoint run-on
+        # arms _delay_task — e.g. pulse — not switch mode only).
         travel_was_running = self.travel_calc.is_traveling() or (
             self._delay_task is not None and not self._delay_task.done()
         )
