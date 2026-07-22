@@ -754,6 +754,17 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Wrapped covers use the cover entity for tilt commands."""
         return self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor
 
+    def _has_dual_motor_tilt_route(self) -> bool:
+        """Wrapped covers route tilt through the underlying cover entity, so the
+        dual-motor tilt route exists whenever a cover entity is configured —
+        there are no dedicated tilt switch ids to check (mirrors the
+        _has_tilt_motor override). Without this the calibration bootstrap would
+        fall back to the switch-id check and drive the whole shade (close_cover)
+        instead of the underlying's close_cover_tilt on a first-time tilt
+        calibration.
+        """
+        return self._cover_entity_id is not None
+
     def _wrapped_supports_tilt(self) -> bool:
         """Return True if the wrapped cover advertises native tilt support.
 

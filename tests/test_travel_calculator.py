@@ -27,6 +27,38 @@ class TestTravelCalculatorEdgeCases:
         assert calc.current_position() == 50
         assert calc.travel_direction == TravelStatus.STOPPED
 
+    def test_snapshot_restore_round_trips_full_state(self):
+        """restore() puts back every field snapshot() captured, so a mutation
+        made after the snapshot is fully undone (used for exception-safe
+        rollback in _force_full_redrive)."""
+        calc = TravelCalculator(travel_time_down=30, travel_time_up=30)
+        calc.set_position(30)
+        calc.start_travel(80)  # sets target, timestamp and DIRECTION_UP
+        snap = calc.snapshot()
+        before = (
+            calc._last_known_position,
+            calc._last_known_position_timestamp,
+            calc._position_confirmed,
+            calc._travel_to_position,
+            calc.travel_direction,
+        )
+
+        # Mutate the captured fields (stop() flips direction to STOPPED and
+        # retargets, so restoring must bring DIRECTION_UP and the target back).
+        calc.stop()
+        assert calc.travel_direction == TravelStatus.STOPPED
+        assert calc._travel_to_position != before[3]
+
+        calc.restore(snap)
+        after = (
+            calc._last_known_position,
+            calc._last_known_position_timestamp,
+            calc._position_confirmed,
+            calc._travel_to_position,
+            calc.travel_direction,
+        )
+        assert after == before
+
     def test_is_opening(self):
         """is_opening() returns True when traveling upward."""
         calc = TravelCalculator(travel_time_down=30, travel_time_up=30)

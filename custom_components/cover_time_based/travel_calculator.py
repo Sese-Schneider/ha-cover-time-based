@@ -80,6 +80,31 @@ class TravelCalculator:
         self._position_confirmed = False
         self.travel_direction = TravelStatus.STOPPED
 
+    def snapshot(self) -> tuple:
+        """Capture the mutable tracker state for exception-safe rollback.
+
+        Restore with :meth:`restore`. Used where a mutation must be undone if a
+        later step in the same operation raises (e.g. a forced redrive seeds the
+        opposite endpoint before driving relays that may fail).
+        """
+        return (
+            self._last_known_position,
+            self._last_known_position_timestamp,
+            self._position_confirmed,
+            self._travel_to_position,
+            self.travel_direction,
+        )
+
+    def restore(self, snapshot: tuple) -> None:
+        """Restore state captured by :meth:`snapshot`."""
+        (
+            self._last_known_position,
+            self._last_known_position_timestamp,
+            self._position_confirmed,
+            self._travel_to_position,
+            self.travel_direction,
+        ) = snapshot
+
     def stop(self) -> None:
         """Stop traveling."""
         stop_position = self.current_position()

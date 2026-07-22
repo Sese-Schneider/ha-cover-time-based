@@ -436,6 +436,92 @@ async def test_tilt_restore_completion_clears_stale_direction(make_cover):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
+    "control_mode,extra",
+    [
+        ("toggle", {}),
+        ("toggle_opposite", {}),
+        (
+            "pulse",
+            dict(
+                send_endpoint_stop=False,
+                stop_switch="switch.stop",
+                tilt_stop_switch="switch.tilt_stop",
+            ),
+        ),
+    ],
+    ids=["toggle", "toggle_opposite", "pulse-no-endpoint-stop"],
+)
+async def test_plain_tilt_move_settling_at_endpoint_does_not_pulse_tilt_relay(
+    make_cover, control_mode, extra
+):
+    """Task-1 coverage gap: the momentary *endpoint* tilt case.
+
+    The existing plain-tilt-move stop tests all settle MID-tilt, so they only
+    reach ``_tilt_settle``'s ``else`` branch (send the tilt stop). The endpoint
+    branch — a tilt move that finishes exactly at a tilt limit (0/100) on
+    momentary hardware, where the tilt motor self-stops on its own limit and a
+    stop 'pulse' there would restart it (#153) / go-to-favourite (#133) — was
+    only verified by code-reading. Drive a plain dual-motor tilt move to the
+    tilt endpoint and let it complete via auto-stop: ``_tilt_settle`` must skip
+    the relay stop, so NO tilt relay is actioned during the settle.
+    """
+    cover = make_cover(
+        control_mode=control_mode,
+        tilt_time_close=0.2,
+        tilt_time_open=0.2,
+        tilt_mode="dual_motor",
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        **extra,
+    )
+    assert cover._has_tilt_motor()
+    assert cover._self_stops_at_endpoints()
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(90)  # close to the 100 endpoint
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(100)  # plain tilt move to the tilt endpoint
+        assert cover.tilt_calc.is_traveling() and cover._moving_tilt_motor
+        await asyncio.sleep(0.3)
+        n = len(cover.hass.services.async_call.call_args_list)
+        await cover.auto_stop_if_necessary()  # tilt reaches 100 -> _tilt_settle
+
+    assert cover.tilt_calc.current_position() == 100
+    calls = _all_calls(cover, n)
+    # No tilt relay actioned at all during the endpoint settle: the motor
+    # self-stopped at its limit, so a pulse would be a phantom movement.
+    assert _tilt_switch_calls(cover, n) == [], calls
+    assert not any(c[1] == "switch.tilt_stop" for c in calls), calls
+
+
+@pytest.mark.asyncio
+async def test_switch_mode_plain_tilt_move_at_endpoint_still_deenergizes_tilt(
+    make_cover,
+):
+    """Switch-mode contrast to the momentary endpoint test: switch mode's
+    latched tilt relay must ALWAYS be de-energized when a tilt move settles,
+    even exactly at a tilt endpoint (``_self_stops_at_endpoints`` is False, so
+    ``_tilt_settle`` sends the stop)."""
+    cover = make_cover(control_mode=CONTROL_MODE_SWITCH, **DUAL)
+    assert cover._has_tilt_motor()
+    assert not cover._self_stops_at_endpoints()
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(90)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(100)
+        assert cover.tilt_calc.is_traveling() and cover._moving_tilt_motor
+        await asyncio.sleep(0.6)  # DUAL tilt_time is 5.0s -> 10% is 0.5s
+        n = len(cover.hass.services.async_call.call_args_list)
+        await cover.auto_stop_if_necessary()
+
+    assert cover.tilt_calc.current_position() == 100
+    offs = [c for c in _tilt_switch_calls(cover, n) if c[0] == "turn_off"]
+    assert offs, "switch mode must de-energize the latched tilt relay at the endpoint"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
     "control_mode",
     [
         CONTROL_MODE_SWITCH,
