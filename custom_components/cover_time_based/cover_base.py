@@ -675,8 +675,27 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             target,
             opposite,
         )
+        # The travel target is pre-validated above, but a dual-motor redrive
+        # seeds the opposite endpoint and then drives the tilt-to-safe pre-step
+        # BEFORE travel — and that pre-step validates the tilt switch and fires
+        # the tilt relay deeper in (_start_tilt_pre_step), AFTER this seed. A
+        # tilt-phase failure there would otherwise leave the tracker parked at
+        # the opposite endpoint with no movement started to correct it (a wrong
+        # position then persisted), and the pre-step's continuation fields
+        # dangling. Snapshot before seeding and roll back on any failure. The
+        # seed can't move earlier — _async_move_to_endpoint needs it in place to
+        # reach the full-travel branch, and the deferred travel derives its
+        # direction from it.
+        snapshot = self.travel_calc.snapshot()
         self.travel_calc.set_position(opposite)
-        await self._async_move_to_endpoint(target=target)
+        try:
+            await self._async_move_to_endpoint(target=target)
+        except Exception:
+            self.travel_calc.restore(snapshot)
+            self._pending_travel_target = None
+            self._pending_travel_command = None
+            self._tilt_restore_target = None
+            raise
 
     async def _direction_change_delay(self):
         """Pause between stop and direction change to let the motor settle.

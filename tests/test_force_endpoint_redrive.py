@@ -269,3 +269,48 @@ async def test_force_redrive_validates_even_with_stale_self_initiated_flag(make_
         "tracker must not be corrupted to the opposite endpoint by a failed "
         "redrive, even when _self_initiated_movement was left stale-False"
     )
+
+
+@pytest.mark.asyncio
+async def test_force_redrive_failing_tilt_prestep_does_not_corrupt_tracker(make_cover):
+    """A dual-motor forced redrive seeds the opposite endpoint, then drives the
+    tilt-to-safe pre-step BEFORE travel. Task 17 pre-validated only the TRAVEL
+    target — the tilt switch is checked (and the tilt relay fired) deeper in,
+    inside _start_tilt_pre_step, AFTER the seed. So a tilt-phase failure (the
+    tilt service raising, or the tilt switch unavailable) left the travel
+    tracker parked at the opposite endpoint with no movement started to correct
+    it, and the pre-step's half-set continuation fields dangling. Snapshot the
+    tracker before the seed and roll it back (plus clear the pending fields) on
+    any failure."""
+    cover = make_cover(
+        control_mode=CONTROL_MODE_SWITCH,
+        tilt_time_close=2.0,
+        tilt_time_open=2.0,
+        tilt_mode="dual_motor",
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        tilt_stop_switch="switch.tilt_stop",
+        safe_tilt_position=100,
+        force_endpoint_redrive=True,
+    )
+    cover.travel_calc.set_position(0)  # believed fully closed (settled)
+    cover.tilt_calc.set_position(0)  # slats NOT at safe (100) -> pre-step drives tilt_open
+
+    # The tilt-to-safe pre-step raises (e.g. the tilt service errors) AFTER the
+    # seed and after the pending fields are set.
+    async def _boom():
+        raise HomeAssistantError("tilt relay failed")
+
+    with patch.object(cover, "async_write_ha_state"):
+        with patch.object(cover, "_send_tilt_open", side_effect=_boom):
+            with pytest.raises(HomeAssistantError):
+                await cover.async_close_cover()
+
+    assert cover.travel_calc.current_position() == 0, (
+        "tracker must not be left seeded at the opposite endpoint by a failed "
+        "tilt pre-step during a forced redrive"
+    )
+    # The pre-step's continuation fields must not dangle after the rollback.
+    assert cover._pending_travel_target is None, cover._pending_travel_target
+    assert cover._pending_travel_command is None, cover._pending_travel_command
+    assert cover._tilt_restore_target is None, cover._tilt_restore_target
