@@ -183,3 +183,35 @@ test("(v) flushing after the debounced save already fired does not send a duplic
   saves = updateConfigCalls(hass);
   expect(saves).toHaveLength(1); // still just the one save, not a duplicate
 });
+
+// ---------------------------------------------------------------------------
+// (vi) a TRUE removal while calibrating must not leave the autosave timer armed
+// to fire a save on the detached element. During calibration _autoSave defers
+// (re-arms) rather than saving, so a timer is typically armed. The deferred
+// true-removal check ends the calibration (_calibratingOverride -> false); a
+// leftover armed timer would then elapse and, no longer seeing calibration,
+// run _autoSave -> update_config on an element that is gone for good.
+// ---------------------------------------------------------------------------
+
+test("(vi) a true removal while calibrating does not fire an autosave on the detached element", async () => {
+  const hass = makeHass({ states: CAL_STATES });
+  card = await mountCard(hass, { selectedEntity: "cover.x", config: { control_mode: "switch" } });
+  card._calibratingOverride = true;
+  vi.useFakeTimers();
+
+  // Arm a pending debounced edit (the timer stays armed while calibrating).
+  card._updateLocal({ travel_time_close: 42 });
+
+  document.body.removeChild(card); // true removal, stays gone
+
+  // The deferred true-removal check runs next tick and cancels the calibration.
+  await vi.advanceTimersByTimeAsync(0);
+  const cancels = stopCalibrationCalls(hass);
+  expect(cancels).toHaveLength(1); // sanity: the true removal did cancel calibration
+
+  // Let any leftover autosave timer elapse. With the fix it was cleared, so no
+  // save fires on the detached element.
+  await vi.advanceTimersByTimeAsync(600);
+  expect(updateConfigCalls(hass)).toHaveLength(0);
+  card = null;
+});
