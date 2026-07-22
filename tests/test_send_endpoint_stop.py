@@ -212,6 +212,73 @@ async def test_default_pulse_dual_motor_pulses_tilt_endpoint_stop(make_cover):
 
 
 # ---------------------------------------------------------------------------
+# 3b. The TRAVEL stop at the tilt-restore boundary follows the flag too.
+#
+# Coverage gap M3: the tilt endpoint tests above drive auto_stop_if_necessary,
+# but the flag also gates the travel STOP that _start_tilt_restore issues at the
+# travel-endpoint boundary of a dual-motor full close (via the shared
+# _stop_travel_relay_if_needed). A pulse cover was never driven through that
+# lifecycle site with the option toggled — a #153/#133 travel re-pulse would
+# have gone uncaught there.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "send_endpoint_stop,expect_travel_stop",
+    [(False, False), (True, True)],
+    ids=["option-off-skips", "option-on-pulses"],
+)
+async def test_pulse_dual_motor_tilt_restore_gates_travel_stop(
+    make_cover, send_endpoint_stop, expect_travel_stop
+):
+    """Dual-motor pulse full close: tilt-to-safe, travel to 0, then tilt restore.
+    At the restore boundary the travel motor has just reached the 0 endpoint, so
+    _start_tilt_restore's travel STOP must follow send_endpoint_stop: skipped
+    when off (self-stopping hardware, a stop pulse there is a #133 go-to-favourite
+    / #153 re-open), pulsed when on (#129 latching controller)."""
+    cover = make_cover(
+        control_mode=CONTROL_MODE_PULSE,
+        stop_switch="switch.stop",
+        send_endpoint_stop=send_endpoint_stop,
+        travel_time_close=0.2,
+        travel_time_open=0.2,
+        tilt_time_close=0.2,
+        tilt_time_open=0.2,
+        tilt_mode="dual_motor",
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        tilt_stop_switch="switch.tilt_stop",
+        close_includes_tilt=True,
+    )
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(30)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_close_cover()  # tilt pre-step: 30 -> safe (100)
+        assert cover.tilt_calc.is_traveling()
+        await asyncio.sleep(0.3)
+        await cover.auto_stop_if_necessary()  # pre-step done -> travel starts (50 -> 0)
+        assert cover.travel_calc.is_traveling()
+        assert cover._tilt_restore_target == 0
+
+        await asyncio.sleep(0.3)
+        # Isolate the restore boundary: only the travel STOP (if any) counts.
+        cover.hass.services.async_call.reset_mock()
+        await cover.auto_stop_if_necessary()  # travel done at 0 -> _start_tilt_restore
+        assert cover._tilt_restore_active
+
+    stop_on = _relay_turn_on(cover, "switch.stop")
+    if expect_travel_stop:
+        assert stop_on, "option on: travel stop must pulse at the restore boundary (#129)"
+    else:
+        assert stop_on == [], (
+            "option off: travel stop must be skipped at the restore boundary (#133/#153)"
+        )
+    await _cancel_tasks(cover)
+
+
+# ---------------------------------------------------------------------------
 # 4. Run-on still applies when the option is on.
 # ---------------------------------------------------------------------------
 
