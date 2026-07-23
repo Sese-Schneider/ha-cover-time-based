@@ -3,6 +3,7 @@
 ### Features
 
 - **German (`de`) translation**: the integration now ships German alongside English, Portuguese and Polish, across both translated surfaces — the Home Assistant strings (the config flow, the Repairs notices and the service descriptions) and every string the **Cover Time Based** configuration card draws, including the option helper text. German-speaking users get it automatically from Home Assistant's own language setting, and the regional variants `de-AT` and `de-CH` resolve to the same catalogue. The "your language isn't translated yet" banner no longer appears for them.
+- **Italian (`it`) translation** ([#203](https://github.com/Sese-Schneider/ha-cover-time-based/issues/203)): Italian now ships too, across the same two surfaces — the Home Assistant strings and every string the **Cover Time Based** configuration card draws, option helper text included. Italian-speaking users get it automatically from Home Assistant's own language setting, the regional variants `it-IT` and `it-CH` resolve to the same catalogue, and the "your language isn't translated yet" banner no longer appears for them.
 
 ### Fixes
 
