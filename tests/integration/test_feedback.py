@@ -7,9 +7,9 @@ movement).
 
 from __future__ import annotations
 
+import time as time_mod
 from datetime import timedelta
 from unittest.mock import patch
-import time as time_mod
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util

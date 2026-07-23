@@ -1,21 +1,30 @@
 """Shared fixtures for cover_time_based tests."""
 
 import asyncio
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from custom_components.cover_time_based.const import (
+    CONF_CLOSE_INCLUDES_TILT,
+    CONF_FORCE_ENDPOINT_REDRIVE,
+    CONF_FORCE_TIME_BASED_POSITION,
+    CONF_IGNORE_REPORTED_POSITION,
+    CONF_INVERT,
+    CONF_REPORTS_COMMAND_NOT_ENDPOINT,
+    CONF_SEND_ENDPOINT_STOP,
+)
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_CONTROL_MODE,
     CONF_COVER_ENTITY_ID,
+    CONF_ENDPOINT_RUNON_TIME,
     CONF_MAX_TILT_ALLOWED_POSITION,
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_SAFE_TILT_POSITION,
     CONF_STOP_SWITCH_ENTITY_ID,
-    CONF_ENDPOINT_RUNON_TIME,
     CONF_TILT_CLOSE_SWITCH,
     CONF_TILT_MODE,
     CONF_TILT_OPEN_SWITCH,
@@ -30,15 +39,6 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_WRAPPED,
     DEFAULT_PULSE_TIME,
     _create_cover_from_options,
-)
-from custom_components.cover_time_based.const import (
-    CONF_CLOSE_INCLUDES_TILT,
-    CONF_FORCE_ENDPOINT_REDRIVE,
-    CONF_FORCE_TIME_BASED_POSITION,
-    CONF_IGNORE_REPORTED_POSITION,
-    CONF_INVERT,
-    CONF_REPORTS_COMMAND_NOT_ENDPOINT,
-    CONF_SEND_ENDPOINT_STOP,
 )
 
 DEFAULT_TRAVEL_TIME = 30

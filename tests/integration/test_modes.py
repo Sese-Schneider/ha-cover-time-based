@@ -5,9 +5,9 @@ Tests toggle mode stop-before-reverse and pulse mode relay pulsing.
 
 from __future__ import annotations
 
+import time as time_mod
 from datetime import timedelta
 from unittest.mock import patch
-import time as time_mod
 
 import pytest
 from homeassistant.core import HomeAssistant

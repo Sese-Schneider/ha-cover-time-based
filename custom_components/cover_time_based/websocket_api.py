@@ -11,18 +11,20 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .calibration import CALIBRATABLE_ATTRIBUTES
+from .const import DOMAIN
 from .cover import (
     CONF_ASSUMED_STATE,
     CONF_CLOSE_INCLUDES_TILT,
     CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_CONTROL_MODE,
     CONF_COVER_ENTITY_ID,
+    CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
-    CONF_MIN_MOVEMENT_TIME,
     CONF_MAX_TILT_ALLOWED_POSITION,
+    CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_RELAY_REPORTS_OFF,
@@ -30,7 +32,6 @@ from .cover import (
     CONF_SAFE_TILT_POSITION,
     CONF_SEND_ENDPOINT_STOP,
     CONF_STOP_SWITCH_ENTITY_ID,
-    CONF_ENDPOINT_RUNON_TIME,
     CONF_TILT_CLOSE_SWITCH,
     CONF_TILT_MODE,
     CONF_TILT_OPEN_SWITCH,
@@ -58,7 +59,6 @@ from .cover import (
     DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
 )
-from .const import DOMAIN
 from .helpers import resolve_entity_or_none
 
 _LOGGER = logging.getLogger(__name__)

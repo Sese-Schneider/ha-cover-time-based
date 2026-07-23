@@ -16,13 +16,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import voluptuous as vol
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
     SERVICE_STOP_COVER,
 )
-
-import voluptuous as vol
 
 from custom_components.cover_time_based.const import (
     CONF_DIRECTION_CHANGE_DELAY,

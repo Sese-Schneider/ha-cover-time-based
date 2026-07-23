@@ -5,16 +5,15 @@ service calls for the latching relay (switch) mode.
 """
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, call, patch
 
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
     CONTROL_MODE_TOGGLE,
 )
 from custom_components.cover_time_based.cover_switch_mode import SwitchModeCover
-
 
 # ---------------------------------------------------------------------------
 # Factory

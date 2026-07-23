@@ -1,8 +1,8 @@
 """Tests for CoverTimeBasedConfigFlow."""
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from homeassistant.const import CONF_NAME
 
 from custom_components.cover_time_based.config_flow import CoverTimeBasedConfigFlow

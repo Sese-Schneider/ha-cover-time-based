@@ -6,10 +6,9 @@ Covers:
 """
 
 import asyncio
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 from homeassistant.exceptions import HomeAssistantError
 
@@ -20,7 +19,6 @@ from custom_components.cover_time_based.tilt_strategies.planning import (
     extract_coupled_travel,
 )
 from custom_components.cover_time_based.travel_calculator import TravelCalculator
-
 
 # ===================================================================
 # planning.py: extract_coupled_tilt
@@ -398,9 +396,11 @@ class TestExternalMovementAutoStop:
         cover._self_initiated_movement = False
         cover._last_command = SERVICE_CLOSE_COVER
 
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(cover, "_send_stop", new_callable=AsyncMock) as mock_stop:
-                await cover.auto_stop_if_necessary()
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", new_callable=AsyncMock) as mock_stop,
+        ):
+            await cover.auto_stop_if_necessary()
 
         # Relay stop should NOT have been called
         mock_stop.assert_not_awaited()
@@ -421,12 +421,14 @@ class TestExternalMovementAutoStop:
         cover._self_initiated_movement = False
         cover._last_command = SERVICE_OPEN_COVER
 
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
                 cover._tilt_strategy,
                 "snap_trackers_to_physical",
-            ) as mock_snap:
-                await cover.auto_stop_if_necessary()
+            ) as mock_snap,
+        ):
+            await cover.auto_stop_if_necessary()
 
         # snap_trackers_to_physical should have been called
         mock_snap.assert_called_once_with(cover.travel_calc, cover.tilt_calc)
@@ -502,11 +504,13 @@ class TestMoveEndpointStartupDelayDualMotorTiltStop:
         # Last command was OPEN, so closing (target=0) is a direction change
         cover._last_command = SERVICE_OPEN_COVER
 
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
                 cover, "_send_tilt_stop", new_callable=AsyncMock
-            ) as mock_tilt_stop:
-                await cover._async_move_tilt_to_endpoint(target=0)
+            ) as mock_tilt_stop,
+        ):
+            await cover._async_move_tilt_to_endpoint(target=0)
 
         mock_tilt_stop.assert_awaited_once()
 
@@ -537,11 +541,13 @@ class TestMoveEndpointRelayWasOnDualMotorTiltStop:
         # Create an active delay task (not done) so _cancel_delay_task returns True
         cover._delay_task = asyncio.get_event_loop().create_future()
 
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
                 cover, "_send_tilt_stop", new_callable=AsyncMock
-            ) as mock_tilt_stop:
-                await cover._async_move_tilt_to_endpoint(target=0)
+            ) as mock_tilt_stop,
+        ):
+            await cover._async_move_tilt_to_endpoint(target=0)
 
         mock_tilt_stop.assert_awaited_once()
 
@@ -586,9 +592,11 @@ class TestSetPositionEarlyReturnAfterDirectionChange:
                 return 51
             return 49
 
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(TravelCalculator, "current_position", mock_current):
-                await cover.set_position(49)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(TravelCalculator, "current_position", mock_current),
+        ):
+            await cover.set_position(49)
 
         # Early return at line 594 means _last_command is NOT updated at line 606
         assert cover._last_command == SERVICE_OPEN_COVER
@@ -622,12 +630,14 @@ class TestSetTiltPositionDirectionChangeDualMotor:
         # Last command was OPEN
         cover._last_command = SERVICE_OPEN_COVER
 
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
                 cover, "_send_tilt_stop", new_callable=AsyncMock
-            ) as mock_tilt_stop:
-                # Set tilt to a position below current (closing) => direction change
-                await cover.set_tilt_position(20)
+            ) as mock_tilt_stop,
+        ):
+            # Set tilt to a position below current (closing) => direction change
+            await cover.set_tilt_position(20)
 
         mock_tilt_stop.assert_awaited_once()
 
@@ -673,9 +683,11 @@ class TestSetTiltPositionDirectionChangeDualMotor:
             # travel_calc
             return 50
 
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(TravelCalculator, "current_position", mock_current):
-                await cover.set_tilt_position(49)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(TravelCalculator, "current_position", mock_current),
+        ):
+            await cover.set_tilt_position(49)
 
         # Early return at line 669 means _last_command NOT updated at line 699
         assert cover._last_command == SERVICE_OPEN_COVER
@@ -707,11 +719,13 @@ class TestSetTiltPositionRelayWasOnDualMotor:
         # Create an active delay task so _cancel_delay_task returns True
         cover._delay_task = asyncio.get_event_loop().create_future()
 
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
                 cover, "_send_tilt_stop", new_callable=AsyncMock
-            ) as mock_tilt_stop:
-                await cover.set_tilt_position(80)
+            ) as mock_tilt_stop,
+        ):
+            await cover.set_tilt_position(80)
 
         mock_tilt_stop.assert_awaited_once()
 
@@ -967,17 +981,19 @@ class TestTiltPreStepSendClose:
         cover.travel_calc.set_position(50)
         cover.tilt_calc.set_position(80)  # Current tilt is 80
 
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
                 cover, "_send_tilt_close", new_callable=AsyncMock
-            ) as mock_tilt_close:
-                # tilt_target=30 < current_tilt=80 => closing_tilt=True
-                await cover._start_tilt_pre_step(
-                    tilt_target=30,
-                    travel_target=0,
-                    travel_command=SERVICE_CLOSE_COVER,
-                    restore_target=80,
-                )
+            ) as mock_tilt_close,
+        ):
+            # tilt_target=30 < current_tilt=80 => closing_tilt=True
+            await cover._start_tilt_pre_step(
+                tilt_target=30,
+                travel_target=0,
+                travel_command=SERVICE_CLOSE_COVER,
+                restore_target=80,
+            )
 
         mock_tilt_close.assert_awaited_once()
         assert cover._pending_travel_target == 0
@@ -1009,11 +1025,13 @@ class TestTiltRestoreSendOpen:
         # Set restore target to a higher value (opening)
         cover._tilt_restore_target = 80
 
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
                 cover, "_send_tilt_open", new_callable=AsyncMock
-            ) as mock_tilt_open:
-                await cover._start_tilt_restore()
+            ) as mock_tilt_open,
+        ):
+            await cover._start_tilt_restore()
 
         mock_tilt_open.assert_awaited_once()
         assert cover._tilt_restore_active is True
@@ -1041,13 +1059,15 @@ class TestTiltSendMarkSwitchPending:
             tilt_stop_switch="switch.tilt_stop",
         )
 
-        with patch.object(
-            cover,
-            "_switch_is_on",
-            side_effect=lambda eid: eid == "switch.tilt_close",
+        with (
+            patch.object(
+                cover,
+                "_switch_is_on",
+                side_effect=lambda eid: eid == "switch.tilt_close",
+            ),
+            patch.object(cover, "_mark_switch_pending") as mock_mark,
         ):
-            with patch.object(cover, "_mark_switch_pending") as mock_mark:
-                await cover._send_tilt_open()
+            await cover._send_tilt_open()
 
         # Should mark close switch with 1 (it was on; one off echo expected)
         # and open switch with 1 (target was off; one on echo expected).
@@ -1071,13 +1091,15 @@ class TestTiltSendMarkSwitchPending:
             tilt_stop_switch="switch.tilt_stop",
         )
 
-        with patch.object(
-            cover,
-            "_switch_is_on",
-            side_effect=lambda eid: eid == "switch.tilt_open",
+        with (
+            patch.object(
+                cover,
+                "_switch_is_on",
+                side_effect=lambda eid: eid == "switch.tilt_open",
+            ),
+            patch.object(cover, "_mark_switch_pending") as mock_mark,
         ):
-            with patch.object(cover, "_mark_switch_pending") as mock_mark:
-                await cover._send_tilt_close()
+            await cover._send_tilt_close()
 
         calls = mock_mark.call_args_list
         assert any(c.args == ("switch.tilt_open", 1) for c in calls), (
@@ -1099,13 +1121,15 @@ class TestTiltSendMarkSwitchPending:
             tilt_stop_switch="switch.tilt_stop",
         )
 
-        with patch.object(
-            cover,
-            "_switch_is_on",
-            side_effect=lambda eid: eid == "switch.tilt_open",
+        with (
+            patch.object(
+                cover,
+                "_switch_is_on",
+                side_effect=lambda eid: eid == "switch.tilt_open",
+            ),
+            patch.object(cover, "_mark_switch_pending") as mock_mark,
         ):
-            with patch.object(cover, "_mark_switch_pending") as mock_mark:
-                await cover._send_tilt_stop()
+            await cover._send_tilt_stop()
 
         calls = mock_mark.call_args_list
         assert any(c.args == ("switch.tilt_open", 1) for c in calls), (
@@ -1124,13 +1148,15 @@ class TestTiltSendMarkSwitchPending:
             tilt_stop_switch="switch.tilt_stop",
         )
 
-        with patch.object(
-            cover,
-            "_switch_is_on",
-            side_effect=lambda eid: eid == "switch.tilt_close",
+        with (
+            patch.object(
+                cover,
+                "_switch_is_on",
+                side_effect=lambda eid: eid == "switch.tilt_close",
+            ),
+            patch.object(cover, "_mark_switch_pending") as mock_mark,
         ):
-            with patch.object(cover, "_mark_switch_pending") as mock_mark:
-                await cover._send_tilt_stop()
+            await cover._send_tilt_stop()
 
         calls = mock_mark.call_args_list
         assert any(c.args == ("switch.tilt_close", 1) for c in calls), (
@@ -1149,13 +1175,15 @@ class TestTiltSendMarkSwitchPending:
             tilt_stop_switch="switch.tilt_stop",
         )
 
-        with patch.object(
-            cover,
-            "_switch_is_on",
-            return_value=True,
+        with (
+            patch.object(
+                cover,
+                "_switch_is_on",
+                return_value=True,
+            ),
+            patch.object(cover, "_mark_switch_pending") as mock_mark,
         ):
-            with patch.object(cover, "_mark_switch_pending") as mock_mark:
-                await cover._send_tilt_stop()
+            await cover._send_tilt_stop()
 
         calls = mock_mark.call_args_list
         assert any(c.args == ("switch.tilt_open", 1) for c in calls), (

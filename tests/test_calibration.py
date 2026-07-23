@@ -1,9 +1,9 @@
 """Tests for calibration services."""
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 
 
 class TestConfigEntryAccess:
@@ -38,12 +38,12 @@ class TestCalibrationState:
     def test_constants_defined(self):
         """Calibration constants should be accessible."""
         from custom_components.cover_time_based.calibration import (
-            CALIBRATION_STEP_PAUSE,
-            CALIBRATION_OVERHEAD_STEPS,
-            CALIBRATION_TILT_OVERHEAD_STEPS,
-            CALIBRATION_MIN_MOVEMENT_START,
-            CALIBRATION_MIN_MOVEMENT_INCREMENT,
             CALIBRATABLE_ATTRIBUTES,
+            CALIBRATION_MIN_MOVEMENT_INCREMENT,
+            CALIBRATION_MIN_MOVEMENT_START,
+            CALIBRATION_OVERHEAD_STEPS,
+            CALIBRATION_STEP_PAUSE,
+            CALIBRATION_TILT_OVERHEAD_STEPS,
             SERVICE_START_CALIBRATION,
             SERVICE_STOP_CALIBRATION,
         )
@@ -550,24 +550,27 @@ class TestCalibrationEdgeCases:
 
     def test_resolve_direction_explicit_close(self, make_cover):
         """_resolve_direction returns CLOSE for explicit 'close'."""
-        from custom_components.cover_time_based.cover_base import CoverTimeBased
         from homeassistant.const import SERVICE_CLOSE_COVER
+
+        from custom_components.cover_time_based.cover_base import CoverTimeBased
 
         result = CoverTimeBased._resolve_direction("close", 75)
         assert result == SERVICE_CLOSE_COVER
 
     def test_resolve_direction_explicit_open(self, make_cover):
         """_resolve_direction returns OPEN for explicit 'open'."""
-        from custom_components.cover_time_based.cover_base import CoverTimeBased
         from homeassistant.const import SERVICE_OPEN_COVER
+
+        from custom_components.cover_time_based.cover_base import CoverTimeBased
 
         result = CoverTimeBased._resolve_direction("open", 25)
         assert result == SERVICE_OPEN_COVER
 
     def test_resolve_direction_auto_from_low_position(self, make_cover):
         """_resolve_direction auto-detects OPEN when position < 50."""
-        from custom_components.cover_time_based.cover_base import CoverTimeBased
         from homeassistant.const import SERVICE_OPEN_COVER
+
+        from custom_components.cover_time_based.cover_base import CoverTimeBased
 
         result = CoverTimeBased._resolve_direction(None, 25)
         assert result == SERVICE_OPEN_COVER
@@ -688,19 +691,21 @@ class TestCalibrationRestoreOnStopFailure:
         """A raise from _calibration_stop during timeout must not skip restore."""
         cover = make_cover(travel_startup_delay=0.5)
         cover.travel_calc.set_position(100)
-        with patch.object(cover, "async_write_ha_state"):
-            with patch.object(
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
                 cover,
                 "_calibration_stop",
                 AsyncMock(side_effect=RuntimeError("relay offline")),
-            ):
-                await cover.start_calibration(
-                    attribute="travel_startup_delay", timeout=0.02
-                )
-                assert cover._travel_startup_delay is None  # zeroed for the test
-                timeout_task = cover._calibration.timeout_task
-                with pytest.raises(RuntimeError, match="relay offline"):
-                    await timeout_task
+            ),
+        ):
+            await cover.start_calibration(
+                attribute="travel_startup_delay", timeout=0.02
+            )
+            assert cover._travel_startup_delay is None  # zeroed for the test
+            timeout_task = cover._calibration.timeout_task
+            with pytest.raises(RuntimeError, match="relay offline"):
+                await timeout_task
         assert cover._calibration is None
         assert cover._travel_startup_delay == 0.5
 
@@ -716,13 +721,15 @@ class TestCalibrationRestoreOnStopFailure:
                 attribute="travel_startup_delay", timeout=300.0
             )
             assert cover._travel_startup_delay is None  # zeroed for the test
-            with patch.object(
-                cover,
-                "_calibration_stop",
-                AsyncMock(side_effect=RuntimeError("relay offline")),
+            with (
+                patch.object(
+                    cover,
+                    "_calibration_stop",
+                    AsyncMock(side_effect=RuntimeError("relay offline")),
+                ),
+                pytest.raises(RuntimeError, match="relay offline"),
             ):
-                with pytest.raises(RuntimeError, match="relay offline"):
-                    await cover.stop_calibration()
+                await cover.stop_calibration()
         assert cover._calibration is None
         assert cover._travel_startup_delay == 0.5
 
@@ -783,8 +790,9 @@ class TestSetPositionAfterCalibrationNoTilt:
         _set_position_after_calibration with a tilt attribute.
         It should return early without error.
         """
-        from custom_components.cover_time_based.calibration import CalibrationState
         from homeassistant.const import SERVICE_CLOSE_COVER
+
+        from custom_components.cover_time_based.calibration import CalibrationState
 
         cover = make_cover()  # No tilt configured => no tilt_calc
         # Ensure no tilt_calc exists
@@ -812,6 +820,7 @@ class TestCalibrationResultOpenDirection:
         in the OPEN direction.
         """
         import time as time_mod
+
         from homeassistant.const import SERVICE_OPEN_COVER
 
         cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
@@ -843,6 +852,7 @@ class TestCalibrationResultOpenDirection:
         in the OPEN direction.
         """
         import time as time_mod
+
         from homeassistant.const import SERVICE_OPEN_COVER
 
         cover = make_cover(tilt_time_close=10.0, tilt_time_open=10.0)
@@ -1028,42 +1038,40 @@ class TestMinMovementPulseLoop:
         cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
         cover.hass.config_entries.async_update_entry = MagicMock()
 
-        with patch.object(cover, "async_write_ha_state"):
-            # Patch the initial pause to be very short so pulses start quickly.
-            # These constants are lazily imported from the calibration module
-            # inside _run_min_movement_pulses, so patching the source works.
-            with (
-                patch(
-                    "custom_components.cover_time_based.calibration.CALIBRATION_MIN_MOVEMENT_INITIAL_PAUSE",
-                    0.05,
-                ),
-                patch(
-                    "custom_components.cover_time_based.calibration.CALIBRATION_STEP_PAUSE",
-                    0.05,
-                ),
-            ):
-                await cover.start_calibration(
-                    attribute="min_movement_time", timeout=60.0
-                )
-                # Wait for at least 2 pulses to complete
-                for _ in range(200):
-                    await asyncio.sleep(0.05)
-                    if (
-                        cover._calibration is not None
-                        and cover._calibration.step_count >= 2
-                    ):
-                        break
+        # Patch the initial pause to be very short so pulses start quickly.
+        # These constants are lazily imported from the calibration module
+        # inside _run_min_movement_pulses, so patching the source works.
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.calibration.CALIBRATION_MIN_MOVEMENT_INITIAL_PAUSE",
+                0.05,
+            ),
+            patch(
+                "custom_components.cover_time_based.calibration.CALIBRATION_STEP_PAUSE",
+                0.05,
+            ),
+        ):
+            await cover.start_calibration(attribute="min_movement_time", timeout=60.0)
+            # Wait for at least 2 pulses to complete
+            for _ in range(200):
+                await asyncio.sleep(0.05)
+                if (
+                    cover._calibration is not None
+                    and cover._calibration.step_count >= 2
+                ):
+                    break
 
-                assert cover._calibration is not None
-                assert cover._calibration.step_count >= 2
-                assert cover._calibration.last_pulse_duration is not None
-                # Each pulse is 0.1s + 0.1s increment, so after 2 pulses
-                # last_pulse_duration should be 0.2
-                assert cover._calibration.last_pulse_duration == pytest.approx(
-                    0.1 * cover._calibration.step_count, abs=0.01
-                )
+            assert cover._calibration is not None
+            assert cover._calibration.step_count >= 2
+            assert cover._calibration.last_pulse_duration is not None
+            # Each pulse is 0.1s + 0.1s increment, so after 2 pulses
+            # last_pulse_duration should be 0.2
+            assert cover._calibration.last_pulse_duration == pytest.approx(
+                0.1 * cover._calibration.step_count, abs=0.01
+            )
 
-                result = await cover.stop_calibration()
+            result = await cover.stop_calibration()
 
         assert cover._calibration is None
         assert result["attribute"] == "min_movement_time"

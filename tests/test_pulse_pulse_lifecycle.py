@@ -31,9 +31,9 @@ is RED on HEAD and GREEN once the fix lands.
 """
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.cover_time_based.cover import CONTROL_MODE_PULSE
 

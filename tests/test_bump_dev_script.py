@@ -40,6 +40,7 @@ def _run(cwd: Path, *args: str, env: dict | None = None) -> subprocess.Completed
         cwd=cwd,
         capture_output=True,
         text=True,
+        check=False,
         env=env or _clean_env(),
     )
 

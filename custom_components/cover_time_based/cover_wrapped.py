@@ -747,9 +747,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
             if pos is not None:
                 self._log(
                     "_send_stop :: no native stop; freezing via set_cover_position(%d)",
-                    int(round(pos)),
+                    round(pos),
                 )
-                await self._call_set_cover_position(int(round(pos)))
+                await self._call_set_cover_position(round(pos))
                 return
         await self._call_cover_service("stop_cover")
 

@@ -15,10 +15,9 @@ self-stops there, so the timed stop is essential.
 """
 
 import asyncio
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based.cover import (
@@ -840,7 +839,7 @@ async def test_switch_dual_motor_external_open_continues_into_travel(make_cover)
     # ... but no relay is driven — the hardware is doing the travel itself.
     relay_calls = [(c.args[1], c.args[2].get("entity_id")) for c in _ha_calls(cover)]
     assert relay_calls == [], (
-        "external continuation must not fire relays: %s" % relay_calls
+        f"external continuation must not fire relays: {relay_calls}"
     )
     await _cancel_tasks(cover)
 

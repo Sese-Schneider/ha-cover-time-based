@@ -1,7 +1,8 @@
 """Unit tests for the wrapped-cover actuation drivers."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from custom_components.cover_time_based.drivers import (
     NativePositionDriver,

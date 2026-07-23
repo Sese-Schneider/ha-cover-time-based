@@ -17,10 +17,9 @@ at the phase boundary for an externally-triggered move.
 """
 
 import asyncio
-
-import pytest
 from unittest.mock import patch
 
+import pytest
 
 RELAY_ENTITIES = (
     "switch.open",
@@ -88,7 +87,7 @@ async def test_external_tilt_prestep_continuation_fires_no_relays(make_cover):
 
     relay_calls = _relay_calls(cover, n_before)
     assert relay_calls == [], (
-        "external tilt-pre-step continuation fired relay commands: %s" % relay_calls
+        f"external tilt-pre-step continuation fired relay commands: {relay_calls}"
     )
     # Second phase is still *tracked* so the integration mirrors the motor.
     assert cover.travel_calc.is_traveling()
@@ -139,7 +138,7 @@ async def test_external_travel_prestep_continuation_fires_no_relays(make_cover):
 
     relay_calls = _relay_calls(cover, n_before)
     assert relay_calls == [], (
-        "external travel-pre-step continuation fired relay commands: %s" % relay_calls
+        f"external travel-pre-step continuation fired relay commands: {relay_calls}"
     )
     # Second phase (tilt) is still tracked.
     assert cover.tilt_calc.is_traveling()

@@ -30,11 +30,8 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.helpers.restore_state import RestoreEntity
-from .travel_calculator import TravelCalculator, TravelStatus
 
 from .calibration import CalibrationState
-from .cover_calibration import CalibrationMixin
-from .position_storage import async_get_position_store
 from .const import (
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
@@ -48,6 +45,8 @@ from .const import (
     CONF_TRAVEL_TIME_OPEN,
     DIRECTION_CHANGE_DELAY,
 )
+from .cover_calibration import CalibrationMixin
+from .position_storage import async_get_position_store
 from .tilt_strategies import InlineTilt, SequentialTilt
 from .tilt_strategies.planning import (
     calculate_pre_step_delay,
@@ -55,6 +54,7 @@ from .tilt_strategies.planning import (
     extract_coupled_travel,
     has_travel_pre_step,
 )
+from .travel_calculator import TravelCalculator, TravelStatus
 
 _LOGGER = logging.getLogger(__name__)
 

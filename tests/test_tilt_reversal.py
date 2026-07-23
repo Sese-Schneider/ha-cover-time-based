@@ -14,18 +14,17 @@ duplication is intentional per the plan.
 """
 
 import asyncio
-
-import pytest
 from unittest.mock import patch
 
+import pytest
 
-DUAL = dict(
-    tilt_time_close=5.0,
-    tilt_time_open=5.0,
-    tilt_mode="dual_motor",
-    tilt_open_switch="switch.tilt_open",
-    tilt_close_switch="switch.tilt_close",
-)
+DUAL = {
+    "tilt_time_close": 5.0,
+    "tilt_time_open": 5.0,
+    "tilt_mode": "dual_motor",
+    "tilt_open_switch": "switch.tilt_open",
+    "tilt_close_switch": "switch.tilt_close",
+}
 
 
 @pytest.mark.asyncio
@@ -158,17 +157,17 @@ async def test_set_position_during_shared_motor_tilt_does_not_repulse(make_cover
 # ---------------------------------------------------------------------------
 
 
-DUAL_TO = dict(
-    control_mode="toggle_opposite",
-    travel_time_close=0.2,
-    travel_time_open=0.2,
-    tilt_time_close=0.2,
-    tilt_time_open=0.2,
-    tilt_mode="dual_motor",
-    tilt_open_switch="switch.tilt_open",
-    tilt_close_switch="switch.tilt_close",
-    safe_tilt_position=100,
-)
+DUAL_TO = {
+    "control_mode": "toggle_opposite",
+    "travel_time_close": 0.2,
+    "travel_time_open": 0.2,
+    "tilt_time_close": 0.2,
+    "tilt_time_open": 0.2,
+    "tilt_mode": "dual_motor",
+    "tilt_open_switch": "switch.tilt_open",
+    "tilt_close_switch": "switch.tilt_close",
+    "safe_tilt_position": 100,
+}
 
 
 @pytest.mark.asyncio

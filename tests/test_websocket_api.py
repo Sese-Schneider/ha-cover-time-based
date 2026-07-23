@@ -1,7 +1,8 @@
 """Tests for the WebSocket API module."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -859,7 +860,7 @@ class TestWsUpdateConfig:
 
     @pytest.mark.asyncio
     async def test_update_single_field(self):
-        hass, config_entry, entity_reg = _make_hass(
+        hass, _config_entry, entity_reg = _make_hass(
             options={CONF_CONTROL_MODE: CONTROL_MODE_SWITCH}
         )
         conn = _make_connection()
@@ -1302,7 +1303,7 @@ class TestPulseTimeSchemaValidation:
 
     @pytest.mark.asyncio
     async def test_null_pops_stored_key(self):
-        hass, config_entry, entity_reg = _make_hass(options={CONF_PULSE_TIME: 3.0})
+        hass, _config_entry, entity_reg = _make_hass(options={CONF_PULSE_TIME: 3.0})
         conn = _make_connection()
 
         with patch(
@@ -2015,8 +2016,8 @@ class TestWsResolveEntity:
         assert resolve_entity_or_none(hass, "cover.test") is None
 
     def test_returns_entity_when_valid(self):
-        from custom_components.cover_time_based.helpers import resolve_entity_or_none
         from custom_components.cover_time_based.cover import _create_cover_from_options
+        from custom_components.cover_time_based.helpers import resolve_entity_or_none
 
         entity = _create_cover_from_options(
             {

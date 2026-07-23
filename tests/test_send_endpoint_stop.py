@@ -15,10 +15,9 @@ between the two, mirroring the toggle-mode ``relay_reports_off`` option.
 """
 
 import asyncio
-
-import pytest
 from unittest.mock import patch
 
+import pytest
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based.cover import (

@@ -7,17 +7,15 @@ name fallback, _stop_travel_if_traveling with tilt.
 """
 
 import asyncio
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
     ATTR_CURRENT_TILT_POSITION,
     CoverEntityFeature,
 )
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
-
 
 # ===================================================================
 # Name / unique_id / device_class / assumed_state properties
@@ -33,11 +31,11 @@ class TestBasicProperties:
 
     def test_name_falls_back_to_device_id(self, make_cover):
         from custom_components.cover_time_based.cover import (
-            _create_cover_from_options,
+            CONF_CLOSE_SWITCH_ENTITY_ID,
             CONF_CONTROL_MODE,
             CONF_OPEN_SWITCH_ENTITY_ID,
-            CONF_CLOSE_SWITCH_ENTITY_ID,
             CONTROL_MODE_SWITCH,
+            _create_cover_from_options,
         )
 
         cover = _create_cover_from_options(
@@ -71,7 +69,6 @@ class TestBasicProperties:
         this guards against any mode dropping it in its **kwargs chain.
         """
         from custom_components.cover_time_based.cover import (
-            _create_cover_from_options,
             CONF_ASSUMED_STATE,
             CONF_CLOSE_SWITCH_ENTITY_ID,
             CONF_CONTROL_MODE,
@@ -81,6 +78,7 @@ class TestBasicProperties:
             CONTROL_MODE_SWITCH,
             CONTROL_MODE_TOGGLE,
             CONTROL_MODE_WRAPPED,
+            _create_cover_from_options,
         )
 
         mode_map = {
@@ -229,11 +227,13 @@ class TestStateRestoration:
         old_state = MagicMock()
         old_state.attributes = {ATTR_CURRENT_POSITION: 70}
 
-        with patch.object(cover, "async_get_last_state", return_value=old_state):
-            with patch(
+        with (
+            patch.object(cover, "async_get_last_state", return_value=old_state),
+            patch(
                 "custom_components.cover_time_based.cover_base.async_track_state_change_event"
-            ):
-                await cover.async_added_to_hass()
+            ),
+        ):
+            await cover.async_added_to_hass()
 
         assert cover.travel_calc.current_position() == 70
 
@@ -247,11 +247,13 @@ class TestStateRestoration:
             ATTR_CURRENT_TILT_POSITION: 80,
         }
 
-        with patch.object(cover, "async_get_last_state", return_value=old_state):
-            with patch(
+        with (
+            patch.object(cover, "async_get_last_state", return_value=old_state),
+            patch(
                 "custom_components.cover_time_based.cover_base.async_track_state_change_event"
-            ):
-                await cover.async_added_to_hass()
+            ),
+        ):
+            await cover.async_added_to_hass()
 
         assert cover.travel_calc.current_position() == 60
         assert cover.tilt_calc.current_position() == 80
@@ -260,11 +262,13 @@ class TestStateRestoration:
     async def test_no_restore_when_no_old_state(self, make_cover):
         cover = make_cover()
 
-        with patch.object(cover, "async_get_last_state", return_value=None):
-            with patch(
+        with (
+            patch.object(cover, "async_get_last_state", return_value=None),
+            patch(
                 "custom_components.cover_time_based.cover_base.async_track_state_change_event"
-            ):
-                await cover.async_added_to_hass()
+            ),
+        ):
+            await cover.async_added_to_hass()
 
         # Position should remain unset
         assert cover.travel_calc.current_position() is None
@@ -276,11 +280,13 @@ class TestStateRestoration:
         old_state = MagicMock()
         old_state.attributes = {}
 
-        with patch.object(cover, "async_get_last_state", return_value=old_state):
-            with patch(
+        with (
+            patch.object(cover, "async_get_last_state", return_value=old_state),
+            patch(
                 "custom_components.cover_time_based.cover_base.async_track_state_change_event"
-            ):
-                await cover.async_added_to_hass()
+            ),
+        ):
+            await cover.async_added_to_hass()
 
         assert cover.travel_calc.current_position() is None
 
@@ -288,11 +294,13 @@ class TestStateRestoration:
     async def test_registers_state_listeners_for_switch_entities(self, make_cover):
         cover = make_cover(stop_switch="switch.stop")
 
-        with patch.object(cover, "async_get_last_state", return_value=None):
-            with patch(
+        with (
+            patch.object(cover, "async_get_last_state", return_value=None),
+            patch(
                 "custom_components.cover_time_based.cover_base.async_track_state_change_event"
-            ) as mock_track:
-                await cover.async_added_to_hass()
+            ) as mock_track,
+        ):
+            await cover.async_added_to_hass()
 
         # Should register listeners for open, close, and stop switches
         assert mock_track.call_count == 3
@@ -347,9 +355,11 @@ class TestAutoUpdaterHook:
         cover.travel_calc.start_travel(100)
 
         mock_update = MagicMock()
-        with patch.object(cover, "async_schedule_update_ha_state", mock_update):
-            with patch.object(cover, "auto_stop_if_necessary", new_callable=AsyncMock):
-                cover.auto_updater_hook(None)
+        with (
+            patch.object(cover, "async_schedule_update_ha_state", mock_update),
+            patch.object(cover, "auto_stop_if_necessary", new_callable=AsyncMock),
+        ):
+            cover.auto_updater_hook(None)
 
         mock_update.assert_called_once()
 
@@ -362,9 +372,11 @@ class TestAutoUpdaterHook:
         unsub = MagicMock()
         cover._unsubscribe_auto_updater = unsub
 
-        with patch.object(cover, "async_schedule_update_ha_state"):
-            with patch.object(cover, "auto_stop_if_necessary", new_callable=AsyncMock):
-                cover.auto_updater_hook(None)
+        with (
+            patch.object(cover, "async_schedule_update_ha_state"),
+            patch.object(cover, "auto_stop_if_necessary", new_callable=AsyncMock),
+        ):
+            cover.auto_updater_hook(None)
 
         # Auto updater should have been stopped
         unsub.assert_called_once()
@@ -849,9 +861,11 @@ class TestHandleCommandExternallyTriggered:
         cover = make_cover()
         cover._triggered_externally = True
 
-        with patch.object(cover, "_send_close", new_callable=AsyncMock) as mock_send:
-            with patch.object(cover, "async_write_ha_state"):
-                await cover._async_handle_command(SERVICE_CLOSE_COVER)
+        with (
+            patch.object(cover, "_send_close", new_callable=AsyncMock) as mock_send,
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover._async_handle_command(SERVICE_CLOSE_COVER)
 
         mock_send.assert_not_awaited()
 
@@ -860,9 +874,11 @@ class TestHandleCommandExternallyTriggered:
         cover = make_cover()
         cover._triggered_externally = True
 
-        with patch.object(cover, "_send_open", new_callable=AsyncMock) as mock_send:
-            with patch.object(cover, "async_write_ha_state"):
-                await cover._async_handle_command(SERVICE_OPEN_COVER)
+        with (
+            patch.object(cover, "_send_open", new_callable=AsyncMock) as mock_send,
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover._async_handle_command(SERVICE_OPEN_COVER)
 
         mock_send.assert_not_awaited()
 
@@ -871,9 +887,11 @@ class TestHandleCommandExternallyTriggered:
         cover = make_cover()
         cover._triggered_externally = True
 
-        with patch.object(cover, "_send_stop", new_callable=AsyncMock) as mock_send:
-            with patch.object(cover, "async_write_ha_state"):
-                await cover._async_handle_command("stop_cover")
+        with (
+            patch.object(cover, "_send_stop", new_callable=AsyncMock) as mock_send,
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover._async_handle_command("stop_cover")
 
         mock_send.assert_not_awaited()
 
@@ -894,9 +912,11 @@ class TestStopCoverExternallyTriggered:
         cover._last_command = SERVICE_CLOSE_COVER
         cover._triggered_externally = True
 
-        with patch.object(cover, "_send_stop", new_callable=AsyncMock) as mock_send:
-            with patch.object(cover, "async_write_ha_state"):
-                await cover.async_stop_cover()
+        with (
+            patch.object(cover, "_send_stop", new_callable=AsyncMock) as mock_send,
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover.async_stop_cover()
 
         mock_send.assert_not_awaited()
 
@@ -1150,9 +1170,11 @@ class TestUnconfiguredEntity:
         from homeassistant.exceptions import HomeAssistantError
 
         cover = make_cover(open_switch="", close_switch="")
-        with pytest.raises(HomeAssistantError, match="not configured"):
-            with patch.object(cover, "async_write_ha_state"):
-                await cover.async_set_cover_position(position=50)
+        with (
+            pytest.raises(HomeAssistantError, match="not configured"),
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover.async_set_cover_position(position=50)
 
     @pytest.mark.asyncio
     async def test_require_travel_time_raises(self, make_cover):
@@ -1162,9 +1184,11 @@ class TestUnconfiguredEntity:
         cover = make_cover()
         cover._travel_time_close = None
         cover._travel_time_open = None
-        with pytest.raises(HomeAssistantError, match="[Tt]ravel time"):
-            with patch.object(cover, "async_write_ha_state"):
-                await cover.async_set_cover_position(position=50)
+        with (
+            pytest.raises(HomeAssistantError, match="[Tt]ravel time"),
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover.async_set_cover_position(position=50)
 
 
 # ===================================================================

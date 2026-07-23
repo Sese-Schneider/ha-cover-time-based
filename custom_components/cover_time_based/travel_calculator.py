@@ -11,8 +11,8 @@ Home Assistant's cover position convention (0=closed, 100=open).
 
 from __future__ import annotations
 
-from enum import Enum
 import time
+from enum import Enum
 
 
 class TravelStatus(Enum):

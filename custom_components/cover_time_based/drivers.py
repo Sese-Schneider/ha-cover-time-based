@@ -51,7 +51,7 @@ class NativePositionDriver(PositionDriver):
     async def command_move(self, target, command, already_moving_same_dir) -> None:
         cover = self._cover
         cover._require_movement_target_available(cover._cover_entity_id)
-        position = int(round(target))
+        position = round(target)
         cover._log(
             "_command_position_move :: forwarding set_cover_position(%d)", position
         )

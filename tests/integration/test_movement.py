@@ -7,9 +7,9 @@ through the real HA service calls and event bus.
 from __future__ import annotations
 
 import asyncio
+import time as time_mod
 from datetime import timedelta
 from unittest.mock import patch
-import time as time_mod
 
 import pytest
 from homeassistant.core import HomeAssistant

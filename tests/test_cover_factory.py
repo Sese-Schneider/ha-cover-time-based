@@ -1,7 +1,8 @@
 """Tests for cover factory and YAML config parsing in cover.py."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -17,17 +18,17 @@ from custom_components.cover_time_based.cover import (
     CONF_RELAY_REPORTS_OFF,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_TILT_STARTUP_DELAY,
+    CONF_TILT_TIME_CLOSE,
+    CONF_TILT_TIME_OPEN,
     CONF_TILTING_TIME_DOWN,
     CONF_TILTING_TIME_UP,
     CONF_TRAVEL_DELAY_AT_END,
     CONF_TRAVEL_MOVES_WITH_TILT,
     CONF_TRAVEL_STARTUP_DELAY,
-    CONF_TRAVELLING_TIME_DOWN,
-    CONF_TRAVELLING_TIME_UP,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
-    CONF_TILT_TIME_CLOSE,
-    CONF_TILT_TIME_OPEN,
+    CONF_TRAVELLING_TIME_DOWN,
+    CONF_TRAVELLING_TIME_UP,
     CONTROL_MODE_PULSE,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
@@ -37,8 +38,8 @@ from custom_components.cover_time_based.cover import (
     _resolve_tilt_strategy,
     devices_from_config,
 )
-from custom_components.cover_time_based.cover_switch_mode import SwitchModeCover
 from custom_components.cover_time_based.cover_pulse_mode import PulseModeCover
+from custom_components.cover_time_based.cover_switch_mode import SwitchModeCover
 from custom_components.cover_time_based.cover_toggle_mode import ToggleModeCover
 from custom_components.cover_time_based.cover_toggle_opposite_mode import (
     ToggleOppositeModeCover,
@@ -50,7 +51,6 @@ from custom_components.cover_time_based.tilt_strategies import (
     SequentialCloseTilt,
     SequentialOpenTilt,
 )
-
 
 # ===================================================================
 # _create_cover_from_options
@@ -554,6 +554,7 @@ class TestInputModeSchemaValidation:
     )
     def test_switch_cover_schema_accepts_input_mode(self, value):
         import voluptuous as vol
+
         from custom_components.cover_time_based.cover import SWITCH_COVER_SCHEMA
 
         validated = vol.Schema(SWITCH_COVER_SCHEMA)(
@@ -568,6 +569,7 @@ class TestInputModeSchemaValidation:
 
     def test_switch_cover_schema_rejects_unknown_input_mode(self):
         import voluptuous as vol
+
         from custom_components.cover_time_based.cover import SWITCH_COVER_SCHEMA
 
         with pytest.raises(vol.Invalid):
@@ -634,14 +636,16 @@ class TestAsyncSetupPlatform:
         }
 
         platform = MagicMock()
-        with patch("custom_components.cover_time_based.cover.async_create_issue"):
-            with patch(
+        with (
+            patch("custom_components.cover_time_based.cover.async_create_issue"),
+            patch(
                 "custom_components.cover_time_based.cover.entity_platform.current_platform"
-            ) as mock_platform:
-                mock_platform.get.return_value = platform
-                await async_setup_platform(
-                    hass, config, lambda entities: added_entities.extend(entities)
-                )
+            ) as mock_platform,
+        ):
+            mock_platform.get.return_value = platform
+            await async_setup_platform(
+                hass, config, lambda entities: added_entities.extend(entities)
+            )
 
         assert len(added_entities) == 1
         assert isinstance(added_entities[0], SwitchModeCover)

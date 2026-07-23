@@ -25,6 +25,7 @@ def _run(cwd: Path, *args: str) -> subprocess.CompletedProcess:
         cwd=cwd,
         capture_output=True,
         text=True,
+        check=False,
         env=_clean_env(),
     )
 
