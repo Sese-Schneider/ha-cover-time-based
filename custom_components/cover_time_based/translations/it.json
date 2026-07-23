@@ -1,0 +1,81 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Aggiungi una tapparella temporizzata",
+        "description": "Scegli un nome per la tua tapparella. Dopo averla creata, aggiungi la scheda **Cover Time Based** a una dashboard per configurare tutte le impostazioni.",
+        "data": {
+          "name": "Nome"
+        }
+      }
+    }
+  },
+  "issues": {
+    "card_installed": {
+      "title": "Aggiorna il browser per visualizzare la scheda Cover Time Based",
+      "description": "La scheda dashboard Cover Time Based è stata installata. Home Assistant carica le risorse della dashboard solo al caricamento della pagina, quindi nelle sessioni del browser già aperte la scheda resta assente finché non ricarichi — e spesso funziona solo un **aggiornamento forzato**. Esegui un aggiornamento forzato (**Ctrl+Maiusc+R**, oppure **⌘+Maiusc+R** su macOS) per caricare la scheda; se continua a mostrare un errore di configurazione, svuota la cache del browser e ricarica. Puoi chiudere questo problema una volta che la scheda compare."
+    },
+    "deprecated_yaml": {
+      "title": "La configurazione YAML è deprecata",
+      "description": "La configurazione di Cover Time Based tramite YAML è deprecata e verrà rimossa in una versione futura.\n\nRimuovi la configurazione YAML e ricrea le tue tapparelle dall'interfaccia utente: **Impostazioni > Dispositivi e servizi > Helper > Crea helper > Cover Time Based**."
+    }
+  },
+  "services": {
+    "set_known_position": {
+      "name": "Imposta la posizione della tapparella",
+      "description": "Imposta internamente una posizione nota per la tapparella.",
+      "fields": {
+        "position": {
+          "name": "Posizione",
+          "description": "La posizione della tapparella, tra 0 e 100."
+        }
+      }
+    },
+    "set_known_tilt_position": {
+      "name": "Imposta la posizione di inclinazione della tapparella",
+      "description": "Imposta internamente una posizione di inclinazione nota per la tapparella.",
+      "fields": {
+        "tilt_position": {
+          "name": "Posizione",
+          "description": "La posizione di inclinazione della tapparella, tra 0 e 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Avvia calibrazione",
+      "description": "Avvia un test di calibrazione per misurare un parametro di temporizzazione. La tapparella inizierà a muoversi — chiama stop_calibration quando viene raggiunto il finecorsa desiderato.",
+      "fields": {
+        "entity_id": {
+          "name": "ID entità",
+          "description": "La tapparella da calibrare"
+        },
+        "attribute": {
+          "name": "Attributo",
+          "description": "Il parametro di temporizzazione da calibrare"
+        },
+        "timeout": {
+          "name": "Timeout",
+          "description": "Timeout di sicurezza in secondi — il motore si fermerà automaticamente se stop_calibration non viene chiamato"
+        },
+        "direction": {
+          "name": "Direzione",
+          "description": "Direzione del movimento durante il test. Se non impostata, viene rilevata automaticamente in base alla posizione attuale"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Termina calibrazione",
+      "description": "Termina un test di calibrazione in corso. Calcola il risultato e lo salva nella configurazione, a meno che non venga annullato.",
+      "fields": {
+        "entity_id": {
+          "name": "ID entità",
+          "description": "La tapparella in fase di calibrazione"
+        },
+        "cancel": {
+          "name": "Annulla",
+          "description": "Se vero, scarta i risultati del test senza salvarli"
+        }
+      }
+    }
+  }
+}
