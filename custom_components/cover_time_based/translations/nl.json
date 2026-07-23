@@ -1,0 +1,81 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Een tijdgestuurd rolluik toevoegen",
+        "description": "Kies een naam voor je rolluik. Nadat je het hebt aangemaakt, voeg je de kaart **Cover Time Based** toe aan een dashboard om alle instellingen te configureren.",
+        "data": {
+          "name": "Naam"
+        }
+      }
+    }
+  },
+  "issues": {
+    "card_installed": {
+      "title": "Vernieuw je browser om de Cover Time Based-kaart te tonen",
+      "description": "De Cover Time Based-dashboardkaart is geïnstalleerd. Home Assistant laadt dashboardbronnen alleen bij het laden van de pagina, dus in browsersessies die al open staan blijft de kaart ontbreken totdat je herlaadt — en vaak werkt alleen een **harde vernieuwing**. Voer een harde vernieuwing uit (**Ctrl+Shift+R**, of **⌘+Shift+R** op macOS) om de kaart te laden; als er daarna nog steeds een configuratiefout wordt getoond, wis dan de cache van je browser en herlaad. Je kunt dit probleem sluiten zodra de kaart verschijnt."
+    },
+    "deprecated_yaml": {
+      "title": "YAML-configuratie is verouderd",
+      "description": "Het configureren van Cover Time Based via YAML is verouderd en wordt in een toekomstige versie verwijderd.\n\nVerwijder de YAML-configuratie en maak je rolluiken opnieuw aan via de gebruikersinterface: **Instellingen > Apparaten en diensten > Helpers > Helper aanmaken > Cover Time Based**."
+    }
+  },
+  "services": {
+    "set_known_position": {
+      "name": "Rolluikpositie instellen",
+      "description": "Stelt intern een bekende positie voor het rolluik in.",
+      "fields": {
+        "position": {
+          "name": "Positie",
+          "description": "De positie van het rolluik, tussen 0 en 100."
+        }
+      }
+    },
+    "set_known_tilt_position": {
+      "name": "Kantelpositie van het rolluik instellen",
+      "description": "Stelt intern een bekende kantelpositie voor het rolluik in.",
+      "fields": {
+        "tilt_position": {
+          "name": "Positie",
+          "description": "De kantelpositie van het rolluik, tussen 0 en 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Kalibratie starten",
+      "description": "Start een kalibratietest om een tijdparameter te meten. Het rolluik begint te bewegen — roep stop_calibration aan zodra het gewenste eindpunt is bereikt.",
+      "fields": {
+        "entity_id": {
+          "name": "Entiteit-ID",
+          "description": "Het te kalibreren rolluik"
+        },
+        "attribute": {
+          "name": "Attribuut",
+          "description": "De te kalibreren tijdparameter"
+        },
+        "timeout": {
+          "name": "Time-out",
+          "description": "Veiligheids-time-out in seconden — de motor stopt automatisch als stop_calibration niet wordt aangeroepen"
+        },
+        "direction": {
+          "name": "Richting",
+          "description": "Richting waarin tijdens de test wordt bewogen. Indien niet ingesteld, wordt dit automatisch bepaald op basis van de huidige positie"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Kalibratie stoppen",
+      "description": "Stopt een actieve kalibratietest. Berekent het resultaat en slaat het op in de configuratie, tenzij het wordt geannuleerd.",
+      "fields": {
+        "entity_id": {
+          "name": "Entiteit-ID",
+          "description": "Het rolluik dat wordt gekalibreerd"
+        },
+        "cancel": {
+          "name": "Annuleren",
+          "description": "Indien waar, worden de testresultaten weggegooid zonder op te slaan"
+        }
+      }
+    }
+  }
+}
