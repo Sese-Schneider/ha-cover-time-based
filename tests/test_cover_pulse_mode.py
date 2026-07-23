@@ -8,12 +8,11 @@ await those tasks to verify the full call sequence.
 """
 
 import asyncio
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
-from custom_components.cover_time_based.cover_pulse_mode import PulseModeCover
+import pytest
 
+from custom_components.cover_time_based.cover_pulse_mode import PulseModeCover
 
 # ---------------------------------------------------------------------------
 # Factory

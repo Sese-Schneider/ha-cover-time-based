@@ -7,9 +7,9 @@ re-driven for the full travel time (modeled from the opposite endpoint) instead
 of being skipped as a no-op / short resync pulse.
 """
 
-import pytest
 from unittest.mock import patch
 
+import pytest
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 from homeassistant.exceptions import HomeAssistantError
 
@@ -232,9 +232,8 @@ async def test_force_redrive_failed_validation_does_not_corrupt_tracker(make_cov
     # Make the movement target unavailable.
     cover.hass.states.get.return_value = None
 
-    with patch.object(cover, "async_write_ha_state"):
-        with pytest.raises(HomeAssistantError):
-            await cover.async_close_cover()
+    with patch.object(cover, "async_write_ha_state"), pytest.raises(HomeAssistantError):
+        await cover.async_close_cover()
 
     assert cover.travel_calc.current_position() == 0, (
         "tracker must not be corrupted to the opposite endpoint by a failed redrive"
@@ -261,9 +260,8 @@ async def test_force_redrive_validates_even_with_stale_self_initiated_flag(make_
     # Simulate a prior externally-triggered movement leaving this flag stale.
     cover._self_initiated_movement = False
 
-    with patch.object(cover, "async_write_ha_state"):
-        with pytest.raises(HomeAssistantError):
-            await cover.async_close_cover()
+    with patch.object(cover, "async_write_ha_state"), pytest.raises(HomeAssistantError):
+        await cover.async_close_cover()
 
     assert cover.travel_calc.current_position() == 0, (
         "tracker must not be corrupted to the opposite endpoint by a failed "
@@ -303,10 +301,12 @@ async def test_force_redrive_failing_tilt_prestep_does_not_corrupt_tracker(make_
     async def _boom():
         raise HomeAssistantError("tilt relay failed")
 
-    with patch.object(cover, "async_write_ha_state"):
-        with patch.object(cover, "_send_tilt_open", side_effect=_boom):
-            with pytest.raises(HomeAssistantError):
-                await cover.async_close_cover()
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_send_tilt_open", side_effect=_boom),
+        pytest.raises(HomeAssistantError),
+    ):
+        await cover.async_close_cover()
 
     assert cover.travel_calc.current_position() == 0, (
         "tracker must not be left seeded at the opposite endpoint by a failed "

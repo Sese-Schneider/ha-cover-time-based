@@ -9,10 +9,9 @@ pulses a relay with a single turn_on and schedules no completion task.
 """
 
 import logging
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
+import pytest
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
@@ -24,7 +23,6 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -516,12 +514,11 @@ class TestPulseModePendingSwitchOpen:
             await cover._async_handle_command(SERVICE_OPEN_COVER)
             await _drain_tasks(cover)
 
-        # close switch was ON -> 1 pending, plus open switch always gets 2
-        assert "switch.close" in cover._pending_switch or True
-        # Verify the pending counts were set (they may have been decremented
-        # by echo filtering, but the code path was exercised).
-        # The key assertion: the call sequence is unchanged, but the
-        # _mark_switch_pending branch on line 49 was hit.
+        # The close switch was ON, so the _mark_switch_pending branch is the
+        # one exercised here. Deliberately no assertion on _pending_switch:
+        # echo filtering may already have decremented the count by the time we
+        # look, so its contents are timing-dependent. This test is a regression
+        # guard that the branch runs to completion without raising.
 
     @pytest.mark.asyncio
     async def test_open_marks_stop_switch_pending_when_on(self, make_cover):

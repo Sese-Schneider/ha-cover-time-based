@@ -1,10 +1,9 @@
 """Tests for __init__.py integration setup/teardown."""
 
 import re
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.helpers.issue_registry import IssueSeverity
 
 from custom_components.cover_time_based import (

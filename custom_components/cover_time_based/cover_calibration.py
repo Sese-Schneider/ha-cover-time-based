@@ -65,26 +65,27 @@ class CalibrationMixin:
             raise HomeAssistantError("Calibration already in progress")
 
         # Validate BEFORE creating state
-        if attribute in ("tilt_time_close", "tilt_time_open"):
-            if (
-                self._tilt_strategy is not None
-                and not self._tilt_strategy.can_calibrate_tilt()
-            ):
-                raise HomeAssistantError(
-                    "Tilt time calibration not available for this tilt mode"
-                )
+        if attribute in ("tilt_time_close", "tilt_time_open") and (
+            self._tilt_strategy is not None
+            and not self._tilt_strategy.can_calibrate_tilt()
+        ):
+            raise HomeAssistantError(
+                "Tilt time calibration not available for this tilt mode"
+            )
 
-        if attribute == "travel_startup_delay":
-            if not (self._travel_time_close or self._travel_time_open):
-                raise HomeAssistantError(
-                    "Travel time must be configured before calibrating startup delay"
-                )
+        if attribute == "travel_startup_delay" and not (
+            self._travel_time_close or self._travel_time_open
+        ):
+            raise HomeAssistantError(
+                "Travel time must be configured before calibrating startup delay"
+            )
 
-        if attribute == "tilt_startup_delay":
-            if not (self._tilting_time_close or self._tilting_time_open):
-                raise HomeAssistantError(
-                    "Tilt time must be configured before calibrating startup delay"
-                )
+        if attribute == "tilt_startup_delay" and not (
+            self._tilting_time_close or self._tilting_time_open
+        ):
+            raise HomeAssistantError(
+                "Tilt time must be configured before calibrating startup delay"
+            )
 
         # Neutralize any in-flight tracked movement: calibration drives the
         # motors directly, and a still-armed auto-updater would fire a relay
@@ -322,9 +323,9 @@ class CalibrationMixin:
         assert self._calibration is not None
         assert self._calibration.move_command is not None
         from .calibration import (
-            CALIBRATION_MIN_MOVEMENT_START,
             CALIBRATION_MIN_MOVEMENT_INCREMENT,
             CALIBRATION_MIN_MOVEMENT_INITIAL_PAUSE,
+            CALIBRATION_MIN_MOVEMENT_START,
             CALIBRATION_STEP_PAUSE,
         )
 

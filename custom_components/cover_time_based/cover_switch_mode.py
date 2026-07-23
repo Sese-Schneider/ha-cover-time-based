@@ -131,14 +131,13 @@ class SwitchModeCover(SwitchCoverTimeBased):
                     "_handle_external_tilt_state_change :: external tilt close off, stopping"
                 )
                 await self.async_stop_cover(supersede=False, tilt_axis_reported=True)
-        elif entity_id == self._tilt_stop_switch_id:
-            if new_val == "on":
-                _LOGGER.debug(
-                    "_handle_external_tilt_state_change :: external tilt stop detected"
-                )
-                # A dedicated stop relay is a press, not a report — unlike the
-                # relay-off branches above, which are the hardware reporting.
-                await self.async_stop_cover(tilt_axis_reported=True)
+        elif entity_id == self._tilt_stop_switch_id and new_val == "on":
+            _LOGGER.debug(
+                "_handle_external_tilt_state_change :: external tilt stop detected"
+            )
+            # A dedicated stop relay is a press, not a report — unlike the
+            # relay-off branches above, which are the hardware reporting.
+            await self.async_stop_cover(tilt_axis_reported=True)
 
     async def _send_open(self) -> None:
         # Mark a pending echo only when the relay call will actually flip state

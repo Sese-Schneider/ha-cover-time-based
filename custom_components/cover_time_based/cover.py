@@ -9,11 +9,11 @@ from homeassistant.components.cover import (
     ATTR_TILT_POSITION,
     PLATFORM_SCHEMA,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     CONF_NAME,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -323,11 +323,11 @@ def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwa
 
 def _create_cover_from_options(options, device_id="", name=""):
     """Create the appropriate cover subclass based on options."""
-    from .cover_wrapped import WrappedCoverTimeBased
-    from .cover_switch_mode import SwitchModeCover
     from .cover_pulse_mode import PulseModeCover
+    from .cover_switch_mode import SwitchModeCover
     from .cover_toggle_mode import ToggleModeCover
     from .cover_toggle_opposite_mode import ToggleOppositeModeCover
+    from .cover_wrapped import WrappedCoverTimeBased
 
     control_mode = options.get(CONF_CONTROL_MODE, CONTROL_MODE_SWITCH)
 
@@ -341,32 +341,32 @@ def _create_cover_from_options(options, device_id="", name=""):
     )
 
     # Common params for all subclasses
-    common = dict(
-        device_id=device_id,
-        name=name,
-        tilt_strategy=tilt_strategy,
-        tilt_mode_str=tilt_mode_str,
-        travel_time_close=options.get(CONF_TRAVEL_TIME_CLOSE),
-        travel_time_open=options.get(CONF_TRAVEL_TIME_OPEN),
-        tilt_time_close=options.get(CONF_TILT_TIME_CLOSE),
-        tilt_time_open=options.get(CONF_TILT_TIME_OPEN),
-        travel_startup_delay=options.get(CONF_TRAVEL_STARTUP_DELAY),
-        tilt_startup_delay=options.get(CONF_TILT_STARTUP_DELAY),
-        endpoint_runon_time=options.get(
+    common = {
+        "device_id": device_id,
+        "name": name,
+        "tilt_strategy": tilt_strategy,
+        "tilt_mode_str": tilt_mode_str,
+        "travel_time_close": options.get(CONF_TRAVEL_TIME_CLOSE),
+        "travel_time_open": options.get(CONF_TRAVEL_TIME_OPEN),
+        "tilt_time_close": options.get(CONF_TILT_TIME_CLOSE),
+        "tilt_time_open": options.get(CONF_TILT_TIME_OPEN),
+        "travel_startup_delay": options.get(CONF_TRAVEL_STARTUP_DELAY),
+        "tilt_startup_delay": options.get(CONF_TILT_STARTUP_DELAY),
+        "endpoint_runon_time": options.get(
             CONF_ENDPOINT_RUNON_TIME, DEFAULT_ENDPOINT_RUNON_TIME
         ),
-        min_movement_time=options.get(CONF_MIN_MOVEMENT_TIME),
-        tilt_open_switch=options.get(CONF_TILT_OPEN_SWITCH),
-        tilt_close_switch=options.get(CONF_TILT_CLOSE_SWITCH),
-        tilt_stop_switch=options.get(CONF_TILT_STOP_SWITCH),
-        close_includes_tilt=options.get(
+        "min_movement_time": options.get(CONF_MIN_MOVEMENT_TIME),
+        "tilt_open_switch": options.get(CONF_TILT_OPEN_SWITCH),
+        "tilt_close_switch": options.get(CONF_TILT_CLOSE_SWITCH),
+        "tilt_stop_switch": options.get(CONF_TILT_STOP_SWITCH),
+        "close_includes_tilt": options.get(
             CONF_CLOSE_INCLUDES_TILT, DEFAULT_CLOSE_INCLUDES_TILT
         ),
-        assumed_state=options.get(CONF_ASSUMED_STATE, DEFAULT_ASSUMED_STATE),
-        force_endpoint_redrive=options.get(
+        "assumed_state": options.get(CONF_ASSUMED_STATE, DEFAULT_ASSUMED_STATE),
+        "force_endpoint_redrive": options.get(
             CONF_FORCE_ENDPOINT_REDRIVE, DEFAULT_FORCE_ENDPOINT_REDRIVE
         ),
-    )
+    }
 
     if control_mode == CONTROL_MODE_WRAPPED:
         return WrappedCoverTimeBased(

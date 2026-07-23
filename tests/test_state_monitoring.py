@@ -9,11 +9,11 @@ External state changes only start tracking movement — they never auto-stop,
 since we can't reliably know when the motor stopped from switch state alone.
 """
 
+import contextlib
 import time
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.components.cover import ATTR_CURRENT_POSITION
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
@@ -1822,10 +1822,10 @@ async def _drain_bg_tasks(cover):
     """Wait for all background tasks (pulse completions etc.) to finish."""
     for task in cover.hass._test_tasks:
         if not task.done():
-            try:
+            # A background task failing is not this helper's concern — callers
+            # assert on the cover's resulting state, not on task outcomes.
+            with contextlib.suppress(Exception):
                 await task
-            except Exception:
-                pass
 
 
 class TestRawDirectionChangeEchoFiltering:
@@ -2219,9 +2219,11 @@ class TestWrappedCoverReportsCommandNotEndpoint:
         _set_wrapped_state(cover, "closed", current_position=None)
 
         event = _make_attribute_event("cover.inner", "closed", None)
-        with patch.object(cover, "_snap_to_position") as snap:
-            with patch.object(cover, "async_write_ha_state"):
-                await cover._handle_external_attribute_change(event)
+        with (
+            patch.object(cover, "_snap_to_position") as snap,
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover._handle_external_attribute_change(event)
 
         snap.assert_not_called()
         assert cover.travel_calc.current_position() == 70

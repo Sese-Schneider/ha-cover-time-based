@@ -43,6 +43,7 @@ def _run(cwd: Path, *args: str) -> subprocess.CompletedProcess:
         cwd=cwd,
         capture_output=True,
         text=True,
+        check=False,
         env=_clean_env(),
     )
 
@@ -218,6 +219,7 @@ def test_pushes_and_opens_pr(tmp_path: Path):
         cwd=repo,
         capture_output=True,
         text=True,
+        check=False,
         env=env,
     )
     assert result.returncode == 0, result.stdout + result.stderr

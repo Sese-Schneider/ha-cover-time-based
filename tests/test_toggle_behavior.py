@@ -6,9 +6,9 @@ cover when a same-direction command arrives while already moving, and that
 the stop guard prevents relay commands when the cover is idle.
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
@@ -18,7 +18,6 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
 )
-
 
 # ===================================================================
 # Toggle: close/open while already moving in the same direction

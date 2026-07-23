@@ -4,15 +4,13 @@ Each test verifies that the correct cover.* service call is made.
 """
 
 import asyncio
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
+import pytest
 from homeassistant.components.cover import ATTR_CURRENT_POSITION
 from homeassistant.const import STATE_CLOSED, STATE_UNAVAILABLE
 
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
-
 
 # CoverEntityFeature bit values (OPEN=1, CLOSE=2, SET_POSITION=4, STOP=8).
 _F_OPEN = 1
@@ -1279,8 +1277,9 @@ class TestNativeCouplingNeutralized:
 
     @pytest.mark.asyncio
     async def test_move_to_rejects_unavailable_target(self):
-        from custom_components.cover_time_based.drivers import NativeTiltDriver
         from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.cover_time_based.drivers import NativeTiltDriver
 
         cover = _make_wrapped_cover(
             tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"

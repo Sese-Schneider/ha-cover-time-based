@@ -8,10 +8,9 @@ direction.
 
 import asyncio
 from types import SimpleNamespace
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
+import pytest
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based.cover_toggle_opposite_mode import (

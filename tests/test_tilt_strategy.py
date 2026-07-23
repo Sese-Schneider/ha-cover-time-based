@@ -1,7 +1,5 @@
 """Tests for TiltStrategy classes (SequentialTilt and DualMotorTilt)."""
 
-from custom_components.cover_time_based.travel_calculator import TravelCalculator
-
 from custom_components.cover_time_based.tilt_strategies import (
     DualMotorTilt,
     InlineTilt,
@@ -14,7 +12,7 @@ from custom_components.cover_time_based.tilt_strategies import (
 from custom_components.cover_time_based.tilt_strategies.planning import (
     has_travel_pre_step,
 )
-
+from custom_components.cover_time_based.travel_calculator import TravelCalculator
 
 # ===================================================================
 # MovementStep dataclasses

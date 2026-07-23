@@ -8,8 +8,9 @@ mocking _async_move_to_endpoint would bypass _plan_tilt_for_travel entirely
 and hide bugs in how it honors close_includes_tilt.
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from custom_components.cover_time_based.travel_calculator import TravelStatus
 

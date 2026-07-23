@@ -1,8 +1,8 @@
 """Tests for rejecting commands / marking unavailable when targets are unavailable."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.exceptions import HomeAssistantError
 
@@ -214,9 +214,11 @@ class TestMovementStartGating:
         cover = make_cover(open_switch="switch.open", close_switch="switch.close")
         _set_target_states(cover, {"switch.open": STATE_UNAVAILABLE})
         cover.travel_calc.set_position(0)
-        with patch.object(cover, "async_write_ha_state"):
-            with pytest.raises(HomeAssistantError):
-                await cover.async_open_cover()
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            pytest.raises(HomeAssistantError),
+        ):
+            await cover.async_open_cover()
         assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
@@ -233,9 +235,11 @@ class TestMovementStartGating:
         cover = make_cover(open_switch="switch.open", close_switch="switch.close")
         _set_target_states(cover, {"switch.close": STATE_UNAVAILABLE})
         cover.travel_calc.set_position(100)
-        with patch.object(cover, "async_write_ha_state"):
-            with pytest.raises(HomeAssistantError):
-                await cover.async_close_cover()
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            pytest.raises(HomeAssistantError),
+        ):
+            await cover.async_close_cover()
         assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
@@ -286,9 +290,11 @@ class TestMovementStartGating:
         cover = make_cover(cover_entity_id="cover.real")
         _set_target_states(cover, {"cover.real": STATE_UNAVAILABLE})
         cover.travel_calc.set_position(0)
-        with patch.object(cover, "async_write_ha_state"):
-            with pytest.raises(HomeAssistantError):
-                await cover.async_open_cover()
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            pytest.raises(HomeAssistantError),
+        ):
+            await cover.async_open_cover()
         assert not cover.travel_calc.is_traveling()
 
     @pytest.mark.asyncio
@@ -314,9 +320,11 @@ class TestMovementStartGating:
         )
         _set_target_states(cover, {"switch.tilt_open": STATE_UNAVAILABLE})
         cover.tilt_calc.set_position(0)
-        with patch.object(cover, "async_write_ha_state"):
-            with pytest.raises(HomeAssistantError):
-                await cover.async_open_cover_tilt()
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            pytest.raises(HomeAssistantError),
+        ):
+            await cover.async_open_cover_tilt()
         assert not cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
@@ -357,9 +365,11 @@ class TestSequentialOpenTiltGating:
         cover = self._make(make_cover)
         _set_target_states(cover, {"switch.open": STATE_UNAVAILABLE})
         cover.tilt_calc.set_position(100)
-        with patch.object(cover, "async_write_ha_state"):
-            with pytest.raises(HomeAssistantError):
-                await cover.async_close_cover_tilt()
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            pytest.raises(HomeAssistantError),
+        ):
+            await cover.async_close_cover_tilt()
         assert not cover.tilt_calc.is_traveling()
 
     @pytest.mark.asyncio
@@ -410,9 +420,11 @@ class TestPreStepGating:
                 "switch.tilt_close": STATE_UNAVAILABLE,
             },
         )
-        with patch.object(cover, "async_write_ha_state"):
-            with pytest.raises(HomeAssistantError):
-                await cover.async_open_cover()
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            pytest.raises(HomeAssistantError),
+        ):
+            await cover.async_open_cover()
         assert not cover.tilt_calc.is_traveling()
         assert not cover.travel_calc.is_traveling()
 
@@ -435,9 +447,11 @@ class TestPreStepGating:
         cover.tilt_calc.set_position(30)
         # Tilt targets fine; the OPEN travel relay (fired after the pre-step) is dead.
         _set_target_states(cover, {"switch.open": STATE_UNAVAILABLE})
-        with patch.object(cover, "async_write_ha_state"):
-            with pytest.raises(HomeAssistantError):
-                await cover.async_open_cover()
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            pytest.raises(HomeAssistantError),
+        ):
+            await cover.async_open_cover()
         assert not cover.tilt_calc.is_traveling()
         assert not cover.travel_calc.is_traveling()
 
@@ -471,8 +485,10 @@ class TestPreStepGating:
                 "switch.close": STATE_UNAVAILABLE,
             },
         )
-        with patch.object(cover, "async_write_ha_state"):
-            with pytest.raises(HomeAssistantError):
-                await cover.async_set_cover_tilt_position(tilt_position=50)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            pytest.raises(HomeAssistantError),
+        ):
+            await cover.async_set_cover_tilt_position(tilt_position=50)
         assert not cover.travel_calc.is_traveling()
         assert not cover.tilt_calc.is_traveling()

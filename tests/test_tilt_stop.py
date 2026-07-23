@@ -1,10 +1,9 @@
 """Stopping tilt-motor movements — audit findings core-C1a/C1b."""
 
 import asyncio
-
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 from homeassistant.const import SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based.cover import (
@@ -41,13 +40,13 @@ def _tilt_switch_calls(cover, start=0):
     ]
 
 
-DUAL = dict(
-    tilt_time_close=5.0,
-    tilt_time_open=5.0,
-    tilt_mode="dual_motor",
-    tilt_open_switch="switch.tilt_open",
-    tilt_close_switch="switch.tilt_close",
-)
+DUAL = {
+    "tilt_time_close": 5.0,
+    "tilt_time_open": 5.0,
+    "tilt_mode": "dual_motor",
+    "tilt_open_switch": "switch.tilt_open",
+    "tilt_close_switch": "switch.tilt_close",
+}
 
 
 @pytest.mark.asyncio
@@ -92,11 +91,11 @@ def _all_calls(cover, start=0):
         ("toggle_opposite", {}),
         (
             "pulse",
-            dict(
-                send_endpoint_stop=False,
-                stop_switch="switch.stop",
-                tilt_stop_switch="switch.tilt_stop",
-            ),
+            {
+                "send_endpoint_stop": False,
+                "stop_switch": "switch.stop",
+                "tilt_stop_switch": "switch.tilt_stop",
+            },
         ),
     ],
     ids=["toggle", "toggle_opposite", "pulse-no-endpoint-stop"],
@@ -442,11 +441,11 @@ async def test_tilt_restore_completion_clears_stale_direction(make_cover):
         ("toggle_opposite", {}),
         (
             "pulse",
-            dict(
-                send_endpoint_stop=False,
-                stop_switch="switch.stop",
-                tilt_stop_switch="switch.tilt_stop",
-            ),
+            {
+                "send_endpoint_stop": False,
+                "stop_switch": "switch.stop",
+                "tilt_stop_switch": "switch.tilt_stop",
+            },
         ),
     ],
     ids=["toggle", "toggle_opposite", "pulse-no-endpoint-stop"],
@@ -545,12 +544,12 @@ async def test_external_tilt_press_before_tilt_calibration_does_not_crash(
     ``_handle_external_tilt_state_change`` directly, so the test exercises
     the guard actually added at the dispatch site rather than bypassing it.
     """
-    kwargs = dict(
-        control_mode=control_mode,
-        tilt_mode="dual_motor",
-        tilt_open_switch="switch.tilt_open",
-        tilt_close_switch="switch.tilt_close",
-    )
+    kwargs = {
+        "control_mode": control_mode,
+        "tilt_mode": "dual_motor",
+        "tilt_open_switch": "switch.tilt_open",
+        "tilt_close_switch": "switch.tilt_close",
+    }
     if control_mode == CONTROL_MODE_PULSE:
         # Pulse mode requires a dedicated stop switch, and its tilt axis has
         # its own dedicated stop relay too (see DUAL fixtures above).

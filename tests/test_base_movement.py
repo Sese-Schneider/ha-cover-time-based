@@ -12,17 +12,16 @@ These tests exercise the movement coordination logic in cover_base.py:
 
 import asyncio
 from types import SimpleNamespace
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from custom_components.cover_time_based.cover import CONTROL_MODE_TOGGLE
+import pytest
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
     SERVICE_STOP_COVER,
 )
 
+from custom_components.cover_time_based.cover import CONTROL_MODE_TOGGLE
 
 # ===================================================================
 # Travel endpoint movement (async_close_cover / async_open_cover)

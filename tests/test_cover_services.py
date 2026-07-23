@@ -2,27 +2,26 @@
 
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import voluptuous as vol
 import yaml
-from unittest.mock import AsyncMock, MagicMock
-
 from homeassistant.exceptions import HomeAssistantError
 
-from custom_components.cover_time_based.helpers import resolve_entity
 from custom_components.cover_time_based.cover import (
-    _register_services,
-    _create_cover_from_options,
+    CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_CONTROL_MODE,
     CONF_OPEN_SWITCH_ENTITY_ID,
-    CONF_CLOSE_SWITCH_ENTITY_ID,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
     CONTROL_MODE_SWITCH,
     SERVICE_START_CALIBRATION,
     SERVICE_STOP_CALIBRATION,
+    _create_cover_from_options,
+    _register_services,
 )
+from custom_components.cover_time_based.helpers import resolve_entity
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_DIR = REPO_ROOT / "custom_components" / "cover_time_based"

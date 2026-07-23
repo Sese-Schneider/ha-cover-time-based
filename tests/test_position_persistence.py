@@ -10,9 +10,9 @@ stopped.
 """
 
 import asyncio
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import patch
 
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_SWITCH,
