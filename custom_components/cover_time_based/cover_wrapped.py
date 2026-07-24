@@ -43,7 +43,7 @@ _COMMANDED_STATES = _MOVING_STATES | _STOPPED_STATES
 # ZHA) briefly bounce back to their pre-command state before settling on
 # the destination state — within this window we trust our own time-based
 # position calculation rather than the wrapped cover's transient state.
-# Observed bounces happen <250 ms after the command; 500 ms gives a 2×
+# Observed bounces happen <250 ms after the command; 500 ms gives a 2x
 # safety margin without interfering with legitimate later state changes.
 _BOUNCE_GRACE_PERIOD = 0.5
 

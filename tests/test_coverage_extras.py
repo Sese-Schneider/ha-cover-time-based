@@ -250,7 +250,7 @@ class TestRequireTravelTimeRaisesClosing:
         cover = make_cover()
         cover._travel_time_close = None
 
-        with pytest.raises(HomeAssistantError, match="[Tt]ravel time"):
+        with pytest.raises(HomeAssistantError, match=r"[Tt]ravel time"):
             cover._require_travel_time(closing=True)
 
     def test_raises_when_travel_time_open_is_none(self, make_cover):
@@ -258,7 +258,7 @@ class TestRequireTravelTimeRaisesClosing:
         cover = make_cover()
         cover._travel_time_open = None
 
-        with pytest.raises(HomeAssistantError, match="[Tt]ravel time"):
+        with pytest.raises(HomeAssistantError, match=r"[Tt]ravel time"):
             cover._require_travel_time(closing=False)
 
     def test_returns_value_when_configured(self, make_cover):

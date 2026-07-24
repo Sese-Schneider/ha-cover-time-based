@@ -56,7 +56,7 @@ class TestResolveEntity:
         hass = MagicMock()
         hass.data = {"entity_components": {"cover": component}}
 
-        with pytest.raises(HomeAssistantError, match="cover.test"):
+        with pytest.raises(HomeAssistantError, match=r"cover.test"):
             resolve_entity(hass, "cover.test")
 
     def test_raises_when_not_cover_time_based(self):

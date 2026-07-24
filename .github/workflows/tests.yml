@@ -88,12 +88,13 @@ jobs:
           python-version: "3.14"
 
       - name: Install ruff
-        # Pinned deliberately. ruff's default rule set and formatter style shift
-        # between minor releases, so an unpinned install lets someone else's
-        # release turn this job red on a tree nobody touched — 0.16.0 did exactly
-        # that, surfacing 125 findings across files that had not changed. Bump
-        # this when you mean to, in a PR that also clears whatever it surfaces.
-        run: python -m pip install ruff==0.16.0
+        # Unpinned on purpose — we want the latest ruff. What keeps that from
+        # turning the job red on an untouched tree is the explicit rule set in
+        # pyproject.toml ([tool.ruff.lint].select), not a version pin: a bare
+        # `ruff check` follows ruff's *default* rules, which shift between
+        # releases (0.16.0 expanded them and surfaced 125 findings here). Pinning
+        # the rules we enforce, rather than the version, lets us stay current.
+        run: python -m pip install ruff
 
       - name: Check formatting
         run: ruff format --check .
