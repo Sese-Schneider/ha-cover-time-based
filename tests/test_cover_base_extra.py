@@ -1185,7 +1185,7 @@ class TestUnconfiguredEntity:
         cover._travel_time_close = None
         cover._travel_time_open = None
         with (
-            pytest.raises(HomeAssistantError, match="[Tt]ravel time"),
+            pytest.raises(HomeAssistantError, match=r"[Tt]ravel time"),
             patch.object(cover, "async_write_ha_state"),
         ):
             await cover.async_set_cover_position(position=50)

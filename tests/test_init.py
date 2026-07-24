@@ -453,7 +453,7 @@ class TestFrontendCacheBuster:
     def test_card_js_url_lives_under_hashed_prefix(self):
         # Inner relative imports resolve under the same hashed prefix, so
         # `entity-filter.js` busts together with the main card.
-        assert _CARD_JS_URL == f"{_PANEL_URL}/cover-time-based-card.js"
+        assert f"{_PANEL_URL}/cover-time-based-card.js" == _CARD_JS_URL
 
 
 class TestIntegrationTeardown:

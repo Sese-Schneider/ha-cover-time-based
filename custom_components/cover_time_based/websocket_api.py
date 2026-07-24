@@ -413,7 +413,7 @@ async def ws_start_calibration(
         if "direction" in msg:
             kwargs["direction"] = msg["direction"]
         await entity.start_calibration(**kwargs)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         connection.send_error(msg["id"], "failed", str(exc))
         return
 
@@ -441,7 +441,7 @@ async def ws_stop_calibration(
 
     try:
         result = await entity.stop_calibration(cancel=msg["cancel"])
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         connection.send_error(msg["id"], "failed", str(exc))
         return
 
@@ -493,7 +493,7 @@ async def ws_raw_command(
             else:
                 entity.travel_calc.clear_position()
             entity.async_write_ha_state()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         connection.send_error(msg["id"], "failed", str(exc))
         return
 

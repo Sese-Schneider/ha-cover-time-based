@@ -1,3 +1,16 @@
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+# Enforce an explicit rule set rather than ruff's defaults, which shift between
+# releases. This is what lets CI install ruff unpinned and still stay green on
+# an untouched tree: the version floats, the rules we hold ourselves to don't.
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+# Line width is governed by `ruff format`; E501 would only fire on long string
+# literals, comments and test-failure messages the formatter deliberately leaves
+# intact, so enforcing it here buys noise, not readability.
+ignore = ["E501"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

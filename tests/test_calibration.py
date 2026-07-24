@@ -132,7 +132,7 @@ class TestStopCalibrationTravelTime:
         from homeassistant.exceptions import HomeAssistantError
 
         cover = make_cover()
-        with pytest.raises(HomeAssistantError, match="[Nn]o calibration"):
+        with pytest.raises(HomeAssistantError, match=r"[Nn]o calibration"):
             await cover.stop_calibration()
 
     @pytest.mark.asyncio
@@ -349,7 +349,7 @@ class TestMotorOverheadCalibration:
         # Factory defaults travel_time to 30, so manually clear it
         cover._travel_time_close = None
         cover._travel_time_open = None
-        with pytest.raises(HomeAssistantError, match="[Tt]ravel time"):
+        with pytest.raises(HomeAssistantError, match=r"[Tt]ravel time"):
             await cover.start_calibration(
                 attribute="travel_startup_delay", timeout=300.0
             )
@@ -424,7 +424,7 @@ class TestMotorOverheadCalibration:
         from homeassistant.exceptions import HomeAssistantError
 
         cover = make_cover()  # No tilt time configured
-        with pytest.raises(HomeAssistantError, match="[Tt]ilt time"):
+        with pytest.raises(HomeAssistantError, match=r"[Tt]ilt time"):
             await cover.start_calibration(attribute="tilt_startup_delay", timeout=300.0)
 
     @pytest.mark.asyncio
@@ -545,7 +545,7 @@ class TestCalibrationEdgeCases:
         )
         # Mock strategy to reject tilt calibration
         cover._tilt_strategy.can_calibrate_tilt = lambda: False
-        with pytest.raises(HomeAssistantError, match="[Tt]ilt.*not available"):
+        with pytest.raises(HomeAssistantError, match=r"[Tt]ilt.*not available"):
             await cover.start_calibration(attribute="tilt_time_close", timeout=30.0)
 
     def test_resolve_direction_explicit_close(self, make_cover):
