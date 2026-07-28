@@ -178,9 +178,9 @@ The companion to [Always re-send open/close at the endpoints](#always-re-send-op
 
 That option fixes the *endpoint* commands. This one fixes **Set position**. With it on, a position command first drives the cover **fully open** — a true datum, because the motor stalls against its own limit — waits for the motor to settle, and only then moves to the position you asked for. Home Assistant's idea of where the cover is stops mattering, because every move starts from somewhere it can be sure of.
 
-The case it exists for: you park a shutter at 25% because an obstruction below would otherwise be crushed by a full close. Somebody uses the remote and leaves the cover at 75% while Home Assistant still believes 50%. Your automation asks for 25%, the integration runs the motor for 25% of the travel time from that stale 50%, and the cover ends up hard against the obstruction instead of safely above it.
+The case it exists for: you park a shutter at 25% because an obstruction below would otherwise be crushed by a full close. Somebody uses the remote and leaves the cover at 30% — more closed than Home Assistant knows — while Home Assistant still believes 50%. Your automation asks for 25%; the integration computes a 25%-of-travel close from the believed 50%, but that movement is applied to the *real* position, so the cover actually ends up at 5% — hard against the obstruction, instead of safely up at 25%.
 
-**This doubles the travel of every positioning move.** Going from 5% to 10% becomes a run to fully open followed by a run back down to 10%. That is real wear on the motor, so the option is off by default — turn it on only if your hardware tolerates it and the drift is causing you real problems.
+**Every positioning move costs a full open plus the run back down to the target — between one and two times the cover's full travel time, however small the change you asked for.** Going from 5% to 10% becomes a full open (100% of the travel) followed by a run back down to 10% (90% of the travel) — around 190% of a full travel, not a doubling. That is real wear on the motor, so the option is off by default — turn it on only if your hardware tolerates it and the drift is causing you real problems.
 
 Notes:
 
