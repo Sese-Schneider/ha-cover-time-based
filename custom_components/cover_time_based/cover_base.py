@@ -722,6 +722,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         strategy the excess would not stall — it would bleed into cover travel
         and desync the travel tracker — so _start_recalibration_drive routes
         those to the travel re-drive instead.
+
+        Mirrors _force_full_redrive's rollback scope: _async_move_tilt_to_endpoint
+        has the same shape as _async_move_to_endpoint — on a boundary-locked
+        dual_motor cover it may run a travel pre-step first
+        (_start_travel_pre_step), which sets the continuation fields
+        _pending_tilt_target / _pending_tilt_command *before* firing the travel
+        relay command. A failure there (e.g. the travel switch entity going
+        unavailable) leaves those dangling with no travel movement ever
+        started to reach the auto-updater continuation that would otherwise
+        consume them, so they must be cleared alongside the tracker restore.
         """
         opposite = 100 if target == 0 else 0
         self._self_initiated_movement = not self._triggered_externally
@@ -736,6 +746,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self._async_move_tilt_to_endpoint(target=target)
         except Exception:
             self.tilt_calc.restore(snapshot)
+            self._pending_tilt_target = None
+            self._pending_tilt_command = None
             raise
 
     def _should_recalibrate(
@@ -1489,7 +1501,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         travel_time = self._require_travel_time(closing)
         movement_time = (abs(target - current) / 100.0) * travel_time
 
-        if self._is_movement_too_short(movement_time, target, current, "set_position"):
+        if self._is_movement_too_short(
+            movement_time,
+            target,
+            current,
+            "set_position",
+            is_recalibrated_leg=not recalibrate,
+        ):
             return
 
         self._last_command = command
@@ -1666,7 +1684,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     needs_travel_pre_step = True
 
         if self._is_movement_too_short(
-            movement_time, target, current, "set_tilt_position"
+            movement_time,
+            target,
+            current,
+            "set_tilt_position",
+            is_recalibrated_leg=not recalibrate,
         ):
             return
 
@@ -1794,8 +1816,28 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         return True, is_direction_change
 
-    def _is_movement_too_short(self, movement_time, target, current, label):
-        """Check if movement time is below minimum. Returns True if movement should be skipped."""
+    def _is_movement_too_short(
+        self,
+        movement_time,
+        target,
+        current,
+        label,
+        *,
+        is_recalibrated_leg: bool = False,
+    ):
+        """Check if movement time is below minimum. Returns True if movement should be skipped.
+
+        ``is_recalibrated_leg`` marks leg B of a recalibrated move (#179) — the
+        caller passed ``recalibrate=False``. min_movement_time exists to skip
+        pointless motor pulses for imperceptible moves, but by the time leg B
+        runs, leg A has already driven the motor a full travel to reach a true
+        datum; the second pulse to the position the user actually asked for IS
+        the point of the operation, not a redundant nudge. Rejecting it here
+        would silently strand the cover at leg A's endpoint instead of where
+        it was asked to go, so leg B is exempt from this check entirely.
+        """
+        if is_recalibrated_leg:
+            return False
         is_to_endpoint = target in (0, 100)
         if (
             self._min_movement_time is not None

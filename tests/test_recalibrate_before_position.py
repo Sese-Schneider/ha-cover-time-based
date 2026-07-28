@@ -158,6 +158,35 @@ async def test_leg_b_does_not_arm_a_third_leg(make_cover):
 
 
 @pytest.mark.asyncio
+async def test_min_movement_time_does_not_strand_leg_b(make_cover):
+    """Fix round 1, IMPORTANT 1: min_movement_time must not silently drop leg
+    B after leg A has already moved the cover. Believed 75, asked for 95, with
+    min_movement_time=2: leg A drives fully open (a real, full-length motor
+    run), then leg B's pulse back down to 95 computes to 0.5s -- under the 2s
+    floor. min_movement_time exists to skip pointless motor pulses for
+    imperceptible moves; once leg A has already run the motor a full travel,
+    that rationale is gone -- the second pulse is the entire point of the
+    operation, and dropping it would strand the cover fully open instead of
+    at the 95% the user asked for."""
+    cover = make_cover(recalibrate_before_position=True, min_movement_time=2)
+    cover.travel_calc.set_position(75)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        await cover.set_position(95)
+        cover.travel_calc.set_position(100)  # leg A arrives
+        await cover.auto_stop_if_necessary()
+
+    assert cover._pending_recalibrated_target is None
+    assert cover.travel_calc.is_closing(), (
+        "leg B must still run despite being 'too short'"
+    )
+    assert cover.travel_calc._travel_to_position == 95
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "kwargs",
     [
