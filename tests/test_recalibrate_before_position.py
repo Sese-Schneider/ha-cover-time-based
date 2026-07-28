@@ -493,9 +493,12 @@ async def test_leg_b_waits_for_the_endpoint_runon(make_cover):
 
 @pytest.mark.asyncio
 async def test_leg_b_failure_does_not_escape(make_cover):
-    """Leg B runs on the auto-updater's task; an escaping HomeAssistantError
-    would take the updater down. The cover is parked at a true endpoint, so
-    stopping there is safe and correctly tracked."""
+    """Leg B runs on a fresh per-tick task (hass.async_create_task, not
+    literally "the auto-updater" -- stop_auto_updater() has already run by
+    this point). An escaping HomeAssistantError would still surface only as a
+    noisy unhandled-task-exception log and, worse, silently abandon the move
+    the user asked for. The cover is parked at a true endpoint, so stopping
+    there is safe and correctly tracked; warn instead of losing it."""
     cover = make_cover(recalibrate_before_position=True)
     cover.travel_calc.set_position(75)
 
@@ -517,17 +520,21 @@ async def test_leg_b_failure_does_not_escape(make_cover):
 
 @pytest.mark.asyncio
 async def test_maybe_start_recalibrated_leg_propagates_own_cancellation(make_cover):
-    """Cancelling the task that is running _maybe_start_recalibrated_leg (the
-    auto-updater's task, torn down e.g. on entity removal or HA shutdown)
-    must propagate as a real cancellation of that task.
+    """Cancelling the task that is running _maybe_start_recalibrated_leg (a
+    fresh per-tick task from hass.async_create_task -- e.g. torn down on
+    entity removal or HA shutdown) must propagate as a real cancellation of
+    that task.
 
-    contextlib.suppress(CancelledError) around the run-on await cannot tell
-    "the run-on task I'm waiting on was cancelled by a supersede" apart from
-    "I myself was cancelled" -- both surface as CancelledError at the same
-    await point. Swallowing the latter would carry on into
-    _settle_before_reversing on a task nothing asked to keep alive. This is
-    pinned against asyncio.Task.cancelling(): only a direct cancel() of the
-    current task bumps its own count.
+    A bare `await delay_task` (or contextlib.suppress(CancelledError) around
+    one) cannot tell "the run-on task I'm waiting on was cancelled by a
+    supersede" apart from "I myself was cancelled" -- both surface as
+    CancelledError at the same await point, and a bare await would also
+    propagate MY cancellation down into delay_task, killing the pending
+    relay de-energisation. asyncio.wait keeps the two independent: the inner
+    task's own cancellation is absorbed (checked below by
+    test_..._absorbs_delay_task_cancellation) while an outer cancellation of
+    this task still propagates out through the await, without touching
+    delay_task at all.
     """
     cover = make_cover(recalibrate_before_position=True)
     cover.travel_calc.set_position(100)
@@ -548,16 +555,24 @@ async def test_maybe_start_recalibrated_leg_propagates_own_cancellation(make_cov
         with pytest.raises(asyncio.CancelledError):
             await task
 
+    assert not cover._delay_task.cancelled(), (
+        "our own cancellation must not propagate into delay_task and kill"
+        " the pending relay de-energisation (MINOR 5)"
+    )
     settle.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_maybe_start_recalibrated_leg_absorbs_delay_task_cancellation(make_cover):
-    """The complementary case: a supersede cancelling only the run-on task
+    """The complementary case: cancelling only the run-on task directly
     (_cancel_delay_task, as async_stop_cover/_abandon_active_lifecycle do)
-    while leg B's own task is left running must not kill leg B's task --
-    only the epoch re-check in _settle_before_reversing decides whether leg B
-    proceeds (see test_stop_inside_the_settle_gap_aborts_leg_b)."""
+    while leg B's own task is left running -- with nothing superseding the
+    movement itself -- must not kill leg B's task. Leg B still proceeds past
+    the run-on wait to the settle gap; the epoch re-checks (both the one
+    immediately after the run-on wait and _settle_before_reversing's own) are
+    what would actually stop it on a genuine supersede -- see
+    test_stop_during_the_runon_wait_prevents_leg_b and
+    test_stop_inside_the_settle_gap_aborts_leg_b."""
     cover = make_cover(recalibrate_before_position=True)
     cover.travel_calc.set_position(100)
     cover._pending_recalibrated_target = 25
@@ -577,3 +592,109 @@ async def test_maybe_start_recalibrated_leg_absorbs_delay_task_cancellation(make
         await task  # must not raise
 
     settle.assert_awaited_once()
+
+
+# ===================================================================
+# Task 3 fix round 2 — Critical 1 / Important 2
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_stop_during_the_runon_wait_prevents_leg_b(make_cover):
+    """CRITICAL 1: the epoch is captured once, before the run-on await, and
+    was never re-checked afterward. _settle_before_reversing's own re-check
+    does NOT cover this window -- it captures self._movement_epoch on entry
+    and compares it to itself after its own sleep, so it only ever catches a
+    supersede landing during ITS OWN wait, never one that already landed
+    during the run-on wait before settle even started. Reproduces the
+    review's Critical 1: a STOP arriving while leg B is parked on the
+    endpoint run-on must not be followed by leg B driving off anyway."""
+    cover = make_cover(recalibrate_before_position=True, endpoint_runon_time=2.0)
+    cover.travel_calc.set_position(75)
+    runon_started = asyncio.Event()
+    runon_release = asyncio.Event()
+
+    async def fake_runon(_delay):
+        runon_started.set()
+        await runon_release.wait()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_delayed_stop", side_effect=fake_runon),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        await cover.set_position(25)
+        cover.travel_calc.set_position(100)  # leg A arrives
+
+        task = asyncio.ensure_future(cover.auto_stop_if_necessary())
+        await asyncio.wait_for(runon_started.wait(), timeout=5)
+        assert not task.done(), "leg B must still be parked on the run-on wait"
+
+        await cover.async_stop_cover()  # user presses STOP mid run-on
+        runon_release.set()
+        await asyncio.wait_for(task, timeout=5)
+
+    assert not cover.travel_calc.is_traveling(), "leg B must not run after a stop"
+    assert cover.travel_calc.current_position() == 100, (
+        "must stay where the stop left it, not drive off to the old target"
+    )
+
+
+@pytest.mark.asyncio
+async def test_new_command_during_the_runon_wait_supersedes(make_cover):
+    """CRITICAL 1b, the other supersede path in the same window: a fresh
+    set_position landing while leg B is parked on the run-on wait must win --
+    the stale leg B, resuming afterward, must not clobber it back to the old
+    target."""
+    cover = make_cover(recalibrate_before_position=True, endpoint_runon_time=2.0)
+    cover.travel_calc.set_position(75)
+    runon_started = asyncio.Event()
+    runon_release = asyncio.Event()
+
+    async def fake_runon(_delay):
+        runon_started.set()
+        await runon_release.wait()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_delayed_stop", side_effect=fake_runon),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        await cover.set_position(25)
+        cover.travel_calc.set_position(100)  # leg A arrives
+
+        task = asyncio.ensure_future(cover.auto_stop_if_necessary())
+        await asyncio.wait_for(runon_started.wait(), timeout=5)
+        assert not task.done(), "leg B must still be parked on the run-on wait"
+
+        await cover.set_position(60, recalibrate=False)
+        runon_release.set()
+        await asyncio.wait_for(task, timeout=5)
+
+    assert cover.travel_calc._travel_to_position == 60, (
+        "must keep heading for the fresh target, not be clobbered back to 25"
+    )
+
+
+@pytest.mark.asyncio
+async def test_maybe_start_recalibrated_leg_epoch_mismatch_still_clears(make_cover):
+    """IMPORTANT 2: the epoch-mismatch branch inside
+    _maybe_start_recalibrated_leg must itself clear the three pending fields,
+    independent of the upstream clear finding (a) added to
+    _clear_multiphase_tilt_state. _supersede_movement bumps the epoch without
+    going through _clear_multiphase_tilt_state, so arming directly and
+    superseding this way is the one route that still reaches the
+    epoch-mismatch branch with a non-None target -- pinning the "clear before
+    the epoch check" ordering fix round 1 introduced. Moving the three clears
+    to after the epoch check leaves every other test in this file green."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(100)
+
+    cover._arm_recalibrated_leg(25, "travel")
+    cover._supersede_movement()
+    await cover._maybe_start_recalibrated_leg()
+
+    assert cover._pending_recalibrated_target is None
+    assert cover._pending_recalibrated_axis is None
+    assert cover._recalibration_epoch is None
+    assert not cover.travel_calc.is_traveling(), "epoch mismatch must not run leg B"

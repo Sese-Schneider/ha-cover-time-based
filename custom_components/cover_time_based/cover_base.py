@@ -2662,25 +2662,31 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         # Leg A may have armed a delayed relay stop (endpoint_runon_time).
         # Settling while the relay is still energized would make the rest gap a
-        # fiction, so let the run-on finish before starting the clock. This
-        # runs on the auto-updater's own task, so the CancelledError raised
-        # here has two possible sources that look identical at this await
-        # point: the run-on task itself being cancelled by a supersede (safe
-        # to absorb — the epoch re-check in _settle_before_reversing below is
-        # what actually decides whether leg B still proceeds), or *this* task
-        # being cancelled (e.g. the auto-updater torn down on entity removal
-        # or HA shutdown), which must propagate rather than let leg B carry on
-        # running on a task nothing asked to keep alive. Task.cancelling()
-        # distinguishes them: it is only bumped by a direct cancel() of this
-        # task, not by cancelling something this task merely happens to be
-        # awaiting.
+        # fiction, so let the run-on finish before starting the clock.
+        #
+        # asyncio.wait, not a bare `await delay_task`: a bare await makes
+        # delay_task this coroutine's own suspension point, so cancelling
+        # *this* task (e.g. the per-tick task from hass.async_create_task,
+        # torn down on entity removal or HA shutdown) would cancel delay_task
+        # right along with it -- killing the pending _delayed_stop before it
+        # de-energises the relay, leaving it latched on. asyncio.wait's own
+        # internal waiter absorbs that instead: delay_task keeps running to
+        # completion regardless, while a cancellation of this task still
+        # propagates out normally through the await.
         delay_task = self._delay_task
         if delay_task is not None and not delay_task.done():
-            try:
-                await delay_task
-            except asyncio.CancelledError:
-                if asyncio.current_task().cancelling():
-                    raise
+            await asyncio.wait({delay_task})
+
+        # The run-on wait above is itself an await — a stop or a new command
+        # can land while it is in flight, and would otherwise go unnoticed:
+        # _settle_before_reversing captures self._movement_epoch on entry and
+        # compares it to itself after its OWN sleep, so it only ever catches a
+        # supersede landing during its own wait — never one that already
+        # landed during the run-on wait above, before settle even started
+        # (issue #179 review, Critical 1). Re-check explicitly.
+        if self._movement_epoch != armed_epoch:
+            self._log("_maybe_start_recalibrated_leg :: superseded during run-on wait")
+            return
 
         # auto_stop_if_necessary cleared _last_command, so leg B does not read
         # itself as a direction change and would skip DIRECTION_CHANGE_DELAY --
@@ -2696,9 +2702,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             else:
                 await self.set_position(target, recalibrate=False)
         except HomeAssistantError as err:
-            # We are on the auto-updater's task — an escape would take the
-            # updater down. The cover is parked at a true endpoint, so leaving
-            # it there is safe and correctly tracked.
+            # This runs on a fresh per-tick task from hass.async_create_task,
+            # not literally "the auto-updater" — stop_auto_updater() has
+            # already unsubscribed the interval timer by the time we get
+            # here, so an escape would not take that down. It would still
+            # surface only as a noisy unhandled-task-exception log, and worse,
+            # silently abandon the move the user asked for. The cover is
+            # parked at a true endpoint (leg A's), so leaving it there is
+            # safe and correctly tracked — warn instead of losing it silently.
             _LOGGER.warning(
                 "(%s) recalibrated move to %d%% failed: %s",
                 self.entity_id,
