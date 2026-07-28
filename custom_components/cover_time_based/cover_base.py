@@ -733,17 +733,28 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return position not in (0, 100)
         return True
 
-    def _movement_started(self) -> bool:
+    def _movement_started(self, *, prior_startup_task=None) -> bool:
         """Whether the movement just commanded is actually under way.
 
         A recalibration leg arms its follow-up only if leg A really started.
         _async_move_to_endpoint has a silent early return (a same-direction
         startup delay already active), and arming behind it would strand the
         pending target with no completion ever coming to consume it.
+
+        ``prior_startup_task`` is the startup-delay task that was already
+        live *before* this drive was attempted, if any. Without it, a startup
+        delay left over from an earlier, unrelated move reads as "this drive
+        started" even when the drive's own early-return left it untouched —
+        the caller must pass the task it captured immediately before driving,
+        so only a delay task the drive itself created counts.
         """
         if self.travel_calc.is_traveling():
             return True
-        if self._startup_delay_task is not None and not self._startup_delay_task.done():
+        if (
+            self._startup_delay_task is not None
+            and not self._startup_delay_task.done()
+            and self._startup_delay_task is not prior_startup_task
+        ):
             return True
         if self._pending_travel_target is not None:
             return True
@@ -757,8 +768,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         believed position rather than from the modelled opposite endpoint.
         """
         snapshot = self.travel_calc.snapshot()
+        prior_startup_task = self._startup_delay_task
         await self._force_full_redrive(target=100)
-        if self._movement_started():
+        if self._movement_started(prior_startup_task=prior_startup_task):
             return True
         self.travel_calc.restore(snapshot)
         return False
@@ -1351,6 +1363,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def set_position(self, position, *, recalibrate: bool = True):
         """Move cover to a designated position."""
         if self._should_recalibrate(recalibrate, position, axis="travel"):
+            # Arm only AFTER the drive, never before. _start_recalibration_drive
+            # -> _force_full_redrive -> _async_move_to_endpoint funnels through
+            # _abandon_active_lifecycle, whose first line is _supersede_movement()
+            # (bumps _movement_epoch). _arm_recalibrated_leg stamps
+            # _recalibration_epoch from self._movement_epoch, so arming before
+            # the drive would capture the pre-bump epoch — leg A's own
+            # completion would then read as a newer, unrelated movement and the
+            # epoch check in _maybe_start_recalibrated_leg would silently drop
+            # leg B.
             if await self._start_recalibration_drive("travel"):
                 self._arm_recalibrated_leg(position, "travel")
                 return
@@ -2015,6 +2036,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._moving_tilt_motor = False
                 self._moving_tilt = False
                 await self._async_persist_position()
+                await self._maybe_start_recalibrated_leg()
                 return
 
             if self._pending_travel_target is not None:
@@ -2035,8 +2057,21 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
 
             if self._tilt_restore_target is not None:
-                # Travel just completed — start tilt restore phase
+                # Travel just completed — start tilt restore phase. If the
+                # restore target already matches where tilt is (issue #179:
+                # leg A always targets 100, which coincides with the default
+                # safe_tilt_position, so the dual-motor pre-step already
+                # parked tilt exactly at the restore target), _start_tilt_restore
+                # returns synchronously without driving a motor or re-arming
+                # the auto-updater — this IS the terminal completion of the
+                # move and must consume any armed recalibration leg. When a
+                # real restore is claimed instead (_tilt_restore_active
+                # becomes True), its own eventual completion is handled by
+                # the _tilt_restore_active branch above — checking here too
+                # would double-fire.
                 await self._start_tilt_restore()
+                if not self._tilt_restore_active:
+                    await self._maybe_start_recalibrated_leg()
                 return
 
             current_travel = self.travel_calc.current_position()
@@ -2610,12 +2645,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         the move the user actually asked for.
         """
         target = self._pending_recalibrated_target
-        if target is None or self._movement_epoch != self._recalibration_epoch:
+        if target is None:
             return
         axis = self._pending_recalibrated_axis
+        armed_epoch = self._recalibration_epoch
+        # Clear unconditionally, epoch match or not: a stale pending target
+        # left behind by a superseded leg A must not linger forever waiting
+        # for an epoch that will never come again.
         self._pending_recalibrated_target = None
         self._pending_recalibrated_axis = None
         self._recalibration_epoch = None
+        if self._movement_epoch != armed_epoch:
+            return
 
         # Leg A may have armed a delayed relay stop (endpoint_runon_time).
         # Settling while the relay is still energized would make the rest gap a
