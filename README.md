@@ -169,6 +169,28 @@ Leave it **off** (the default) for covers that report their own position: there 
 
 Note that a forced re-drive deliberately models the move as starting from the opposite endpoint, so if you **stop it part-way** the reported position is derived from that assumed start and can be well off — stopping a forced close halfway reports roughly 50% even if the cover started at the bottom. Let a re-drive run to the endpoint, where the position resyncs, rather than stopping it mid-travel.
 
+This covers `open` and `close` only. For **Set position** commands on the same
+hardware, see [Fully open before moving to a position](#fully-open-before-moving-to-a-position).
+
+### Fully open before moving to a position
+
+The companion to [Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints), for the same hardware: a cover with no position feedback that can also be driven by something Home Assistant never sees — an RF remote talking straight to the motor, or a wall switch wired in parallel with it.
+
+That option fixes the *endpoint* commands. This one fixes **Set position**. With it on, a position command first drives the cover **fully open** — a true datum, because the motor stalls against its own limit — waits for the motor to settle, and only then moves to the position you asked for. Home Assistant's idea of where the cover is stops mattering, because every move starts from somewhere it can be sure of.
+
+The case it exists for: you park a shutter at 25% because an obstruction below would otherwise be crushed by a full close. Somebody uses the remote and leaves the cover at 75% while Home Assistant still believes 50%. Your automation asks for 25%, the integration runs the motor for 25% of the travel time from that stale 50%, and the cover ends up hard against the obstruction instead of safely above it.
+
+**This doubles the travel of every positioning move.** Going from 5% to 10% becomes a run to fully open followed by a run back down to 10%. That is real wear on the motor, so the option is off by default — turn it on only if your hardware tolerates it and the drift is causing you real problems.
+
+Notes:
+
+- Commanding **0%** or **100%** for a travel move skips the extra journey — driving to a travel endpoint is already a recalibration, so it just runs the full travel time in the direction you asked for. On **dual-motor** tilt the same carve-out applies to a tilt endpoint, which recalibrates against the tilt motor's own limit. On **inline** and **sequential** tilt there is no carve-out: every tilt target, endpoints included, still gets the travel leg first, because on those modes a tilt endpoint is reached by running the travel motor for a tilt time, with nothing of its own to stall against.
+- On **dual-motor**, a tilt position move recalibrates against the tilt motor's own fully-open limit and leaves the cover's travel position alone.
+- On **inline** and **sequential** tilt, where the slats share the travel motor, a tilt move relocates the cover — and leaves it there. Recalibrating tilt there means recalibrating the *cover* first, and the move back down to the tilt you actually asked for does not restore the cover to where it was, because that previous position was exactly the untrustworthy value the feature exists to discard. On **inline** the cover is left **fully open**: `set_cover_tilt_position(30)` drives the cover fully open, then tilts to 30 — and stays open at 100%. On **sequential** it is left **fully closed** instead, because sequential tilt only works from the closed position, so the move back to your requested tilt itself starts with a drive to fully closed before tilting. Either way, adjusting the slats with this option on will visibly move the cover and leave it moved — worth knowing before you turn this on for a cover with tilt.
+- A stop, or any new command, cancels the pending second leg, so the cover will not surprise-move on its own afterwards.
+- **Minimum movement time** does not suppress the second leg — once the cover has been driven to the datum, the requested move always runs, however small it is.
+- Physical buttons and remotes are never affected — the extra journey only happens for a position command from Home Assistant.
+
 ## Tilt Mode
 
 The **Tilt Mode** setting controls how tilt and travel interact:
