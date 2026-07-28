@@ -288,6 +288,16 @@ export function renderInputEntities(card, c) {
           c.force_endpoint_redrive === true,
           (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
         )}
+        ${renderToggleWithHelp(
+          card,
+          "recalibrate_before_position.label",
+          "recalibrate_before_position.helper",
+          c.recalibrate_before_position === true,
+          (e) =>
+            card._updateLocal({
+              recalibrate_before_position: e.target.checked,
+            }),
+        )}
       </div>
     `;
   }
@@ -354,6 +364,16 @@ export function renderInputEntities(card, c) {
         "force_endpoint_redrive.helper",
         c.force_endpoint_redrive === true,
         (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
+      )}
+      ${renderToggleWithHelp(
+        card,
+        "recalibrate_before_position.label",
+        "recalibrate_before_position.helper",
+        c.recalibrate_before_position === true,
+        (e) =>
+          card._updateLocal({
+            recalibrate_before_position: e.target.checked,
+          }),
       )}
     </div>
   `;

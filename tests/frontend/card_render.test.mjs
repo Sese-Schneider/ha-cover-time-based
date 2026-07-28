@@ -383,12 +383,13 @@ test("wrapped mode renders cover entity-picker (with includeDomains cover)", asy
   expect(coverPicker).not.toBeUndefined();
 });
 
-test("wrapped mode renders ha-switch toggles (ignore-reported-position, force-time-based, reports-command-not-endpoint, invert, assumed-state, force-endpoint-redrive)", async () => {
+test("wrapped mode renders ha-switch toggles (ignore-reported-position, force-time-based, reports-command-not-endpoint, invert, assumed-state, force-endpoint-redrive, recalibrate-before-position)", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // Exactly 6 toggles: ignore_reported_position, force_time_based_position,
-  // reports_command_not_endpoint, invert, assumed_state, force_endpoint_redrive
-  expect(toggles.length).toBe(6);
+  // Exactly 7 toggles: ignore_reported_position, force_time_based_position,
+  // reports_command_not_endpoint, invert, assumed_state, force_endpoint_redrive,
+  // recalibrate_before_position
+  expect(toggles.length).toBe(7);
 });
 
 test("wrapped mode: toggling reports-command-not-endpoint calls _updateLocal", async () => {
@@ -446,9 +447,9 @@ test("wrapped mode has no .entity-grid", async () => {
 test("switch mode shows assumed-state toggle", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // Exactly 2 toggles: assumed-state and force-endpoint-redrive (switch mode has
-  // no other toggle-with-help)
-  expect(toggles.length).toBe(2);
+  // Exactly 3 toggles: assumed-state, force-endpoint-redrive and
+  // recalibrate-before-position (switch mode has no other toggle-with-help)
+  expect(toggles.length).toBe(3);
 });
 
 // ---------------------------------------------------------------------------
