@@ -7,10 +7,12 @@ first drives the cover fully open — a true datum, since the motor stalls at it
 limit — and only then moves to the requested position.
 """
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+from homeassistant.exceptions import HomeAssistantError
 
 
 @pytest.mark.asyncio
@@ -346,11 +348,14 @@ async def test_rollback_when_leg_a_does_not_start(make_cover):
 async def test_maybe_start_recalibrated_leg_clears_pending_state_on_epoch_mismatch(
     make_cover,
 ):
-    """MINOR 4: a superseded leg B must not linger forever. Before the fix,
-    the epoch-mismatch early return in _maybe_start_recalibrated_leg left
-    _pending_recalibrated_target (and its axis/epoch siblings) set --
-    _clear_multiphase_tilt_state does not know about these fields, so
-    nothing else would ever clear them either."""
+    """MINOR 4 (fix round 1) / Task 3 finding (a): a superseded leg B must not
+    linger forever. Originally regression-tested only via the epoch-mismatch
+    early return in _maybe_start_recalibrated_leg, which still clears
+    unconditionally on a mismatch as belt-and-braces. Task 3 closes the gap
+    further upstream: _clear_multiphase_tilt_state (invoked by every
+    supersede, via _handle_stop) now knows about these three fields too, so
+    the supersede itself clears them immediately -- nothing is left stale
+    even before _maybe_start_recalibrated_leg ever runs again."""
     cover = make_cover(recalibrate_before_position=True)
     cover.travel_calc.set_position(75)
 
@@ -363,11 +368,12 @@ async def test_maybe_start_recalibrated_leg_clears_pending_state_on_epoch_mismat
         # before leg A ever completes.
         await cover.async_stop_cover()
         assert cover._movement_epoch != armed_epoch
-        assert cover._pending_recalibrated_target == 25, (
-            "still armed and stale immediately after the supersede"
+        assert cover._pending_recalibrated_target is None, (
+            "cleared immediately by the supersede, not left stale"
         )
 
-        # A stray/leftover completion call must not leave it armed forever.
+        # A stray/leftover completion call is now a pure no-op (target is
+        # already None), and must still leave everything cleared.
         await cover._maybe_start_recalibrated_leg()
 
     assert cover._pending_recalibrated_target is None
@@ -396,3 +402,178 @@ async def test_recalibration_overrides_already_at_target_noop(make_cover):
     assert cover.travel_calc.is_opening(), "must still drive leg A, not no-op"
     assert cover.travel_calc._travel_to_position == 100
     assert cover._pending_recalibrated_target == 25
+
+
+# ===================================================================
+# Task 3 — cancellation and error handling
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_stop_during_leg_a_cancels_leg_b(make_cover):
+    """A stop mid-recalibration must not be followed by a surprise move."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(75)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(25)
+        await cover.async_stop_cover()
+
+    assert cover._pending_recalibrated_target is None
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        await cover.auto_stop_if_necessary()
+
+    assert not cover.travel_calc.is_traveling(), "no leg B after a stop"
+
+
+@pytest.mark.asyncio
+async def test_new_command_during_leg_a_supersedes(make_cover):
+    """A fresh set_position replaces the pending leg rather than queueing."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(75)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(25)
+        await cover.set_position(60, recalibrate=False)
+
+    assert cover._pending_recalibrated_target is None
+    assert cover.travel_calc._travel_to_position == 60
+
+
+@pytest.mark.asyncio
+async def test_stop_inside_the_settle_gap_aborts_leg_b(make_cover):
+    """_settle_before_reversing re-checks the epoch; a stop landing in the gap
+    must win, not be overridden the moment the settle finishes."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(75)
+
+    async def stop_during_settle():
+        cover._supersede_movement()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", side_effect=stop_during_settle),
+    ):
+        await cover.set_position(25)
+        cover.travel_calc.set_position(100)
+        await cover.auto_stop_if_necessary()
+
+    assert not cover.travel_calc.is_traveling(), "leg B must abort"
+
+
+@pytest.mark.asyncio
+async def test_leg_b_waits_for_the_endpoint_runon(make_cover):
+    """The run-on relay must be de-energised before the settle gap starts,
+    or the 'rest' happens while the motor is still powered."""
+    cover = make_cover(recalibrate_before_position=True, endpoint_runon_time=2.0)
+    cover.travel_calc.set_position(75)
+    order = []
+
+    async def fake_runon(_delay):
+        order.append("runon")
+
+    async def fake_settle():
+        order.append("settle")
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_delayed_stop", side_effect=fake_runon),
+        patch.object(cover, "_direction_change_delay", side_effect=fake_settle),
+    ):
+        await cover.set_position(25)
+        cover.travel_calc.set_position(100)
+        await cover.auto_stop_if_necessary()
+
+    assert order == ["runon", "settle"], f"run-on must precede the settle: {order}"
+
+
+@pytest.mark.asyncio
+async def test_leg_b_failure_does_not_escape(make_cover):
+    """Leg B runs on the auto-updater's task; an escaping HomeAssistantError
+    would take the updater down. The cover is parked at a true endpoint, so
+    stopping there is safe and correctly tracked."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(75)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        await cover.set_position(25)
+        cover.travel_calc.set_position(100)
+        with patch.object(
+            cover,
+            "set_position",
+            side_effect=HomeAssistantError("switch unavailable"),
+        ):
+            await cover.auto_stop_if_necessary()
+
+    assert cover.travel_calc.current_position() == 100
+
+
+@pytest.mark.asyncio
+async def test_maybe_start_recalibrated_leg_propagates_own_cancellation(make_cover):
+    """Cancelling the task that is running _maybe_start_recalibrated_leg (the
+    auto-updater's task, torn down e.g. on entity removal or HA shutdown)
+    must propagate as a real cancellation of that task.
+
+    contextlib.suppress(CancelledError) around the run-on await cannot tell
+    "the run-on task I'm waiting on was cancelled by a supersede" apart from
+    "I myself was cancelled" -- both surface as CancelledError at the same
+    await point. Swallowing the latter would carry on into
+    _settle_before_reversing on a task nothing asked to keep alive. This is
+    pinned against asyncio.Task.cancelling(): only a direct cancel() of the
+    current task bumps its own count.
+    """
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(100)
+    cover._pending_recalibrated_target = 25
+    cover._pending_recalibrated_axis = "travel"
+    cover._recalibration_epoch = cover._movement_epoch
+    cover._delay_task = asyncio.ensure_future(asyncio.sleep(10))
+    settle = AsyncMock()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", new=settle),
+    ):
+        task = asyncio.ensure_future(cover._maybe_start_recalibrated_leg())
+        await asyncio.sleep(0)  # let it reach `await delay_task`
+        assert not task.done()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    settle.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_maybe_start_recalibrated_leg_absorbs_delay_task_cancellation(make_cover):
+    """The complementary case: a supersede cancelling only the run-on task
+    (_cancel_delay_task, as async_stop_cover/_abandon_active_lifecycle do)
+    while leg B's own task is left running must not kill leg B's task --
+    only the epoch re-check in _settle_before_reversing decides whether leg B
+    proceeds (see test_stop_inside_the_settle_gap_aborts_leg_b)."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(100)
+    cover._pending_recalibrated_target = 25
+    cover._pending_recalibrated_axis = "travel"
+    cover._recalibration_epoch = cover._movement_epoch
+    cover._delay_task = asyncio.ensure_future(asyncio.sleep(10))
+    settle = AsyncMock()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", new=settle),
+    ):
+        task = asyncio.ensure_future(cover._maybe_start_recalibrated_leg())
+        await asyncio.sleep(0)  # let it reach `await delay_task`
+        assert not task.done()
+        cover._delay_task.cancel()
+        await task  # must not raise
+
+    settle.assert_awaited_once()

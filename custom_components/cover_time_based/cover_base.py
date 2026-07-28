@@ -1,7 +1,6 @@
 """Base class for time-based cover entities."""
 
 import asyncio
-import contextlib
 import logging
 from abc import abstractmethod
 from asyncio import sleep
@@ -836,13 +835,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._tilt_restore_active = False
 
     def _clear_multiphase_tilt_state(self) -> None:
-        """Drop every in-flight tilt phase — restore and pre-step alike."""
+        """Drop every in-flight movement phase — restore, pre-step, recalibration."""
         self._tilt_restore_target = None
         self._release_tilt_restore()
         self._pending_travel_target = None
         self._pending_travel_command = None
         self._pending_tilt_target = None
         self._pending_tilt_command = None
+        self._pending_recalibrated_target = None
+        self._pending_recalibrated_axis = None
+        self._recalibration_epoch = None
 
     def _tilt_restore_superseded(self, epoch: int) -> bool:
         """Whether the restore holding ``epoch`` has been cancelled or replaced.
@@ -2660,11 +2662,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         # Leg A may have armed a delayed relay stop (endpoint_runon_time).
         # Settling while the relay is still energized would make the rest gap a
-        # fiction, so let the run-on finish before starting the clock.
+        # fiction, so let the run-on finish before starting the clock. This
+        # runs on the auto-updater's own task, so the CancelledError raised
+        # here has two possible sources that look identical at this await
+        # point: the run-on task itself being cancelled by a supersede (safe
+        # to absorb — the epoch re-check in _settle_before_reversing below is
+        # what actually decides whether leg B still proceeds), or *this* task
+        # being cancelled (e.g. the auto-updater torn down on entity removal
+        # or HA shutdown), which must propagate rather than let leg B carry on
+        # running on a task nothing asked to keep alive. Task.cancelling()
+        # distinguishes them: it is only bumped by a direct cancel() of this
+        # task, not by cancelling something this task merely happens to be
+        # awaiting.
         delay_task = self._delay_task
         if delay_task is not None and not delay_task.done():
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await delay_task
+            except asyncio.CancelledError:
+                if asyncio.current_task().cancelling():
+                    raise
 
         # auto_stop_if_necessary cleared _last_command, so leg B does not read
         # itself as a direction change and would skip DIRECTION_CHANGE_DELAY --
@@ -2674,10 +2690,21 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
 
         self._log("_maybe_start_recalibrated_leg :: %s leg to %d%%", axis, target)
-        if axis == "tilt":
-            await self.set_tilt_position(target, recalibrate=False)
-        else:
-            await self.set_position(target, recalibrate=False)
+        try:
+            if axis == "tilt":
+                await self.set_tilt_position(target, recalibrate=False)
+            else:
+                await self.set_position(target, recalibrate=False)
+        except HomeAssistantError as err:
+            # We are on the auto-updater's task — an escape would take the
+            # updater down. The cover is parked at a true endpoint, so leaving
+            # it there is safe and correctly tracked.
+            _LOGGER.warning(
+                "(%s) recalibrated move to %d%% failed: %s",
+                self.entity_id,
+                target,
+                err,
+            )
 
     async def _stop_restore_motor(self) -> None:
         """Take down whichever motor the restore energized.
