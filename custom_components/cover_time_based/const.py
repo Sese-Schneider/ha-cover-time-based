@@ -86,11 +86,14 @@ DEFAULT_FORCE_ENDPOINT_REDRIVE = False
 # feedback that an external remote may also have moved (issue #179), the
 # believed position is untrustworthy, so a timed move from it lands anywhere;
 # the reporter's case is a shutter that must never be driven into an
-# obstruction below it. Doubles the travel of every positioning move, which is
-# why it is off by default.
+# obstruction below it. Every move costs a full open plus the run back down
+# to the target — between one and two times the cover's full travel time,
+# however small the change — which is why it is off by default.
 #
-# Endpoint targets skip the extra leg: reaching an endpoint IS the
-# recalibration. That carve-out is asymmetric for tilt — see
-# CoverTimeBased._should_recalibrate.
+# Endpoint targets (0/100) have no separate leg to arm: forcing the drive
+# straight to that endpoint (modeled from the opposite one, like
+# CONF_FORCE_ENDPOINT_REDRIVE) already recalibrates it, so it just runs once
+# instead of a leg A + leg B pair. That carve-out is asymmetric for tilt —
+# see CoverTimeBased._should_recalibrate and ._needs_forced_endpoint_redrive.
 CONF_RECALIBRATE_BEFORE_POSITION = "recalibrate_before_position"
 DEFAULT_RECALIBRATE_BEFORE_POSITION = False

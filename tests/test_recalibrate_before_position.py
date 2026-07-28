@@ -94,30 +94,139 @@ async def test_leg_b_awaits_the_settle_gap(make_cover):
 
 @pytest.mark.asyncio
 async def test_target_100_is_a_single_forced_open(make_cover):
-    """An endpoint target IS the recalibration — no pointless extra leg."""
+    """An endpoint target IS the recalibration — no pointless extra leg.
+
+    Finding 3 (fix round 1): that is only true if the single drive is
+    actually a *forced* full-travel open modelled from the opposite
+    endpoint (0), not an ordinary timed move computed from the believed
+    position (30) -- the value this whole feature exists to distrust. Default
+    control_mode is switch, which does not self-stop at its endpoints (its
+    latched relay is cut by an explicit stop after the computed duration), so
+    an ordinary timed move here would strand the cover under drift.
+    """
     cover = make_cover(recalibrate_before_position=True)
-    cover.travel_calc.set_position(40)
+    cover.travel_calc.set_position(30)
 
     with patch.object(cover, "async_write_ha_state"):
         await cover.set_position(100)
 
     assert cover.travel_calc.is_opening()
     assert cover.travel_calc._travel_to_position == 100
+    assert cover.travel_calc._last_known_position == 0, (
+        "must be modelled as a full-travel open starting from the opposite"
+        " endpoint (0), not an ordinary move from the believed 30"
+    )
     assert cover._pending_recalibrated_target is None
 
 
 @pytest.mark.asyncio
 async def test_target_0_has_no_open_leg(make_cover):
-    """Going fully closed must not drive fully open first."""
+    """Going fully closed must not drive fully open first.
+
+    Finding 3 (fix round 1) companion to the above: the single drive to 0
+    must be a forced full-travel close modelled from the opposite endpoint
+    (100), not an ordinary timed move from the believed position (30).
+    """
     cover = make_cover(recalibrate_before_position=True)
-    cover.travel_calc.set_position(40)
+    cover.travel_calc.set_position(30)
 
     with patch.object(cover, "async_write_ha_state"):
         await cover.set_position(0)
 
     assert cover.travel_calc.is_closing(), "must close, not open first"
     assert cover.travel_calc._travel_to_position == 0
+    assert cover.travel_calc._last_known_position == 100, (
+        "must be modelled as a full-travel close starting from the opposite"
+        " endpoint (100), not an ordinary move from the believed 30"
+    )
     assert cover._pending_recalibrated_target is None
+
+
+@pytest.mark.asyncio
+async def test_option_off_endpoint_targets_unchanged(make_cover):
+    """Finding 3 (fix round 1) regression guard: with the option off, an
+    endpoint target is an ordinary timed move from the believed position,
+    exactly as before the fix -- the forced-redrive path must not fire when
+    the feature itself is off."""
+    cover = make_cover()
+    cover.travel_calc.set_position(30)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(0)
+
+    assert cover.travel_calc.is_closing()
+    assert cover.travel_calc._travel_to_position == 0
+    assert cover.travel_calc._last_known_position == 30, (
+        "option off: must be an ordinary timed move from the believed"
+        " position (30), not a forced full redrive from the opposite endpoint"
+    )
+
+
+@pytest.mark.asyncio
+async def test_endpoint_redrive_rolls_back_when_not_started(make_cover):
+    """Finding 3 (fix round 1): mirrors test_rollback_when_leg_a_does_not_start
+    for the endpoint-target path. When the forced full redrive silently does
+    not start (_movement_started reports False), the tracker must roll back
+    to the believed position rather than being left seeded at the fabricated
+    opposite endpoint, and the fallback plain move must be planned from that
+    restored position."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(30)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_movement_started", return_value=False),
+    ):
+        await cover.set_position(0)
+
+    assert cover._pending_recalibrated_target is None
+    assert cover.travel_calc._travel_to_position == 0
+    assert cover.travel_calc._last_known_position == 30, (
+        "tracker must be rolled back to the believed position (30), not left"
+        " seeded at the fabricated opposite endpoint (100)"
+    )
+    assert cover.travel_calc.is_closing(), "fallback plain move: 30 -> 0 is a close"
+
+
+@pytest.mark.asyncio
+async def test_recalibrate_false_endpoint_target_not_forced(make_cover):
+    """Finding 3 (fix round 1) guard: ``recalibrate=False`` must also skip
+    the forced-redrive path, not just leg-arming -- a caller that explicitly
+    opts out (as the internal leg-B re-entry does) must never trigger a
+    forced endpoint redrive."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(30)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(0, recalibrate=False)
+
+    assert cover.travel_calc.is_closing()
+    assert cover.travel_calc._last_known_position == 30, (
+        "recalibrate=False must move directly from the believed position,"
+        " not force a full redrive from the opposite endpoint"
+    )
+
+
+@pytest.mark.asyncio
+async def test_external_trigger_never_forces_endpoint_redrive(make_cover):
+    """Finding 3 (fix round 1) guard: a physical press landing on an
+    endpoint target must never be intercepted into a forced full redrive --
+    external moves only track what the hardware already did."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(30)
+
+    with patch.object(cover, "async_write_ha_state"):
+        cover._triggered_externally = True
+        try:
+            await cover.set_position(0)
+        finally:
+            cover._triggered_externally = False
+
+    assert cover.travel_calc.is_closing()
+    assert cover.travel_calc._last_known_position == 30, (
+        "external trigger must move directly from the believed position,"
+        " not force a full redrive from the opposite endpoint"
+    )
 
 
 @pytest.mark.asyncio

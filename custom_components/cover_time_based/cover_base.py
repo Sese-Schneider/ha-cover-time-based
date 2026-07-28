@@ -753,15 +753,23 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     def _should_recalibrate(
         self, recalibrate: bool, position: int, *, axis: str
     ) -> bool:
-        """Whether this move gets a recalibration leg first (issue #179).
+        """Whether this move gets a *two-leg* recalibration: drive to the
+        fully-open datum first, then a second leg to the requested position
+        (issue #179).
 
-        The endpoint carve-out is asymmetric. Skipping is only valid where
-        reaching the endpoint IS a recalibration — that is, where the motor
-        stalls against a physical limit. Travel endpoints always qualify. Tilt
-        endpoints qualify on a dedicated tilt motor only: on the shared-motor
-        strategies a tilt endpoint is reached by driving the travel motor for a
-        tilt time, with nothing to stall against, so every tilt target there
-        still needs the leg.
+        The endpoint carve-out is asymmetric. A travel endpoint target (0/100)
+        never gets a second leg here — the target itself is the datum's own
+        axis, so there is nothing left to drive to once it's reached. That
+        does NOT mean an endpoint target is trusted as-is, though: an
+        ordinary timed move would compute its duration from the believed
+        position, which is exactly the value this feature exists to
+        distrust, so ``set_position`` separately routes an endpoint target
+        through its own forced full re-drive instead (issue #179 finding 3 —
+        see ``_needs_forced_endpoint_redrive``). Tilt endpoints qualify for
+        this no-second-leg carve-out only on a dedicated tilt motor: on the
+        shared-motor strategies a tilt endpoint is reached by driving the
+        travel motor for a tilt time, with nothing to stall against, so every
+        tilt target there still needs the leg.
         """
         if not self._recalibrate_before_position or not recalibrate:
             return False
@@ -772,6 +780,34 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
             return position not in (0, 100)
         return True
+
+    def _needs_forced_endpoint_redrive(self, recalibrate: bool, position: int) -> bool:
+        """Whether a travel endpoint target (0/100) needs a forced full
+        re-drive rather than an ordinary timed move (issue #179 finding 3).
+
+        ``_should_recalibrate`` skips arming a leg for these targets on the
+        premise that reaching an endpoint IS the recalibration — true only if
+        the drive that gets there actually covers the full travel. An
+        ordinary timed move computes its duration from the tracker's
+        BELIEVED current position, which is exactly the value this feature
+        exists to distrust.
+
+        On hardware that self-stops at its physical limits
+        (``_self_stops_at_endpoints`` True) the wrong duration is masked:
+        ``auto_stop_if_necessary`` skips the explicit stop there, so the
+        relay stays live and the motor runs into its limit regardless of the
+        computed duration. Switch mode does not self-stop — its relay is
+        latched for the computed duration and cut by an explicit stop at the
+        end of it — so drift there strands the cover short of the endpoint.
+        Routing every mode through the same forced-full-redrive machinery as
+        leg A fixes this uniformly, and is a no-op change on hardware where
+        the bug was already masked.
+        """
+        if not self._recalibrate_before_position or not recalibrate:
+            return False
+        if self._triggered_externally:
+            return False
+        return position in (0, 100)
 
     def _movement_started(self, *, prior_startup_task=None) -> bool:
         """Whether the movement just commanded is actually under way.
@@ -800,12 +836,21 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return True
         return self._has_tilt_support() and self.tilt_calc.is_traveling()
 
-    async def _start_recalibration_drive(self, axis: str) -> bool:
-        """Drive leg A to the fully-open datum. True if it actually started.
+    async def _start_recalibration_drive(self, axis: str, target: int = 100) -> bool:
+        """Drive a forced full re-drive to ``target``. True if it actually
+        started.
 
         Restores the tracker the forced re-drive seeded when the drive silently
         did not start, so the caller's fallback plain move is planned from the
         believed position rather than from the modelled opposite endpoint.
+
+        ``target`` defaults to 100: leg A of a mid-position recalibrated move
+        always drives to the fully-open datum, since the position the user
+        actually asked for is planned as a separate leg B afterwards (see
+        set_position / set_tilt_position). An endpoint travel target (0 or
+        100) has no separate leg — driving to it fully IS the whole move — so
+        that caller passes its own ``target`` instead of taking the default
+        (issue #179 finding 3).
 
         ``axis`` selects which tracker leg A drives. The caller only passes
         ``"tilt"`` when the strategy uses a dedicated tilt motor (dual_motor)
@@ -818,14 +863,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if axis == "tilt":
             snapshot = self.tilt_calc.snapshot()
             prior_startup_task = self._startup_delay_task
-            await self._force_full_tilt_redrive(target=100)
+            await self._force_full_tilt_redrive(target=target)
             if self._movement_started(prior_startup_task=prior_startup_task):
                 return True
             self.tilt_calc.restore(snapshot)
             return False
         snapshot = self.travel_calc.snapshot()
         prior_startup_task = self._startup_delay_task
-        await self._force_full_redrive(target=100)
+        await self._force_full_redrive(target=target)
         if self._movement_started(prior_startup_task=prior_startup_task):
             return True
         self.travel_calc.restore(snapshot)
@@ -1436,6 +1481,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 return
             self._log(
                 "set_position :: recalibration leg did not start, moving directly"
+            )
+        elif self._needs_forced_endpoint_redrive(recalibrate, position):
+            # position is 0 or 100: driving there IS the recalibration, but
+            # only when it is actually forced to cover the full travel
+            # (issue #179 finding 3) rather than trusting the believed
+            # position for an ordinary timed move. There is no second leg to
+            # arm here — the endpoint target itself is the whole move — so
+            # reuse _start_recalibration_drive purely for its snapshot/
+            # rollback and not-started handling: _force_full_redrive can
+            # silently fail to start (e.g. a same-direction startup delay
+            # already active), and that path must not leave the tracker
+            # seeded at a fabricated endpoint.
+            if await self._start_recalibration_drive("travel", target=position):
+                return
+            self._log(
+                "set_position :: forced endpoint redrive did not start, moving directly"
             )
         self._self_initiated_movement = not self._triggered_externally
         await self._abandon_active_lifecycle()
