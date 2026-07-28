@@ -27,6 +27,7 @@ from .cover import (
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
+    CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
     CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SAFE_TILT_POSITION,
@@ -55,6 +56,7 @@ from .cover import (
     DEFAULT_IGNORE_REPORTED_POSITION,
     DEFAULT_INVERT,
     DEFAULT_PULSE_TIME,
+    DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
     DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
@@ -70,6 +72,7 @@ _FIELD_MAP = {
     "relay_reports_off": CONF_RELAY_REPORTS_OFF,
     "send_endpoint_stop": CONF_SEND_ENDPOINT_STOP,
     "force_endpoint_redrive": CONF_FORCE_ENDPOINT_REDRIVE,
+    "recalibrate_before_position": CONF_RECALIBRATE_BEFORE_POSITION,
     "open_switch_entity_id": CONF_OPEN_SWITCH_ENTITY_ID,
     "close_switch_entity_id": CONF_CLOSE_SWITCH_ENTITY_ID,
     "stop_switch_entity_id": CONF_STOP_SWITCH_ENTITY_ID,
@@ -232,6 +235,9 @@ async def ws_get_config(
             "force_endpoint_redrive": options.get(
                 CONF_FORCE_ENDPOINT_REDRIVE, DEFAULT_FORCE_ENDPOINT_REDRIVE
             ),
+            "recalibrate_before_position": options.get(
+                CONF_RECALIBRATE_BEFORE_POSITION, DEFAULT_RECALIBRATE_BEFORE_POSITION
+            ),
         },
     )
 
@@ -255,6 +261,7 @@ async def ws_get_config(
         vol.Optional("relay_reports_off"): vol.Any(None, bool),
         vol.Optional("send_endpoint_stop"): vol.Any(None, bool),
         vol.Optional("force_endpoint_redrive"): vol.Any(None, bool),
+        vol.Optional("recalibrate_before_position"): vol.Any(None, bool),
         vol.Optional("open_switch_entity_id"): vol.Any(str, None),
         vol.Optional("close_switch_entity_id"): vol.Any(str, None),
         vol.Optional("stop_switch_entity_id"): vol.Any(str, None),

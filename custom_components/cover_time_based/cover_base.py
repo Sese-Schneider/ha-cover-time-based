@@ -36,6 +36,7 @@ from .const import (
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_MIN_MOVEMENT_TIME,
+    CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILT_TIME_CLOSE,
@@ -100,11 +101,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         close_includes_tilt=True,
         assumed_state=True,
         force_endpoint_redrive=False,
+        recalibrate_before_position=False,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
         self._assumed_state = assumed_state
         self._force_endpoint_redrive = force_endpoint_redrive
+        self._recalibrate_before_position = recalibrate_before_position
 
         self._tilt_strategy = tilt_strategy
         # Keep the raw configured mode so calibration can still pick the right
@@ -461,6 +464,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
         attr[CONF_FORCE_ENDPOINT_REDRIVE] = self._force_endpoint_redrive
+        attr[CONF_RECALIBRATE_BEFORE_POSITION] = self._recalibrate_before_position
         if self._calibration is not None:
             attr["calibration_active"] = True
             attr["calibration_attribute"] = self._calibration.attribute

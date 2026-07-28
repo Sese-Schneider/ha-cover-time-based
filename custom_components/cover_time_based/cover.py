@@ -34,6 +34,7 @@ from .const import (
     CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
     CONF_MIN_MOVEMENT_TIME,
+    CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
     CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SEND_ENDPOINT_STOP,
@@ -51,6 +52,7 @@ from .const import (
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_IGNORE_REPORTED_POSITION,
     DEFAULT_INVERT,
+    DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
     DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
@@ -365,6 +367,9 @@ def _create_cover_from_options(options, device_id="", name=""):
         "assumed_state": options.get(CONF_ASSUMED_STATE, DEFAULT_ASSUMED_STATE),
         "force_endpoint_redrive": options.get(
             CONF_FORCE_ENDPOINT_REDRIVE, DEFAULT_FORCE_ENDPOINT_REDRIVE
+        ),
+        "recalibrate_before_position": options.get(
+            CONF_RECALIBRATE_BEFORE_POSITION, DEFAULT_RECALIBRATE_BEFORE_POSITION
         ),
     }
 

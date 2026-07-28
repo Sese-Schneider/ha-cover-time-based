@@ -15,6 +15,7 @@ from custom_components.cover_time_based.cover import (
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
+    CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
     CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SEND_ENDPOINT_STOP,
@@ -2673,3 +2674,99 @@ class TestDirectionChangeDelayRemoved:
 
         result = conn.send_result.call_args[0][1]
         assert "direction_change_delay" not in result
+
+
+class TestRecalibrateBeforePositionRoundTrip:
+    """recalibrate_before_position survives get_config and update_config (#179)."""
+
+    @pytest.mark.asyncio
+    async def test_get_config_defaults_to_false(self):
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["recalibrate_before_position"] is False
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_stored_true(self):
+        hass, _, entity_reg = _make_hass(
+            options={CONF_RECALIBRATE_BEFORE_POSITION: True}
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["recalibrate_before_position"] is True
+
+    @pytest.mark.asyncio
+    async def test_update_config_saves_true(self):
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "recalibrate_before_position": True,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_options[CONF_RECALIBRATE_BEFORE_POSITION] is True
+
+    def test_field_map_contains_recalibrate_before_position(self):
+        from custom_components.cover_time_based.websocket_api import _FIELD_MAP
+
+        assert (
+            _FIELD_MAP["recalibrate_before_position"]
+            == CONF_RECALIBRATE_BEFORE_POSITION
+        )
+
+    def test_update_schema_accepts_recalibrate_before_position(self):
+        # Guards the schema/_FIELD_MAP pair: a _FIELD_MAP entry with no matching
+        # vol.Optional is rejected by validation before it ever reaches the map,
+        # so the option silently fails to persist.
+        schema = ws_update_config._ws_schema
+        validated = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": "cover.x",
+                "recalibrate_before_position": True,
+            }
+        )
+        assert validated["recalibrate_before_position"] is True
