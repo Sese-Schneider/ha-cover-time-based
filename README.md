@@ -170,9 +170,11 @@ Leave it **off** (the default) for covers that report their own position: there 
 Note that a forced re-drive deliberately models the move as starting from the opposite endpoint, so if you **stop it part-way** the reported position is derived from that assumed start and can be well off — stopping a forced close halfway reports roughly 50% even if the cover started at the bottom. Let a re-drive run to the endpoint, where the position resyncs, rather than stopping it mid-travel.
 
 This covers `open` and `close` only. For **Set position** commands on the same
-hardware, see [Fully open before moving to a position](#fully-open-before-moving-to-a-position).
+hardware, see [Fully open before moving to a position](#fully-open-before-moving-to-a-position-beta).
 
-### Fully open before moving to a position
+### Fully open before moving to a position (Beta)
+
+New in this release, and its behaviour may still change.
 
 The companion to [Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints), for the same hardware: a cover with no position feedback that a remote or wall switch can also move, so Home Assistant's idea of where it is drifts out of sync. That option fixes `open` and `close`; this one fixes **Set position**.
 

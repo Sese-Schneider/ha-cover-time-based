@@ -18,7 +18,7 @@ afterEach(() => {
   card = null;
 });
 
-const LABEL = "Fully open before moving to a position";
+const LABEL = "Fully open before moving to a position (Beta)";
 
 const cfg = (mode, over = {}) => ({
   control_mode: mode,
