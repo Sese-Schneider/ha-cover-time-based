@@ -13,7 +13,7 @@
   "issues": {
     "card_installed": {
       "title": "Vernieuw je browser om de Cover Time Based-kaart te tonen",
-      "description": "De Cover Time Based-dashboardkaart is geïnstalleerd. Home Assistant laadt dashboardbronnen alleen bij het laden van de pagina, dus in browsersessies die al open staan blijft de kaart ontbreken totdat je herlaadt — en vaak werkt alleen een **harde vernieuwing**. Voer een harde vernieuwing uit (**Ctrl+Shift+R**, of **⌘+Shift+R** op macOS) om de kaart te laden; als er daarna nog steeds een configuratiefout wordt getoond, wis dan de cache van je browser en herlaad. Je kunt dit probleem sluiten zodra de kaart verschijnt."
+      "description": "De Cover Time Based-dashboardkaart is geïnstalleerd. Home Assistant laadt dashboardbronnen alleen bij het laden van de pagina, dus in browsersessies die al open staan blijft de kaart ontbreken totdat je herlaadt — en vaak werkt alleen een **harde vernieuwing**. Voer een harde vernieuwing uit (**Ctrl+Shift+R**, of **⌘+Shift+R** op macOS) om de kaart te laden; als er daarna nog steeds een configuratiefout wordt getoond, wis dan de cache van je browser en herlaad. Je kunt dit probleem negeren zodra de kaart verschijnt."
     },
     "deprecated_yaml": {
       "title": "YAML-configuratie is verouderd",

@@ -13,7 +13,7 @@
   "issues": {
     "card_installed": {
       "title": "Refresh your browser to show the Cover Time Based card",
-      "description": "The Cover Time Based dashboard card was installed. Home Assistant only loads dashboard resources when the page loads, so in already-open browser sessions the card stays missing until you reload — and often only a **hard refresh** works. Do a hard refresh (**Ctrl+Shift+R**, or **⌘+Shift+R** on macOS) to load the card; if it still shows a configuration error, clear your browser cache and reload. You can dismiss this issue once the card appears."
+      "description": "The Cover Time Based dashboard card was installed. Home Assistant only loads dashboard resources when the page loads, so in already-open browser sessions the card stays missing until you reload — and often only a **hard refresh** works. Do a hard refresh (**Ctrl+Shift+R**, or **⌘+Shift+R** on macOS) to load the card; if it still shows a configuration error, clear your browser cache and reload. You can ignore this issue once the card appears."
     },
     "deprecated_yaml": {
       "title": "YAML configuration is deprecated",

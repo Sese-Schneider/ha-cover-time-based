@@ -13,7 +13,7 @@
   "issues": {
     "card_installed": {
       "title": "Aktualisiere deinen Browser, um die Cover-Time-Based-Karte anzuzeigen",
-      "description": "Die Cover-Time-Based-Dashboard-Karte wurde installiert. Home Assistant lädt Dashboard-Ressourcen nur beim Laden der Seite, daher fehlt die Karte in bereits geöffneten Browser-Sitzungen, bis du neu lädst — und oft hilft nur ein **vollständiges Neuladen**. Führe ein vollständiges Neuladen durch (**Strg+Umschalt+R** bzw. **⌘+Umschalt+R** unter macOS), um die Karte zu laden; falls weiterhin ein Konfigurationsfehler erscheint, leere den Browser-Cache und lade neu. Sobald die Karte erscheint, kannst du dieses Problem schließen."
+      "description": "Die Cover-Time-Based-Dashboard-Karte wurde installiert. Home Assistant lädt Dashboard-Ressourcen nur beim Laden der Seite, daher fehlt die Karte in bereits geöffneten Browser-Sitzungen, bis du neu lädst — und oft hilft nur ein **vollständiges Neuladen**. Führe ein vollständiges Neuladen durch (**Strg+Umschalt+R** bzw. **⌘+Umschalt+R** unter macOS), um die Karte zu laden; falls weiterhin ein Konfigurationsfehler erscheint, leere den Browser-Cache und lade neu. Sobald die Karte erscheint, kannst du dieses Problem ignorieren."
     },
     "deprecated_yaml": {
       "title": "Die YAML-Konfiguration ist veraltet",

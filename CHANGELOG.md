@@ -7,6 +7,12 @@
 - **Spanish (`es`) translation**: Spanish ships as well, across the same two surfaces, picked up automatically from Home Assistant's language setting, with `es-419` and the other regional variants resolving to the same catalogue.
 - **Catalan (`ca`) translation**: Catalan ships as well, across the same two surfaces, picked up automatically from Home Assistant's language setting.
 
+### Fixes
+
+- **The two timing tables no longer render under identical headers in every non-English language**: the **Timing** tab draws a travel table and a tilt table, headed **Travel Attribute** and **Tilt Attribute**. Every non-English catalogue translated both as a bare "Attribute" — "Atributo", "Atrybut", "Attribut", "Attributo", "Attribuut" — so in German, Italian, Dutch, Polish and Portuguese the two tables were headed identically and the label that tells them apart was lost. Each language now distinguishes them, using its own existing word for travel and tilt.
+- **Italian: the "Switch (latching)" control mode was labelled `bistabile`, which names the other mode**: in Italian a *relè bistabile* is a pulse-driven impulse relay — i.e. exactly the neighbouring **Impulso (momentaneo)** mode — so the label pointed Italian users at the wrong wiring for a maintained-contact relay. It is now **Interruttore (mantenuto)**, which pairs correctly against the momentary half of the distinction. German (`rastend`), Polish, Portuguese and Dutch were already unambiguous and are unchanged.
+- **The card-installed Repairs notice told you to "dismiss"/"close" an issue, naming a button that doesn't exist**: Home Assistant's Repairs action is **Ignore**. The English source said "dismiss" and the German, Italian, Dutch and Portuguese catalogues said "close"; all now name the action Home Assistant actually shows (`Ignorieren`, `Ignora`, `Negeer`, `Ignorar`). Polish already said "zignorować" and is unchanged.
+
 ## 4.10.0 (2026-07-29)
 
 ### Features

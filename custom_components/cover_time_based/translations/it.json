@@ -13,7 +13,7 @@
   "issues": {
     "card_installed": {
       "title": "Aggiorna il browser per visualizzare la scheda Cover Time Based",
-      "description": "La scheda dashboard Cover Time Based è stata installata. Home Assistant carica le risorse della dashboard solo al caricamento della pagina, quindi nelle sessioni del browser già aperte la scheda resta assente finché non ricarichi — e spesso funziona solo un **aggiornamento forzato**. Esegui un aggiornamento forzato (**Ctrl+Maiusc+R**, oppure **⌘+Maiusc+R** su macOS) per caricare la scheda; se continua a mostrare un errore di configurazione, svuota la cache del browser e ricarica. Puoi chiudere questo problema una volta che la scheda compare."
+      "description": "La scheda dashboard Cover Time Based è stata installata. Home Assistant carica le risorse della dashboard solo al caricamento della pagina, quindi nelle sessioni del browser già aperte la scheda resta assente finché non ricarichi — e spesso funziona solo un **aggiornamento forzato**. Esegui un aggiornamento forzato (**Ctrl+Maiusc+R**, oppure **⌘+Maiusc+R** su macOS) per caricare la scheda; se continua a mostrare un errore di configurazione, svuota la cache del browser e ricarica. Puoi ignorare questo problema una volta che la scheda compare."
     },
     "deprecated_yaml": {
       "title": "La configurazione YAML è deprecata",
