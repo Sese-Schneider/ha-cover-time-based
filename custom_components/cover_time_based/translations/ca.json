@@ -1,0 +1,81 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Afegeix una persiana temporitzada",
+        "description": "Tria un nom per a la teva persiana. Un cop creada, afegeix la targeta **Cover Time Based** a un panell per configurar tots els paràmetres.",
+        "data": {
+          "name": "Nom"
+        }
+      }
+    }
+  },
+  "issues": {
+    "card_installed": {
+      "title": "Actualitza el navegador per mostrar la targeta Cover Time Based",
+      "description": "S'ha instal·lat la targeta de panell Cover Time Based. Home Assistant només carrega els recursos dels panells en carregar la pàgina, així que a les sessions del navegador que ja estiguin obertes la targeta no apareixerà fins que no tornis a carregar, i sovint només funciona una **actualització forçada**. Fes una actualització forçada (**Ctrl+Maj+R**, o **⌘+Maj+R** a macOS) per carregar la targeta; si continua mostrant un error de configuració, buida la memòria cau del navegador i torna a carregar. Pots tancar aquest problema un cop aparegui la targeta."
+    },
+    "deprecated_yaml": {
+      "title": "La configuració YAML és obsoleta",
+      "description": "Configurar Cover Time Based mitjançant YAML és obsolet i s'eliminarà en una versió futura.\n\nElimina la configuració YAML i torna a crear les teves persianes des de la interfície d'usuari: **Configuració > Dispositius i serveis > Ajudants > Crea ajudant > Cover Time Based**."
+    }
+  },
+  "services": {
+    "set_known_position": {
+      "name": "Estableix la posició de la persiana",
+      "description": "Estableix internament una posició coneguda per a la persiana.",
+      "fields": {
+        "position": {
+          "name": "Posició",
+          "description": "La posició de la persiana, entre 0 i 100."
+        }
+      }
+    },
+    "set_known_tilt_position": {
+      "name": "Estableix la posició d'inclinació de la persiana",
+      "description": "Estableix internament una posició d'inclinació coneguda per a la persiana.",
+      "fields": {
+        "tilt_position": {
+          "name": "Posició",
+          "description": "La posició d'inclinació de la persiana, entre 0 i 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Inicia la calibració",
+      "description": "Inicia una prova de calibració per mesurar un paràmetre de temps. La persiana es començarà a moure: crida stop_calibration quan s'arribi al final de cursa desitjat.",
+      "fields": {
+        "entity_id": {
+          "name": "ID d'entitat",
+          "description": "La persiana que s'ha de calibrar"
+        },
+        "attribute": {
+          "name": "Atribut",
+          "description": "El paràmetre de temps que s'ha de calibrar"
+        },
+        "timeout": {
+          "name": "Temps d'espera",
+          "description": "Temps d'espera de seguretat en segons: el motor s'aturarà automàticament si no es crida stop_calibration"
+        },
+        "direction": {
+          "name": "Direcció",
+          "description": "Direcció del moviment durant la prova. Si no s'estableix, es detecta automàticament segons la posició actual"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Atura la calibració",
+      "description": "Atura una prova de calibració en curs. Calcula el resultat i el desa a la configuració llevat que es cancel·li.",
+      "fields": {
+        "entity_id": {
+          "name": "ID d'entitat",
+          "description": "La persiana que s'està calibrant"
+        },
+        "cancel": {
+          "name": "Cancel·la",
+          "description": "Si és cert, descarta els resultats de la prova sense desar-los"
+        }
+      }
+    }
+  }
+}
