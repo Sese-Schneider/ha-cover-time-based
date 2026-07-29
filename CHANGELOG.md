@@ -1,3 +1,9 @@
+## Unreleased
+
+### Features
+
+- **Added a per-cover "Fully open before moving to a position" option (Beta)** ([#179](https://github.com/Sese-Schneider/ha-cover-time-based/issues/179)): for covers with no position feedback that a remote can move, **Set position** now drives the cover fully open first, then to the target. Off by default — it roughly doubles travel time, and on **inline** and **sequential** tilt, adjusting the slats moves the whole cover and leaves it moved.
+
 ## 4.10.0 (2026-07-29)
 
 ### Features
@@ -5,7 +11,6 @@
 - **German (`de`) translation**: German is now supported, covering the Home Assistant strings and the configuration card, picked up automatically from Home Assistant's language setting, regional variants included.
 - **Italian (`it`) translation** ([#203](https://github.com/Sese-Schneider/ha-cover-time-based/issues/203)): Italian is now supported too, covering the Home Assistant strings and the configuration card, picked up automatically from Home Assistant's language setting.
 - **Dutch (`nl`) translation** ([#205](https://github.com/Sese-Schneider/ha-cover-time-based/issues/205)): Dutch is now supported too, covering the Home Assistant strings and the configuration card, picked up automatically from Home Assistant's language setting.
-- **Added a per-cover "Fully open before moving to a position" option (Beta)** ([#179](https://github.com/Sese-Schneider/ha-cover-time-based/issues/179)): for covers with no position feedback that a remote can move, **Set position** now drives the cover fully open first, then to the target. Off by default — it roughly doubles travel time, and on **inline** and **sequential** tilt, adjusting the slats moves the whole cover and leaves it moved.
 
 ### Fixes
 
