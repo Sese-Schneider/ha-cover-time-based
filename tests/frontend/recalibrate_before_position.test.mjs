@@ -46,36 +46,38 @@ for (const mode of ["switch", "pulse", "toggle", "wrapped"]) {
   });
 }
 
-test("the toggle reflects a stored true", async () => {
-  card = await mountCard(makeHass(), {
-    selectedEntity: "cover.x",
-    config: cfg("switch", { recalibrate_before_position: true }),
-    activeTab: "device",
+for (const mode of ["switch", "wrapped"]) {
+  test(`the toggle reflects a stored true (${mode} mode)`, async () => {
+    card = await mountCard(makeHass(), {
+      selectedEntity: "cover.x",
+      config: cfg(mode, { recalibrate_before_position: true }),
+      activeTab: "device",
+    });
+    expect(row(card).querySelector("ha-switch").checked).toBe(true);
   });
-  expect(row(card).querySelector("ha-switch").checked).toBe(true);
-});
 
-test("the toggle defaults to off", async () => {
-  card = await mountCard(makeHass(), {
-    selectedEntity: "cover.x",
-    config: cfg("switch"),
-    activeTab: "device",
+  test(`the toggle defaults to off (${mode} mode)`, async () => {
+    card = await mountCard(makeHass(), {
+      selectedEntity: "cover.x",
+      config: cfg(mode),
+      activeTab: "device",
+    });
+    expect(row(card).querySelector("ha-switch").checked).toBe(false);
   });
-  expect(row(card).querySelector("ha-switch").checked).toBe(false);
-});
 
-test("toggling calls _updateLocal with true", async () => {
-  card = await mountCard(makeHass(), {
-    selectedEntity: "cover.x",
-    config: cfg("switch"),
-    activeTab: "device",
+  test(`toggling calls _updateLocal with true (${mode} mode)`, async () => {
+    card = await mountCard(makeHass(), {
+      selectedEntity: "cover.x",
+      config: cfg(mode),
+      activeTab: "device",
+    });
+    const captured = [];
+    card._updateLocal = (u) => captured.push(u);
+
+    const toggle = row(card).querySelector("ha-switch");
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change"));
+
+    expect(captured).toEqual([{ recalibrate_before_position: true }]);
   });
-  const captured = [];
-  card._updateLocal = (u) => captured.push(u);
-
-  const toggle = row(card).querySelector("ha-switch");
-  toggle.checked = true;
-  toggle.dispatchEvent(new Event("change"));
-
-  expect(captured).toEqual([{ recalibrate_before_position: true }]);
-});
+}
