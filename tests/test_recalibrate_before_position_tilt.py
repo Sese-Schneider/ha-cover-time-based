@@ -300,7 +300,7 @@ async def test_external_sequential_close_never_recalibrates(make_cover):
 
 @pytest.mark.asyncio
 async def test_leg_a_failing_travel_prestep_does_not_strand_pending_tilt(make_cover):
-    """MINOR 2: mirror of
+    """Mirror of
     test_force_redrive_failing_tilt_prestep_does_not_corrupt_tracker
     (tests/test_force_endpoint_redrive.py) for the tilt side. A boundary-locked
     dual_motor leg A seeds tilt at the opposite endpoint, then -- because
@@ -372,8 +372,8 @@ async def test_sequential_leg_b_full_journey_ends_at_travel_0(make_cover):
 
 
 # ===================================================================
-# Fix round 3 — set_tilt_position's recalibration drive must stop and
-# settle before reversing (same defect as set_position, fix round 2)
+# set_tilt_position's recalibration drive must stop and settle before
+# reversing (same defect as set_position's leg A)
 # ===================================================================
 
 
@@ -385,8 +385,8 @@ async def test_travel_leg_reversal_stops_and_settles(
     """Requirement 1/2: cover closing (a plain TRAVEL movement, not a tilt
     one), option on, set_tilt_position(30) -- the axis="travel"
     recalibration leg always drives OPEN, so it reverses the in-flight
-    close. Must stop and settle first, exactly like set_position's leg A
-    (fix round 2). sequential_open's tilt_command_for inversion is
+    close. Must stop and settle first, exactly like set_position's leg A.
+    sequential_open's tilt_command_for inversion is
     irrelevant here since leg A drives via the plain travel command, never
     through tilt_command_for."""
     cover = make_cover(
@@ -656,10 +656,9 @@ async def test_stop_during_settle_aborts_dual_motor_leg(make_cover):
 async def test_dual_motor_idle_stale_last_command_no_spurious_stop(
     make_cover, command_spy
 ):
-    """Final-review fix (item 1): ``is_direction_change`` alone is not enough
-    to gate the pre-drive stop in
-    ``_stop_and_settle_tilt_before_recalibration_drive`` -- it must also
-    require something to actually be moving (``was_moving``). A dual_motor
+    """``is_direction_change`` alone is not enough to gate the pre-drive
+    stop in ``_stop_and_settle_tilt_before_recalibration_drive`` -- it must
+    also require something to actually be moving (``was_moving``). A dual_motor
     cover idle on both axes with a stale ``_last_command`` (e.g. left over
     from an earlier move) reads as a direction change against nothing
     moving; without the ``was_moving`` conjunct this pulses
@@ -693,8 +692,8 @@ async def test_dual_motor_idle_stale_last_command_no_spurious_stop(
 
 @pytest.mark.asyncio
 async def test_recalibration_plan_tilt_axis_tolerates_no_tilt_strategy(make_cover):
-    """Final-review fix (item 3): ``_recalibration_plan(axis="tilt")`` must
-    not return ``RecalibrationPlan.TWO_LEG`` when ``_tilt_strategy`` is None.
+    """``_recalibration_plan(axis="tilt")`` must not return
+    ``RecalibrationPlan.TWO_LEG`` when ``_tilt_strategy`` is None.
     It's unreachable via HA (the required_features gate keeps
     set_tilt_position from running without tilt configured), but the rest of
     this function -- and the rest of set_tilt_position -- explicitly

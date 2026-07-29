@@ -681,7 +681,7 @@ class TestCalibrationRestoreOnStopFailure:
     (and, in `stop_calibration`, after the result computation). If that stop
     is a relay service call that raises, the restore is skipped — leaving
     the startup delay permanently zeroed, i.e. exactly the silent drift bug
-    Task 7 exists to prevent — and `_calibration` is left non-None, wedging
+    these tests guard against — and `_calibration` is left non-None, wedging
     calibration forever. `async_will_remove_from_hass` already restores
     before clearing; these two paths must do the same via try/finally.
     """

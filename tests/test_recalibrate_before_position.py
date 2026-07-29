@@ -100,13 +100,13 @@ async def test_leg_b_awaits_the_settle_gap(make_cover):
 async def test_target_100_is_a_single_forced_open(make_cover):
     """An endpoint target IS the recalibration — no pointless extra leg.
 
-    Finding 3 (fix round 1): that is only true if the single drive is
-    actually a *forced* full-travel open modelled from the opposite
-    endpoint (0), not an ordinary timed move computed from the believed
-    position (30) -- the value this whole feature exists to distrust. Default
-    control_mode is switch, which does not self-stop at its endpoints (its
-    latched relay is cut by an explicit stop after the computed duration), so
-    an ordinary timed move here would strand the cover under drift.
+    That is only true if the single drive is actually a *forced*
+    full-travel open modelled from the opposite endpoint (0), not an
+    ordinary timed move computed from the believed position (30) -- the
+    value this whole feature exists to distrust. Default control_mode is
+    switch, which does not self-stop at its endpoints (its latched relay is
+    cut by an explicit stop after the computed duration), so an ordinary
+    timed move here would strand the cover under drift.
     """
     cover = make_cover(recalibrate_before_position=True)
     cover.travel_calc.set_position(30)
@@ -127,9 +127,9 @@ async def test_target_100_is_a_single_forced_open(make_cover):
 async def test_target_0_has_no_open_leg(make_cover):
     """Going fully closed must not drive fully open first.
 
-    Finding 3 (fix round 1) companion to the above: the single drive to 0
-    must be a forced full-travel close modelled from the opposite endpoint
-    (100), not an ordinary timed move from the believed position (30).
+    Companion to the above: the single drive to 0 must be a forced
+    full-travel close modelled from the opposite endpoint (100), not an
+    ordinary timed move from the believed position (30).
     """
     cover = make_cover(recalibrate_before_position=True)
     cover.travel_calc.set_position(30)
@@ -148,10 +148,10 @@ async def test_target_0_has_no_open_leg(make_cover):
 
 @pytest.mark.asyncio
 async def test_option_off_endpoint_targets_unchanged(make_cover):
-    """Finding 3 (fix round 1) regression guard: with the option off, an
-    endpoint target is an ordinary timed move from the believed position,
-    exactly as before the fix -- the forced-redrive path must not fire when
-    the feature itself is off."""
+    """Regression guard: with the option off, an endpoint target is an
+    ordinary timed move from the believed position, exactly as before the
+    fix -- the forced-redrive path must not fire when the feature itself is
+    off."""
     cover = make_cover()
     cover.travel_calc.set_position(30)
 
@@ -168,8 +168,8 @@ async def test_option_off_endpoint_targets_unchanged(make_cover):
 
 @pytest.mark.asyncio
 async def test_endpoint_redrive_rolls_back_when_not_started(make_cover):
-    """Finding 3 (fix round 1): mirrors test_rollback_when_leg_a_does_not_start
-    for the endpoint-target path. When the forced full redrive silently does
+    """Mirrors test_rollback_when_leg_a_does_not_start for the
+    endpoint-target path. When the forced full redrive silently does
     not start (_movement_started reports False), the tracker must roll back
     to the believed position rather than being left seeded at the fabricated
     opposite endpoint, and the fallback plain move must be planned from that
@@ -194,10 +194,10 @@ async def test_endpoint_redrive_rolls_back_when_not_started(make_cover):
 
 @pytest.mark.asyncio
 async def test_recalibrate_false_endpoint_target_not_forced(make_cover):
-    """Finding 3 (fix round 1) guard: ``recalibrate=False`` must also skip
-    the forced-redrive path, not just leg-arming -- a caller that explicitly
-    opts out (as the internal leg-B re-entry does) must never trigger a
-    forced endpoint redrive."""
+    """Guard: ``recalibrate=False`` must also skip the forced-redrive path,
+    not just leg-arming -- a caller that explicitly opts out (as the
+    internal leg-B re-entry does) must never trigger a forced endpoint
+    redrive."""
     cover = make_cover(recalibrate_before_position=True)
     cover.travel_calc.set_position(30)
 
@@ -213,9 +213,9 @@ async def test_recalibrate_false_endpoint_target_not_forced(make_cover):
 
 @pytest.mark.asyncio
 async def test_external_trigger_never_forces_endpoint_redrive(make_cover):
-    """Finding 3 (fix round 1) guard: a physical press landing on an
-    endpoint target must never be intercepted into a forced full redrive --
-    external moves only track what the hardware already did."""
+    """Guard: a physical press landing on an endpoint target must never be
+    intercepted into a forced full redrive -- external moves only track
+    what the hardware already did."""
     cover = make_cover(recalibrate_before_position=True)
     cover.travel_calc.set_position(30)
 
@@ -482,7 +482,7 @@ async def test_rollback_when_leg_a_does_not_start(make_cover):
 
 
 # ===================================================================
-# Fix round 1 — stale pending state on epoch mismatch (MINOR 4)
+# Stale pending state on epoch mismatch
 # ===================================================================
 
 
@@ -490,14 +490,14 @@ async def test_rollback_when_leg_a_does_not_start(make_cover):
 async def test_maybe_start_recalibrated_leg_clears_pending_state_on_epoch_mismatch(
     make_cover,
 ):
-    """MINOR 4 (fix round 1) / Task 3 finding (a): a superseded leg B must not
-    linger forever. Originally regression-tested only via the epoch-mismatch
-    early return in _maybe_start_recalibrated_leg, which still clears
-    unconditionally on a mismatch as belt-and-braces. Task 3 closes the gap
-    further upstream: _clear_multiphase_tilt_state (invoked by every
-    supersede, via _handle_stop) now knows about these three fields too, so
-    the supersede itself clears them immediately -- nothing is left stale
-    even before _maybe_start_recalibrated_leg ever runs again."""
+    """A superseded leg B must not linger forever. Originally
+    regression-tested only via the epoch-mismatch early return in
+    _maybe_start_recalibrated_leg, which still clears unconditionally on a
+    mismatch as belt-and-braces. This closes the gap further upstream too:
+    _clear_multiphase_tilt_state (invoked by every supersede, via
+    _handle_stop) now knows about these three fields too, so the supersede
+    itself clears them immediately -- nothing is left stale even before
+    _maybe_start_recalibrated_leg ever runs again."""
     cover = make_cover(recalibrate_before_position=True)
     cover.travel_calc.set_position(75)
 
@@ -524,7 +524,7 @@ async def test_maybe_start_recalibrated_leg_clears_pending_state_on_epoch_mismat
 
 
 # ===================================================================
-# Fix round 1 — recalibration pre-empts the already-at-target no-op (MINOR 5)
+# Recalibration pre-empts the already-at-target no-op
 # ===================================================================
 
 
@@ -547,7 +547,7 @@ async def test_recalibration_overrides_already_at_target_noop(make_cover):
 
 
 # ===================================================================
-# Task 3 — cancellation and error handling
+# Cancellation and error handling
 # ===================================================================
 
 
@@ -699,7 +699,7 @@ async def test_maybe_start_recalibrated_leg_propagates_own_cancellation(make_cov
 
     assert not cover._delay_task.cancelled(), (
         "our own cancellation must not propagate into delay_task and kill"
-        " the pending relay de-energisation (MINOR 5)"
+        " the pending relay de-energisation"
     )
     settle.assert_not_awaited()
 
@@ -737,20 +737,20 @@ async def test_maybe_start_recalibrated_leg_absorbs_delay_task_cancellation(make
 
 
 # ===================================================================
-# Task 3 fix round 2 — Critical 1 / Important 2
+# Epoch checks around the endpoint run-on wait
 # ===================================================================
 
 
 @pytest.mark.asyncio
 async def test_stop_during_the_runon_wait_prevents_leg_b(make_cover):
-    """CRITICAL 1: the epoch is captured once, before the run-on await, and
+    """The epoch is captured once, before the run-on await, and
     was never re-checked afterward. _settle_before_reversing's own re-check
     does NOT cover this window -- it captures self._movement_epoch on entry
     and compares it to itself after its own sleep, so it only ever catches a
     supersede landing during ITS OWN wait, never one that already landed
-    during the run-on wait before settle even started. Reproduces the
-    review's Critical 1: a STOP arriving while leg B is parked on the
-    endpoint run-on must not be followed by leg B driving off anyway."""
+    during the run-on wait before settle even started. A STOP arriving
+    while leg B is parked on the endpoint run-on must not be followed by
+    leg B driving off anyway."""
     cover = make_cover(recalibrate_before_position=True, endpoint_runon_time=2.0)
     cover.travel_calc.set_position(75)
     runon_started = asyncio.Event()
@@ -784,7 +784,7 @@ async def test_stop_during_the_runon_wait_prevents_leg_b(make_cover):
 
 @pytest.mark.asyncio
 async def test_new_command_during_the_runon_wait_supersedes(make_cover):
-    """CRITICAL 1b, the other supersede path in the same window: a fresh
+    """The other supersede path in the same window: a fresh
     set_position landing while leg B is parked on the run-on wait must win --
     the stale leg B, resuming afterward, must not clobber it back to the old
     target."""
@@ -820,14 +820,13 @@ async def test_new_command_during_the_runon_wait_supersedes(make_cover):
 
 @pytest.mark.asyncio
 async def test_maybe_start_recalibrated_leg_epoch_mismatch_still_clears(make_cover):
-    """IMPORTANT 2: the epoch-mismatch branch inside
-    _maybe_start_recalibrated_leg must itself clear the three pending fields,
-    independent of the upstream clear finding (a) added to
-    _clear_multiphase_tilt_state. _supersede_movement bumps the epoch without
-    going through _clear_multiphase_tilt_state, so arming directly and
-    superseding this way is the one route that still reaches the
-    epoch-mismatch branch with a non-None target -- pinning the "clear before
-    the epoch check" ordering fix round 1 introduced. Moving the three clears
+    """The epoch-mismatch branch inside _maybe_start_recalibrated_leg must
+    itself clear the three pending fields, independent of the upstream
+    clear added to _clear_multiphase_tilt_state. _supersede_movement bumps
+    the epoch without going through _clear_multiphase_tilt_state, so
+    arming directly and superseding this way is the one route that still
+    reaches the epoch-mismatch branch with a non-None target -- pinning
+    the "clear before the epoch check" ordering. Moving the three clears
     to after the epoch check leaves every other test in this file green."""
     cover = make_cover(recalibrate_before_position=True)
     cover.travel_calc.set_position(100)
@@ -983,7 +982,7 @@ async def test_option_off_reversal_unaffected_by_recalibration_guard(
 ):
     """Requirement 5: with the option off, an ordinary reversing
     set_position still goes through the pre-existing plain-path
-    stop-then-settle, exactly as before fix round 2 -- the new
+    stop-then-settle, exactly as before this feature -- the new
     pre-recalibration-drive guard never fires when the option is off.
     Opening toward 80 from a believed 20, both an endpoint target (0) and a
     mid-range target below the current position (10) reverse the in-flight
@@ -1012,8 +1011,8 @@ async def test_option_off_reversal_unaffected_by_recalibration_guard(
 async def test_set_known_position_stale_last_command_no_spurious_stop(
     make_cover, command_spy
 ):
-    """Final-review fix (item 1): ``is_direction_change`` alone is not enough
-    to gate the pre-drive stop in
+    """``is_direction_change`` alone is not enough to gate the pre-drive
+    stop in
     ``_stop_and_settle_before_recalibration_drive`` -- it must also require
     something to actually be moving. ``set_known_position`` -> ``_handle_stop``
     halts ``travel_calc`` but never touches ``_last_command``, so a stale

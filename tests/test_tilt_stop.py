@@ -108,8 +108,8 @@ async def test_stop_during_plain_tilt_move_does_not_pulse_travel_relay(
 
     A plain dual-motor tilt move drives only the tilt motor; the travel motor
     sits idle, yet ``_last_command`` is left at the travel open/close command
-    (``DualMotorTilt`` inherits ``tilt_command_for``). Task 1 made
-    ``async_stop_cover_tilt`` delegate to ``async_stop_cover``, whose internal
+    (``DualMotorTilt`` inherits ``tilt_command_for``).
+    ``async_stop_cover_tilt`` delegates to ``async_stop_cover``, whose internal
     travel ``_send_stop`` was ungated on travel activity — so pressing STOP(_TILT)
     pulsed a stopped travel motor: a movement command on toggle hardware (#153),
     a go-to-favourite on pulse ``send_endpoint_stop=False`` (#133). The tilt axis
