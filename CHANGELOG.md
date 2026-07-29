@@ -1,4 +1,4 @@
-## Unreleased
+## 4.10.0 (2026-07-29)
 
 ### Features
 
