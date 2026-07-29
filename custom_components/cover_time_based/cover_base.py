@@ -1228,9 +1228,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_travel_command = None
         self._pending_tilt_target = None
         self._pending_tilt_command = None
-        self._pending_recalibrated_target = None
-        self._pending_recalibrated_axis = None
-        self._recalibration_epoch = None
+        self._disarm_recalibrated_leg()
 
     def _tilt_restore_superseded(self, epoch: int) -> bool:
         """Whether the restore holding ``epoch`` has been cancelled or replaced.
