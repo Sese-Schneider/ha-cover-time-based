@@ -11,7 +11,11 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+from homeassistant.const import (
+    SERVICE_CLOSE_COVER,
+    SERVICE_OPEN_COVER,
+    SERVICE_STOP_COVER,
+)
 from homeassistant.exceptions import HomeAssistantError
 
 
@@ -836,3 +840,181 @@ async def test_maybe_start_recalibrated_leg_epoch_mismatch_still_clears(make_cov
     assert cover._pending_recalibrated_axis is None
     assert cover._recalibration_epoch is None
     assert not cover.travel_calc.is_traveling(), "epoch mismatch must not run leg B"
+
+
+# ===================================================================
+# Fix round 2 — a reversing recalibration drive must stop and settle first
+# ===================================================================
+#
+# _start_recalibration_drive funnels a travel-axis drive through
+# _force_full_redrive -> _async_move_to_endpoint, which has no in-motion-
+# reversal handling of its own (unlike its tilt counterpart,
+# _async_move_tilt_to_endpoint). Both recalibration-drive callers in
+# set_position -- leg A of a mid-position move (always drives OPEN) and a
+# forced endpoint redrive (drives OPEN or CLOSE) -- can be asked to reverse
+# an in-flight movement, and previously did so by issuing the new direction
+# command straight at the running motor with no stop and no settle. On
+# Toggle (opposite button) hardware an opposite-direction pulse while moving
+# IS a stop, not a reversal, so this desynced the tracker from a physically
+# halted motor.
+
+
+def _command_spy(cover):
+    """Wrap cover._async_handle_command to record the command sequence
+    while still calling through to the real implementation, so relay state
+    and _last_command bookkeeping behave exactly as in production."""
+    original = cover._async_handle_command
+    calls = []
+
+    async def spy(command, *args):
+        calls.append(command)
+        return await original(command, *args)
+
+    return calls, spy
+
+
+@pytest.mark.asyncio
+async def test_toggle_opposite_endpoint_redrive_reversal_stops_and_settles(
+    make_cover,
+):
+    """Requirement 1: Toggle-opposite, opening toward 80, option on,
+    set_position(0) must stop and await the settle gap before the close
+    drive -- not issue close_cover straight at the still-opening motor.
+    Asserted at the command level (the sequence _async_handle_command
+    receives), which is where the bug showed: the tracker still moved
+    either way, only the missing STOP/settle distinguished the fix from the
+    bug (see the coordinator's own relay-level trace)."""
+    cover = make_cover(control_mode="toggle_opposite", recalibrate_before_position=True)
+    cover.travel_calc.set_position(20)
+    cover.travel_calc.start_travel(80)
+    cover._last_command = SERVICE_OPEN_COVER
+    assert cover.travel_calc.is_opening()
+
+    calls, spy = _command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=spy),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_position(0)
+
+    assert calls == [SERVICE_STOP_COVER, SERVICE_CLOSE_COVER], (
+        f"must stop before reversing to close, in that order: {calls}"
+    )
+    settle.assert_awaited_once()
+    assert cover._pending_recalibrated_target is None, "endpoint target arms no leg"
+
+
+@pytest.mark.asyncio
+async def test_mid_range_leg_a_reversal_stops_and_settles(make_cover):
+    """Requirement 2: closing toward 20, option on, set_position(50) — leg
+    A always drives OPEN, so this reverses the in-flight close. The open
+    drive must stop and settle first."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(60)
+    cover.travel_calc.start_travel(20)
+    cover._last_command = SERVICE_CLOSE_COVER
+    assert cover.travel_calc.is_closing()
+
+    calls, spy = _command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=spy),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_position(50)
+
+    assert calls == [SERVICE_STOP_COVER, SERVICE_OPEN_COVER], (
+        f"leg A's open drive must stop and reverse cleanly, in that order: {calls}"
+    )
+    settle.assert_awaited_once()
+    assert cover._pending_recalibrated_target == 50, "leg B must still be armed"
+
+
+@pytest.mark.asyncio
+async def test_same_direction_recalibration_drive_no_spurious_stop(make_cover):
+    """Requirement 3 (regression guard): already opening, option on,
+    set_position(100) drives OPEN again — same direction as what is already
+    running, so no reversal is needed and no extra stop/settle must be
+    inserted."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(20)
+    cover.travel_calc.start_travel(100)
+    cover._last_command = SERVICE_OPEN_COVER
+    assert cover.travel_calc.is_opening()
+
+    calls, spy = _command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=spy),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_position(100)
+
+    assert SERVICE_STOP_COVER not in calls, f"no spurious stop: {calls}"
+    settle.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stop_during_reversal_settle_aborts_recalibration_drive(make_cover):
+    """Requirement 4: a stop (or any new command) landing inside the
+    pre-drive settle gap must win. The recalibration drive must not proceed
+    once the settle finishes, and set_position must not fall back to a
+    plain move either -- something else has already claimed the movement."""
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(20)
+    cover.travel_calc.start_travel(80)
+    cover._last_command = SERVICE_OPEN_COVER
+
+    async def stop_during_settle():
+        cover._supersede_movement()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", side_effect=stop_during_settle),
+    ):
+        await cover.set_position(0)
+
+    assert not cover.travel_calc.is_traveling(), (
+        "no recalibration drive, and no fallback plain move, after a stop mid-settle"
+    )
+    assert cover._pending_recalibrated_target is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "target",
+    [0, 10],
+    ids=["endpoint", "mid-range"],
+)
+async def test_option_off_reversal_unaffected_by_recalibration_guard(
+    make_cover, target
+):
+    """Requirement 5: with the option off, an ordinary reversing
+    set_position still goes through the pre-existing plain-path
+    stop-then-settle, exactly as before fix round 2 -- the new
+    pre-recalibration-drive guard never fires when the option is off.
+    Opening toward 80 from a believed 20, both an endpoint target (0) and a
+    mid-range target below the current position (10) reverse the in-flight
+    open into a close."""
+    cover = make_cover(control_mode="toggle_opposite")
+    cover.travel_calc.set_position(20)
+    cover.travel_calc.start_travel(80)
+    cover._last_command = SERVICE_OPEN_COVER
+
+    calls, spy = _command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=spy),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_position(target)
+
+    assert calls == [SERVICE_STOP_COVER, SERVICE_CLOSE_COVER], (
+        f"option off: unchanged stop-then-reverse sequence: {calls}"
+    )
+    settle.assert_awaited_once()

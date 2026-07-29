@@ -836,6 +836,64 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return True
         return self._has_tilt_support() and self.tilt_calc.is_traveling()
 
+    async def _stop_and_settle_before_recalibration_drive(self, command: str) -> bool:
+        """Stop and settle an in-flight movement a recalibration drive is
+        about to reverse (issue #179 fix round 2).
+
+        A travel-axis recalibration drive funnels through
+        ``_force_full_redrive`` -> ``_async_move_to_endpoint``, which —
+        unlike its tilt counterpart ``_async_move_tilt_to_endpoint`` — has no
+        in-motion-reversal handling of its own: past its startup-delay
+        branch it just issues ``command`` at whatever is already running.
+        On hardware whose direction relays are independently addressable
+        (Switch) that is silently harmless, but on Toggle (opposite button)
+        an opposite-direction pulse while moving IS a stop
+        (``cover_toggle_opposite_mode.py``) — so the motor halts mid-travel
+        while the tracker keeps counting toward the recalibration drive's
+        fabricated full-travel target, and the eventual endpoint stop then
+        pulses the *other* relay at an already-stopped motor: a #153-class
+        phantom move. Even where the relays are independent, skipping this
+        drops the fixed settle gap every other reversal in this class gets.
+
+        Mirrors ``set_position``'s own direction-change block (the plain,
+        non-recalibrated path further down) rather than a second reversal
+        mechanism, so both callers — leg A of a mid-position recalibrated
+        move (always drives OPEN, reverses only while closing) and a forced
+        endpoint redrive (drives OPEN or CLOSE, reverses either way) — share
+        the same stop-then-settle behaviour the rest of the class already
+        relies on.
+
+        Returns False if the movement was superseded during the settle gap.
+        The caller must return immediately rather than fall back to a plain
+        move — something else has already claimed the movement, mirroring
+        the plain path's own ``if not await self._settle_before_reversing():
+        return``.
+        """
+        shared_motor_tilt_traveling = (
+            self._has_tilt_support()
+            and not self._tilt_strategy.uses_tilt_motor
+            and self.tilt_calc.is_traveling()
+        )
+        is_direction_change = (
+            self._last_command is not None and self._last_command != command
+        )
+        if not (
+            is_direction_change
+            and (self.travel_calc.is_traveling() or shared_motor_tilt_traveling)
+        ):
+            return True
+        self._log(
+            "_stop_and_settle_before_recalibration_drive :: reversing"
+            " in-flight movement before driving %s",
+            command,
+        )
+        self.travel_calc.stop()
+        self.stop_auto_updater()
+        if self._has_tilt_support() and self.tilt_calc.is_traveling():
+            self.tilt_calc.stop()
+        await self._async_handle_command(SERVICE_STOP_COVER)
+        return await self._settle_before_reversing()
+
     async def _start_recalibration_drive(self, axis: str, target: int = 100) -> bool:
         """Drive a forced full re-drive to ``target``. True if it actually
         started.
@@ -1467,6 +1525,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def set_position(self, position, *, recalibrate: bool = True):
         """Move cover to a designated position."""
         if self._should_recalibrate(recalibrate, position, axis="travel"):
+            # Leg A always drives OPEN (the fully-open datum), so it only
+            # reverses an in-flight movement that is currently closing.
+            # Stop and settle first if so (issue #179 fix round 2) — see
+            # _stop_and_settle_before_recalibration_drive.
+            if not await self._stop_and_settle_before_recalibration_drive(
+                SERVICE_OPEN_COVER
+            ):
+                return
             # Arm only AFTER the drive, never before. _start_recalibration_drive
             # -> _force_full_redrive -> _async_move_to_endpoint funnels through
             # _abandon_active_lifecycle, whose first line is _supersede_movement()
@@ -1493,6 +1559,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # silently fail to start (e.g. a same-direction startup delay
             # already active), and that path must not leave the tracker
             # seeded at a fabricated endpoint.
+            #
+            # Unlike leg A, this drive can reverse either way — target=0
+            # drives CLOSE, target=100 drives OPEN — so stop and settle
+            # first if it would (issue #179 fix round 2).
+            endpoint_command = (
+                SERVICE_CLOSE_COVER if position == 0 else SERVICE_OPEN_COVER
+            )
+            if not await self._stop_and_settle_before_recalibration_drive(
+                endpoint_command
+            ):
+                return
             if await self._start_recalibration_drive("travel", target=position):
                 return
             self._log(
