@@ -11,6 +11,7 @@ from custom_components.cover_time_based.const import (
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
+    CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SEND_ENDPOINT_STOP,
 )
@@ -111,6 +112,7 @@ def make_cover(make_hass, _mock_position_store):
         force_time_based_position=None,
         reports_command_not_endpoint=None,
         force_endpoint_redrive=None,
+        recalibrate_before_position=None,
         invert=None,
     ):
         if cover_entity_id is not None:
@@ -175,6 +177,8 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_REPORTS_COMMAND_NOT_ENDPOINT] = reports_command_not_endpoint
         if force_endpoint_redrive is not None:
             options[CONF_FORCE_ENDPOINT_REDRIVE] = force_endpoint_redrive
+        if recalibrate_before_position is not None:
+            options[CONF_RECALIBRATE_BEFORE_POSITION] = recalibrate_before_position
         if invert is not None:
             options[CONF_INVERT] = invert
 
@@ -205,3 +209,22 @@ def make_cover(make_hass, _mock_position_store):
         for task in getattr(cover.hass, "_test_tasks", []):
             if not task.done():
                 task.cancel()
+
+
+@pytest.fixture
+def command_spy():
+    """Wrap a cover's _async_handle_command, recording the command sequence
+    while still calling through to the real implementation, so relay state
+    and _last_command bookkeeping behave exactly as in production."""
+
+    def _make(cover):
+        original = cover._async_handle_command
+        calls = []
+
+        async def spy(command, *args):
+            calls.append(command)
+            return await original(command, *args)
+
+        return calls, spy
+
+    return _make

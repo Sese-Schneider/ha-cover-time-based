@@ -6,6 +6,8 @@ from abc import abstractmethod
 from asyncio import sleep
 from contextvars import ContextVar
 from datetime import timedelta
+from enum import Enum, auto
+from typing import Literal
 
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
@@ -36,6 +38,7 @@ from .const import (
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_MIN_MOVEMENT_TIME,
+    CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILT_TIME_CLOSE,
@@ -76,6 +79,21 @@ _EXTERNAL_TRIGGER: ContextVar[frozenset] = ContextVar(
     "cover_time_based_external_trigger", default=frozenset()
 )
 
+# "travel" drives self.travel_calc; "tilt" drives self.tilt_calc on a
+# dedicated tilt motor (dual_motor). Named here once so a typo reads as a
+# type error instead of silently picking the wrong branch — see the axis
+# dispatch in _recalibration_plan / _start_recalibration_drive /
+# _arm_recalibrated_leg.
+RecalibrationAxis = Literal["travel", "tilt"]
+
+
+class RecalibrationPlan(Enum):
+    """What a position command should do about recalibration (issue #179)."""
+
+    NONE = auto()
+    TWO_LEG = auto()
+    FORCED_ENDPOINT = auto()
+
 
 class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     """Time-based cover with position tracking."""
@@ -100,11 +118,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         close_includes_tilt=True,
         assumed_state=True,
         force_endpoint_redrive=False,
+        recalibrate_before_position=False,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
         self._assumed_state = assumed_state
         self._force_endpoint_redrive = force_endpoint_redrive
+        self._recalibrate_before_position = recalibrate_before_position
 
         self._tilt_strategy = tilt_strategy
         # Keep the raw configured mode so calibration can still pick the right
@@ -155,6 +175,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_travel_command: str | None = None
         self._pending_tilt_target: int | None = None
         self._pending_tilt_command: str | None = None
+        # Second leg of a recalibrated move (issue #179). Leg A drives to a
+        # physical endpoint; this is the move the user actually asked for,
+        # consumed by auto_stop_if_necessary once leg A completes. The epoch is
+        # leg A's movement epoch: any newer command bumps _movement_epoch and
+        # the mismatch drops the follow-up.
+        self._pending_recalibrated_target: int | None = None
+        self._pending_recalibrated_axis: RecalibrationAxis | None = None
+        self._recalibration_epoch: int | None = None
         self._self_initiated_movement = True
         # True while the active movement drives a dedicated tilt motor (dual
         # motor), so auto-stop settles the tilt motor instead of travel.
@@ -461,6 +489,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
         attr[CONF_FORCE_ENDPOINT_REDRIVE] = self._force_endpoint_redrive
+        attr[CONF_RECALIBRATE_BEFORE_POSITION] = self._recalibrate_before_position
         if self._calibration is not None:
             attr["calibration_active"] = True
             attr["calibration_attribute"] = self._calibration.attribute
@@ -634,7 +663,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         return False
 
-    async def _force_full_redrive(self, target: int) -> None:
+    async def _force_full_redrive(
+        self, target: int, *, suppress_start_command: bool = False
+    ) -> None:
         """Re-drive fully to ``target`` (0 or 100) even though the tracker
         believes it is already settled there (issue #167).
 
@@ -663,6 +694,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         refreshed first (mirroring _async_move_to_endpoint's own first line)
         so _require_movement_target_available's gate sees this call's trigger
         source rather than a value left over from a previous movement.
+
+        ``suppress_start_command`` is forwarded straight through to
+        _async_move_to_endpoint — the caller must decide it BEFORE calling
+        here, because the seed below erases the evidence it is derived from
+        (see _start_recalibration_drive).
         """
         closing = target == 0
         self._self_initiated_movement = not self._triggered_externally
@@ -689,13 +725,446 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         snapshot = self.travel_calc.snapshot()
         self.travel_calc.set_position(opposite)
         try:
-            await self._async_move_to_endpoint(target=target)
+            await self._async_move_to_endpoint(
+                target=target, suppress_start_command=suppress_start_command
+            )
         except Exception:
             self.travel_calc.restore(snapshot)
             self._pending_travel_target = None
             self._pending_travel_command = None
             self._tilt_restore_target = None
             raise
+
+    async def _force_full_tilt_redrive(
+        self, target: int, *, suppress_start_command: bool = False
+    ) -> None:
+        """Re-drive tilt fully to ``target`` (0 or 100) on a dedicated tilt
+        motor, even though the tracker believes it is already there (#179).
+
+        The dual-motor analogue of _force_full_redrive: model the start as the
+        opposite tilt endpoint so the tilt motor runs for its full tilt time
+        and stalls at its own limit, giving a true datum for a cover an
+        external remote may have moved.
+
+        Only valid where the tilt motor is independent. On a shared-motor
+        strategy the excess would not stall — it would bleed into cover travel
+        and desync the travel tracker — so _start_recalibration_drive routes
+        those to the travel re-drive instead.
+
+        Mirrors _force_full_redrive's rollback scope: _async_move_tilt_to_endpoint
+        has the same shape as _async_move_to_endpoint — on a boundary-locked
+        dual_motor cover it may run a travel pre-step first
+        (_start_travel_pre_step), which sets the continuation fields
+        _pending_tilt_target / _pending_tilt_command *before* firing the travel
+        relay command. A failure there (e.g. the travel switch entity going
+        unavailable) leaves those dangling with no travel movement ever
+        started to reach the auto-updater continuation that would otherwise
+        consume them, so they must be cleared alongside the tracker restore.
+
+        ``suppress_start_command`` is forwarded straight through, exactly as
+        in _force_full_redrive: the seed below erases the "was travelling"
+        evidence the caller derives it from.
+        """
+        opposite = 100 if target == 0 else 0
+        self._self_initiated_movement = not self._triggered_externally
+        self._log(
+            "_force_full_tilt_redrive :: target=%d modeled from opposite=%d",
+            target,
+            opposite,
+        )
+        snapshot = self.tilt_calc.snapshot()
+        self.tilt_calc.set_position(opposite)
+        try:
+            await self._async_move_tilt_to_endpoint(
+                target=target, suppress_start_command=suppress_start_command
+            )
+        except Exception:
+            self.tilt_calc.restore(snapshot)
+            self._pending_tilt_target = None
+            self._pending_tilt_command = None
+            raise
+
+    def _recalibration_plan(
+        self, recalibrate: bool, position: int, *, axis: RecalibrationAxis
+    ) -> RecalibrationPlan:
+        """Decide what this position command should do about recalibration
+        (issue #179):
+
+        - ``NONE``: an ordinary timed move, no recalibration.
+        - ``TWO_LEG``: drive to the fully-open datum first (leg A), then a
+          second leg to the requested position (leg B).
+        - ``FORCED_ENDPOINT``: a single forced full re-drive straight to the
+          target — no second leg, because the target itself already IS the
+          datum.
+
+        The endpoint carve-out is asymmetric. A travel endpoint target (0/100)
+        never gets a two-leg recalibration — the target itself is the datum's
+        own axis, so there is nothing left to drive to once it's reached.
+        That does NOT mean an endpoint target is trusted as-is, though: an
+        ordinary timed move would compute its duration from the tracker's
+        BELIEVED current position, which is exactly the value this feature
+        exists to distrust — so a travel endpoint target gets
+        ``FORCED_ENDPOINT`` instead of ``NONE``, routing it through the same
+        forced-full-redrive machinery as leg A (issue #179 finding 3).
+
+        On hardware that self-stops at its physical limits
+        (``_self_stops_at_endpoints`` True) the wrong duration from an
+        ordinary timed move is masked: ``auto_stop_if_necessary`` skips the
+        explicit stop there, so the relay stays live and the motor runs into
+        its limit regardless of the computed duration. Switch mode does not
+        self-stop — its relay is latched for the computed duration and cut by
+        an explicit stop at the end of it — so drift there strands the cover
+        short of the endpoint. Routing every mode through ``FORCED_ENDPOINT``
+        fixes this uniformly, and is a no-op change on hardware where the bug
+        was already masked.
+
+        Tilt endpoints qualify for the no-second-leg carve-out only on a
+        dedicated tilt motor: on the shared-motor strategies a tilt endpoint
+        is reached by driving the travel motor for a tilt time, with nothing
+        to stall against, so every tilt target there still gets ``TWO_LEG``.
+
+        Where the carve-out does apply — a dedicated tilt motor — it is
+        ``FORCED_ENDPOINT``, not ``NONE``, for exactly the reason spelled out
+        above for travel: ``NONE`` is an ordinary timed move computed from the
+        BELIEVED tilt position, and the masking that makes that survive on
+        self-stopping hardware is absent in switch mode and in pulse with the
+        default ``send_endpoint_stop`` — there ``_tilt_settle`` de-energises
+        the tilt relay on time and the motor never stalls. A believed-90 → 100
+        move is then a 10%-of-tilt-time nudge; if the real tilt were at 20 it
+        lands at ~30. Routed through ``_force_full_tilt_redrive(target)``, it
+        runs the full tilt time from the opposite tilt endpoint and stalls
+        against the tilt motor's own limit instead.
+        """
+        if not self._recalibrate_before_position or not recalibrate:
+            return RecalibrationPlan.NONE
+        if self._triggered_externally:
+            return RecalibrationPlan.NONE
+        if axis == "travel":
+            if position not in (0, 100):
+                return RecalibrationPlan.TWO_LEG
+            return RecalibrationPlan.FORCED_ENDPOINT
+        if self._tilt_strategy is None:
+            # Defensive, not reachable today: HA's required_features gate
+            # keeps set_tilt_position from ever running without tilt
+            # configured. But the rest of this function tolerates
+            # _tilt_strategy is None (see the three checks above and in the
+            # travel branch), and set_tilt_position itself dereferences
+            # _tilt_strategy.uses_tilt_motor unconditionally right after
+            # calling this — an AttributeError there would slip past
+            # _maybe_start_recalibrated_leg's `except HomeAssistantError`.
+            # Returning NONE here keeps this function's own local invariant
+            # (tolerate None) rather than relying on the unreachability
+            # holding forever.
+            return RecalibrationPlan.NONE
+        if self._tilt_strategy.uses_tilt_motor:
+            if position not in (0, 100):
+                return RecalibrationPlan.TWO_LEG
+            return RecalibrationPlan.FORCED_ENDPOINT
+        return RecalibrationPlan.TWO_LEG
+
+    def _movement_started(
+        self, *, prior_startup_task: asyncio.Task | None = None
+    ) -> bool:
+        """Whether the movement just commanded is actually under way.
+
+        A recalibration leg arms its follow-up only if leg A really started.
+        _async_move_to_endpoint and _async_move_tilt_to_endpoint both return
+        None and have several silent early returns of their own (a
+        same-direction startup delay already active, a direction-change
+        cancel, a resync/no-op at an already-matching target, a
+        settle-gap supersede) — arming behind any of them would strand the
+        pending target with no completion ever coming to consume it. With no
+        return value to read from those methods, this instead probes every
+        piece of state a started drive could have touched:
+
+        - ``travel_calc.is_traveling()`` — a plain travel drive began.
+        - a NEW ``_startup_delay_task`` (see ``prior_startup_task`` below) —
+          the relay is on and the motor is pending its startup delay.
+        - ``_pending_travel_target`` — a tilt-before-travel pre-step began.
+        - ``tilt_calc.is_traveling()`` (dual_motor only) — a tilt drive (or
+          its own pre-step) began.
+
+        Each early return in the two funnel methods must leave every one of
+        these untouched, or this reads a leg A that never actually moved as
+        "started" and arms a leg B with nothing left to trigger it — see the
+        comment at each such return in those two methods.
+
+        ``prior_startup_task`` is the startup-delay task that was already
+        live *before* this drive was attempted, if any. Without it, a startup
+        delay left over from an earlier, unrelated move reads as "this drive
+        started" even when the drive's own early-return left it untouched —
+        the caller must pass the task it captured immediately before driving,
+        so only a delay task the drive itself created counts.
+        """
+        if self.travel_calc.is_traveling():
+            return True
+        if (
+            self._startup_delay_task is not None
+            and not self._startup_delay_task.done()
+            and self._startup_delay_task is not prior_startup_task
+        ):
+            return True
+        if self._pending_travel_target is not None:
+            return True
+        return self._has_tilt_support() and self.tilt_calc.is_traveling()
+
+    def _is_direction_change(self, command: str) -> bool:
+        """Whether ``command`` reverses the last one we sent."""
+        return self._last_command is not None and self._last_command != command
+
+    async def _stop_and_settle_before_recalibration_drive(self, command: str) -> bool:
+        """Stop and settle an in-flight movement a recalibration drive is
+        about to reverse (issue #179).
+
+        A travel-axis recalibration drive funnels through
+        ``_force_full_redrive`` -> ``_async_move_to_endpoint``, which —
+        unlike its tilt counterpart ``_async_move_tilt_to_endpoint`` — has no
+        in-motion-reversal handling of its own: past its startup-delay
+        branch it just issues ``command`` at whatever is already running.
+        On hardware whose direction relays are independently addressable
+        (Switch) that is silently harmless, but on Toggle (opposite button)
+        an opposite-direction pulse while moving IS a stop
+        (``cover_toggle_opposite_mode.py``) — so the motor halts mid-travel
+        while the tracker keeps counting toward the recalibration drive's
+        fabricated full-travel target, and the eventual endpoint stop then
+        pulses the *other* relay at an already-stopped motor: a #153-class
+        phantom move. Even where the relays are independent, skipping this
+        drops the fixed settle gap every other reversal in this class gets.
+
+        Mirrors ``set_position``'s own direction-change block (the plain,
+        non-recalibrated path further down) rather than a second reversal
+        mechanism, so both callers there — leg A of a mid-position
+        recalibrated move (always drives OPEN, reverses only while closing)
+        and a forced endpoint redrive (drives OPEN or CLOSE, reverses either
+        way) — share the same stop-then-settle behaviour the rest of the
+        class already relies on. ``set_tilt_position`` reuses it too for its
+        own ``axis="travel"`` recalibration leg (the shared-motor tilt
+        strategies — inline, sequential): that leg drives the plain travel
+        OPEN command exactly like ``set_position``'s leg A, whichever tilt
+        strategy is configured — a shared-motor tilt move's own command
+        (from ``tilt_command_for``, inverted on ``sequential_open``) still
+        ends up in ``_last_command`` as whichever relay it actually energised,
+        so the plain ``_last_command != command`` check here already accounts
+        for that inversion with no special-casing needed. The dual-motor
+        tilt leg (``axis="tilt"``) is a different, independent motor and has
+        its own counterpart — see
+        ``_stop_and_settle_tilt_before_recalibration_drive``.
+
+        Returns False if the movement was superseded during the settle gap.
+        The caller must return immediately rather than fall back to a plain
+        move — something else has already claimed the movement, mirroring
+        the plain path's own ``if not await self._settle_before_reversing():
+        return``.
+        """
+        shared_motor_tilt_traveling = (
+            self._has_tilt_support()
+            and not self._tilt_strategy.uses_tilt_motor
+            and self.tilt_calc.is_traveling()
+        )
+        is_direction_change = self._is_direction_change(command)
+        if not (
+            is_direction_change
+            and (self.travel_calc.is_traveling() or shared_motor_tilt_traveling)
+        ):
+            return True
+        self._log(
+            "_stop_and_settle_before_recalibration_drive :: reversing"
+            " in-flight movement before driving %s",
+            command,
+        )
+        self.travel_calc.stop()
+        self.stop_auto_updater()
+        if self._has_tilt_support() and self.tilt_calc.is_traveling():
+            self.tilt_calc.stop()
+        await self._async_handle_command(SERVICE_STOP_COVER)
+        return await self._settle_before_reversing()
+
+    async def _stop_and_settle_tilt_before_recalibration_drive(
+        self, command: str, was_tilt_motor_move: bool
+    ) -> bool:
+        """Tilt-axis counterpart of ``_stop_and_settle_before_recalibration_drive``,
+        for a dual-motor recalibration leg (``axis="tilt"``, issue #179).
+
+        The gap here has a different mechanism than the travel axis, but the
+        same effect. ``_force_full_tilt_redrive`` seeds ``tilt_calc`` to the
+        opposite endpoint *before* ``_async_move_tilt_to_endpoint`` ever
+        runs — and that seed sets the tracker's target equal to its own
+        position, so ``tilt_calc.is_traveling()`` reads False by the time
+        ``_async_move_tilt_to_endpoint``'s own in-motion-reversal check runs.
+        That check does exist (unlike the travel axis, which has none at
+        all) but is defeated for every recalibration-drive caller, because
+        it always runs after the seed has already erased the "was
+        travelling" signal it depends on. This must be evaluated from the
+        tracker's TRUE state, before ``_start_recalibration_drive`` (and the
+        seed inside it) ever runs.
+
+        Mirrors ``set_tilt_position``'s own direction-change block: the same
+        ``is_direction_change`` formula, and the same axis-aware stop
+        (``_stop_displaced_movement_for_tilt``) rather than a blind travel
+        STOP — a moving dedicated tilt motor must get a tilt stop, not a
+        travel STOP off a stale ``_last_command`` (#153).
+
+        ``was_tilt_motor_move`` must be the caller's own snapshot of
+        ``self._moving_tilt_motor``, taken before anything resets it —
+        mirrors ``set_tilt_position``'s own capture for the same reason (see
+        ``_stop_displaced_movement_for_tilt``).
+
+        Returns False if the movement was superseded during the settle gap;
+        the caller must return immediately rather than fall back to a plain
+        move or the drive itself.
+        """
+        is_direction_change = self._is_direction_change(command)
+        was_moving = self.tilt_calc.is_traveling() or self.travel_calc.is_traveling()
+        if not (is_direction_change and was_moving):
+            return True
+        self._log(
+            "_stop_and_settle_tilt_before_recalibration_drive :: reversing"
+            " in-flight movement before driving %s",
+            command,
+        )
+        if self.tilt_calc.is_traveling():
+            self.tilt_calc.stop()
+        if self.travel_calc.is_traveling():
+            self.travel_calc.stop()
+        self.stop_auto_updater()
+        await self._stop_displaced_movement_for_tilt(was_tilt_motor_move)
+        return await self._settle_before_reversing()
+
+    def _already_driving_travel_toward(self, target: int) -> bool:
+        """Whether the travel motor is ALREADY running the direction a forced
+        re-drive to ``target`` would command (issue #179).
+
+        The mirror image of ``_stop_and_settle_before_recalibration_drive``'s
+        reversal test, and gated on the same two facts for the same reasons:
+        ``_last_command`` for the direction (a shared-motor tilt phase records
+        whichever relay it actually energised there, inversions included) and
+        "is anything actually moving" so a stale command outliving its movement
+        — ``set_known_position`` leaves exactly that — cannot suppress a drive
+        at a stopped motor. Deliberately ``== command`` rather than ``not
+        _is_direction_change(command)``: the latter also matches
+        ``_last_command is None``, and suppressing on *no* recorded direction
+        would animate the tracker over a motor nobody started.
+
+        Must be evaluated BEFORE the forced re-drive seeds the opposite
+        endpoint — the seed clears ``is_traveling()`` — hence a caller-side
+        decision rather than a check inside the funnel.
+        """
+        command = SERVICE_CLOSE_COVER if target == 0 else SERVICE_OPEN_COVER
+        shared_motor_tilt_traveling = (
+            self._has_tilt_support()
+            and not self._tilt_strategy.uses_tilt_motor
+            and self.tilt_calc.is_traveling()
+        )
+        return self._last_command == command and (
+            self.travel_calc.is_traveling() or shared_motor_tilt_traveling
+        )
+
+    def _already_driving_tilt_toward(self, target: int) -> bool:
+        """Tilt-axis counterpart of ``_already_driving_travel_toward``, for a
+        dedicated tilt motor (dual_motor, issue #179).
+
+        Reads ``tilt_calc`` rather than ``_last_command``, which is ambiguous
+        on this axis: dual_motor's ``tilt_command_for`` returns the plain
+        open/close services, so a *travel* move heading open leaves
+        ``_last_command`` indistinguishable from a tilt move heading open.
+        Suppressing off that would skip the tilt pulse while the tilt motor
+        sits idle and its tracker animates — the very desync this guard exists
+        to prevent, inverted. ``tilt_calc`` has no such ambiguity: this is only
+        ever called for a dedicated tilt motor (the caller passes ``"tilt"``
+        only when ``uses_tilt_motor``), and there the tilt tracker moves only
+        while that motor is energised — a plain tilt move, a tilt-to-safe
+        pre-step, or a tilt restore. A travel move never couples it into
+        motion (dual_motor's plans never set ``coupled_tilt``, and the
+        pre-step-skipped path starts it already at its target).
+
+        Deliberately NOT also conjoined with ``_moving_tilt_motor``: only a
+        plain tilt move sets that flag, so requiring it would re-pulse a tilt
+        motor that a pre-step or a restore has running. Neither of those gets
+        a compensating stop from ``_abandon_active_lifecycle`` either — the
+        forced re-drive's seed clears ``tilt_calc.is_traveling()`` before that
+        runs, so its ``was_tilt_traveling`` term reads False as well.
+        """
+        return self.tilt_calc.is_traveling() and self.tilt_calc.is_closing() == (
+            target == 0
+        )
+
+    async def _start_recalibration_drive(
+        self, axis: RecalibrationAxis, target: int = 100
+    ) -> bool:
+        """Drive a forced full re-drive to ``target``. True if it actually
+        started.
+
+        Restores the tracker the forced re-drive seeded when the drive silently
+        did not start, so the caller's fallback plain move is planned from the
+        believed position rather than from the modelled opposite endpoint.
+
+        ``target`` defaults to 100: leg A of a mid-position recalibrated move
+        always drives to the fully-open datum, since the position the user
+        actually asked for is planned as a separate leg B afterwards (see
+        set_position / set_tilt_position). An endpoint travel target (0 or
+        100) has no separate leg — driving to it fully IS the whole move — so
+        that caller passes its own ``target`` instead of taking the default
+        (issue #179 finding 3).
+
+        ``axis`` selects which tracker leg A drives, and with it which
+        calculator is snapshotted/restored and which redrive coroutine runs.
+        The caller only passes ``"tilt"`` when the strategy uses a dedicated
+        tilt motor (dual_motor) — the only hardware where a tilt drive stalls
+        against its own limit and so is a true datum; every other
+        tilt-triggered call passes ``"travel"`` instead, since on shared-motor
+        hardware the tilt "motor" IS the travel motor and the datum is a
+        travel endpoint. No further guard is needed here.
+
+        The drive's start command is suppressed when the motor is already
+        running that way. This is the counterpart of the caller's own
+        stop-and-settle for the reversing case, and it has to be decided here
+        rather than downstream: the forced re-drive seeds the opposite endpoint
+        before issuing anything, which erases the "was travelling" evidence.
+        Re-issuing the start command at a motor already driving that direction
+        is what the plain path guards with ``already_moving_same_dir`` — on
+        toggle (same-button) hardware the second edge stops the motor, and the
+        seeded tracker then animates a full travel over a motor at a standstill
+        (issue #179). Suppressed uniformly across modes, exactly as the plain
+        path does: elsewhere the re-command is merely redundant, so there is
+        nothing to gain from a per-mode carve-out.
+        """
+        calc = self.tilt_calc if axis == "tilt" else self.travel_calc
+        redrive = (
+            self._force_full_tilt_redrive
+            if axis == "tilt"
+            else self._force_full_redrive
+        )
+        already_driving = (
+            self._already_driving_tilt_toward(target)
+            if axis == "tilt"
+            else self._already_driving_travel_toward(target)
+        )
+        if already_driving:
+            self._log(
+                "_start_recalibration_drive :: %s motor already driving toward"
+                " %d%%, riding it rather than re-commanding",
+                axis,
+                target,
+            )
+        snapshot = calc.snapshot()
+        prior_startup_task = self._startup_delay_task
+        await redrive(target=target, suppress_start_command=already_driving)
+        if self._movement_started(prior_startup_task=prior_startup_task):
+            return True
+        calc.restore(snapshot)
+        return False
+
+    def _arm_recalibrated_leg(self, target: int, axis: RecalibrationAxis) -> None:
+        """Record the move to make once leg A reaches the endpoint."""
+        self._pending_recalibrated_target = target
+        self._pending_recalibrated_axis = axis
+        self._recalibration_epoch = self._movement_epoch
+
+    def _disarm_recalibrated_leg(self) -> None:
+        """Drop any armed recalibration leg without running it."""
+        self._pending_recalibrated_target = None
+        self._pending_recalibrated_axis = None
+        self._recalibration_epoch = None
 
     async def _direction_change_delay(self):
         """Pause between stop and direction change to let the motor settle.
@@ -752,13 +1221,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._tilt_restore_active = False
 
     def _clear_multiphase_tilt_state(self) -> None:
-        """Drop every in-flight tilt phase — restore and pre-step alike."""
+        """Drop every in-flight movement phase — restore, pre-step, recalibration."""
         self._tilt_restore_target = None
         self._release_tilt_restore()
         self._pending_travel_target = None
         self._pending_travel_command = None
         self._pending_tilt_target = None
         self._pending_tilt_command = None
+        self._disarm_recalibrated_leg()
 
     def _tilt_restore_superseded(self, epoch: int) -> bool:
         """Whether the restore holding ``epoch`` has been cancelled or replaced.
@@ -969,8 +1439,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # Movement orchestration
     # -----------------------------------------------------------------------
 
-    async def _async_move_to_endpoint(self, target):
-        """Move cover to an endpoint (0=fully closed, 100=fully open)."""
+    async def _async_move_to_endpoint(self, target, *, suppress_start_command=False):
+        """Move cover to an endpoint (0=fully closed, 100=fully open).
+
+        ``suppress_start_command`` drives the tracker without touching a relay,
+        for the one caller that knows the motor is ALREADY running the
+        direction this move would command: a forced full re-drive
+        (_force_full_redrive) issued while the cover travels that way already.
+        Re-issuing the start command there is the hazard the plain
+        ``set_position`` path guards with ``already_moving_same_dir`` — on
+        toggle (same-button) hardware a second rising edge on the driving relay
+        STOPS the motor. This cannot be detected from inside here: the caller's
+        seed sets travel_calc to the opposite endpoint before we run, which
+        erases the "is travelling" evidence entirely (the same trap the
+        dual-motor tilt reversal works around by evaluating before the seed).
+        Hence a flag decided by the caller rather than a check here. The motor
+        keeps running toward the endpoint and stalls at its limit, which is
+        exactly what a forced re-drive wants; the startup delay is dropped too,
+        since the motor is already up to speed.
+        """
         # NB: _self_initiated_movement is assigned only once this call is
         # committed to acting, past the startup-delay early-returns below.
         # A same-direction command that reaches an already-active startup delay
@@ -1019,11 +1506,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._cancel_startup_delay_task()
                 await self._async_handle_command(SERVICE_STOP_COVER)
                 self._last_command = None
+                # Silent: no travel started. _movement_started must read this
+                # as "not started" — see its docstring.
                 return
             else:
                 self._log(
                     "_async_move_to_endpoint :: startup delay already active, not restarting"
                 )
+                # Silent: no travel started. _movement_started must read this
+                # as "not started" — see its docstring.
                 return
 
         # Committed to acting: now claim the movement's bookkeeping. Unlike the
@@ -1058,6 +1549,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
+            # Silent: a relay resync fires here, but travel_calc never enters
+            # "traveling" — _movement_started must still read this as "not
+            # started". Not reachable from _force_full_redrive (it seeds the
+            # opposite endpoint first, so current never equals target here),
+            # but a future caller of this method directly would hit it.
             return
 
         relay_was_on = self._cancel_delay_task()
@@ -1107,19 +1603,28 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if started:
             return
 
-        await self._async_handle_command(command)
+        if not suppress_start_command:
+            await self._async_handle_command(command)
         coupled_calc = self.tilt_calc if tilt_target is not None else None
         self._begin_movement(
             target,
             tilt_target,
             self.travel_calc,
             coupled_calc,
-            self._travel_startup_delay,
+            None if suppress_start_command else self._travel_startup_delay,
             pre_step_delay,
         )
 
-    async def _async_move_tilt_to_endpoint(self, target):
-        """Move tilt to an endpoint (0=fully closed, 100=fully open)."""
+    async def _async_move_tilt_to_endpoint(
+        self, target, *, suppress_start_command=False
+    ):
+        """Move tilt to an endpoint (0=fully closed, 100=fully open).
+
+        ``suppress_start_command`` is the tilt-axis counterpart of the travel
+        funnel's flag — see _async_move_to_endpoint. Same caller
+        (_force_full_tilt_redrive), same reason: its seed erases the evidence,
+        so the decision has to be made before the drive.
+        """
         # As in _async_move_to_endpoint: assign _self_initiated_movement only
         # once committed to acting, past the "startup delay already active, not
         # restarting" early-return below, so a same-direction command reaching
@@ -1152,11 +1657,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 # _last_command (#153).
                 await self._stop_displaced_movement_for_tilt(was_tilt_motor_move)
                 self._last_command = None
+                # Silent: no tilt drive started. _movement_started must read
+                # this as "not started" — see its docstring.
                 return
             else:
                 self._log(
                     "_async_move_tilt_to_endpoint :: startup delay already active, not restarting"
                 )
+                # Silent: no tilt drive started. _movement_started must read
+                # this as "not started" — see its docstring.
                 return
 
         # Committed to acting (a direction change above falls through to here):
@@ -1179,6 +1688,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 # is leaving). A press for that endpoint is a user stop, not a
                 # no-op — the old early-return left the motor running.
                 await self.async_stop_cover(tilt_axis_reported=False)
+            # Silent either way: no tilt drive started. _movement_started
+            # must read this as "not started" — see its docstring.
             return
 
         # In-motion reversal: the new tilt direction opposes the tilt already in
@@ -1202,9 +1713,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self.stop_auto_updater()
             await self._stop_displaced_movement_for_tilt(was_tilt_motor_move)
             if not await self._settle_before_reversing():
+                # Silent: superseded mid-settle, both calcs already stopped
+                # above. _movement_started must read this as "not started" —
+                # see its docstring.
                 return
             current_tilt = self.tilt_calc.current_position()
             if current_tilt is not None and current_tilt == target:
+                # Silent: settled exactly at target, nothing left to drive.
+                # _movement_started must read this as "not started" — see its
+                # docstring.
                 return
 
         if current_tilt is None:
@@ -1260,24 +1777,88 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # _handle_external_tilt_state_change already did), double-marking
             # its pending echo and swallowing the user's next press. Mirrors
             # the _async_handle_command guard the non-tilt-motor branch uses.
-            if not self._triggered_externally:
+            if not self._triggered_externally and not suppress_start_command:
                 if closing:
                     await self._send_tilt_close()
                 else:
                     await self._send_tilt_open()
-        else:
+        elif not suppress_start_command:
             await self._async_handle_command(command)
         self._begin_movement(
             target,
             travel_target,
             self.tilt_calc,
             self.travel_calc,
-            self._tilt_startup_delay,
+            None if suppress_start_command else self._tilt_startup_delay,
             pre_step_delay,
         )
 
-    async def set_position(self, position):
-        """Move cover to a designated position."""
+    async def set_position(self, position, *, recalibrate: bool = True):
+        """Move cover to a designated position.
+
+        ``recalibrate`` is passed False by exactly one caller,
+        ``_maybe_start_recalibrated_leg`` running leg B of a recalibrated
+        move (issue #179), to stop this call from arming a leg of its own on
+        top of one that already ran. It has a second, less obvious
+        consequence: it also exempts the move from ``min_movement_time`` (see
+        ``_is_movement_too_short``'s ``is_recalibrated_leg`` parameter, which
+        is fed ``not recalibrate``) — leg A has already driven the motor a
+        full travel, so leg B's own pulse is the point of the operation, not
+        a redundant nudge to skip. A future caller passing ``recalibrate=False``
+        for an unrelated reason would silently get that exemption too.
+        """
+        plan = self._recalibration_plan(recalibrate, position, axis="travel")
+        if plan is RecalibrationPlan.TWO_LEG:
+            # Leg A always drives OPEN (the fully-open datum), so it only
+            # reverses an in-flight movement that is currently closing.
+            # Stop and settle first if so (issue #179) — see
+            # _stop_and_settle_before_recalibration_drive.
+            if not await self._stop_and_settle_before_recalibration_drive(
+                SERVICE_OPEN_COVER
+            ):
+                return
+            # Arm only AFTER the drive, never before. _start_recalibration_drive
+            # -> _force_full_redrive -> _async_move_to_endpoint funnels through
+            # _abandon_active_lifecycle, whose first line is _supersede_movement()
+            # (bumps _movement_epoch). _arm_recalibrated_leg stamps
+            # _recalibration_epoch from self._movement_epoch, so arming before
+            # the drive would capture the pre-bump epoch — leg A's own
+            # completion would then read as a newer, unrelated movement and the
+            # epoch check in _maybe_start_recalibrated_leg would silently drop
+            # leg B.
+            if await self._start_recalibration_drive("travel"):
+                self._arm_recalibrated_leg(position, "travel")
+                return
+            self._log(
+                "set_position :: recalibration leg did not start, moving directly"
+            )
+        elif plan is RecalibrationPlan.FORCED_ENDPOINT:
+            # position is 0 or 100: driving there IS the recalibration, but
+            # only when it is actually forced to cover the full travel
+            # (issue #179 finding 3) rather than trusting the believed
+            # position for an ordinary timed move. There is no second leg to
+            # arm here — the endpoint target itself is the whole move — so
+            # reuse _start_recalibration_drive purely for its snapshot/
+            # rollback and not-started handling: _force_full_redrive can
+            # silently fail to start (e.g. a same-direction startup delay
+            # already active), and that path must not leave the tracker
+            # seeded at a fabricated endpoint.
+            #
+            # Unlike leg A, this drive can reverse either way — target=0
+            # drives CLOSE, target=100 drives OPEN — so stop and settle
+            # first if it would (issue #179).
+            endpoint_command = (
+                SERVICE_CLOSE_COVER if position == 0 else SERVICE_OPEN_COVER
+            )
+            if not await self._stop_and_settle_before_recalibration_drive(
+                endpoint_command
+            ):
+                return
+            if await self._start_recalibration_drive("travel", target=position):
+                return
+            self._log(
+                "set_position :: forced endpoint redrive did not start, moving directly"
+            )
         self._self_initiated_movement = not self._triggered_externally
         await self._abandon_active_lifecycle()
         current = self.travel_calc.current_position()
@@ -1342,7 +1923,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         travel_time = self._require_travel_time(closing)
         movement_time = (abs(target - current) / 100.0) * travel_time
 
-        if self._is_movement_too_short(movement_time, target, current, "set_position"):
+        if self._is_movement_too_short(
+            movement_time,
+            target,
+            current,
+            "set_position",
+            is_recalibrated_leg=not recalibrate,
+        ):
             return
 
         self._last_command = command
@@ -1405,8 +1992,92 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
         await self._async_handle_command(command)
 
-    async def set_tilt_position(self, position):
-        """Move cover tilt to a designated position."""
+    async def set_tilt_position(self, position, *, recalibrate: bool = True):
+        """Move cover tilt to a designated position.
+
+        ``recalibrate`` is passed False by exactly one caller,
+        ``_maybe_start_recalibrated_leg`` running leg B of a recalibrated
+        move (issue #179), to stop this call from arming a leg of its own on
+        top of one that already ran. It has a second, less obvious
+        consequence: it also exempts the move from ``min_movement_time`` (see
+        ``_is_movement_too_short``'s ``is_recalibrated_leg`` parameter, which
+        is fed ``not recalibrate``) — leg A has already driven the motor a
+        full travel, so leg B's own pulse is the point of the operation, not
+        a redundant nudge to skip. A future caller passing ``recalibrate=False``
+        for an unrelated reason would silently get that exemption too.
+        """
+        plan = self._recalibration_plan(recalibrate, position, axis="tilt")
+        if plan is RecalibrationPlan.TWO_LEG:
+            # The drive axis is "tilt" only where the tilt motor is independent
+            # (dual_motor) and so stalls against its own limit; everywhere else
+            # the tilt "motor" IS the travel motor, so the datum is a travel
+            # endpoint and leg A drives "travel" instead. The *armed* axis is
+            # always "tilt" regardless — leg B is the tilt move the caller
+            # asked for either way.
+            axis = "tilt" if self._tilt_strategy.uses_tilt_motor else "travel"
+            # Leg A always drives fully open (closing=False). Stop and settle
+            # first if that reverses an in-flight movement (issue #179,
+            # mirroring set_position's own leg A). dual_motor's tilt motor is
+            # independent, so it needs the axis-aware tilt helper (a moving
+            # dedicated tilt motor must get a tilt stop, not a travel STOP —
+            # #153); every other strategy drives leg A via the plain travel
+            # OPEN command, so it reuses the same helper set_position already
+            # uses.
+            if axis == "tilt":
+                was_tilt_motor_move = self._moving_tilt_motor
+                if not await self._stop_and_settle_tilt_before_recalibration_drive(
+                    self._tilt_strategy.tilt_command_for(False), was_tilt_motor_move
+                ):
+                    return
+            elif not await self._stop_and_settle_before_recalibration_drive(
+                SERVICE_OPEN_COVER
+            ):
+                return
+            # Arm only AFTER the drive, never before — mirrors set_position.
+            # _start_recalibration_drive funnels through _async_move_to_endpoint
+            # or _async_move_tilt_to_endpoint, both of which start with
+            # _abandon_active_lifecycle -> _supersede_movement() (bumps
+            # _movement_epoch). _arm_recalibrated_leg stamps _recalibration_epoch
+            # from self._movement_epoch, so arming before the drive would
+            # capture the pre-bump epoch — leg A's own completion would then
+            # read as a newer, unrelated movement and the epoch check in
+            # _maybe_start_recalibrated_leg would silently drop leg B.
+            if await self._start_recalibration_drive(axis):
+                self._arm_recalibrated_leg(position, "tilt")
+                return
+            self._log(
+                "set_tilt_position :: recalibration leg did not start, moving directly"
+            )
+        elif plan is RecalibrationPlan.FORCED_ENDPOINT:
+            # A tilt endpoint on a dedicated tilt motor: driving there IS the
+            # recalibration, so there is no second leg to arm — but only when
+            # the drive is actually forced to cover the full tilt time rather
+            # than trusting the believed tilt for an ordinary timed move.
+            # Exactly set_position's endpoint branch, on the tilt axis; see
+            # _recalibration_plan for why NONE was wrong here. This plan is
+            # only ever produced for uses_tilt_motor, so the drive axis is
+            # always "tilt".
+            #
+            # Like the travel endpoint drive (and unlike leg A, which always
+            # opens) this can reverse either way — target=0 drives the tilt
+            # motor closed, target=100 open — so stop and settle first if it
+            # would, through the axis-aware tilt helper.
+            endpoint_command = self._tilt_strategy.tilt_command_for(position == 0)
+            was_tilt_motor_move = self._moving_tilt_motor
+            if not await self._stop_and_settle_tilt_before_recalibration_drive(
+                endpoint_command, was_tilt_motor_move
+            ):
+                return
+            # _start_recalibration_drive is reused purely for its snapshot /
+            # rollback and not-started handling — _force_full_tilt_redrive can
+            # silently fail to start, and that must not leave tilt_calc seeded
+            # at a fabricated endpoint.
+            if await self._start_recalibration_drive("tilt", target=position):
+                return
+            self._log(
+                "set_tilt_position :: forced tilt endpoint redrive did not"
+                " start, moving directly"
+            )
         self._self_initiated_movement = not self._triggered_externally
         # Capture before _abandon_active_lifecycle resets it: a dedicated tilt
         # motor being displaced must get an axis-aware stop, not a travel STOP
@@ -1495,7 +2166,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     needs_travel_pre_step = True
 
         if self._is_movement_too_short(
-            movement_time, target, current, "set_tilt_position"
+            movement_time,
+            target,
+            current,
+            "set_tilt_position",
+            is_recalibrated_leg=not recalibrate,
         ):
             return
 
@@ -1604,9 +2279,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         Returns (should_proceed, is_direction_change).
         """
-        is_direction_change = (
-            self._last_command is not None and self._last_command != command
-        )
+        is_direction_change = self._is_direction_change(command)
 
         # If startup delay active for same direction, don't restart
         if self._startup_delay_task and not self._startup_delay_task.done():
@@ -1623,8 +2296,28 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         return True, is_direction_change
 
-    def _is_movement_too_short(self, movement_time, target, current, label):
-        """Check if movement time is below minimum. Returns True if movement should be skipped."""
+    def _is_movement_too_short(
+        self,
+        movement_time,
+        target,
+        current,
+        label,
+        *,
+        is_recalibrated_leg: bool = False,
+    ):
+        """Check if movement time is below minimum. Returns True if movement should be skipped.
+
+        ``is_recalibrated_leg`` marks leg B of a recalibrated move (#179) — the
+        caller passed ``recalibrate=False``. min_movement_time exists to skip
+        pointless motor pulses for imperceptible moves, but by the time leg B
+        runs, leg A has already driven the motor a full travel to reach a true
+        datum; the second pulse to the position the user actually asked for IS
+        the point of the operation, not a redundant nudge. Rejecting it here
+        would silently strand the cover at leg A's endpoint instead of where
+        it was asked to go, so leg B is exempt from this check entirely.
+        """
+        if is_recalibrated_leg:
+            return False
         is_to_endpoint = target in (0, 100)
         if (
             self._min_movement_time is not None
@@ -1917,6 +2610,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._moving_tilt = False
                 if was_tilt_motor_move:
                     self._on_tilt_motor_move_complete()
+                # The one terminal return here that does NOT dispatch an armed
+                # recalibration leg — drop it instead (issue #179). Dispatching
+                # would be wrong: leg B is a self-initiated move chained off a
+                # datum leg A reached, and this branch is the *hardware* having
+                # finished a move of its own. Driving the motor again off the
+                # back of that is exactly the surprise-move the feature promises
+                # never to make. A leg should not be armed here at all — an
+                # external trigger gets RecalibrationPlan.NONE, and every route
+                # that flips _self_initiated_movement to False runs
+                # _abandon_active_lifecycle first, which clears the pending — so
+                # this makes that invariant local and enforced rather than
+                # inferred from four call sites. Self-limiting either way; the
+                # point is that it cannot rot.
+                self._disarm_recalibrated_leg()
                 await self._async_persist_position()
                 return
 
@@ -1936,6 +2643,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._moving_tilt_motor = False
                 self._moving_tilt = False
                 await self._async_persist_position()
+                await self._maybe_start_recalibrated_leg()
                 return
 
             if self._pending_travel_target is not None:
@@ -1956,8 +2664,28 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
 
             if self._tilt_restore_target is not None:
-                # Travel just completed — start tilt restore phase
+                # Travel just completed — start tilt restore phase. If the
+                # restore target already matches where tilt is (issue #179:
+                # leg A always targets 100, which coincides with the default
+                # safe_tilt_position, so the dual-motor pre-step already
+                # parked tilt exactly at the restore target), _start_tilt_restore
+                # returns synchronously without driving a motor or re-arming
+                # the auto-updater — this IS the terminal completion of the
+                # move and must consume any armed recalibration leg. When a
+                # real restore is claimed instead (_tilt_restore_active
+                # becomes True), its own eventual completion is handled by
+                # the _tilt_restore_active branch above — checking here too
+                # would double-fire.
                 await self._start_tilt_restore()
+                if not self._tilt_restore_active:
+                    # Mirrors the other two leg-B dispatch sites (issue #179):
+                    # persist before consuming any armed recalibration leg,
+                    # for consistency across the three otherwise-parallel
+                    # sites. Impact is nil either way — leg B persists on its
+                    # own completion — but the asymmetry reads as a bug later
+                    # if left alone.
+                    await self._async_persist_position()
+                    await self._maybe_start_recalibrated_leg()
                 return
 
             current_travel = self.travel_calc.current_position()
@@ -2018,6 +2746,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._moving_tilt_motor = False
             self._moving_tilt = False
             await self._async_persist_position()
+            await self._maybe_start_recalibrated_leg()
 
     def _motor_stops_itself(self) -> bool:
         """Return True if the device halts at the target without a stop command.
@@ -2521,6 +3250,82 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
         self.tilt_calc.start_travel(restore_target)
         self.start_auto_updater()
+
+    async def _maybe_start_recalibrated_leg(self) -> None:
+        """Run the second leg of a recalibrated move, if one is armed (#179).
+
+        Leg A drove the cover to a physical endpoint, so the tracker is now
+        true. Wait out any endpoint run-on and the motor settle gap, then make
+        the move the user actually asked for.
+        """
+        target = self._pending_recalibrated_target
+        if target is None:
+            return
+        axis = self._pending_recalibrated_axis
+        armed_epoch = self._recalibration_epoch
+        # Clear unconditionally, epoch match or not: a stale pending target
+        # left behind by a superseded leg A must not linger forever waiting
+        # for an epoch that will never come again.
+        self._disarm_recalibrated_leg()
+        if self._movement_epoch != armed_epoch:
+            return
+
+        # Leg A may have armed a delayed relay stop (endpoint_runon_time).
+        # Settling while the relay is still energized would make the rest gap a
+        # fiction, so let the run-on finish before starting the clock.
+        #
+        # asyncio.wait, not a bare `await delay_task`: a bare await makes
+        # delay_task this coroutine's own suspension point, so cancelling
+        # *this* task (e.g. the per-tick task from hass.async_create_task,
+        # torn down on entity removal or HA shutdown) would cancel delay_task
+        # right along with it -- killing the pending _delayed_stop before it
+        # de-energises the relay, leaving it latched on. asyncio.wait's own
+        # internal waiter absorbs that instead: delay_task keeps running to
+        # completion regardless, while a cancellation of this task still
+        # propagates out normally through the await.
+        delay_task = self._delay_task
+        if delay_task is not None and not delay_task.done():
+            await asyncio.wait({delay_task})
+
+        # The run-on wait above is itself an await — a stop or a new command
+        # can land while it is in flight, and would otherwise go unnoticed:
+        # _settle_before_reversing captures self._movement_epoch on entry and
+        # compares it to itself after its OWN sleep, so it only ever catches a
+        # supersede landing during its own wait — never one that already
+        # landed during the run-on wait above, before settle even started
+        # (issue #179). Re-check explicitly.
+        if self._movement_epoch != armed_epoch:
+            self._log("_maybe_start_recalibrated_leg :: superseded during run-on wait")
+            return
+
+        # auto_stop_if_necessary cleared _last_command, so leg B does not read
+        # itself as a direction change and would skip DIRECTION_CHANGE_DELAY --
+        # reversing the motor with no rest. Settle explicitly.
+        if not await self._settle_before_reversing():
+            self._log("_maybe_start_recalibrated_leg :: superseded during settle")
+            return
+
+        self._log("_maybe_start_recalibrated_leg :: %s leg to %d%%", axis, target)
+        try:
+            if axis == "tilt":
+                await self.set_tilt_position(target, recalibrate=False)
+            else:
+                await self.set_position(target, recalibrate=False)
+        except HomeAssistantError as err:
+            # This runs on a fresh per-tick task from hass.async_create_task,
+            # not literally "the auto-updater" — stop_auto_updater() has
+            # already unsubscribed the interval timer by the time we get
+            # here, so an escape would not take that down. It would still
+            # surface only as a noisy unhandled-task-exception log, and worse,
+            # silently abandon the move the user asked for. The cover is
+            # parked at a true endpoint (leg A's), so leaving it there is
+            # safe and correctly tracked — warn instead of losing it silently.
+            _LOGGER.warning(
+                "(%s) recalibrated move to %d%% failed: %s",
+                self.entity_id,
+                target,
+                err,
+            )
 
     async def _stop_restore_motor(self) -> None:
         """Take down whichever motor the restore energized.

@@ -69,6 +69,9 @@ export const EN = {
   "force_endpoint_redrive.label": "Always re-send open/close at the endpoints",
   "force_endpoint_redrive.helper":
     "For covers with no position feedback that can also be moved by an external remote, so Home Assistant may wrongly believe they are already fully open or closed. When on, an open or close command is always driven for the full travel time even if Home Assistant thinks the cover is already there — guaranteeing the command reaches the motor. Leave off for covers that report their own position.",
+  "recalibrate_before_position.label": "Fully open before moving to a position (Beta)",
+  "recalibrate_before_position.helper":
+    "For covers with no position feedback that a remote can also move. Drives the cover fully open before each position command, so the move starts from a known position instead of a drifted guess. Roughly doubles the travel of every move, and on inline or sequential tilt it moves the cover when you adjust the slats.",
   "more_info": "More info",
   "timing.attribute_header": "Attribute",
   "timing.travel_attribute_header": "Travel Attribute",
@@ -201,6 +204,9 @@ export const TRANSLATIONS = {
     "force_endpoint_redrive.label": "Reenviar sempre abrir/fechar nos extremos",
     "force_endpoint_redrive.helper":
       "Para estores sem retorno de posição que também podem ser movidos por um telecomando externo, pelo que o Home Assistant pode julgar erradamente que já estão totalmente abertos ou fechados. Quando ativo, um comando de abrir ou fechar é sempre executado durante o tempo total de deslocamento, mesmo que o Home Assistant pense que o estore já lá está — garantindo que o comando chega ao motor. Deixe inativo para estores que reportam a sua própria posição.",
+    "recalibrate_before_position.label": "Abrir totalmente antes de mover para uma posição (Beta)",
+    "recalibrate_before_position.helper":
+      "Para estores sem retorno de posição que também podem ser movidos por um telecomando. Antes de cada comando de definir posição, move primeiro o estore para totalmente aberto, para que o movimento comece a partir de uma posição conhecida em vez de uma estimativa desviada. Isto duplica, grosso modo, o tempo de deslocamento de cada movimento e, na inclinação durante o deslocamento ou na inclinação sequencial, ajustar as lâminas também move o estore.",
     "more_info": "Mais informação",
     "timing.attribute_header": "Atributo",
     "timing.travel_attribute_header": "Atributo",
@@ -331,6 +337,10 @@ export const TRANSLATIONS = {
       "Zawsze ponownie wysyłaj otwórz/zamknij na krańcach",
     "force_endpoint_redrive.helper":
       "Dla rolet bez informacji zwrotnej o pozycji, które mogą być sterowane również zewnętrznym pilotem, przez co Home Assistant może błędnie sądzić, że są już całkowicie otwarte lub zamknięte. Po włączeniu polecenie otwarcia lub zamknięcia jest zawsze wykonywane przez pełny czas ruchu, nawet jeśli Home Assistant sądzi, że roleta już tam jest — dzięki czemu polecenie na pewno dotrze do silnika. Pozostaw wyłączone dla rolet zgłaszających własną pozycję.",
+    "recalibrate_before_position.label":
+      "Otwórz w pełni przed przejściem do pozycji (Beta)",
+    "recalibrate_before_position.helper":
+      "Dla rolet bez informacji zwrotnej o pozycji, które mogą być poruszane również pilotem. Przed każdym poleceniem ustawienia pozycji najpierw otwiera roletę w pełni, dzięki czemu ruch zaczyna się od znanej pozycji, a nie od nieaktualnego przybliżenia. Z grubsza podwaja czas ruchu przy każdym przesunięciu, a przy nachyleniu w trakcie ruchu lub nachyleniu sekwencyjnym regulacja listew porusza także samą roletę.",
     "more_info": "Więcej informacji",
     "timing.attribute_header": "Atrybut",
     "timing.travel_attribute_header": "Atrybut",
@@ -460,6 +470,9 @@ export const TRANSLATIONS = {
     "force_endpoint_redrive.label": "Öffnen/Schließen an den Endlagen immer erneut senden",
     "force_endpoint_redrive.helper":
       "Für Rollläden ohne Positionsrückmeldung, die sich zusätzlich per externer Fernbedienung bewegen lassen, sodass Home Assistant fälschlich annehmen kann, sie seien bereits vollständig geöffnet oder geschlossen. Wenn aktiviert, wird ein Öffnen- oder Schließen-Befehl immer über die volle Fahrzeit ausgeführt, selbst wenn Home Assistant den Rollladen dort schon vermutet — so erreicht der Befehl garantiert den Motor. Für Rollläden, die ihre eigene Position melden, deaktiviert lassen.",
+    "recalibrate_before_position.label": "Vor einer Positionsfahrt zuerst vollständig öffnen (Beta)",
+    "recalibrate_before_position.helper":
+      "Für Rollläden ohne Positionsrückmeldung, die sich auch per Fernbedienung bewegen lassen. Fährt den Rollladen vor jedem Positionsbefehl zuerst vollständig auf, sodass die Fahrt von einer bekannten Position statt von einer abgedrifteten Schätzung beginnt. Verdoppelt dadurch etwa die Fahrzeit jeder Fahrt, und bei Neigung während der Fahrt oder bei sequenzieller Neigung bewegt sich der Rollladen mit, sobald du die Lamellen verstellst.",
     "more_info": "Weitere Informationen",
     "timing.attribute_header": "Attribut",
     "timing.travel_attribute_header": "Attribut",
@@ -590,6 +603,10 @@ export const TRANSLATIONS = {
       "Invia sempre di nuovo apertura/chiusura ai finecorsa",
     "force_endpoint_redrive.helper":
       "Per le tapparelle senza retroazione di posizione che possono essere azionate anche da un telecomando esterno, per cui Home Assistant potrebbe credere erroneamente che siano già completamente aperte o chiuse. Quando è attivo, un comando di apertura o chiusura viene sempre eseguito per l'intero tempo di corsa anche se Home Assistant ritiene che la tapparella si trovi già lì — garantendo che il comando raggiunga il motore. Lascialo disattivato per le tapparelle che riportano la propria posizione.",
+    "recalibrate_before_position.label":
+      "Apri completamente prima di spostare in posizione (Beta)",
+    "recalibrate_before_position.helper":
+      "Per le tapparelle senza retroazione di posizione che possono essere spostate anche da un telecomando. Porta la tapparella in apertura completa prima di ogni comando di posizionamento, così il movimento parte da una posizione nota anziché da una stima alla deriva. Raddoppia circa il tempo di corsa di ogni movimento e, con l'inclinazione durante la corsa o quella sequenziale, muove la tapparella anche quando regoli le lamelle.",
     "more_info": "Maggiori informazioni",
     "timing.attribute_header": "Attributo",
     "timing.travel_attribute_header": "Attributo",
@@ -720,6 +737,10 @@ export const TRANSLATIONS = {
       "Openen/sluiten altijd opnieuw versturen bij de eindstanden",
     "force_endpoint_redrive.helper":
       "Voor rolluiken zonder positieterugkoppeling die ook met een externe afstandsbediening bediend kunnen worden, waardoor Home Assistant ten onrechte kan denken dat ze al volledig open of gesloten zijn. Wanneer dit aanstaat, wordt een open- of sluitcommando altijd gedurende de volledige looptijd uitgevoerd, ook als Home Assistant denkt dat het rolluik daar al staat — zo bereikt het commando gegarandeerd de motor. Laat dit uitstaan voor rolluiken die hun eigen positie rapporteren.",
+    "recalibrate_before_position.label":
+      "Volledig openen voordat naar een positie wordt bewogen (Beta)",
+    "recalibrate_before_position.helper":
+      "Voor rolluiken zonder positieterugkoppeling die ook door een afstandsbediening bewogen kunnen worden. Beweegt het rolluik vóór elk positiecommando eerst volledig open, zodat de beweging start vanaf een bekende positie in plaats van een afgedwaalde schatting. Verdubbelt daarmee ongeveer de looptijd van elke beweging, en bij kantelen tijdens de beweging of sequentieel kantelen beweegt het rolluik mee zodra je de lamellen verstelt.",
     "more_info": "Meer informatie",
     "timing.attribute_header": "Attribuut",
     "timing.travel_attribute_header": "Attribuut",

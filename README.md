@@ -169,6 +169,19 @@ Leave it **off** (the default) for covers that report their own position: there 
 
 Note that a forced re-drive deliberately models the move as starting from the opposite endpoint, so if you **stop it part-way** the reported position is derived from that assumed start and can be well off — stopping a forced close halfway reports roughly 50% even if the cover started at the bottom. Let a re-drive run to the endpoint, where the position resyncs, rather than stopping it mid-travel.
 
+This covers `open` and `close` only. For **Set position** commands on the same
+hardware, see [Fully open before moving to a position](#fully-open-before-moving-to-a-position-beta).
+
+### Fully open before moving to a position (Beta)
+
+New in this release, and its behaviour may still change.
+
+The companion to [Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints), for the same hardware: a cover with no position feedback that a remote or wall switch can also move, so Home Assistant's idea of where it is drifts out of sync. That option fixes `open` and `close`; this one fixes **Set position**.
+
+With it on, a position command drives the cover fully open first — the one position it can be sure of, since the motor stops at its own limit — and only then moves to the position you asked for. So a stale guess can no longer send the cover somewhere you didn't intend, like closing it onto an obstruction below. Physical buttons and remotes are unaffected.
+
+Off by default, because it is expensive: every move costs a full open plus the run back down, up to about twice the full travel time however small the change. And on **inline** and **sequential** tilt, where the slats share the travel motor, adjusting the slats moves the whole cover and leaves it moved.
+
 ## Tilt Mode
 
 The **Tilt Mode** setting controls how tilt and travel interact:

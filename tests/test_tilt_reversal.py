@@ -1,6 +1,6 @@
 """Tilt direction changes must be axis-aware and settle before reversing.
 
-Audit Task 3 — three probe-confirmed defects, one coherent fix:
+Three probe-confirmed defects, one coherent fix:
 
 1. Wrong-axis stop: a tilt-only direction change sent a *travel* STOP keyed off a
    stale ``_last_command``; on toggle hardware that pulses an idle travel relay

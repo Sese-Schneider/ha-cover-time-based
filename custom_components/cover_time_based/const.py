@@ -79,3 +79,21 @@ DEFAULT_SEND_ENDPOINT_STOP = True
 # endpoint command must actually reach the underlying device.
 CONF_FORCE_ENDPOINT_REDRIVE = "force_endpoint_redrive"
 DEFAULT_FORCE_ENDPOINT_REDRIVE = False
+
+# All modes. When True, a set_cover_position command first drives the cover
+# fully open — a physical datum, since the motor stalls against its limit — and
+# only then moves to the requested position. For a cover with no position
+# feedback that an external remote may also have moved (issue #179), the
+# believed position is untrustworthy, so a timed move from it lands anywhere;
+# the reporter's case is a shutter that must never be driven into an
+# obstruction below it. Every move costs a full open plus the run back down
+# to the target — between one and two times the cover's full travel time,
+# however small the change — which is why it is off by default.
+#
+# Endpoint targets (0/100) have no separate leg to arm: forcing the drive
+# straight to that endpoint (modeled from the opposite one, like
+# CONF_FORCE_ENDPOINT_REDRIVE) already recalibrates it, so it just runs once
+# instead of a leg A + leg B pair. That carve-out is asymmetric for tilt —
+# see CoverTimeBased._recalibration_plan.
+CONF_RECALIBRATE_BEFORE_POSITION = "recalibrate_before_position"
+DEFAULT_RECALIBRATE_BEFORE_POSITION = False

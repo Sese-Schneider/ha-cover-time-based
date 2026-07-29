@@ -838,12 +838,24 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return
         await super().async_set_cover_tilt_position(**kwargs)
 
-    async def _async_move_tilt_to_endpoint(self, target):
-        """Route open/close-tilt through native forwarding when available."""
+    async def _async_move_tilt_to_endpoint(
+        self, target, *, suppress_start_command=False
+    ):
+        """Route open/close-tilt through native forwarding when available.
+
+        Native forwarding ignores ``suppress_start_command``: the flag exists
+        for relay hardware where a second start edge is a stop (see the base
+        method). A native ``set_cover_tilt_position`` is an idempotent target,
+        so re-sending it while the device is already moving that way is
+        harmless — and suppressing it would leave the tracker animating a
+        target the device was never told about.
+        """
         if self._use_native_tilt():
             await self._native_tilt_driver.move_to(target)
             return
-        await super()._async_move_tilt_to_endpoint(target)
+        await super()._async_move_tilt_to_endpoint(
+            target, suppress_start_command=suppress_start_command
+        )
 
     async def _send_tilt_open(self) -> None:
         if not self._wrapped_supports_tilt():
