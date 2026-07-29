@@ -73,7 +73,6 @@ export const EN = {
   "recalibrate_before_position.helper":
     "For covers with no position feedback that a remote can also move. Drives the cover fully open before each position command, so the move starts from a known position instead of a drifted guess. Roughly doubles the travel of every move, and on inline or sequential tilt it moves the cover when you adjust the slats.",
   "more_info": "More info",
-  "timing.attribute_header": "Attribute",
   "timing.travel_attribute_header": "Travel Attribute",
   "timing.tilt_attribute_header": "Tilt Attribute",
   "timing.value_header": "Value",
@@ -208,7 +207,6 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.helper":
       "Para estores sem retorno de posição que também podem ser movidos por um telecomando. Antes de cada comando de definir posição, move primeiro o estore para totalmente aberto, para que o movimento comece a partir de uma posição conhecida em vez de uma estimativa desviada. Isto duplica, grosso modo, o tempo de deslocamento de cada movimento e, na inclinação durante o deslocamento ou na inclinação sequencial, ajustar as lâminas também move o estore.",
     "more_info": "Mais informação",
-    "timing.attribute_header": "Atributo",
     "timing.travel_attribute_header": "Atributo de deslocamento",
     "timing.tilt_attribute_header": "Atributo de inclinação",
     "timing.value_header": "Valor",
@@ -342,7 +340,6 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.helper":
       "Dla rolet bez informacji zwrotnej o pozycji, które mogą być poruszane również pilotem. Przed każdym poleceniem ustawienia pozycji najpierw otwiera roletę w pełni, dzięki czemu ruch zaczyna się od znanej pozycji, a nie od nieaktualnego przybliżenia. Z grubsza podwaja czas ruchu przy każdym przesunięciu, a przy nachyleniu w trakcie ruchu lub nachyleniu sekwencyjnym regulacja listew porusza także samą roletę.",
     "more_info": "Więcej informacji",
-    "timing.attribute_header": "Atrybut",
     "timing.travel_attribute_header": "Atrybut ruchu",
     "timing.tilt_attribute_header": "Atrybut nachylenia",
     "timing.value_header": "Wartość",
@@ -474,7 +471,6 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.helper":
       "Für Rollläden ohne Positionsrückmeldung, die sich auch per Fernbedienung bewegen lassen. Fährt den Rollladen vor jedem Positionsbefehl zuerst vollständig auf, sodass die Fahrt von einer bekannten Position statt von einer abgedrifteten Schätzung beginnt. Verdoppelt dadurch etwa die Fahrzeit jeder Fahrt, und bei Neigung während der Fahrt oder bei sequenzieller Neigung bewegt sich der Rollladen mit, sobald du die Lamellen verstellst.",
     "more_info": "Weitere Informationen",
-    "timing.attribute_header": "Attribut",
     "timing.travel_attribute_header": "Fahrattribut",
     "timing.tilt_attribute_header": "Neigungsattribut",
     "timing.value_header": "Wert",
@@ -608,7 +604,6 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.helper":
       "Per le tapparelle senza retroazione di posizione che possono essere spostate anche da un telecomando. Porta la tapparella in apertura completa prima di ogni comando di posizionamento, così il movimento parte da una posizione nota anziché da una stima alla deriva. Raddoppia circa il tempo di corsa di ogni movimento e, con l'inclinazione durante la corsa o quella sequenziale, muove la tapparella anche quando regoli le lamelle.",
     "more_info": "Maggiori informazioni",
-    "timing.attribute_header": "Attributo",
     "timing.travel_attribute_header": "Attributo di corsa",
     "timing.tilt_attribute_header": "Attributo di inclinazione",
     "timing.value_header": "Valore",
@@ -742,7 +737,6 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.helper":
       "Voor rolluiken zonder positieterugkoppeling die ook door een afstandsbediening bewogen kunnen worden. Beweegt het rolluik vóór elk positiecommando eerst volledig open, zodat de beweging start vanaf een bekende positie in plaats van een afgedwaalde schatting. Verdubbelt daarmee ongeveer de looptijd van elke beweging, en bij kantelen tijdens de beweging of sequentieel kantelen beweegt het rolluik mee zodra je de lamellen verstelt.",
     "more_info": "Meer informatie",
-    "timing.attribute_header": "Attribuut",
     "timing.travel_attribute_header": "Loopattribuut",
     "timing.tilt_attribute_header": "Kantelattribuut",
     "timing.value_header": "Waarde",
@@ -874,7 +868,6 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.helper":
       "Pour les volets sans retour de position qu'une télécommande peut aussi actionner. Ouvre complètement le volet avant chaque commande de position, afin que le mouvement parte d'une position connue plutôt que d'une estimation partie à la dérive. Cela double à peu près la course de chaque mouvement et, avec une inclinaison pendant la course ou une inclinaison séquentielle, le volet bouge lorsque vous réglez les lames.",
     "more_info": "Plus d'informations",
-    "timing.attribute_header": "Attribut",
     "timing.travel_attribute_header": "Attribut de course",
     "timing.tilt_attribute_header": "Attribut d'inclinaison",
     "timing.value_header": "Valeur",
@@ -1006,7 +999,6 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.helper":
       "Para persianas sin realimentación de posición que un mando a distancia también puede mover. Abre la persiana por completo antes de cada comando de posición, para que el movimiento parta de una posición conocida en lugar de una estimación desviada. Duplica aproximadamente el recorrido de cada movimiento y, con la inclinación durante el recorrido o la inclinación secuencial, mueve la persiana cuando ajustas las lamas.",
     "more_info": "Más información",
-    "timing.attribute_header": "Atributo",
     "timing.travel_attribute_header": "Atributo de recorrido",
     "timing.tilt_attribute_header": "Atributo de inclinación",
     "timing.value_header": "Valor",
@@ -1138,7 +1130,6 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.helper":
       "Per a persianes sense realimentació de posició que un comandament a distància també pot moure. Obre la persiana del tot abans de cada ordre de posició, perquè el moviment parteixi d'una posició coneguda en lloc d'una estimació desviada. Duplica aproximadament el recorregut de cada moviment i, amb la inclinació durant el recorregut o la inclinació seqüencial, mou la persiana quan ajustes les lamel·les.",
     "more_info": "Més informació",
-    "timing.attribute_header": "Atribut",
     "timing.travel_attribute_header": "Atribut de recorregut",
     "timing.tilt_attribute_header": "Atribut d'inclinació",
     "timing.value_header": "Valor",
