@@ -3,6 +3,15 @@
 ### Features
 
 - **Added a per-cover "Fully open before moving to a position" option (Beta)** ([#179](https://github.com/Sese-Schneider/ha-cover-time-based/issues/179)): for covers with no position feedback that a remote can move, **Set position** now drives the cover fully open first, then to the target. Off by default — it roughly doubles travel time, and on **inline** and **sequential** tilt, adjusting the slats moves the whole cover and leaves it moved.
+- **French (`fr`) translation** ([#216](https://github.com/Sese-Schneider/ha-cover-time-based/issues/216)): French now ships too, across both translated surfaces — the Home Assistant strings and every string the **Cover Time Based** configuration card draws, option helper text included. French-speaking users get it automatically from Home Assistant's own language setting, the regional variants `fr-CA`, `fr-BE` and `fr-CH` resolve to the same catalogue, and the "your language isn't translated yet" banner no longer appears for them.
+- **Spanish (`es`) translation**: Spanish ships as well, across the same two surfaces, picked up automatically from Home Assistant's language setting, with `es-419` and the other regional variants resolving to the same catalogue.
+- **Catalan (`ca`) translation**: Catalan ships as well, across the same two surfaces, picked up automatically from Home Assistant's language setting.
+
+### Fixes
+
+- **The two timing tables no longer render under identical headers in every non-English language**: the **Timing** tab draws a travel table and a tilt table, headed **Travel Attribute** and **Tilt Attribute**. Every non-English catalogue translated both as a bare "Attribute" — "Atributo", "Atrybut", "Attribut", "Attributo", "Attribuut" — so in German, Italian, Dutch, Polish and Portuguese the two tables were headed identically and the label that tells them apart was lost. Each language now distinguishes them, using its own existing word for travel and tilt.
+- **Italian: the "Switch (latching)" control mode was labelled `bistabile`, which names the other mode**: in Italian a *relè bistabile* is a pulse-driven impulse relay — i.e. exactly the neighbouring **Impulso (momentaneo)** mode — so the label pointed Italian users at the wrong wiring for a maintained-contact relay. It is now **Interruttore (mantenuto)**, which pairs correctly against the momentary half of the distinction. German (`rastend`), Polish, Portuguese and Dutch were already unambiguous and are unchanged.
+- **The card-installed Repairs notice told you to "dismiss"/"close" an issue, naming a button that doesn't exist**: Home Assistant's Repairs action is **Ignore**. The English source said "dismiss" and the German, Italian, Dutch and Portuguese catalogues said "close"; all now name the action Home Assistant actually shows (`Ignorieren`, `Ignora`, `Negeer`, `Ignorar`). Polish already said "zignorować" and is unchanged.
 
 ## 4.10.0 (2026-07-29)
 

@@ -11,16 +11,16 @@ Cover Time Based has strings in two places, each with its own file layout. Both 
 | Home Assistant backend | [`strings.json`](custom_components/cover_time_based/strings.json) and [`translations/<lang>.json`](custom_components/cover_time_based/translations/) | Config-flow titles and fields, Repairs issues, service descriptions — anything Home Assistant's own UI renders for us. |
 | Lovelace configuration card | [`frontend/translations.js`](custom_components/cover_time_based/frontend/translations.js) — the `EN` object at the top, and the `TRANSLATIONS` block below it | Every string the card itself draws. |
 
-Currently supported languages: English (`en`), Portuguese (`pt`), Polish (`pl`), German (`de`), Italian (`it`), Dutch (`nl`). This line is the canonical list — everything else derives from the catalogues themselves, so adding a language only touches it here.
+Currently supported languages: English (`en`), Portuguese (`pt`), Polish (`pl`), German (`de`), Italian (`it`), Dutch (`nl`), French (`fr`), Spanish (`es`), Catalan (`ca`). This line is the canonical list — everything else derives from the catalogues themselves, so adding a language only touches it here.
 
 ## Adding a new language
 
-Say you want to add French (`fr`).
+Say you want to add Swedish (`sv`).
 
 ### Backend
 
-1. Copy `custom_components/cover_time_based/translations/en.json` to `custom_components/cover_time_based/translations/fr.json`.
-2. Translate every value in `fr.json`. Keep the keys exactly the same — Home Assistant looks them up by name.
+1. Copy `custom_components/cover_time_based/translations/en.json` to `custom_components/cover_time_based/translations/sv.json`.
+2. Translate every value in `sv.json`. Keep the keys exactly the same — Home Assistant looks them up by name.
 
 Don't touch `strings.json` — it stays in English and is the developer source of truth.
 
@@ -38,7 +38,7 @@ In [`custom_components/cover_time_based/frontend/translations.js`](custom_compon
    };
    ```
 
-2. Add a `fr:` entry mirroring the existing non-English blocks. Use the `EN` object above it as the master list of keys: copy every key across and translate its value.
+2. Add an `sv:` entry mirroring the existing non-English blocks. Use the `EN` object above it as the master list of keys: copy every key across and translate its value.
 
 A key you miss falls back to English at runtime, so a partial translation renders — but it will not pass CI. Both surfaces are held to complete catalogues: the card by `tests/frontend/translation_parity.test.mjs`, and the Home Assistant strings by `scripts/check_translations.py`, which the pre-push hook and CI both run. Translate every key, and use the [audit below](#verifying-translations-are-in-sync) to find any you've missed.
 
