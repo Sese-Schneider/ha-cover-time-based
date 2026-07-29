@@ -10,7 +10,51 @@ datum is a travel endpoint, so the recalibration leg is a TRAVEL drive.
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.const import (
+    SERVICE_CLOSE_COVER,
+    SERVICE_OPEN_COVER,
+    SERVICE_STOP_COVER,
+)
 from homeassistant.exceptions import HomeAssistantError
+
+
+def _command_spy(cover):
+    """Wrap cover._async_handle_command to record the command sequence
+    while still calling through to the real implementation, so relay state
+    and _last_command bookkeeping behave exactly as in production. Mirrors
+    the identically-named helper in test_recalibrate_before_position.py."""
+    original = cover._async_handle_command
+    calls = []
+
+    async def spy(command, *args):
+        calls.append(command)
+        return await original(command, *args)
+
+    return calls, spy
+
+
+def _tilt_send_spy(cover):
+    """Wrap cover._send_tilt_stop/_send_tilt_open/_send_tilt_close to record
+    the call sequence -- the dual-motor analogue of _command_spy, since a
+    dual-motor tilt drive fires these directly rather than going through
+    _async_handle_command."""
+    calls = []
+    originals = {
+        name: getattr(cover, name)
+        for name in ("_send_tilt_stop", "_send_tilt_open", "_send_tilt_close")
+    }
+
+    def make_spy(name):
+        async def spy(*args, **kwargs):
+            calls.append(name)
+            return await originals[name](*args, **kwargs)
+
+        return spy
+
+    patchers = [
+        patch.object(cover, name, side_effect=make_spy(name)) for name in originals
+    ]
+    return calls, patchers
 
 
 def _dual(make_cover, **over):
@@ -337,4 +381,281 @@ async def test_sequential_leg_b_full_journey_ends_at_travel_0(make_cover):
     assert cover.tilt_calc.current_position() == 30
     assert not cover.travel_calc.is_traveling()
     assert not cover.tilt_calc.is_traveling()
+    assert cover._pending_recalibrated_target is None
+
+
+# ===================================================================
+# Fix round 3 — set_tilt_position's recalibration drive must stop and
+# settle before reversing (same defect as set_position, fix round 2)
+# ===================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tilt_mode", ["inline", "sequential_close", "sequential_open"])
+async def test_travel_leg_reversal_stops_and_settles(make_cover, tilt_mode):
+    """Requirement 1/2: cover closing (a plain TRAVEL movement, not a tilt
+    one), option on, set_tilt_position(30) -- the axis="travel"
+    recalibration leg always drives OPEN, so it reverses the in-flight
+    close. Must stop and settle first, exactly like set_position's leg A
+    (fix round 2). sequential_open's tilt_command_for inversion is
+    irrelevant here since leg A drives via the plain travel command, never
+    through tilt_command_for."""
+    cover = make_cover(
+        control_mode="toggle_opposite",
+        recalibrate_before_position=True,
+        tilt_mode=tilt_mode,
+        tilt_time_open=5,
+        tilt_time_close=5,
+    )
+    cover.travel_calc.set_position(60)
+    cover.travel_calc.start_travel(20)
+    cover.tilt_calc.set_position(50)
+    cover._last_command = SERVICE_CLOSE_COVER
+    assert cover.travel_calc.is_closing()
+
+    calls, spy = _command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=spy),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_tilt_position(30)
+
+    assert calls[:2] == [SERVICE_STOP_COVER, SERVICE_OPEN_COVER], (
+        f"must stop before reversing to open, in that order: {calls}"
+    )
+    settle.assert_awaited_once()
+    assert cover._pending_recalibrated_target == 30
+
+
+@pytest.mark.asyncio
+async def test_sequential_open_shared_motor_same_direction_no_spurious_stop(
+    make_cover,
+):
+    """Requirement 2 ('verify rather than assume'): on sequential_open,
+    tilt_command_for inverts the mapping -- tilt_command_for(closing_tilt=True)
+    returns OPEN, not CLOSE (SequentialOpenTilt.tilt_command_for). A tilt
+    move that is semantically "closing" therefore energises the OPEN relay.
+    Leg A always drives OPEN too, so when a tilt-closing move is already in
+    flight, leg A's own OPEN drive must NOT be treated as a reversal --
+    _last_command already reads OPEN, matching the relay leg A itself wants
+    to drive."""
+    cover = make_cover(
+        control_mode="toggle_opposite",
+        recalibrate_before_position=True,
+        tilt_mode="sequential_open",
+        tilt_time_open=5,
+        tilt_time_close=5,
+    )
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(80)
+    cover.tilt_calc.start_travel(20)  # tilt closing: sends OPEN (inverted)
+    cover._last_command = SERVICE_OPEN_COVER
+    assert cover.tilt_calc.is_closing()
+
+    calls, spy = _command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=spy),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_tilt_position(30)
+
+    assert SERVICE_STOP_COVER not in calls, (
+        f"no spurious stop -- OPEN relay is already the one leg A wants: {calls}"
+    )
+    settle.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sequential_open_shared_motor_reversal_stops_and_settles(make_cover):
+    """Requirement 2 companion: the other half of the inversion check. A
+    tilt-opening move on sequential_open sends CLOSE (tilt_command_for(
+    closing_tilt=False) == SERVICE_CLOSE_COVER, inverted). Leg A's OPEN
+    drive genuinely opposes the energised CLOSE relay here, so it must stop
+    and settle first."""
+    cover = make_cover(
+        control_mode="toggle_opposite",
+        recalibrate_before_position=True,
+        tilt_mode="sequential_open",
+        tilt_time_open=5,
+        tilt_time_close=5,
+    )
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(20)
+    cover.tilt_calc.start_travel(80)  # tilt opening: sends CLOSE (inverted)
+    cover._last_command = SERVICE_CLOSE_COVER
+    assert cover.tilt_calc.is_opening()
+
+    calls, spy = _command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=spy),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_tilt_position(30)
+
+    assert calls[:2] == [SERVICE_STOP_COVER, SERVICE_OPEN_COVER], (
+        f"CLOSE relay energised, leg A wants OPEN -- must stop first: {calls}"
+    )
+    settle.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_travel_axis_same_direction_no_spurious_stop(make_cover):
+    """Requirement 4 (travel axis): already opening, option on,
+    set_tilt_position -- leg A's OPEN drive matches the direction already
+    running, so no stop/settle must be inserted."""
+    cover = make_cover(
+        control_mode="toggle_opposite",
+        recalibrate_before_position=True,
+        tilt_mode="inline",
+        tilt_time_open=5,
+        tilt_time_close=5,
+    )
+    cover.travel_calc.set_position(20)
+    cover.travel_calc.start_travel(100)
+    cover.tilt_calc.set_position(50)
+    cover._last_command = SERVICE_OPEN_COVER
+    assert cover.travel_calc.is_opening()
+
+    calls, spy = _command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=spy),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_tilt_position(30)
+
+    assert SERVICE_STOP_COVER not in calls, f"no spurious stop: {calls}"
+    settle.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stop_during_settle_aborts_travel_leg(make_cover):
+    """Requirement 5 (travel axis): a stop landing inside the pre-drive
+    settle gap must win -- the recalibration drive must not proceed, and
+    set_tilt_position must not fall back to a plain move either."""
+    cover = make_cover(
+        recalibrate_before_position=True,
+        tilt_mode="inline",
+        tilt_time_open=5,
+        tilt_time_close=5,
+    )
+    cover.travel_calc.set_position(60)
+    cover.travel_calc.start_travel(20)
+    cover.tilt_calc.set_position(50)
+    cover._last_command = SERVICE_CLOSE_COVER
+
+    async def stop_during_settle():
+        cover._supersede_movement()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", side_effect=stop_during_settle),
+    ):
+        await cover.set_tilt_position(30)
+
+    assert not cover.travel_calc.is_traveling(), (
+        "no recalibration drive, and no fallback plain move, after a stop mid-settle"
+    )
+    assert cover._pending_recalibrated_target is None
+
+
+@pytest.mark.asyncio
+async def test_dual_motor_leg_a_reversal_stops_and_settles(make_cover):
+    """Requirement 3: dual_motor, tilt motor moving in the opposite
+    direction, option on -- the tilt recalibration leg (axis="tilt") must
+    stop and settle first.
+
+    The gap is real here too, though the mechanism differs from the travel
+    axis: _force_full_tilt_redrive seeds tilt_calc to the opposite endpoint
+    BEFORE _async_move_tilt_to_endpoint ever runs. That seed sets
+    tilt_calc's target equal to its own position, so tilt_calc.is_traveling()
+    reads False by the time _async_move_tilt_to_endpoint's own in-motion-
+    reversal check runs -- defeating it, even though it exists. This must be
+    evaluated from the tracker's TRUE state, before the seed."""
+    cover = _dual(make_cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(60)
+    cover.tilt_calc.start_travel(20)  # tilt closing
+    cover._last_command = SERVICE_CLOSE_COVER
+    cover._moving_tilt_motor = True
+    assert cover.tilt_calc.is_closing()
+
+    calls, patchers = _tilt_send_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patchers[0],
+        patchers[1],
+        patchers[2],
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_tilt_position(30)
+
+    assert calls == ["_send_tilt_stop", "_send_tilt_open"], (
+        f"must stop the tilt motor then reverse it open, in order: {calls}"
+    )
+    settle.assert_awaited_once()
+    assert cover._pending_recalibrated_target == 30
+    assert cover._pending_recalibrated_axis == "tilt"
+
+
+@pytest.mark.asyncio
+async def test_dual_motor_same_direction_no_spurious_stop(make_cover):
+    """Requirement 4 (tilt axis): the tilt motor is already opening, option
+    on -- leg A's own open drive matches, so no stop/settle must be
+    inserted."""
+    cover = _dual(make_cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(20)
+    cover.tilt_calc.start_travel(100)  # tilt already opening
+    cover._last_command = SERVICE_OPEN_COVER
+    cover._moving_tilt_motor = True
+    assert cover.tilt_calc.is_opening()
+
+    calls, patchers = _tilt_send_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patchers[0],
+        patchers[1],
+        patchers[2],
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_tilt_position(30)
+
+    assert "_send_tilt_stop" not in calls, f"no spurious tilt stop: {calls}"
+    settle.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stop_during_settle_aborts_dual_motor_leg(make_cover):
+    """Requirement 5 (tilt axis): a stop landing inside the pre-drive settle
+    gap must win for the dual-motor recalibration leg too -- no drive, no
+    fallback plain move."""
+    cover = _dual(make_cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(60)
+    cover.tilt_calc.start_travel(20)  # tilt closing
+    cover._last_command = SERVICE_CLOSE_COVER
+    cover._moving_tilt_motor = True
+
+    async def stop_during_settle():
+        cover._supersede_movement()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", side_effect=stop_during_settle),
+    ):
+        await cover.set_tilt_position(30)
+
+    assert not cover.tilt_calc.is_traveling(), (
+        "no recalibration drive, and no fallback plain move, after a stop mid-settle"
+    )
     assert cover._pending_recalibrated_target is None

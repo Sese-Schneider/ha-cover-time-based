@@ -857,11 +857,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         Mirrors ``set_position``'s own direction-change block (the plain,
         non-recalibrated path further down) rather than a second reversal
-        mechanism, so both callers — leg A of a mid-position recalibrated
-        move (always drives OPEN, reverses only while closing) and a forced
-        endpoint redrive (drives OPEN or CLOSE, reverses either way) — share
-        the same stop-then-settle behaviour the rest of the class already
-        relies on.
+        mechanism, so both callers there — leg A of a mid-position
+        recalibrated move (always drives OPEN, reverses only while closing)
+        and a forced endpoint redrive (drives OPEN or CLOSE, reverses either
+        way) — share the same stop-then-settle behaviour the rest of the
+        class already relies on. ``set_tilt_position`` reuses it too for its
+        own ``axis="travel"`` recalibration leg (the shared-motor tilt
+        strategies — inline, sequential): that leg drives the plain travel
+        OPEN command exactly like ``set_position``'s leg A, whichever tilt
+        strategy is configured — a shared-motor tilt move's own command
+        (from ``tilt_command_for``, inverted on ``sequential_open``) still
+        ends up in ``_last_command`` as whichever relay it actually energised,
+        so the plain ``_last_command != command`` check here already accounts
+        for that inversion with no special-casing needed. The dual-motor
+        tilt leg (``axis="tilt"``) is a different, independent motor and has
+        its own counterpart — see
+        ``_stop_and_settle_tilt_before_recalibration_drive``.
 
         Returns False if the movement was superseded during the settle gap.
         The caller must return immediately rather than fall back to a plain
@@ -892,6 +903,60 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._has_tilt_support() and self.tilt_calc.is_traveling():
             self.tilt_calc.stop()
         await self._async_handle_command(SERVICE_STOP_COVER)
+        return await self._settle_before_reversing()
+
+    async def _stop_and_settle_tilt_before_recalibration_drive(
+        self, command: str, was_tilt_motor_move: bool
+    ) -> bool:
+        """Tilt-axis counterpart of ``_stop_and_settle_before_recalibration_drive``,
+        for a dual-motor recalibration leg (``axis="tilt"``, issue #179 fix
+        round 3).
+
+        The gap here has a different mechanism than the travel axis, but the
+        same effect. ``_force_full_tilt_redrive`` seeds ``tilt_calc`` to the
+        opposite endpoint *before* ``_async_move_tilt_to_endpoint`` ever
+        runs — and that seed sets the tracker's target equal to its own
+        position, so ``tilt_calc.is_traveling()`` reads False by the time
+        ``_async_move_tilt_to_endpoint``'s own in-motion-reversal check runs.
+        That check does exist (unlike the travel axis, which has none at
+        all) but is defeated for every recalibration-drive caller, because
+        it always runs after the seed has already erased the "was
+        travelling" signal it depends on. This must be evaluated from the
+        tracker's TRUE state, before ``_start_recalibration_drive`` (and the
+        seed inside it) ever runs.
+
+        Mirrors ``set_tilt_position``'s own direction-change block: the same
+        ``is_direction_change`` formula, and the same axis-aware stop
+        (``_stop_displaced_movement_for_tilt``) rather than a blind travel
+        STOP — a moving dedicated tilt motor must get a tilt stop, not a
+        travel STOP off a stale ``_last_command`` (#153).
+
+        ``was_tilt_motor_move`` must be the caller's own snapshot of
+        ``self._moving_tilt_motor``, taken before anything resets it —
+        mirrors ``set_tilt_position``'s own capture for the same reason (see
+        ``_stop_displaced_movement_for_tilt``).
+
+        Returns False if the movement was superseded during the settle gap;
+        the caller must return immediately rather than fall back to a plain
+        move or the drive itself.
+        """
+        is_direction_change = (
+            self._last_command is not None and self._last_command != command
+        )
+        was_moving = self.tilt_calc.is_traveling() or self.travel_calc.is_traveling()
+        if not (is_direction_change and was_moving):
+            return True
+        self._log(
+            "_stop_and_settle_tilt_before_recalibration_drive :: reversing"
+            " in-flight movement before driving %s",
+            command,
+        )
+        if self.tilt_calc.is_traveling():
+            self.tilt_calc.stop()
+        if self.travel_calc.is_traveling():
+            self.travel_calc.stop()
+        self.stop_auto_updater()
+        await self._stop_displaced_movement_for_tilt(was_tilt_motor_move)
         return await self._settle_before_reversing()
 
     async def _start_recalibration_drive(self, axis: str, target: int = 100) -> bool:
@@ -1711,6 +1776,31 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def set_tilt_position(self, position, *, recalibrate: bool = True):
         """Move cover tilt to a designated position."""
         if self._should_recalibrate(recalibrate, position, axis="tilt"):
+            # The drive axis is "tilt" only where the tilt motor is independent
+            # (dual_motor) and so stalls against its own limit; everywhere else
+            # the tilt "motor" IS the travel motor, so the datum is a travel
+            # endpoint and leg A drives "travel" instead. The *armed* axis is
+            # always "tilt" regardless — leg B is the tilt move the caller
+            # asked for either way.
+            axis = "tilt" if self._tilt_strategy.uses_tilt_motor else "travel"
+            # Leg A always drives fully open (closing=False). Stop and settle
+            # first if that reverses an in-flight movement (issue #179 fix
+            # round 3, mirroring the round-2 fix to set_position's own leg
+            # A). dual_motor's tilt motor is independent, so it needs the
+            # axis-aware tilt helper (a moving dedicated tilt motor must get
+            # a tilt stop, not a travel STOP — #153); every other strategy
+            # drives leg A via the plain travel OPEN command, so it reuses
+            # the same helper set_position already uses.
+            if axis == "tilt":
+                was_tilt_motor_move = self._moving_tilt_motor
+                if not await self._stop_and_settle_tilt_before_recalibration_drive(
+                    self._tilt_strategy.tilt_command_for(False), was_tilt_motor_move
+                ):
+                    return
+            elif not await self._stop_and_settle_before_recalibration_drive(
+                SERVICE_OPEN_COVER
+            ):
+                return
             # Arm only AFTER the drive, never before — mirrors set_position.
             # _start_recalibration_drive funnels through _async_move_to_endpoint
             # or _async_move_tilt_to_endpoint, both of which start with
@@ -1720,14 +1810,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # capture the pre-bump epoch — leg A's own completion would then
             # read as a newer, unrelated movement and the epoch check in
             # _maybe_start_recalibrated_leg would silently drop leg B.
-            #
-            # The drive axis is "tilt" only where the tilt motor is independent
-            # (dual_motor) and so stalls against its own limit; everywhere else
-            # the tilt "motor" IS the travel motor, so the datum is a travel
-            # endpoint and leg A drives "travel" instead. The *armed* axis is
-            # always "tilt" regardless — leg B is the tilt move the caller
-            # asked for either way.
-            axis = "tilt" if self._tilt_strategy.uses_tilt_motor else "travel"
             if await self._start_recalibration_drive(axis):
                 self._arm_recalibrated_leg(position, "tilt")
                 return
