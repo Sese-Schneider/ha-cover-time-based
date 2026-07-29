@@ -777,7 +777,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return False
         if axis == "travel":
             return position not in (0, 100)
-        if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
+        if self._tilt_strategy is None:
+            # Defensive, not reachable today: HA's required_features gate
+            # keeps set_tilt_position from ever running without tilt
+            # configured. But the rest of this function tolerates
+            # _tilt_strategy is None (see the three checks above and in the
+            # travel branch), and set_tilt_position itself dereferences
+            # _tilt_strategy.uses_tilt_motor unconditionally right after
+            # calling this — an AttributeError there would slip past
+            # _maybe_start_recalibrated_leg's `except HomeAssistantError`.
+            # Returning False here keeps this function's own local
+            # invariant (tolerate None) rather than relying on the
+            # unreachability holding forever.
+            return False
+        if self._tilt_strategy.uses_tilt_motor:
             return position not in (0, 100)
         return True
 
@@ -809,7 +822,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return False
         return position in (0, 100)
 
-    def _movement_started(self, *, prior_startup_task=None) -> bool:
+    def _movement_started(
+        self, *, prior_startup_task: asyncio.Task | None = None
+    ) -> bool:
         """Whether the movement just commanded is actually under way.
 
         A recalibration leg arms its follow-up only if leg A really started.
@@ -2404,6 +2419,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 # would double-fire.
                 await self._start_tilt_restore()
                 if not self._tilt_restore_active:
+                    # Mirrors the other two leg-B dispatch sites (issue #179
+                    # final review, item 6): persist before consuming any
+                    # armed recalibration leg, for consistency across the
+                    # three otherwise-parallel sites. Impact is nil either
+                    # way — leg B persists on its own completion — but the
+                    # asymmetry reads as a bug later if left alone.
+                    await self._async_persist_position()
                     await self._maybe_start_recalibrated_leg()
                 return
 
