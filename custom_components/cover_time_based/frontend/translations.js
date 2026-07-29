@@ -71,7 +71,7 @@ export const EN = {
     "For covers with no position feedback that can also be moved by an external remote, so Home Assistant may wrongly believe they are already fully open or closed. When on, an open or close command is always driven for the full travel time even if Home Assistant thinks the cover is already there — guaranteeing the command reaches the motor. Leave off for covers that report their own position.",
   "recalibrate_before_position.label": "Fully open before moving to a position",
   "recalibrate_before_position.helper":
-    "Drives the cover fully open first, so the tracked position is known, then moves to the requested position. For covers with no position feedback that are also moved by a remote Home Assistant cannot see. Every move costs a full open plus the run back down to the target, up to double the full travel time — only enable this if your motor tolerates it. On covers with tilt, adjusting the slats moves the cover itself too.",
+    "Drives the cover fully open first, so the tracked position is known, then moves to the requested position. For covers with no position feedback that are also moved by a remote Home Assistant cannot see. Every move costs a full open plus the run back down to the target, up to double the full travel time — only enable this if your motor tolerates it. On inline and sequential tilt, adjusting the slats drives the cover too — and leaves it there.",
   "more_info": "More info",
   "timing.attribute_header": "Attribute",
   "timing.travel_attribute_header": "Travel Attribute",
@@ -206,7 +206,7 @@ export const TRANSLATIONS = {
       "Para estores sem retorno de posição que também podem ser movidos por um telecomando externo, pelo que o Home Assistant pode julgar erradamente que já estão totalmente abertos ou fechados. Quando ativo, um comando de abrir ou fechar é sempre executado durante o tempo total de deslocamento, mesmo que o Home Assistant pense que o estore já lá está — garantindo que o comando chega ao motor. Deixe inativo para estores que reportam a sua própria posição.",
     "recalibrate_before_position.label": "Abrir totalmente antes de mover para uma posição",
     "recalibrate_before_position.helper":
-      "Move primeiro o estore para totalmente aberto, para que a posição rastreada fique conhecida, e só depois o move para a posição pedida. Para estores sem retorno de posição que também são movidos por um telecomando que o Home Assistant não consegue ver. Cada movimento custa uma abertura total mais o percurso de volta até à posição pedida, até ao dobro do tempo total de deslocamento — ative isto apenas se o seu motor tolerar. Em estores com inclinação, ajustar as lâminas move também o próprio estore.",
+      "Move primeiro o estore para totalmente aberto, para que a posição rastreada fique conhecida, e só depois o move para a posição pedida. Para estores sem retorno de posição que também são movidos por um telecomando que o Home Assistant não consegue ver. Cada movimento custa uma abertura total mais o percurso de volta até à posição pedida, até ao dobro do tempo total de deslocamento — ative isto apenas se o seu motor tolerar. Na inclinação durante o deslocamento e na inclinação sequencial, ajustar as lâminas também movimenta o estore — e deixa-o nessa posição.",
     "more_info": "Mais informação",
     "timing.attribute_header": "Atributo",
     "timing.travel_attribute_header": "Atributo",
@@ -340,7 +340,7 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label":
       "Otwórz w pełni przed przejściem do pozycji",
     "recalibrate_before_position.helper":
-      "Najpierw otwiera roletę w pełni, aby śledzona pozycja była znana, a następnie przesuwa ją do żądanej pozycji. Dotyczy rolet bez informacji zwrotnej o pozycji, które mogą być poruszane również pilotem, czego Home Assistant nie widzi. Każdy ruch kosztuje pełne otwarcie plus powrót do żądanej pozycji, czyli do dwukrotności pełnego czasu ruchu — włącz tę opcję tylko wtedy, gdy twój silnik to toleruje. Na roletach z nachyleniem regulacja listew porusza również samą roletę.",
+      "Najpierw otwiera roletę w pełni, aby śledzona pozycja była znana, a następnie przesuwa ją do żądanej pozycji. Dotyczy rolet bez informacji zwrotnej o pozycji, które mogą być poruszane również pilotem, czego Home Assistant nie widzi. Każdy ruch kosztuje pełne otwarcie plus powrót do żądanej pozycji, czyli do dwukrotności pełnego czasu ruchu — włącz tę opcję tylko wtedy, gdy twój silnik to toleruje. Przy nachyleniu w trakcie ruchu oraz nachyleniu sekwencyjnym regulacja listew porusza również roletę — i pozostawia ją w tym położeniu.",
     "more_info": "Więcej informacji",
     "timing.attribute_header": "Atrybut",
     "timing.travel_attribute_header": "Atrybut",
@@ -472,7 +472,7 @@ export const TRANSLATIONS = {
       "Für Rollläden ohne Positionsrückmeldung, die sich zusätzlich per externer Fernbedienung bewegen lassen, sodass Home Assistant fälschlich annehmen kann, sie seien bereits vollständig geöffnet oder geschlossen. Wenn aktiviert, wird ein Öffnen- oder Schließen-Befehl immer über die volle Fahrzeit ausgeführt, selbst wenn Home Assistant den Rollladen dort schon vermutet — so erreicht der Befehl garantiert den Motor. Für Rollläden, die ihre eigene Position melden, deaktiviert lassen.",
     "recalibrate_before_position.label": "Vor einer Positionsfahrt zuerst vollständig öffnen",
     "recalibrate_before_position.helper":
-      "Fährt den Rollladen zuerst vollständig auf, damit die verfolgte Position bekannt ist, und fährt ihn dann in die angeforderte Position. Für Rollläden ohne Positionsrückmeldung, die zusätzlich per Fernbedienung bewegt werden, was Home Assistant nicht sehen kann. Jede Fahrt kostet ein vollständiges Öffnen plus die Rückfahrt zur gewünschten Position, bis zum Doppelten der vollen Fahrzeit — aktiviere dies nur, wenn dein Motor das verträgt. Bei Rollläden mit Neigung bewegt das Verstellen der Lamellen auch den Rollladen selbst.",
+      "Fährt den Rollladen zuerst vollständig auf, damit die verfolgte Position bekannt ist, und fährt ihn dann in die angeforderte Position. Für Rollläden ohne Positionsrückmeldung, die zusätzlich per Fernbedienung bewegt werden, was Home Assistant nicht sehen kann. Jede Fahrt kostet ein vollständiges Öffnen plus die Rückfahrt zur gewünschten Position, bis zum Doppelten der vollen Fahrzeit — aktiviere dies nur, wenn dein Motor das verträgt. Bei Neigung während der Fahrt und bei sequenzieller Neigung bewegt das Verstellen der Lamellen auch den Rollladen mit — und lässt ihn dort stehen.",
     "more_info": "Weitere Informationen",
     "timing.attribute_header": "Attribut",
     "timing.travel_attribute_header": "Attribut",
@@ -606,7 +606,7 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label":
       "Apri completamente prima di spostare in posizione",
     "recalibrate_before_position.helper":
-      "Porta prima la tapparella in apertura completa, così la posizione tracciata è nota, poi la sposta nella posizione richiesta. Per tapparelle senza retroazione di posizione che vengono spostate anche da un telecomando che Home Assistant non può vedere. Ogni movimento costa un'apertura completa più la corsa di ritorno fino alla posizione richiesta, fino al doppio dell'intero tempo di corsa — attivalo solo se il motore lo tollera. Nelle tapparelle con inclinazione, regolare le lamelle sposta anche la tapparella stessa.",
+      "Porta prima la tapparella in apertura completa, così la posizione tracciata è nota, poi la sposta nella posizione richiesta. Per tapparelle senza retroazione di posizione che vengono spostate anche da un telecomando che Home Assistant non può vedere. Ogni movimento costa un'apertura completa più la corsa di ritorno fino alla posizione richiesta, fino al doppio dell'intero tempo di corsa — attivalo solo se il motore lo tollera. Nell'inclinazione durante la corsa e in quella sequenziale, regolare le lamelle sposta anche la tapparella — e la lascia lì.",
     "more_info": "Maggiori informazioni",
     "timing.attribute_header": "Attributo",
     "timing.travel_attribute_header": "Attributo",
@@ -740,7 +740,7 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label":
       "Volledig openen voordat naar een positie wordt bewogen",
     "recalibrate_before_position.helper":
-      "Beweegt het rolluik eerst volledig open, zodat de gevolgde positie bekend is, en beweegt het daarna naar de gevraagde positie. Voor rolluiken zonder positieterugkoppeling die ook door een afstandsbediening bewogen worden die Home Assistant niet kan zien. Elke beweging kost een volledige opening plus de terugweg naar de gevraagde positie, tot het dubbele van de volledige looptijd — schakel dit alleen in als je motor dat aankan. Bij rolluiken met kantelfunctie verplaatst het verstellen van de lamellen ook het rolluik zelf.",
+      "Beweegt het rolluik eerst volledig open, zodat de gevolgde positie bekend is, en beweegt het daarna naar de gevraagde positie. Voor rolluiken zonder positieterugkoppeling die ook door een afstandsbediening bewogen worden die Home Assistant niet kan zien. Elke beweging kost een volledige opening plus de terugweg naar de gevraagde positie, tot het dubbele van de volledige looptijd — schakel dit alleen in als je motor dat aankan. Bij kantelen tijdens de beweging en bij sequentieel kantelen verplaatst het verstellen van de lamellen ook het rolluik — en laat het daar staan.",
     "more_info": "Meer informatie",
     "timing.attribute_header": "Attribuut",
     "timing.travel_attribute_header": "Attribuut",
