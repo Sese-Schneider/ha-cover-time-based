@@ -3,6 +3,7 @@
 ### Features
 
 - **Added a per-cover "Fully open before moving to a position" option (Beta)** ([#179](https://github.com/Sese-Schneider/ha-cover-time-based/issues/179)): for covers with no position feedback that a remote can move, **Set position** now drives the cover fully open first, then to the target. Off by default — it roughly doubles travel time, and on **inline** and **sequential** tilt, adjusting the slats moves the whole cover and leaves it moved.
+- **French (`fr`) translation** ([#216](https://github.com/Sese-Schneider/ha-cover-time-based/issues/216)): French now ships too, across both translated surfaces — the Home Assistant strings and every string the **Cover Time Based** configuration card draws, option helper text included. French-speaking users get it automatically from Home Assistant's own language setting, the regional variants `fr-CA`, `fr-BE` and `fr-CH` resolve to the same catalogue, and the "your language isn't translated yet" banner no longer appears for them.
 
 ## 4.10.0 (2026-07-29)
 

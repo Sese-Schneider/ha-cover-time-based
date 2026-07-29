@@ -1,0 +1,81 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ajouter un volet temporisé",
+        "description": "Choisissez un nom pour votre volet. Une fois celui-ci créé, ajoutez la carte **Cover Time Based** à un tableau de bord pour configurer tous les paramètres.",
+        "data": {
+          "name": "Nom"
+        }
+      }
+    }
+  },
+  "issues": {
+    "card_installed": {
+      "title": "Actualisez votre navigateur pour afficher la carte Cover Time Based",
+      "description": "La carte de tableau de bord Cover Time Based a été installée. Home Assistant ne charge les ressources des tableaux de bord qu'au chargement de la page : dans les sessions de navigateur déjà ouvertes, la carte reste absente tant que vous ne rechargez pas — et souvent seule une **actualisation forcée** fonctionne. Effectuez une actualisation forcée (**Ctrl+Maj+R**, ou **⌘+Maj+R** sur macOS) pour charger la carte ; si une erreur de configuration persiste, videz le cache de votre navigateur et rechargez la page. Vous pourrez fermer ce problème une fois la carte apparue."
+    },
+    "deprecated_yaml": {
+      "title": "La configuration YAML est obsolète",
+      "description": "La configuration de Cover Time Based en YAML est obsolète et sera supprimée dans une version future.\n\nSupprimez la configuration YAML et recréez vos volets depuis l'interface utilisateur : **Paramètres > Appareils et services > Entrées > Créer une entrée > Cover Time Based**."
+    }
+  },
+  "services": {
+    "set_known_position": {
+      "name": "Définir la position du volet",
+      "description": "Définit en interne une position connue pour le volet.",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "La position du volet, entre 0 et 100."
+        }
+      }
+    },
+    "set_known_tilt_position": {
+      "name": "Définir la position d'inclinaison du volet",
+      "description": "Définit en interne une position d'inclinaison connue pour le volet.",
+      "fields": {
+        "tilt_position": {
+          "name": "Position",
+          "description": "La position d'inclinaison du volet, entre 0 et 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Démarrer l'étalonnage",
+      "description": "Démarre un test d'étalonnage pour mesurer un paramètre de temporisation. Le volet va se mettre en mouvement — appelez stop_calibration lorsque la fin de course souhaitée est atteinte.",
+      "fields": {
+        "entity_id": {
+          "name": "ID d'entité",
+          "description": "Le volet à étalonner"
+        },
+        "attribute": {
+          "name": "Attribut",
+          "description": "Le paramètre de temporisation à étalonner"
+        },
+        "timeout": {
+          "name": "Délai d'expiration",
+          "description": "Délai d'expiration de sécurité en secondes — le moteur s'arrête automatiquement si stop_calibration n'est pas appelé"
+        },
+        "direction": {
+          "name": "Direction",
+          "description": "Direction du mouvement pendant le test. Si elle n'est pas définie, elle est détectée automatiquement d'après la position actuelle"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Arrêter l'étalonnage",
+      "description": "Arrête un test d'étalonnage en cours. Calcule le résultat et l'enregistre dans la configuration, sauf en cas d'annulation.",
+      "fields": {
+        "entity_id": {
+          "name": "ID d'entité",
+          "description": "Le volet en cours d'étalonnage"
+        },
+        "cancel": {
+          "name": "Annuler",
+          "description": "Si vrai, abandonne les résultats du test sans les enregistrer"
+        }
+      }
+    }
+  }
+}
