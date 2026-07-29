@@ -1160,6 +1160,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_recalibrated_axis = axis
         self._recalibration_epoch = self._movement_epoch
 
+    def _disarm_recalibrated_leg(self) -> None:
+        """Drop any armed recalibration leg without running it."""
+        self._pending_recalibrated_target = None
+        self._pending_recalibrated_axis = None
+        self._recalibration_epoch = None
+
     async def _direction_change_delay(self):
         """Pause between stop and direction change to let the motor settle.
 
@@ -2606,6 +2612,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._moving_tilt = False
                 if was_tilt_motor_move:
                     self._on_tilt_motor_move_complete()
+                # The one terminal return here that does NOT dispatch an armed
+                # recalibration leg — drop it instead (issue #179). Dispatching
+                # would be wrong: leg B is a self-initiated move chained off a
+                # datum leg A reached, and this branch is the *hardware* having
+                # finished a move of its own. Driving the motor again off the
+                # back of that is exactly the surprise-move the feature promises
+                # never to make. A leg should not be armed here at all — an
+                # external trigger gets RecalibrationPlan.NONE, and every route
+                # that flips _self_initiated_movement to False runs
+                # _abandon_active_lifecycle first, which clears the pending — so
+                # this makes that invariant local and enforced rather than
+                # inferred from four call sites. Self-limiting either way; the
+                # point is that it cannot rot.
+                self._disarm_recalibrated_leg()
                 await self._async_persist_position()
                 return
 
@@ -3248,9 +3268,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # Clear unconditionally, epoch match or not: a stale pending target
         # left behind by a superseded leg A must not linger forever waiting
         # for an epoch that will never come again.
-        self._pending_recalibrated_target = None
-        self._pending_recalibrated_axis = None
-        self._recalibration_epoch = None
+        self._disarm_recalibrated_leg()
         if self._movement_epoch != armed_epoch:
             return
 

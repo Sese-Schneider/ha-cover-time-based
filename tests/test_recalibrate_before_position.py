@@ -1210,3 +1210,37 @@ async def test_switch_same_direction_leg_a_leaves_the_latch_alone(make_cover):
     assert cover.travel_calc.is_opening(), "the tracker must still animate leg A"
     assert cover.travel_calc._travel_to_position == 100
     assert cover._pending_recalibrated_target == 50, "leg B must still be armed"
+
+
+@pytest.mark.asyncio
+async def test_external_terminal_completion_disarms_the_leg(make_cover):
+    """The one terminal return in auto_stop_if_necessary that does not
+    dispatch leg B must drop it instead of leaving it armed.
+
+    No route reaches this with a leg armed today — an external trigger gets
+    RecalibrationPlan.NONE, and everything that flips
+    _self_initiated_movement to False runs _abandon_active_lifecycle first,
+    which clears the pending — so the state is constructed directly. That is
+    the point: the guarantee is currently an inference across four call
+    sites, and this makes it a local, enforced invariant. Dispatching here
+    would be wrong, not merely unnecessary: leg B is a self-initiated move,
+    and this branch is the hardware having finished a move of its own.
+    """
+    cover = make_cover(recalibrate_before_position=True)
+    cover.travel_calc.set_position(100)
+    cover._arm_recalibrated_leg(25, "travel")
+    cover._self_initiated_movement = False
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        await cover.auto_stop_if_necessary()
+
+    assert cover._pending_recalibrated_target is None, "the armed leg must be dropped"
+    assert cover._pending_recalibrated_axis is None
+    assert cover._recalibration_epoch is None
+    assert not cover.travel_calc.is_traveling(), (
+        "and must NOT be dispatched — an external move must not chain a"
+        " self-initiated one"
+    )

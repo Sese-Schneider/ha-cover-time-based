@@ -66,3 +66,46 @@ async def test_switch_mode_stop_persists_position_contrast(
         await cover.async_stop_cover()
 
     assert _mock_position_store.async_save.await_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_tilt_restore_no_op_branch_persists(make_cover, _mock_position_store):
+    """The tilt-restore-no-op branch of auto_stop_if_necessary is a terminal
+    completion, so it must persist like the other two.
+
+    A dual-motor travel move to an endpoint runs a tilt-to-safe pre-step, then
+    travel, then a "restore" phase whose target is the endpoint itself. With
+    the default safe_tilt_position (100) an open lands tilt exactly on that
+    restore target, so _start_tilt_restore takes its synchronous no-op
+    shortcut: no motor is driven and the auto-updater is never re-armed, which
+    makes that return the end of the move. Without the persist here the Store
+    keeps whatever the last write said while the cover sits at a new position
+    — on restart it snaps back. Nothing to do with
+    recalibrate_before_position (deliberately off here): this branch is
+    reached by any dual-motor cover.
+    """
+    cover = make_cover(
+        tilt_mode="dual_motor",
+        tilt_time_open=2.0,
+        tilt_time_close=2.0,
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        tilt_stop_switch="switch.tilt_stop",
+    )
+    cover.travel_calc.set_position(75)
+    cover.tilt_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(100)
+        # Tilt pre-step reaches the safe position (100).
+        cover.tilt_calc.set_position(100)
+        await cover.auto_stop_if_necessary()
+        # Travel reaches 100. Tilt already sits on the restore target (100).
+        cover.travel_calc.set_position(100)
+        _mock_position_store.async_save.reset_mock()
+        await cover.auto_stop_if_necessary()
+
+    assert not cover._tilt_restore_active, "the restore must be the no-op shortcut"
+    assert _mock_position_store.async_save.await_count == 1, (
+        "the terminal no-op restore must persist the position it finished at"
+    )
