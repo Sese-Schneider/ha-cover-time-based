@@ -659,3 +659,58 @@ async def test_stop_during_settle_aborts_dual_motor_leg(make_cover):
         "no recalibration drive, and no fallback plain move, after a stop mid-settle"
     )
     assert cover._pending_recalibrated_target is None
+
+
+@pytest.mark.asyncio
+async def test_dual_motor_idle_stale_last_command_no_spurious_stop(make_cover):
+    """Final-review fix (item 1): ``is_direction_change`` alone is not enough
+    to gate the pre-drive stop in
+    ``_stop_and_settle_tilt_before_recalibration_drive`` -- it must also
+    require something to actually be moving (``was_moving``). A dual_motor
+    cover idle on both axes with a stale ``_last_command`` (e.g. left over
+    from an earlier move) reads as a direction change against nothing
+    moving; without the ``was_moving`` conjunct this pulses
+    ``_async_handle_command(STOP)`` plus a ``_send_tilt_stop()`` -- exactly
+    the hazard ``async_stop_cover`` was written to avoid."""
+    cover = _dual(make_cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(60)
+    cover._last_command = SERVICE_CLOSE_COVER  # stale: nothing is moving
+    assert not cover.tilt_calc.is_traveling()
+    assert not cover.travel_calc.is_traveling()
+
+    tilt_calls, patchers = _tilt_send_spy(cover)
+    cmd_calls, cmd_spy = _command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=cmd_spy),
+        patchers[0],
+        patchers[1],
+        patchers[2],
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_tilt_position(30)
+
+    assert cmd_calls == [], f"no spurious stop at an idle motor: {cmd_calls}"
+    assert "_send_tilt_stop" not in tilt_calls, f"no spurious tilt stop: {tilt_calls}"
+    settle.assert_not_awaited()
+    assert cover._pending_recalibrated_target == 30, "leg A must still proceed normally"
+
+
+@pytest.mark.asyncio
+async def test_should_recalibrate_tilt_axis_tolerates_no_tilt_strategy(make_cover):
+    """Final-review fix (item 3): ``_should_recalibrate(axis="tilt")`` must
+    not return True when ``_tilt_strategy`` is None. It's unreachable via HA
+    (the required_features gate keeps set_tilt_position from running without
+    tilt configured), but the rest of this function -- and the rest of
+    set_tilt_position -- explicitly tolerates ``_tilt_strategy is None``.
+    Left unguarded, the caller's ``self._tilt_strategy.uses_tilt_motor``
+    dereference right after this call would raise AttributeError, which
+    ``_maybe_start_recalibrated_leg``'s ``except HomeAssistantError`` would
+    not catch. Constructed directly since the state isn't reachable through
+    the public API."""
+    cover = make_cover(recalibrate_before_position=True)
+    assert cover._tilt_strategy is None
+
+    assert cover._should_recalibrate(True, 50, axis="tilt") is False
