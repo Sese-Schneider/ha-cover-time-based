@@ -829,3 +829,158 @@ async def test_dual_motor_tilt_pre_step_is_ridden_not_repulsed(make_cover):
     assert cover.tilt_calc._travel_to_position == 100
     assert cover._pending_travel_target is None, "the pre-step's travel is abandoned"
     assert cover._pending_recalibrated_target == 30
+
+
+# ===================================================================
+# Fix round 3 — dual_motor tilt endpoints are FORCED, not trusted
+#
+# A tilt endpoint on a dedicated tilt motor got RecalibrationPlan.NONE: an
+# ordinary timed move computed from the BELIEVED tilt position, which is the
+# one value this feature exists to distrust. That only reaches the physical
+# limit where _self_stops_at_endpoints() is True — false for switch mode, and
+# false for pulse with the default send_endpoint_stop, where _tilt_settle
+# de-energises the tilt relay on time and the motor never stalls. Same
+# argument _recalibration_plan already makes for the travel axis; the fix was
+# applied there and not here.
+# ===================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("target", "opposite", "believed"),
+    [(100, 0, 90), (0, 100, 10)],
+    ids=["open", "close"],
+)
+async def test_dual_motor_tilt_endpoint_is_a_forced_full_redrive(
+    make_cover, target, opposite, believed
+):
+    """Switch mode does not self-stop at its tilt limits — the tilt relay is
+    latched for the computed duration and cut by an explicit stop — so a
+    believed-90 → 100 move is a 10%-of-tilt-time nudge, identical to the
+    option being off. If the real tilt were at 20 it lands at ~30, not 100.
+    The endpoint drive must be modelled from the opposite tilt endpoint so it
+    runs the full tilt time and stalls against the motor's own limit."""
+    cover = _dual(make_cover)  # switch mode: no self-stop at the tilt limits
+    assert not cover._self_stops_at_endpoints()
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(believed)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(target)
+
+    assert cover.tilt_calc._travel_to_position == target
+    assert cover.tilt_calc._last_known_position == opposite, (
+        "must be modelled as a full tilt-travel from the opposite tilt"
+        f" endpoint ({opposite}), not an ordinary move from the believed"
+        f" {believed}"
+    )
+    assert cover._pending_recalibrated_target is None, (
+        "the endpoint IS the datum — still no second leg"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target", [0, 100])
+async def test_dual_motor_tilt_endpoint_plan_is_forced_endpoint(make_cover, target):
+    """Pinned at the plan level too: the tilt axis now mirrors travel."""
+    cover = _dual(make_cover)
+    assert (
+        cover._recalibration_plan(True, target, axis="tilt")
+        is RecalibrationPlan.FORCED_ENDPOINT
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("target", "believed"), [(100, 90), (0, 10)], ids=["open", "close"]
+)
+async def test_dual_motor_tilt_endpoint_unchanged_with_option_off(
+    make_cover, target, believed
+):
+    """Regression guard: with the option off a tilt endpoint stays an ordinary
+    timed move from the believed position."""
+    cover = make_cover(
+        recalibrate_before_position=False,
+        tilt_mode="dual_motor",
+        tilt_time_open=5,
+        tilt_time_close=5,
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        tilt_stop_switch="switch.tilt_stop",
+    )
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(believed)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(target)
+
+    assert cover.tilt_calc._travel_to_position == target
+    assert cover.tilt_calc._last_known_position == believed, (
+        "option off: an ordinary timed move from the believed position"
+    )
+
+
+@pytest.mark.asyncio
+async def test_dual_motor_tilt_endpoint_leg_b_is_not_forced(make_cover):
+    """Leg B of a recalibrated move (recalibrate=False) must stay an ordinary
+    move — leg A already gave it a true datum, and forcing again would drive
+    the tilt motor a second full travel."""
+    cover = _dual(make_cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(90)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(100, recalibrate=False)
+
+    assert cover.tilt_calc._last_known_position == 90
+
+
+@pytest.mark.asyncio
+async def test_dual_motor_tilt_endpoint_redrive_rolls_back_when_not_started(make_cover):
+    """Mirrors the travel axis: when the forced tilt redrive silently does not
+    start, the tracker must roll back to the believed position rather than be
+    left seeded at the fabricated opposite endpoint, and the fallback plain
+    move must be planned from the restored value."""
+    cover = _dual(make_cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(90)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_movement_started", return_value=False),
+    ):
+        await cover.set_tilt_position(100)
+
+    assert cover._pending_recalibrated_target is None
+    assert cover.tilt_calc._last_known_position == 90, (
+        "rolled back to the believed position for the fallback plain move"
+    )
+
+
+@pytest.mark.asyncio
+async def test_dual_motor_tilt_endpoint_reversal_stops_and_settles(make_cover):
+    """The forced tilt endpoint drive can reverse either way (unlike leg A,
+    which always opens), so it needs the same pre-drive stop and settle."""
+    cover = _dual(make_cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(60)
+    cover.tilt_calc.start_travel(90)  # tilt opening
+    cover._last_command = SERVICE_OPEN_COVER
+    cover._moving_tilt_motor = True
+
+    calls, patchers = _tilt_send_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patchers[0],
+        patchers[1],
+        patchers[2],
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_tilt_position(0)
+
+    assert calls == ["_send_tilt_stop", "_send_tilt_close"], (
+        f"must stop, settle, then drive the other way: {calls}"
+    )
+    settle.assert_awaited_once()
+    assert cover.tilt_calc._last_known_position == 100, "still a forced full redrive"

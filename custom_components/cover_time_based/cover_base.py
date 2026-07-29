@@ -821,9 +821,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         Tilt endpoints qualify for the no-second-leg carve-out only on a
         dedicated tilt motor: on the shared-motor strategies a tilt endpoint
         is reached by driving the travel motor for a tilt time, with nothing
-        to stall against, so every tilt target there still needs the leg —
-        and unlike the travel axis, there is no ``FORCED_ENDPOINT`` for tilt:
-        a shared-motor tilt endpoint always gets ``TWO_LEG`` instead.
+        to stall against, so every tilt target there still gets ``TWO_LEG``.
+
+        Where the carve-out does apply — a dedicated tilt motor — it is
+        ``FORCED_ENDPOINT``, not ``NONE``, for exactly the reason spelled out
+        above for travel: ``NONE`` is an ordinary timed move computed from the
+        BELIEVED tilt position, and the masking that makes that survive on
+        self-stopping hardware is absent in switch mode and in pulse with the
+        default ``send_endpoint_stop`` — there ``_tilt_settle`` de-energises
+        the tilt relay on time and the motor never stalls. A believed-90 → 100
+        move is then a 10%-of-tilt-time nudge; if the real tilt were at 20 it
+        lands at ~30. Routed through ``_force_full_tilt_redrive(target)``, it
+        runs the full tilt time from the opposite tilt endpoint and stalls
+        against the tilt motor's own limit instead.
         """
         if not self._recalibrate_before_position or not recalibrate:
             return RecalibrationPlan.NONE
@@ -849,7 +859,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._tilt_strategy.uses_tilt_motor:
             if position not in (0, 100):
                 return RecalibrationPlan.TWO_LEG
-            return RecalibrationPlan.NONE
+            return RecalibrationPlan.FORCED_ENDPOINT
         return RecalibrationPlan.TWO_LEG
 
     def _movement_started(
@@ -2033,6 +2043,36 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 return
             self._log(
                 "set_tilt_position :: recalibration leg did not start, moving directly"
+            )
+        elif plan is RecalibrationPlan.FORCED_ENDPOINT:
+            # A tilt endpoint on a dedicated tilt motor: driving there IS the
+            # recalibration, so there is no second leg to arm — but only when
+            # the drive is actually forced to cover the full tilt time rather
+            # than trusting the believed tilt for an ordinary timed move.
+            # Exactly set_position's endpoint branch, on the tilt axis; see
+            # _recalibration_plan for why NONE was wrong here. This plan is
+            # only ever produced for uses_tilt_motor, so the drive axis is
+            # always "tilt".
+            #
+            # Like the travel endpoint drive (and unlike leg A, which always
+            # opens) this can reverse either way — target=0 drives the tilt
+            # motor closed, target=100 open — so stop and settle first if it
+            # would, through the axis-aware tilt helper.
+            endpoint_command = self._tilt_strategy.tilt_command_for(position == 0)
+            was_tilt_motor_move = self._moving_tilt_motor
+            if not await self._stop_and_settle_tilt_before_recalibration_drive(
+                endpoint_command, was_tilt_motor_move
+            ):
+                return
+            # _start_recalibration_drive is reused purely for its snapshot /
+            # rollback and not-started handling — _force_full_tilt_redrive can
+            # silently fail to start, and that must not leave tilt_calc seeded
+            # at a fabricated endpoint.
+            if await self._start_recalibration_drive("tilt", target=position):
+                return
+            self._log(
+                "set_tilt_position :: forced tilt endpoint redrive did not"
+                " start, moving directly"
             )
         self._self_initiated_movement = not self._triggered_externally
         # Capture before _abandon_active_lifecycle resets it: a dedicated tilt
