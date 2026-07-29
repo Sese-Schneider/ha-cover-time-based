@@ -859,23 +859,9 @@ async def test_maybe_start_recalibrated_leg_epoch_mismatch_still_clears(make_cov
 # halted motor.
 
 
-def _command_spy(cover):
-    """Wrap cover._async_handle_command to record the command sequence
-    while still calling through to the real implementation, so relay state
-    and _last_command bookkeeping behave exactly as in production."""
-    original = cover._async_handle_command
-    calls = []
-
-    async def spy(command, *args):
-        calls.append(command)
-        return await original(command, *args)
-
-    return calls, spy
-
-
 @pytest.mark.asyncio
 async def test_toggle_opposite_endpoint_redrive_reversal_stops_and_settles(
-    make_cover,
+    make_cover, command_spy
 ):
     """Requirement 1: Toggle-opposite, opening toward 80, option on,
     set_position(0) must stop and await the settle gap before the close
@@ -890,7 +876,7 @@ async def test_toggle_opposite_endpoint_redrive_reversal_stops_and_settles(
     cover._last_command = SERVICE_OPEN_COVER
     assert cover.travel_calc.is_opening()
 
-    calls, spy = _command_spy(cover)
+    calls, spy = command_spy(cover)
 
     with (
         patch.object(cover, "async_write_ha_state"),
@@ -907,7 +893,7 @@ async def test_toggle_opposite_endpoint_redrive_reversal_stops_and_settles(
 
 
 @pytest.mark.asyncio
-async def test_mid_range_leg_a_reversal_stops_and_settles(make_cover):
+async def test_mid_range_leg_a_reversal_stops_and_settles(make_cover, command_spy):
     """Requirement 2: closing toward 20, option on, set_position(50) — leg
     A always drives OPEN, so this reverses the in-flight close. The open
     drive must stop and settle first."""
@@ -917,7 +903,7 @@ async def test_mid_range_leg_a_reversal_stops_and_settles(make_cover):
     cover._last_command = SERVICE_CLOSE_COVER
     assert cover.travel_calc.is_closing()
 
-    calls, spy = _command_spy(cover)
+    calls, spy = command_spy(cover)
 
     with (
         patch.object(cover, "async_write_ha_state"),
@@ -934,7 +920,9 @@ async def test_mid_range_leg_a_reversal_stops_and_settles(make_cover):
 
 
 @pytest.mark.asyncio
-async def test_same_direction_recalibration_drive_no_spurious_stop(make_cover):
+async def test_same_direction_recalibration_drive_no_spurious_stop(
+    make_cover, command_spy
+):
     """Requirement 3 (regression guard): already opening, option on,
     set_position(100) drives OPEN again — same direction as what is already
     running, so no reversal is needed and no extra stop/settle must be
@@ -945,7 +933,7 @@ async def test_same_direction_recalibration_drive_no_spurious_stop(make_cover):
     cover._last_command = SERVICE_OPEN_COVER
     assert cover.travel_calc.is_opening()
 
-    calls, spy = _command_spy(cover)
+    calls, spy = command_spy(cover)
 
     with (
         patch.object(cover, "async_write_ha_state"),
@@ -991,7 +979,7 @@ async def test_stop_during_reversal_settle_aborts_recalibration_drive(make_cover
     ids=["endpoint", "mid-range"],
 )
 async def test_option_off_reversal_unaffected_by_recalibration_guard(
-    make_cover, target
+    make_cover, command_spy, target
 ):
     """Requirement 5: with the option off, an ordinary reversing
     set_position still goes through the pre-existing plain-path
@@ -1005,7 +993,7 @@ async def test_option_off_reversal_unaffected_by_recalibration_guard(
     cover.travel_calc.start_travel(80)
     cover._last_command = SERVICE_OPEN_COVER
 
-    calls, spy = _command_spy(cover)
+    calls, spy = command_spy(cover)
 
     with (
         patch.object(cover, "async_write_ha_state"),
@@ -1021,7 +1009,9 @@ async def test_option_off_reversal_unaffected_by_recalibration_guard(
 
 
 @pytest.mark.asyncio
-async def test_set_known_position_stale_last_command_no_spurious_stop(make_cover):
+async def test_set_known_position_stale_last_command_no_spurious_stop(
+    make_cover, command_spy
+):
     """Final-review fix (item 1): ``is_direction_change`` alone is not enough
     to gate the pre-drive stop in
     ``_stop_and_settle_before_recalibration_drive`` -- it must also require
@@ -1047,7 +1037,7 @@ async def test_set_known_position_stale_last_command_no_spurious_stop(make_cover
         "set_known_position/_handle_stop must not touch _last_command -- that's the setup"
     )
 
-    calls, spy = _command_spy(cover)
+    calls, spy = command_spy(cover)
 
     with (
         patch.object(cover, "async_write_ha_state"),

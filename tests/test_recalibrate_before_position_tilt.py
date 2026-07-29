@@ -17,27 +17,14 @@ from homeassistant.const import (
 )
 from homeassistant.exceptions import HomeAssistantError
 
-
-def _command_spy(cover):
-    """Wrap cover._async_handle_command to record the command sequence
-    while still calling through to the real implementation, so relay state
-    and _last_command bookkeeping behave exactly as in production. Mirrors
-    the identically-named helper in test_recalibrate_before_position.py."""
-    original = cover._async_handle_command
-    calls = []
-
-    async def spy(command, *args):
-        calls.append(command)
-        return await original(command, *args)
-
-    return calls, spy
+from custom_components.cover_time_based.cover_base import RecalibrationPlan
 
 
 def _tilt_send_spy(cover):
     """Wrap cover._send_tilt_stop/_send_tilt_open/_send_tilt_close to record
-    the call sequence -- the dual-motor analogue of _command_spy, since a
-    dual-motor tilt drive fires these directly rather than going through
-    _async_handle_command."""
+    the call sequence -- the dual-motor analogue of the command_spy fixture,
+    since a dual-motor tilt drive fires these directly rather than going
+    through _async_handle_command."""
     calls = []
     originals = {
         name: getattr(cover, name)
@@ -196,9 +183,9 @@ async def test_shared_motor_tilt_endpoints_still_recalibrate(make_cover, target)
 async def test_tilt_endpoint_services_are_unaffected(make_cover):
     """open_cover_tilt / close_cover_tilt already target an endpoint and go
     through _async_move_tilt_to_endpoint directly, never set_tilt_position (so
-    never _should_recalibrate). Deliberately uses inline, not dual_motor: on
+    never _recalibration_plan). Deliberately uses inline, not dual_motor: on
     dual_motor a tilt target of 100 is exempt by the endpoint carve-out
-    anyway, so that fixture can't tell "never reaches _should_recalibrate"
+    anyway, so that fixture can't tell "never reaches _recalibration_plan"
     apart from "reaches it but is carved out". inline has no carve-out --
     every tilt target there recalibrates -- so this only stays green because
     the endpoint services bypass set_tilt_position entirely."""
@@ -286,7 +273,7 @@ async def test_external_sequential_close_never_recalibrates(make_cover):
     sequential external-close redirect (_async_move_to_endpoint ->
     set_tilt_position(articulated), called with _triggered_externally=True)
     must not force a full-open recalibration leg. If the self-initiated-only
-    guard in _should_recalibrate ever regressed to only checking the travel
+    guard in _recalibration_plan ever regressed to only checking the travel
     axis, a user physically pressing close on sequential hardware would
     instead trigger the motor running fully open -- the opposite direction
     from the button they just pressed."""
@@ -392,7 +379,9 @@ async def test_sequential_leg_b_full_journey_ends_at_travel_0(make_cover):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tilt_mode", ["inline", "sequential_close", "sequential_open"])
-async def test_travel_leg_reversal_stops_and_settles(make_cover, tilt_mode):
+async def test_travel_leg_reversal_stops_and_settles(
+    make_cover, command_spy, tilt_mode
+):
     """Requirement 1/2: cover closing (a plain TRAVEL movement, not a tilt
     one), option on, set_tilt_position(30) -- the axis="travel"
     recalibration leg always drives OPEN, so it reverses the in-flight
@@ -413,7 +402,7 @@ async def test_travel_leg_reversal_stops_and_settles(make_cover, tilt_mode):
     cover._last_command = SERVICE_CLOSE_COVER
     assert cover.travel_calc.is_closing()
 
-    calls, spy = _command_spy(cover)
+    calls, spy = command_spy(cover)
 
     with (
         patch.object(cover, "async_write_ha_state"),
@@ -431,7 +420,7 @@ async def test_travel_leg_reversal_stops_and_settles(make_cover, tilt_mode):
 
 @pytest.mark.asyncio
 async def test_sequential_open_shared_motor_same_direction_no_spurious_stop(
-    make_cover,
+    make_cover, command_spy
 ):
     """Requirement 2 ('verify rather than assume'): on sequential_open,
     tilt_command_for inverts the mapping -- tilt_command_for(closing_tilt=True)
@@ -454,7 +443,7 @@ async def test_sequential_open_shared_motor_same_direction_no_spurious_stop(
     cover._last_command = SERVICE_OPEN_COVER
     assert cover.tilt_calc.is_closing()
 
-    calls, spy = _command_spy(cover)
+    calls, spy = command_spy(cover)
 
     with (
         patch.object(cover, "async_write_ha_state"),
@@ -470,7 +459,9 @@ async def test_sequential_open_shared_motor_same_direction_no_spurious_stop(
 
 
 @pytest.mark.asyncio
-async def test_sequential_open_shared_motor_reversal_stops_and_settles(make_cover):
+async def test_sequential_open_shared_motor_reversal_stops_and_settles(
+    make_cover, command_spy
+):
     """Requirement 2 companion: the other half of the inversion check. A
     tilt-opening move on sequential_open sends CLOSE (tilt_command_for(
     closing_tilt=False) == SERVICE_CLOSE_COVER, inverted). Leg A's OPEN
@@ -489,7 +480,7 @@ async def test_sequential_open_shared_motor_reversal_stops_and_settles(make_cove
     cover._last_command = SERVICE_CLOSE_COVER
     assert cover.tilt_calc.is_opening()
 
-    calls, spy = _command_spy(cover)
+    calls, spy = command_spy(cover)
 
     with (
         patch.object(cover, "async_write_ha_state"),
@@ -505,7 +496,7 @@ async def test_sequential_open_shared_motor_reversal_stops_and_settles(make_cove
 
 
 @pytest.mark.asyncio
-async def test_travel_axis_same_direction_no_spurious_stop(make_cover):
+async def test_travel_axis_same_direction_no_spurious_stop(make_cover, command_spy):
     """Requirement 4 (travel axis): already opening, option on,
     set_tilt_position -- leg A's OPEN drive matches the direction already
     running, so no stop/settle must be inserted."""
@@ -522,7 +513,7 @@ async def test_travel_axis_same_direction_no_spurious_stop(make_cover):
     cover._last_command = SERVICE_OPEN_COVER
     assert cover.travel_calc.is_opening()
 
-    calls, spy = _command_spy(cover)
+    calls, spy = command_spy(cover)
 
     with (
         patch.object(cover, "async_write_ha_state"),
@@ -662,7 +653,9 @@ async def test_stop_during_settle_aborts_dual_motor_leg(make_cover):
 
 
 @pytest.mark.asyncio
-async def test_dual_motor_idle_stale_last_command_no_spurious_stop(make_cover):
+async def test_dual_motor_idle_stale_last_command_no_spurious_stop(
+    make_cover, command_spy
+):
     """Final-review fix (item 1): ``is_direction_change`` alone is not enough
     to gate the pre-drive stop in
     ``_stop_and_settle_tilt_before_recalibration_drive`` -- it must also
@@ -680,7 +673,7 @@ async def test_dual_motor_idle_stale_last_command_no_spurious_stop(make_cover):
     assert not cover.travel_calc.is_traveling()
 
     tilt_calls, patchers = _tilt_send_spy(cover)
-    cmd_calls, cmd_spy = _command_spy(cover)
+    cmd_calls, cmd_spy = command_spy(cover)
 
     with (
         patch.object(cover, "async_write_ha_state"),
@@ -699,18 +692,18 @@ async def test_dual_motor_idle_stale_last_command_no_spurious_stop(make_cover):
 
 
 @pytest.mark.asyncio
-async def test_should_recalibrate_tilt_axis_tolerates_no_tilt_strategy(make_cover):
-    """Final-review fix (item 3): ``_should_recalibrate(axis="tilt")`` must
-    not return True when ``_tilt_strategy`` is None. It's unreachable via HA
-    (the required_features gate keeps set_tilt_position from running without
-    tilt configured), but the rest of this function -- and the rest of
-    set_tilt_position -- explicitly tolerates ``_tilt_strategy is None``.
-    Left unguarded, the caller's ``self._tilt_strategy.uses_tilt_motor``
-    dereference right after this call would raise AttributeError, which
-    ``_maybe_start_recalibrated_leg``'s ``except HomeAssistantError`` would
-    not catch. Constructed directly since the state isn't reachable through
-    the public API."""
+async def test_recalibration_plan_tilt_axis_tolerates_no_tilt_strategy(make_cover):
+    """Final-review fix (item 3): ``_recalibration_plan(axis="tilt")`` must
+    not return ``RecalibrationPlan.TWO_LEG`` when ``_tilt_strategy`` is None.
+    It's unreachable via HA (the required_features gate keeps
+    set_tilt_position from running without tilt configured), but the rest of
+    this function -- and the rest of set_tilt_position -- explicitly
+    tolerates ``_tilt_strategy is None``. Left unguarded, the caller's
+    ``self._tilt_strategy.uses_tilt_motor`` dereference right after this call
+    would raise AttributeError, which ``_maybe_start_recalibrated_leg``'s
+    ``except HomeAssistantError`` would not catch. Constructed directly since
+    the state isn't reachable through the public API."""
     cover = make_cover(recalibrate_before_position=True)
     assert cover._tilt_strategy is None
 
-    assert cover._should_recalibrate(True, 50, axis="tilt") is False
+    assert cover._recalibration_plan(True, 50, axis="tilt") is RecalibrationPlan.NONE

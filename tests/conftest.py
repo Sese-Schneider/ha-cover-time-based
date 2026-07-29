@@ -209,3 +209,22 @@ def make_cover(make_hass, _mock_position_store):
         for task in getattr(cover.hass, "_test_tasks", []):
             if not task.done():
                 task.cancel()
+
+
+@pytest.fixture
+def command_spy():
+    """Wrap a cover's _async_handle_command, recording the command sequence
+    while still calling through to the real implementation, so relay state
+    and _last_command bookkeeping behave exactly as in production."""
+
+    def _make(cover):
+        original = cover._async_handle_command
+        calls = []
+
+        async def spy(command, *args):
+            calls.append(command)
+            return await original(command, *args)
+
+        return calls, spy
+
+    return _make
