@@ -1,0 +1,18 @@
+# Normalise line endings so an edit made on any platform produces a diff of the
+# lines that actually changed.
+#
+# Ten files in this repo were CRLF while everything else was LF, so a one-word
+# change to one of them could render as a whole-file diff — which is how a
+# 162-line diff for a single word slipped through review in #218.
+#
+# The usual culprit is a read-then-write round trip. Python text mode reads
+# with universal newlines, so read_text() turns CRLF into "\n", and write_text()
+# then emits "\n" — neither call rewrites anything on its own, but together they
+# silently drop the CRLF unless both are passed newline="". Several editors do
+# the same on save.
+#
+# text=auto: let git detect text vs binary, and store text as LF in the repo.
+# eol=lf:    check text out as LF everywhere, including Windows. This repo has
+#            no Windows-only tooling that needs CRLF, and pinning the working
+#            tree too is what stops the churn coming back.
+* text=auto eol=lf
