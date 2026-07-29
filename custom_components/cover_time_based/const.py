@@ -94,6 +94,6 @@ DEFAULT_FORCE_ENDPOINT_REDRIVE = False
 # straight to that endpoint (modeled from the opposite one, like
 # CONF_FORCE_ENDPOINT_REDRIVE) already recalibrates it, so it just runs once
 # instead of a leg A + leg B pair. That carve-out is asymmetric for tilt —
-# see CoverTimeBased._should_recalibrate and ._needs_forced_endpoint_redrive.
+# see CoverTimeBased._recalibration_plan.
 CONF_RECALIBRATE_BEFORE_POSITION = "recalibrate_before_position"
 DEFAULT_RECALIBRATE_BEFORE_POSITION = False
