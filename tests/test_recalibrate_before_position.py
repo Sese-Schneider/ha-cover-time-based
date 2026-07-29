@@ -8,7 +8,7 @@ limit — and only then moves to the requested position.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.const import (
@@ -1050,3 +1050,163 @@ async def test_set_known_position_stale_last_command_no_spurious_stop(
         f"no stop pulse at an idle motor, just leg A's open drive: {calls}"
     )
     settle.assert_not_awaited()
+
+
+# ===================================================================
+# Fix round 3 — same-direction re-pulse on toggle hardware (CRITICAL)
+#
+# _stop_and_settle_before_recalibration_drive handles the *reversing* case.
+# The mirror image — the recalibration drive heading the SAME way as the
+# movement already under way — had no handling at all: the drive reached
+# _async_move_to_endpoint and re-issued the direction command. On toggle
+# (same button) hardware a second rising edge on the relay that is currently
+# driving STOPS the motor, while _force_full_redrive's seed makes the tracker
+# animate a fabricated full travel over a motor that is standing still.
+# The plain (non-recalibrated) path has guarded against exactly this since
+# forever via `already_moving_same_dir`; these pin the same guard on the
+# recalibration path.
+# ===================================================================
+
+
+def _relay_ops(cover):
+    """The (service, entity_id) pairs actually sent to the hardware."""
+    return [
+        (c.args[1], c.args[2]["entity_id"])
+        for c in cover.hass.services.async_call.call_args_list
+    ]
+
+
+@pytest.mark.asyncio
+async def test_toggle_same_direction_leg_a_does_not_repulse(make_cover):
+    """CRITICAL: toggle, really opening from 20%, set_position(50).
+
+    Leg A drives OPEN — the direction already running. Re-pulsing the open
+    relay is a same-button toggle: the MOTOR STOPS, while the tracker (seeded
+    to 0 by _force_full_redrive) animates a fabricated 0→100 over the full
+    travel time. Leg B then runs from a fabricated 100 against a real 20% and
+    drives the shutter into the bottom — the obstruction-crush outcome this
+    whole feature exists to prevent.
+    """
+    cover = make_cover(control_mode="toggle", recalibrate_before_position=True)
+    cover.travel_calc.set_position(20)
+    cover.travel_calc.start_travel(80)
+    cover._last_command = SERVICE_OPEN_COVER
+    assert cover.travel_calc.is_opening()
+    cover.hass.services.async_call.reset_mock()
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(50)
+
+    assert _relay_ops(cover) == [], (
+        "the motor is already driving toward the datum and will stall there:"
+        f" leg A must not touch a relay at all, got {_relay_ops(cover)}"
+    )
+    assert cover.travel_calc.is_opening(), "the tracker must still animate leg A"
+    assert cover.travel_calc._travel_to_position == 100
+    assert cover.travel_calc._last_known_position == 0, (
+        "still modelled as a full-travel open from the opposite endpoint"
+    )
+    assert cover._pending_recalibrated_target == 50, "leg B must still be armed"
+
+
+@pytest.mark.asyncio
+async def test_toggle_same_direction_forced_endpoint_does_not_repulse(make_cover):
+    """CRITICAL, FORCED_ENDPOINT shape: toggle, really opening, set_position(100).
+
+    Same hazard by the other branch of set_position — a forced endpoint
+    re-drive to 100 while already opening.
+    """
+    cover = make_cover(control_mode="toggle", recalibrate_before_position=True)
+    cover.travel_calc.set_position(20)
+    cover.travel_calc.start_travel(80)
+    cover._last_command = SERVICE_OPEN_COVER
+    cover.hass.services.async_call.reset_mock()
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(100)
+
+    assert _relay_ops(cover) == [], (
+        f"no second rising edge on the open relay: {_relay_ops(cover)}"
+    )
+    assert cover.travel_calc.is_opening()
+    assert cover.travel_calc._travel_to_position == 100
+    assert cover.travel_calc._last_known_position == 0
+    assert cover._pending_recalibrated_target is None, "endpoint target arms no leg"
+
+
+@pytest.mark.asyncio
+async def test_toggle_same_direction_forced_close_does_not_repulse(make_cover):
+    """CRITICAL, closing mirror: toggle, really closing, set_position(0)."""
+    cover = make_cover(control_mode="toggle", recalibrate_before_position=True)
+    cover.travel_calc.set_position(80)
+    cover.travel_calc.start_travel(20)
+    cover._last_command = SERVICE_CLOSE_COVER
+    assert cover.travel_calc.is_closing()
+    cover.hass.services.async_call.reset_mock()
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(0)
+
+    assert _relay_ops(cover) == [], (
+        f"no second rising edge on the close relay: {_relay_ops(cover)}"
+    )
+    assert cover.travel_calc.is_closing()
+    assert cover.travel_calc._travel_to_position == 0
+    assert cover.travel_calc._last_known_position == 100
+
+
+@pytest.mark.asyncio
+async def test_toggle_genuine_reversal_still_stops_and_settles(make_cover, command_spy):
+    """Regression guard for the suppression: it must key off *direction*, not
+    simply "something is moving". A genuine reversal still gets the stop and
+    the settle gap, and the new direction still gets its command."""
+    cover = make_cover(control_mode="toggle", recalibrate_before_position=True)
+    cover.travel_calc.set_position(20)
+    cover.travel_calc.start_travel(80)
+    cover._last_command = SERVICE_OPEN_COVER
+
+    calls, spy = command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=spy),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_position(0)
+
+    assert calls == [SERVICE_STOP_COVER, SERVICE_CLOSE_COVER], (
+        f"a reversal must still stop, settle, then drive the other way: {calls}"
+    )
+    settle.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_switch_same_direction_leg_a_leaves_the_latch_alone(make_cover):
+    """Switch mode takes the same suppression, and it is a no-op there.
+
+    A latching relay that is already driving open stays driving open whether
+    we re-send the command or not — the only difference is relay churn — so
+    the guard is applied uniformly rather than per-mode, exactly as the plain
+    path's `already_moving_same_dir` is. What must not change is that the
+    latch keeps driving and the recalibration leg still runs.
+    """
+    cover = make_cover(recalibrate_before_position=True)  # switch is the default
+    cover.travel_calc.set_position(20)
+    cover.travel_calc.start_travel(80)
+    cover._last_command = SERVICE_OPEN_COVER
+    # Reflect reality: in switch mode the open relay is latched ON for the
+    # whole travel, so a re-send would be writing to an already-on relay.
+    open_state = MagicMock()
+    open_state.state = "on"
+    cover.hass.states.get = lambda eid: open_state if eid == "switch.open" else None
+    cover.hass.services.async_call.reset_mock()
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(50)
+
+    ops = _relay_ops(cover)
+    assert ("turn_off", "switch.open") not in ops, "must never break the latch"
+    assert ops == [], f"nothing to write to an already-latched relay: {ops}"
+    assert cover.travel_calc.is_opening(), "the tracker must still animate leg A"
+    assert cover.travel_calc._travel_to_position == 100
+    assert cover._pending_recalibrated_target == 50, "leg B must still be armed"

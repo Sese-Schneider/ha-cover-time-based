@@ -707,3 +707,125 @@ async def test_recalibration_plan_tilt_axis_tolerates_no_tilt_strategy(make_cove
     assert cover._tilt_strategy is None
 
     assert cover._recalibration_plan(True, 50, axis="tilt") is RecalibrationPlan.NONE
+
+
+# ===================================================================
+# Fix round 3 — same-direction re-pulse (CRITICAL), tilt axis
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_dual_motor_same_direction_leg_a_does_not_repulse(make_cover):
+    """The travel axis' same-direction hazard, on the dedicated tilt motor.
+
+    The tilt motor is already opening; leg A drives it fully open. Re-issuing
+    the tilt-open command on toggle (same-button) hardware is a second rising
+    edge on the relay that is currently driving, which STOPS the tilt motor —
+    while _force_full_tilt_redrive's seed has tilt_calc animating a fabricated
+    full articulation over a motor at a standstill.
+    """
+    cover = _dual(make_cover, control_mode="toggle")
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(20)
+    cover.tilt_calc.start_travel(80)  # tilt motor really opening
+    cover._last_command = SERVICE_OPEN_COVER
+    cover._moving_tilt_motor = True
+
+    calls, patchers = _tilt_send_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patchers[0],
+        patchers[1],
+        patchers[2],
+    ):
+        await cover.set_tilt_position(30)
+
+    assert calls == [], (
+        f"leg A must ride the tilt movement already under way, got {calls}"
+    )
+    assert cover.tilt_calc.is_opening(), "the tracker must still animate leg A"
+    assert cover.tilt_calc._travel_to_position == 100
+    assert cover.tilt_calc._last_known_position == 0
+    assert cover._pending_recalibrated_target == 30, "leg B must still be armed"
+
+
+@pytest.mark.asyncio
+async def test_dual_motor_travel_moving_still_pulses_the_tilt_motor(make_cover):
+    """The suppression must not read _last_command on the tilt axis.
+
+    dual_motor's ``tilt_command_for`` returns the plain open/close services,
+    so a TRAVEL move heading open leaves ``_last_command == open`` —
+    indistinguishable from a tilt move heading open. Deciding suppression off
+    that would skip the tilt pulse while the tilt motor sits idle and its
+    tracker animates: the very desync this guard exists to prevent, inverted.
+    """
+    cover = _dual(make_cover, control_mode="toggle")
+    cover.tilt_calc.set_position(20)
+    cover.travel_calc.set_position(30)
+    cover.travel_calc.start_travel(80)  # the TRAVEL motor is opening
+    cover._last_command = SERVICE_OPEN_COVER
+    assert not cover._moving_tilt_motor
+
+    calls, patchers = _tilt_send_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patchers[0],
+        patchers[1],
+        patchers[2],
+    ):
+        await cover.set_tilt_position(30)
+
+    assert "_send_tilt_open" in calls, (
+        f"the idle tilt motor must actually be commanded: {calls}"
+    )
+    assert cover.tilt_calc.is_opening()
+    assert cover._pending_recalibrated_target == 30
+
+
+@pytest.mark.asyncio
+async def test_dual_motor_tilt_pre_step_is_ridden_not_repulsed(make_cover):
+    """The tilt suppression must NOT be conjoined with ``_moving_tilt_motor``.
+
+    A dual-motor travel move runs a tilt-to-safe pre-step first: the tilt
+    motor really is driving tilt open and ``tilt_calc`` really is opening, but
+    ``_start_tilt_pre_step`` never sets ``_moving_tilt_motor`` (only a plain
+    tilt move does). Requiring that flag would re-pulse a tilt motor that is
+    already running — and nothing compensates, because
+    ``_abandon_active_lifecycle``'s own tilt stop is gated on the same flag
+    plus a ``tilt_calc.is_traveling()`` the forced re-drive's seed has already
+    cleared. So the pre-step must be *ridden*, exactly like a plain
+    same-direction tilt move.
+    """
+    cover = _dual(make_cover, control_mode="toggle")
+    cover.travel_calc.set_position(30)
+    cover.tilt_calc.set_position(20)  # != safe_tilt_position (100) → pre-step
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(80, recalibrate=False)
+
+    assert cover._pending_travel_target == 80, "a tilt pre-step must be in flight"
+    assert cover.tilt_calc.is_opening(), "driven by the tilt motor, opening"
+    assert not cover._moving_tilt_motor, "but the pre-step does not set the flag"
+    assert cover._last_command == SERVICE_OPEN_COVER, "the TRAVEL command"
+
+    calls, patchers = _tilt_send_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patchers[0],
+        patchers[1],
+        patchers[2],
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        await cover.set_tilt_position(30)
+
+    assert calls == [], (
+        "the tilt motor is already driving toward the datum and nothing has"
+        f" stopped it — leg A must not touch a tilt relay: {calls}"
+    )
+    assert cover.tilt_calc.is_opening(), "the tracker must still animate leg A"
+    assert cover.tilt_calc._travel_to_position == 100
+    assert cover._pending_travel_target is None, "the pre-step's travel is abandoned"
+    assert cover._pending_recalibrated_target == 30
