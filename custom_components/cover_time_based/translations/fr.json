@@ -13,7 +13,7 @@
   "issues": {
     "card_installed": {
       "title": "Actualisez votre navigateur pour afficher la carte Cover Time Based",
-      "description": "La carte de tableau de bord Cover Time Based a été installée. Home Assistant ne charge les ressources des tableaux de bord qu'au chargement de la page : dans les sessions de navigateur déjà ouvertes, la carte reste absente tant que vous ne rechargez pas — et souvent seule une **actualisation forcée** fonctionne. Effectuez une actualisation forcée (**Ctrl+Maj+R**, ou **⌘+Maj+R** sur macOS) pour charger la carte ; si une erreur de configuration persiste, videz le cache de votre navigateur et rechargez la page. Vous pourrez fermer ce problème une fois la carte apparue."
+      "description": "La carte de tableau de bord Cover Time Based a été installée. Home Assistant ne charge les ressources des tableaux de bord qu'au chargement de la page : dans les sessions de navigateur déjà ouvertes, la carte reste absente tant que vous ne rechargez pas — et souvent seule une **actualisation forcée** fonctionne. Effectuez une actualisation forcée (**Ctrl+Maj+R**, ou **⌘+Maj+R** sur macOS) pour charger la carte ; si une erreur de configuration persiste, videz le cache de votre navigateur et rechargez la page. Vous pourrez ignorer ce problème une fois la carte apparue."
     },
     "deprecated_yaml": {
       "title": "La configuration YAML est obsolète",

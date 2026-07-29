@@ -13,7 +13,7 @@
   "issues": {
     "card_installed": {
       "title": "Actualiza tu navegador para mostrar la tarjeta Cover Time Based",
-      "description": "Se ha instalado la tarjeta de panel de control Cover Time Based. Home Assistant solo carga los recursos del panel de control al cargar la página, así que en las sesiones del navegador que ya estén abiertas la tarjeta seguirá sin aparecer hasta que recargues, y a menudo solo funciona una **actualización forzada**. Haz una actualización forzada (**Ctrl+Mayús+R**, o **⌘+Mayús+R** en macOS) para cargar la tarjeta; si sigue mostrando un error de configuración, borra la caché del navegador y recarga. Puedes cerrar este problema en cuanto aparezca la tarjeta."
+      "description": "Se ha instalado la tarjeta de panel de control Cover Time Based. Home Assistant solo carga los recursos del panel de control al cargar la página, así que en las sesiones del navegador que ya estén abiertas la tarjeta seguirá sin aparecer hasta que recargues, y a menudo solo funciona una **actualización forzada**. Haz una actualización forzada (**Ctrl+Mayús+R**, o **⌘+Mayús+R** en macOS) para cargar la tarjeta; si sigue mostrando un error de configuración, borra la caché del navegador y recarga. Puedes ignorar este problema en cuanto aparezca la tarjeta."
     },
     "deprecated_yaml": {
       "title": "La configuración YAML está obsoleta",

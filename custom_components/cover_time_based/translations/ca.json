@@ -13,7 +13,7 @@
   "issues": {
     "card_installed": {
       "title": "Actualitza el navegador per mostrar la targeta Cover Time Based",
-      "description": "S'ha instal·lat la targeta de panell Cover Time Based. Home Assistant només carrega els recursos dels panells en carregar la pàgina, així que a les sessions del navegador que ja estiguin obertes la targeta no apareixerà fins que no tornis a carregar, i sovint només funciona una **actualització forçada**. Fes una actualització forçada (**Ctrl+Maj+R**, o **⌘+Maj+R** a macOS) per carregar la targeta; si continua mostrant un error de configuració, buida la memòria cau del navegador i torna a carregar. Pots tancar aquest problema un cop aparegui la targeta."
+      "description": "S'ha instal·lat la targeta de panell Cover Time Based. Home Assistant només carrega els recursos dels panells en carregar la pàgina, així que a les sessions del navegador que ja estiguin obertes la targeta no apareixerà fins que no tornis a carregar, i sovint només funciona una **actualització forçada**. Fes una actualització forçada (**Ctrl+Shift+R**, o **⌘+Shift+R** a macOS) per carregar la targeta; si continua mostrant un error de configuració, buida la memòria cau del navegador i torna a carregar. Pots ignorar aquest problema un cop aparegui la targeta."
     },
     "deprecated_yaml": {
       "title": "La configuració YAML és obsoleta",
@@ -54,8 +54,8 @@
           "description": "El paràmetre de temps que s'ha de calibrar"
         },
         "timeout": {
-          "name": "Temps d'espera",
-          "description": "Temps d'espera de seguretat en segons: el motor s'aturarà automàticament si no es crida stop_calibration"
+          "name": "Temps màxim d'espera",
+          "description": "Temps màxim d'espera de seguretat en segons: el motor s'aturarà automàticament si no es crida stop_calibration"
         },
         "direction": {
           "name": "Direcció",
