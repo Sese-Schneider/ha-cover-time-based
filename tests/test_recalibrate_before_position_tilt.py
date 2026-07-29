@@ -831,6 +831,54 @@ async def test_dual_motor_tilt_pre_step_is_ridden_not_repulsed(make_cover):
     assert cover._pending_recalibrated_target == 30
 
 
+@pytest.mark.asyncio
+async def test_dual_motor_pre_step_reverse_tilt_not_suppressed_by_last_command(
+    make_cover,
+):
+    """``_already_driving_tilt_toward`` must read ``tilt_calc``'s own
+    direction, not a hybrid gated on ``_last_command``.
+
+    With ``safe_tilt_position=0``, a travel move heading OPEN runs a
+    tilt-to-safe pre-step that drives the tilt motor CLOSED (toward 0) —
+    opposite the travel direction that set ``_last_command`` to OPEN. A
+    plausible but wrong implementation, ``self._last_command == command and
+    self.tilt_calc.is_traveling()``, would see ``_last_command == OPEN`` (the
+    travel command, unrelated to the tilt motor here), see the tilt motor
+    traveling, and wrongly conclude it is already driving toward leg A's
+    fully-open datum — suppressing leg A's own ``_send_tilt_open`` and
+    stranding the recalibration drive on a tilt motor that is actually
+    closing. The correct predicate reads ``tilt_calc.is_closing()`` directly
+    and is not fooled by this discriminating scenario.
+    """
+    cover = _dual(make_cover, control_mode="toggle", safe_tilt_position=0)
+    cover.travel_calc.set_position(30)
+    cover.tilt_calc.set_position(20)  # != safe_tilt_position (0) -> pre-step closes
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(80, recalibrate=False)  # travel opens
+
+    assert cover._pending_travel_target == 80, "a tilt pre-step must be in flight"
+    assert cover.tilt_calc.is_closing(), "pre-step drives tilt toward safe (0)"
+    assert cover._last_command == SERVICE_OPEN_COVER, "the TRAVEL command"
+
+    calls, patchers = _tilt_send_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patchers[0],
+        patchers[1],
+        patchers[2],
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        await cover.set_tilt_position(30)
+
+    assert "_send_tilt_open" in calls, (
+        "leg A drives the tilt motor toward its fully-open datum; the tilt"
+        " motor is actually closing (the pre-step), so this must not be"
+        f" suppressed: {calls}"
+    )
+
+
 # ===================================================================
 # Fix round 3 — dual_motor tilt endpoints are FORCED, not trusted
 #
