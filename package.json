@@ -2,6 +2,9 @@
   "name": "cover-time-based-frontend-tests",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
   "scripts": {
     "test:fe": "vitest run",
     "test:fe:watch": "vitest",
