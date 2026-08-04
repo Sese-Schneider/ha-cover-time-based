@@ -144,7 +144,6 @@ test("_autoSave on failure with no err.message falls back to an empty _saveError
   const hass = makeHass({
     ws: {
       "cover_time_based/update_config": () => {
-        // eslint-disable-next-line no-throw-literal
         throw "boom"; // a non-Error throw has no .message
       },
       "cover_time_based/get_config": () => ({ control_mode: "toggle" }),
