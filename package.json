@@ -5,13 +5,22 @@
   "scripts": {
     "test:fe": "vitest run",
     "test:fe:watch": "vitest",
-    "test:fe:cov": "vitest run --coverage"
+    "test:fe:cov": "vitest run --coverage",
+    "format": "prettier --write \"**/*.{js,mjs,ts}\"",
+    "format:check": "prettier --check \"**/*.{js,mjs,ts}\"",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^2.1.0",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.9.0",
     "happy-dom": "^15.0.0",
     "lit-element": "2.4.0",
     "lit-html": "1.4.1",
+    "prettier": "^3.9.6",
     "vitest": "^2.1.0"
   }
 }
