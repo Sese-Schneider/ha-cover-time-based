@@ -264,6 +264,22 @@ test("timing tab renders the Timing Calibration section above the Travel Attribu
   expect(ordered[0]).toBe(calibration);
 });
 
+test("timing tab (not calibrating): position-reset controls lock inside the disabled fieldset while saving", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
+  card._saving = true;
+  card.requestUpdate();
+  await card.updateComplete;
+  const controls = card.shadowRoot.querySelector(".cover-controls");
+  expect(controls).not.toBeNull();
+  const fieldset = controls.closest("fieldset");
+  expect(fieldset).not.toBeNull();
+  expect(fieldset.disabled).toBe(true);
+});
+
 test("entity info row shows the selectedEntity string", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.my_cover", config: switchCfg() });
   const entityId = card.shadowRoot.querySelector(".entity-id");
