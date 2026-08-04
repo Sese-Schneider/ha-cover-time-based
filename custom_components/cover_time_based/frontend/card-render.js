@@ -123,13 +123,27 @@ export function renderConfigSections(card) {
             ${renderTiltMotorSection(card, c)}
           </fieldset>
         `
-      : html`
-          <fieldset class="borderless" ?disabled=${disabled}>
-            ${calibrating ? "" : renderPositionReset(card)}
-            ${renderTimingTable(card, c)}
-          </fieldset>
-          ${renderCalibration(card, calibrating)}
-        `}
+      : calibrating
+        ? html`
+            <!-- The active-calibration panel (Cancel/Finish) must stay OUTSIDE
+                 the disabled fieldset so its controls remain clickable while
+                 calibrating; the timing table stays inside it so it locks. -->
+            ${renderCalibration(card, calibrating)}
+            <fieldset class="borderless" ?disabled=${disabled}>
+              ${renderTimingTable(card, c)}
+            </fieldset>
+          `
+        : html`
+            <!-- Not calibrating: position reset, the calibration controls and
+                 the timing table all sit inside the disabled fieldset so they
+                 lock together while saving, matching the device tab. Order:
+                 position reset -> calibration -> table. -->
+            <fieldset class="borderless" ?disabled=${disabled}>
+              ${renderPositionReset(card)}
+              ${renderCalibration(card, calibrating)}
+              ${renderTimingTable(card, c)}
+            </fieldset>
+          `}
 
     ${card._saving
       ? html`<div class="save-bar"><span class="saving-indicator">${card._t("saving")}</span></div>`

@@ -246,6 +246,40 @@ test("device tab renders a fieldset, timing tab renders a borderless fieldset ar
   expect(fieldset.querySelector(".timing-table")).not.toBeNull();
 });
 
+test("timing tab renders the Timing Calibration section above the Travel Attribute table", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
+  const root = card.shadowRoot;
+  const calibration = root.querySelector("#cal-attribute");
+  const timingTable = root.querySelector(".timing-table");
+  expect(calibration).not.toBeNull();
+  expect(timingTable).not.toBeNull();
+  // querySelectorAll returns matches in document order, so the calibration
+  // section's control must be the first of the two. (Regression: PR #212 moved
+  // the calibration section below the table.)
+  const ordered = [...root.querySelectorAll("#cal-attribute, .timing-table")];
+  expect(ordered[0]).toBe(calibration);
+});
+
+test("timing tab (not calibrating): position-reset controls lock inside the disabled fieldset while saving", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
+  card._saving = true;
+  card.requestUpdate();
+  await card.updateComplete;
+  const controls = card.shadowRoot.querySelector(".cover-controls");
+  expect(controls).not.toBeNull();
+  const fieldset = controls.closest("fieldset");
+  expect(fieldset).not.toBeNull();
+  expect(fieldset.disabled).toBe(true);
+});
+
 test("entity info row shows the selectedEntity string", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.my_cover", config: switchCfg() });
   const entityId = card.shadowRoot.querySelector(".entity-id");
