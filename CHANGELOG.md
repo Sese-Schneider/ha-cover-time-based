@@ -1,4 +1,4 @@
-## Unreleased
+## 4.11.0 (2026-08-04)
 
 ### Features
 
@@ -9,6 +9,7 @@
 
 ### Fixes
 
+- **Startup-delay calibration no longer records a misleading `0` when you finish too early** ([#225](https://github.com/Sese-Schneider/ha-cover-time-based/pull/225)): the travel/tilt **startup delay** ("overhead") test steps the motor through several short moves before one final continuous run to the endpoint, and only that final run measures the delay. Pressing **Finish** during the stepped phase made the backend return a hard-coded `0`, which the card then wrote into the field. The **Finish** button is now disabled until the calibration reaches its final step, so a value can only be captured once it is real. **Cancel** stays available throughout, and the simple travel/tilt-**time** tests — which have no stepped phase — keep **Finish** enabled the whole time.
 - **The two timing tables no longer render under identical headers in every non-English language**: the **Timing** tab draws a travel table and a tilt table, headed **Travel Attribute** and **Tilt Attribute**. Every non-English catalogue translated both as a bare "Attribute" — "Atributo", "Atrybut", "Attribut", "Attributo", "Attribuut" — so in German, Italian, Dutch, Polish and Portuguese the two tables were headed identically and the label that tells them apart was lost. Each language now distinguishes them, using its own existing word for travel and tilt.
 - **Italian: the "Switch (latching)" control mode was labelled `bistabile`, which names the other mode**: in Italian a *relè bistabile* is a pulse-driven impulse relay — i.e. exactly the neighbouring **Impulso (momentaneo)** mode — so the label pointed Italian users at the wrong wiring for a maintained-contact relay. It is now **Interruttore (mantenuto)**, which pairs correctly against the momentary half of the distinction. German (`rastend`), Polish, Portuguese and Dutch were already unambiguous and are unchanged.
 - **The card-installed Repairs notice told you to "dismiss"/"close" an issue, naming a button that doesn't exist**: Home Assistant's Repairs action is **Ignore**. The English source said "dismiss" and the German, Italian, Dutch and Portuguese catalogues said "close"; all now name the action Home Assistant actually shows (`Ignorieren`, `Ignora`, `Negeer`, `Ignorar`). Polish already said "zignorować" and is unchanged.
