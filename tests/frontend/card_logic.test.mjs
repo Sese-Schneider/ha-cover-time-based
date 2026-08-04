@@ -81,94 +81,116 @@ test("_hasRequiredEntities returns false for null config", async () => {
 test("_hasRequiredEntities wrapped: requires cover_entity_id", async () => {
   card = await mountCard(makeHass());
   expect(card._hasRequiredEntities({ control_mode: "wrapped" })).toBe(false);
-  expect(card._hasRequiredEntities({ control_mode: "wrapped", cover_entity_id: "cover.x" })).toBe(true);
+  expect(card._hasRequiredEntities({ control_mode: "wrapped", cover_entity_id: "cover.x" })).toBe(
+    true,
+  );
 });
 
 test("_hasRequiredEntities switch: requires open + close switches", async () => {
   card = await mountCard(makeHass());
-  expect(card._hasRequiredEntities({ control_mode: "switch", open_switch_entity_id: "s.o" })).toBe(false);
-  expect(card._hasRequiredEntities({
-    control_mode: "switch",
-    open_switch_entity_id: "s.o",
-    close_switch_entity_id: "s.c",
-  })).toBe(true);
+  expect(card._hasRequiredEntities({ control_mode: "switch", open_switch_entity_id: "s.o" })).toBe(
+    false,
+  );
+  expect(
+    card._hasRequiredEntities({
+      control_mode: "switch",
+      open_switch_entity_id: "s.o",
+      close_switch_entity_id: "s.c",
+    }),
+  ).toBe(true);
 });
 
 test("_hasRequiredEntities pulse: additionally requires stop switch", async () => {
   card = await mountCard(makeHass());
   // open + close but no stop → false
-  expect(card._hasRequiredEntities({
-    control_mode: "pulse",
-    open_switch_entity_id: "o",
-    close_switch_entity_id: "c",
-  })).toBe(false);
+  expect(
+    card._hasRequiredEntities({
+      control_mode: "pulse",
+      open_switch_entity_id: "o",
+      close_switch_entity_id: "c",
+    }),
+  ).toBe(false);
   // all three → true
-  expect(card._hasRequiredEntities({
-    control_mode: "pulse",
-    open_switch_entity_id: "o",
-    close_switch_entity_id: "c",
-    stop_switch_entity_id: "s",
-  })).toBe(true);
+  expect(
+    card._hasRequiredEntities({
+      control_mode: "pulse",
+      open_switch_entity_id: "o",
+      close_switch_entity_id: "c",
+      stop_switch_entity_id: "s",
+    }),
+  ).toBe(true);
 });
 
 test("_hasRequiredEntities toggle_opposite: requires only open+close (no stop switch)", async () => {
   card = await mountCard(makeHass());
   // open+close present, no stop switch -> ready
-  expect(card._hasRequiredEntities({
-    control_mode: "toggle_opposite",
-    open_switch_entity_id: "switch.o",
-    close_switch_entity_id: "switch.c",
-  })).toBe(true);
+  expect(
+    card._hasRequiredEntities({
+      control_mode: "toggle_opposite",
+      open_switch_entity_id: "switch.o",
+      close_switch_entity_id: "switch.c",
+    }),
+  ).toBe(true);
   // missing close -> not ready
-  expect(card._hasRequiredEntities({
-    control_mode: "toggle_opposite",
-    open_switch_entity_id: "switch.o",
-  })).toBe(false);
+  expect(
+    card._hasRequiredEntities({
+      control_mode: "toggle_opposite",
+      open_switch_entity_id: "switch.o",
+    }),
+  ).toBe(false);
 });
 
 test("_hasRequiredEntities dual_motor (non-wrapped): requires tilt_open + tilt_close", async () => {
   card = await mountCard(makeHass());
   // switch + dual_motor but no tilt switches → false
-  expect(card._hasRequiredEntities({
-    control_mode: "switch",
-    open_switch_entity_id: "o",
-    close_switch_entity_id: "c",
-    tilt_mode: "dual_motor",
-  })).toBe(false);
+  expect(
+    card._hasRequiredEntities({
+      control_mode: "switch",
+      open_switch_entity_id: "o",
+      close_switch_entity_id: "c",
+      tilt_mode: "dual_motor",
+    }),
+  ).toBe(false);
   // with tilt_open + tilt_close → true
-  expect(card._hasRequiredEntities({
-    control_mode: "switch",
-    open_switch_entity_id: "o",
-    close_switch_entity_id: "c",
-    tilt_mode: "dual_motor",
-    tilt_open_switch: "to",
-    tilt_close_switch: "tc",
-  })).toBe(true);
+  expect(
+    card._hasRequiredEntities({
+      control_mode: "switch",
+      open_switch_entity_id: "o",
+      close_switch_entity_id: "c",
+      tilt_mode: "dual_motor",
+      tilt_open_switch: "to",
+      tilt_close_switch: "tc",
+    }),
+  ).toBe(true);
 });
 
 test("_hasRequiredEntities dual_motor + pulse: also requires tilt_stop", async () => {
   card = await mountCard(makeHass());
   // pulse + dual_motor with tilt_open + tilt_close but no tilt_stop → false
-  expect(card._hasRequiredEntities({
-    control_mode: "pulse",
-    open_switch_entity_id: "o",
-    close_switch_entity_id: "c",
-    stop_switch_entity_id: "s",
-    tilt_mode: "dual_motor",
-    tilt_open_switch: "to",
-    tilt_close_switch: "tc",
-  })).toBe(false);
+  expect(
+    card._hasRequiredEntities({
+      control_mode: "pulse",
+      open_switch_entity_id: "o",
+      close_switch_entity_id: "c",
+      stop_switch_entity_id: "s",
+      tilt_mode: "dual_motor",
+      tilt_open_switch: "to",
+      tilt_close_switch: "tc",
+    }),
+  ).toBe(false);
   // with tilt_stop → true
-  expect(card._hasRequiredEntities({
-    control_mode: "pulse",
-    open_switch_entity_id: "o",
-    close_switch_entity_id: "c",
-    stop_switch_entity_id: "s",
-    tilt_mode: "dual_motor",
-    tilt_open_switch: "to",
-    tilt_close_switch: "tc",
-    tilt_stop_switch: "ts",
-  })).toBe(true);
+  expect(
+    card._hasRequiredEntities({
+      control_mode: "pulse",
+      open_switch_entity_id: "o",
+      close_switch_entity_id: "c",
+      stop_switch_entity_id: "s",
+      tilt_mode: "dual_motor",
+      tilt_open_switch: "to",
+      tilt_close_switch: "tc",
+      tilt_stop_switch: "ts",
+    }),
+  ).toBe(true);
 });
 
 // ---------------------------------------------------------------------------
@@ -254,7 +276,7 @@ test("F1: _autoSave re-schedules itself (via _scheduleAutoSave) instead of savin
   await card._autoSave();
 
   expect(hass.callWS).not.toHaveBeenCalledWith(
-    expect.objectContaining({ type: "cover_time_based/update_config" })
+    expect.objectContaining({ type: "cover_time_based/update_config" }),
   );
   expect(scheduleSpy).toHaveBeenCalledTimes(1);
 });
@@ -323,30 +345,39 @@ test("_isCalibrating returns true when _calibratingOverride === true", async () 
 });
 
 test("_isCalibrating returns false when _calibratingOverride === false", async () => {
-  card = await mountCard(makeHass({
-    states: { "cover.x": { state: "open", attributes: { calibration_active: true } } },
-  }), { selectedEntity: "cover.x" });
+  card = await mountCard(
+    makeHass({
+      states: { "cover.x": { state: "open", attributes: { calibration_active: true } } },
+    }),
+    { selectedEntity: "cover.x" },
+  );
   card._calibratingOverride = false;
   // Even though entity says calibration_active, override wins
   expect(card._isCalibrating()).toBe(false);
 });
 
 test("_isCalibrating reads entity calibration_active when override is undefined", async () => {
-  card = await mountCard(makeHass({
-    states: {
-      "cover.x": { state: "open", attributes: { calibration_active: true } },
-    },
-  }), { selectedEntity: "cover.x" });
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.x": { state: "open", attributes: { calibration_active: true } },
+      },
+    }),
+    { selectedEntity: "cover.x" },
+  );
   // No _calibratingOverride set → should read from entity state
   expect(card._isCalibrating()).toBe(true);
 });
 
 test("_isCalibrating returns false when entity calibration_active is not true", async () => {
-  card = await mountCard(makeHass({
-    states: {
-      "cover.x": { state: "open", attributes: {} },
-    },
-  }), { selectedEntity: "cover.x" });
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.x": { state: "open", attributes: {} },
+      },
+    }),
+    { selectedEntity: "cover.x" },
+  );
   expect(card._isCalibrating()).toBe(false);
 });
 
@@ -393,7 +424,9 @@ test("_getCalibrationHint tilt_startup_delay maps to tilt_time_close when knownP
   card.shadowRoot.querySelector = () => ({ value: "tilt_startup_delay" });
   const hint = card._getCalibrationHint();
   // effectiveAttr = tilt_time_close, tiltMode = dual_motor
-  expect(hint).toBe("Start with cover closed and slats open. Click Finish when the slats are fully closed.");
+  expect(hint).toBe(
+    "Start with cover closed and slats open. Click Finish when the slats are fully closed.",
+  );
 });
 
 test("_getCalibrationHint tilt_startup_delay maps to tilt_time_open when knownPosition=closed", async () => {
@@ -404,7 +437,9 @@ test("_getCalibrationHint tilt_startup_delay maps to tilt_time_open when knownPo
   card.shadowRoot.querySelector = () => ({ value: "tilt_startup_delay" });
   const hint = card._getCalibrationHint();
   // effectiveAttr = tilt_time_open, tiltMode = dual_motor
-  expect(hint).toBe("Start with both cover and slats closed. Click Finish when the slats are fully open.");
+  expect(hint).toBe(
+    "Start with both cover and slats closed. Click Finish when the slats are fully open.",
+  );
 });
 
 test("_getCalibrationHint returns tiltMode-specific hint for direct attributes", async () => {
@@ -414,7 +449,7 @@ test("_getCalibrationHint returns tiltMode-specific hint for direct attributes",
   card.shadowRoot.querySelector = () => ({ value: "travel_time_close" });
   const hint = card._getCalibrationHint();
   expect(hint).toBe(
-    "Start with cover fully open. Click Finish when the cover is fully closed, before the slats start tilting."
+    "Start with cover fully open. Click Finish when the cover is fully closed, before the slats start tilting.",
   );
 });
 
@@ -445,38 +480,46 @@ test("_coverSupportsNativeTilt returns false for entityId not in states", async 
 });
 
 test("_coverSupportsNativeTilt returns true when bit 16 (OPEN_TILT) is set", async () => {
-  card = await mountCard(makeHass({
-    states: {
-      "cover.tilt16": { state: "open", attributes: { supported_features: 16 } },
-    },
-  }));
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.tilt16": { state: "open", attributes: { supported_features: 16 } },
+      },
+    }),
+  );
   expect(card._coverSupportsNativeTilt("cover.tilt16")).toBe(true);
 });
 
 test("_coverSupportsNativeTilt returns true when bit 32 (CLOSE_TILT) is set", async () => {
-  card = await mountCard(makeHass({
-    states: {
-      "cover.tilt32": { state: "open", attributes: { supported_features: 32 } },
-    },
-  }));
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.tilt32": { state: "open", attributes: { supported_features: 32 } },
+      },
+    }),
+  );
   expect(card._coverSupportsNativeTilt("cover.tilt32")).toBe(true);
 });
 
 test("_coverSupportsNativeTilt returns true when both tilt bits set", async () => {
-  card = await mountCard(makeHass({
-    states: {
-      "cover.tilts": { state: "open", attributes: { supported_features: 48 } },
-    },
-  }));
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.tilts": { state: "open", attributes: { supported_features: 48 } },
+      },
+    }),
+  );
   expect(card._coverSupportsNativeTilt("cover.tilts")).toBe(true);
 });
 
 test("_coverSupportsNativeTilt returns false when no tilt bits set", async () => {
-  card = await mountCard(makeHass({
-    states: {
-      "cover.notilt": { state: "open", attributes: { supported_features: 15 } },
-    },
-  }));
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.notilt": { state: "open", attributes: { supported_features: 15 } },
+      },
+    }),
+  );
   expect(card._coverSupportsNativeTilt("cover.notilt")).toBe(false);
 });
 

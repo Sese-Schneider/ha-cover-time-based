@@ -1,7 +1,12 @@
 import "../../../custom_components/cover_time_based/frontend/cover-time-based-card.js";
 
 const HA_STUBS = [
-  "ha-card", "ha-entity-picker", "ha-switch", "ha-icon", "ha-input", "ha-textfield",
+  "ha-card",
+  "ha-entity-picker",
+  "ha-switch",
+  "ha-icon",
+  "ha-input",
+  "ha-textfield",
   "ha-icon-button",
 ];
 
@@ -16,7 +21,7 @@ export function defineHaStubs({ exclude = [] } = {}) {
 
 export async function mountCard(
   hass,
-  { config = null, selectedEntity = "", activeTab, knownPosition } = {}
+  { config = null, selectedEntity = "", activeTab, knownPosition } = {},
 ) {
   const el = document.createElement("cover-time-based-card");
   el._config = config;

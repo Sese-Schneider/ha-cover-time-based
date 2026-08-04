@@ -38,12 +38,14 @@ test("_onStartCalibration sends start_calibration and flips _calibratingOverride
   card = await mountCard(hass, { selectedEntity: "cover.x" });
   card.shadowRoot.querySelector = () => ({ value: "travel_time_close" });
   await card._onStartCalibration();
-  expect(hass.callWS).toHaveBeenCalledWith(expect.objectContaining({
-    type: "cover_time_based/start_calibration",
-    entity_id: "cover.x",
-    attribute: "travel_time_close",
-    timeout: 300,
-  }));
+  expect(hass.callWS).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "cover_time_based/start_calibration",
+      entity_id: "cover.x",
+      attribute: "travel_time_close",
+      timeout: 300,
+    }),
+  );
   expect(card._calibratingOverride).toBe(true);
 });
 
@@ -60,10 +62,12 @@ test("_onStartCalibration sends the attribute from the #cal-attribute select", a
   card = await mountCard(hass, { selectedEntity: "cover.y" });
   card.shadowRoot.querySelector = () => ({ value: "tilt_time_open" });
   await card._onStartCalibration();
-  expect(hass.callWS).toHaveBeenCalledWith(expect.objectContaining({
-    attribute: "tilt_time_open",
-    entity_id: "cover.y",
-  }));
+  expect(hass.callWS).toHaveBeenCalledWith(
+    expect.objectContaining({
+      attribute: "tilt_time_open",
+      entity_id: "cover.y",
+    }),
+  );
 });
 
 test("_onStartCalibration alerts on WS failure (window.alert is expected behavior)", async () => {
@@ -106,24 +110,27 @@ test("_onStartCalibration alert message contains the error text", async () => {
 
 // All 7 ATTRIBUTE_TO_CONFIG entries (attribute → config key):
 test.each([
-  ["travel_time_close",   "travel_time_close"],
-  ["tilt_time_open",      "tilt_time_open"],
-  ["travel_time_open",    "travel_time_open"],
-  ["tilt_time_close",     "tilt_time_close"],
-  ["travel_startup_delay","travel_startup_delay"],
-  ["tilt_startup_delay",  "tilt_startup_delay"],
-  ["min_movement_time",   "min_movement_time"],
-])("_onStopCalibration(false) applies %s → _config.%s via ATTRIBUTE_TO_CONFIG", async (attr, key) => {
-  const hass = makeHass({
-    ws: {
-      "cover_time_based/stop_calibration": () => ({ attribute: attr, value: 7.7 }),
-    },
-  });
-  card = await mountCard(hass, { selectedEntity: "cover.x", config: { control_mode: "switch" } });
-  const spy = vi.spyOn(card, "_updateLocal").mockImplementation(() => {});
-  await card._onStopCalibration(false);
-  expect(spy).toHaveBeenCalledWith(expect.objectContaining({ [key]: 7.7 }));
-});
+  ["travel_time_close", "travel_time_close"],
+  ["tilt_time_open", "tilt_time_open"],
+  ["travel_time_open", "travel_time_open"],
+  ["tilt_time_close", "tilt_time_close"],
+  ["travel_startup_delay", "travel_startup_delay"],
+  ["tilt_startup_delay", "tilt_startup_delay"],
+  ["min_movement_time", "min_movement_time"],
+])(
+  "_onStopCalibration(false) applies %s → _config.%s via ATTRIBUTE_TO_CONFIG",
+  async (attr, key) => {
+    const hass = makeHass({
+      ws: {
+        "cover_time_based/stop_calibration": () => ({ attribute: attr, value: 7.7 }),
+      },
+    });
+    card = await mountCard(hass, { selectedEntity: "cover.x", config: { control_mode: "switch" } });
+    const spy = vi.spyOn(card, "_updateLocal").mockImplementation(() => {});
+    await card._onStopCalibration(false);
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ [key]: 7.7 }));
+  },
+);
 
 test("_onStopCalibration(false) sets _calibratingOverride to false", async () => {
   card = await mountCard(makeHass(), { selectedEntity: "cover.x" });
@@ -142,11 +149,13 @@ test("_onStopCalibration(true) cancels: sends stop_calibration with cancel:true"
   const hass = makeHass();
   card = await mountCard(hass, { selectedEntity: "cover.x" });
   await card._onStopCalibration(true);
-  expect(hass.callWS).toHaveBeenCalledWith(expect.objectContaining({
-    type: "cover_time_based/stop_calibration",
-    entity_id: "cover.x",
-    cancel: true,
-  }));
+  expect(hass.callWS).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "cover_time_based/stop_calibration",
+      entity_id: "cover.x",
+      cancel: true,
+    }),
+  );
 });
 
 test("_onStopCalibration(true) sets _calibratingOverride to false", async () => {
@@ -217,7 +226,9 @@ test("finish-then-switch: A's calibration result is NOT written onto B (F2)", as
       "cover_time_based/get_config": ({ entity_id }) =>
         entity_id === "cover.b" ? { ...CROSSWRITE_CONFIG_B } : { ...CROSSWRITE_CONFIG_A },
       "cover_time_based/stop_calibration": () =>
-        new Promise((res) => { resolveStop = res; }),
+        new Promise((res) => {
+          resolveStop = res;
+        }),
     },
   });
   card = await mountCard(hass, { selectedEntity: "cover.a", config: { ...CROSSWRITE_CONFIG_A } });
@@ -235,7 +246,9 @@ test("finish-then-switch: A's calibration result is NOT written onto B (F2)", as
 
   // B's config loads (fast, as get_config usually is) before A's stop_calibration
   // call resolves.
-  await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
   await card.updateComplete;
   expect(card._selectedEntity).toBe("cover.b");
   expect(card._config.travel_time_close).toBe(7);
@@ -256,7 +269,9 @@ test("finish-then-switch: A's calibration result is NOT written onto B (F2)", as
       .map(([a]) => a)
       .filter((a) => a.type === "cover_time_based/update_config");
     // No autosave may target B while carrying A's measurement.
-    expect(saves.find((s) => s.entity_id === "cover.b" && s.travel_time_close === 99.9)).toBeUndefined();
+    expect(
+      saves.find((s) => s.entity_id === "cover.b" && s.travel_time_close === 99.9),
+    ).toBeUndefined();
   } finally {
     vi.useRealTimers();
   }
@@ -294,12 +309,12 @@ test("finish without switching: the result IS applied and autosaved to the calib
 // ---------------------------------------------------------------------------
 
 test.each([
-  ["open_cover",  "open"],
+  ["open_cover", "open"],
   ["close_cover", "close"],
-  ["stop_cover",  "stop"],
-  ["tilt_open",   "tilt_open"],
-  ["tilt_close",  "tilt_close"],
-  ["tilt_stop",   "tilt_stop"],
+  ["stop_cover", "stop"],
+  ["tilt_open", "tilt_open"],
+  ["tilt_close", "tilt_close"],
+  ["tilt_stop", "tilt_stop"],
 ])("_onCoverCommand maps %s → '%s'", async (action, command) => {
   const hass = makeHass();
   card = await mountCard(hass, { selectedEntity: "cover.x" });
@@ -349,15 +364,14 @@ test("_onPositionPresetChange='open' sets known position 100 (no tilt when tilt_
   const hass = makeHass();
   card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "none" } });
   await card._onPositionPresetChange("open");
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_position",
-    { entity_id: "cover.x", position: 100 }
-  );
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_position", {
+    entity_id: "cover.x",
+    position: 100,
+  });
   expect(hass.callService).not.toHaveBeenCalledWith(
     "cover_time_based",
     "set_known_tilt_position",
-    expect.anything()
+    expect.anything(),
   );
 });
 
@@ -365,96 +379,88 @@ test("_onPositionPresetChange='open' sets position 100 + tilt 100 when tilt is o
   const hass = makeHass();
   card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "inline" } });
   await card._onPositionPresetChange("open");
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_position",
-    { entity_id: "cover.x", position: 100 }
-  );
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_tilt_position",
-    { entity_id: "cover.x", tilt_position: 100 }
-  );
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_position", {
+    entity_id: "cover.x",
+    position: 100,
+  });
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_tilt_position", {
+    entity_id: "cover.x",
+    tilt_position: 100,
+  });
 });
 
 test("_onPositionPresetChange='open' sets position 100 + tilt 100 for dual_motor tilt mode", async () => {
   const hass = makeHass();
   card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "dual_motor" } });
   await card._onPositionPresetChange("open");
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_position",
-    { entity_id: "cover.x", position: 100 }
-  );
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_tilt_position",
-    { entity_id: "cover.x", tilt_position: 100 }
-  );
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_position", {
+    entity_id: "cover.x",
+    position: 100,
+  });
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_tilt_position", {
+    entity_id: "cover.x",
+    tilt_position: 100,
+  });
 });
 
 test("_onPositionPresetChange='closed' sets position 0, no tilt when tilt_mode:none", async () => {
   const hass = makeHass();
   card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "none" } });
   await card._onPositionPresetChange("closed");
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_position",
-    { entity_id: "cover.x", position: 0 }
-  );
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_position", {
+    entity_id: "cover.x",
+    position: 0,
+  });
   expect(hass.callService).not.toHaveBeenCalledWith(
     "cover_time_based",
     "set_known_tilt_position",
-    expect.anything()
+    expect.anything(),
   );
 });
 
 test("_onPositionPresetChange='closed' sets position 0 + tilt 0 when tilted", async () => {
   const hass = makeHass();
-  card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "sequential_close" } });
+  card = await mountCard(hass, {
+    selectedEntity: "cover.x",
+    config: { tilt_mode: "sequential_close" },
+  });
   await card._onPositionPresetChange("closed");
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_position",
-    { entity_id: "cover.x", position: 0 }
-  );
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_tilt_position",
-    { entity_id: "cover.x", tilt_position: 0 }
-  );
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_position", {
+    entity_id: "cover.x",
+    position: 0,
+  });
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_tilt_position", {
+    entity_id: "cover.x",
+    tilt_position: 0,
+  });
 });
 
 test("_onPositionPresetChange='closed_tilt_open' sets position 0 + tilt 100", async () => {
   const hass = makeHass();
   card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "inline" } });
   await card._onPositionPresetChange("closed_tilt_open");
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_position",
-    { entity_id: "cover.x", position: 0 }
-  );
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_tilt_position",
-    { entity_id: "cover.x", tilt_position: 100 }
-  );
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_position", {
+    entity_id: "cover.x",
+    position: 0,
+  });
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_tilt_position", {
+    entity_id: "cover.x",
+    tilt_position: 100,
+  });
 });
 
 test("_onPositionPresetChange='closed_tilt_closed' sets position 0 + tilt 0", async () => {
   const hass = makeHass();
   card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "inline" } });
   await card._onPositionPresetChange("closed_tilt_closed");
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_position",
-    { entity_id: "cover.x", position: 0 }
-  );
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_tilt_position",
-    { entity_id: "cover.x", tilt_position: 0 }
-  );
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_position", {
+    entity_id: "cover.x",
+    position: 0,
+  });
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_tilt_position", {
+    entity_id: "cover.x",
+    tilt_position: 0,
+  });
 });
 
 test("_onPositionPresetChange='closed_tilt_open' sends tilt 100 regardless of config tilt_mode", async () => {
@@ -462,11 +468,10 @@ test("_onPositionPresetChange='closed_tilt_open' sends tilt 100 regardless of co
   const hass = makeHass();
   card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "none" } });
   await card._onPositionPresetChange("closed_tilt_open");
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_tilt_position",
-    { entity_id: "cover.x", tilt_position: 100 }
-  );
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_tilt_position", {
+    entity_id: "cover.x",
+    tilt_position: 100,
+  });
 });
 
 test("_onPositionPresetChange='closed_tilt_closed' sends tilt 0 regardless of config tilt_mode", async () => {
@@ -474,11 +479,10 @@ test("_onPositionPresetChange='closed_tilt_closed' sends tilt 0 regardless of co
   const hass = makeHass();
   card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "none" } });
   await card._onPositionPresetChange("closed_tilt_closed");
-  expect(hass.callService).toHaveBeenCalledWith(
-    "cover_time_based",
-    "set_known_tilt_position",
-    { entity_id: "cover.x", tilt_position: 0 }
-  );
+  expect(hass.callService).toHaveBeenCalledWith("cover_time_based", "set_known_tilt_position", {
+    entity_id: "cover.x",
+    tilt_position: 0,
+  });
 });
 
 test("_onPositionPresetChange sets _knownPosition to the preset value", async () => {
@@ -491,7 +495,9 @@ test("_onPositionPresetChange sets _knownPosition to the preset value", async ()
 test("_onPositionPresetChange error path swallows the error (console.error is expected)", async () => {
   const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
-    service: async () => { throw new Error("service failed"); },
+    service: async () => {
+      throw new Error("service failed");
+    },
   });
   card = await mountCard(hass, { selectedEntity: "cover.x", config: { tilt_mode: "none" } });
   // Must NOT throw
@@ -563,9 +569,7 @@ test("live entity picker: switching device clears _sawCalibrationActive alongsid
   card._sawCalibrationActive = true;
 
   const picker = card.shadowRoot.querySelector("ha-entity-picker");
-  picker.dispatchEvent(
-    new CustomEvent("value-changed", { detail: { value: "cover.b" } })
-  );
+  picker.dispatchEvent(new CustomEvent("value-changed", { detail: { value: "cover.b" } }));
 
   expect(card._calibratingOverride).toBeUndefined();
   expect(card._sawCalibrationActive).toBe(false);

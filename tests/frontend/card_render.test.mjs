@@ -129,7 +129,11 @@ test("with no entity selected, .tabs is absent (no config sections)", async () =
 });
 
 test("with entity + config, config sections (.tabs) are rendered", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   expect(card.shadowRoot.querySelector(".tabs")).not.toBeNull();
 });
 
@@ -152,7 +156,11 @@ test("_renderConfigSections renders device tab as active by default", async () =
 });
 
 test("_renderConfigSections with activeTab=timing shows timing tab as active", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
   const tabs = card.shadowRoot.querySelectorAll(".tab");
   expect(tabs[0].classList.contains("active")).toBe(false);
   expect(tabs[1].classList.contains("active")).toBe(true);
@@ -171,13 +179,21 @@ test("calibration tab is disabled when required entities are missing", async () 
 });
 
 test("calibration tab is NOT disabled when required entities are present", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   const tabs = card.shadowRoot.querySelectorAll(".tab");
   expect(tabs[1].disabled).toBe(false);
 });
 
 test("_saving=true renders .save-bar with .saving-indicator", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   card._saving = true;
   card.requestUpdate();
   await card.updateComplete;
@@ -188,7 +204,11 @@ test("_saving=true renders .save-bar with .saving-indicator", async () => {
 });
 
 test("_saveError=true renders .save-bar with .save-error", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   card._saveError = true;
   card.requestUpdate();
   await card.updateComplete;
@@ -199,7 +219,11 @@ test("_saveError=true renders .save-bar with .save-error", async () => {
 });
 
 test("no save-bar when neither _saving nor _saveError", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   expect(card.shadowRoot.querySelector(".save-bar")).toBeNull();
 });
 
@@ -207,7 +231,11 @@ test("no save-bar when neither _saving nor _saveError", async () => {
 // left in a switch slot after leaving pulse mode) — the server's detail
 // message is shown alongside the translated text so the cause is visible.
 test("_saveError with _saveErrorDetail shows the server's reason after the translated text", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   card._saveError = true;
   card._saveErrorDetail = "Script entities are only supported in pulse mode (got script.ir_open)";
   card.requestUpdate();
@@ -219,12 +247,16 @@ test("_saveError with _saveErrorDetail shows the server's reason after the trans
   expect(text).toContain("Script entities are only supported in pulse mode (got script.ir_open)");
   // The detail follows the translated text, not the other way round.
   expect(text.indexOf("Save failed")).toBeLessThan(
-    text.indexOf("Script entities are only supported")
+    text.indexOf("Script entities are only supported"),
   );
 });
 
 test("_saveError with empty _saveErrorDetail shows only the translated text", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   card._saveError = true;
   card._saveErrorDetail = "";
   card.requestUpdate();
@@ -234,11 +266,19 @@ test("_saveError with empty _saveErrorDetail shows only the translated text", as
 });
 
 test("device tab renders a fieldset, timing tab renders a borderless fieldset around the timing table", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   expect(card.shadowRoot.querySelector("fieldset")).not.toBeNull();
 
   card.remove();
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
   const fieldset = card.shadowRoot.querySelector("fieldset");
   expect(fieldset).not.toBeNull();
   expect(fieldset.classList.contains("borderless")).toBe(true);
@@ -292,7 +332,11 @@ test("entity info row shows the selectedEntity string", async () => {
 // ---------------------------------------------------------------------------
 
 test("control mode select has five options: wrapped/switch/pulse/toggle/toggle_opposite", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   const select = card.shadowRoot.querySelector("select.ha-select");
   expect(select).not.toBeNull();
   const values = [...select.options].map((o) => o.value);
@@ -305,42 +349,66 @@ test("control mode select has five options: wrapped/switch/pulse/toggle/toggle_o
 // not on opt.selected (the DOM property the native select manages internally).
 
 test("switch mode: 'switch' option has the selected attribute", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   const select = card.shadowRoot.querySelector("select.ha-select");
   const selectedOpt = [...select.options].find((o) => o.hasAttribute("selected"));
   expect(selectedOpt?.value).toBe("switch");
 });
 
 test("pulse mode: 'pulse' option has the selected attribute", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: pulseCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: pulseCfg(),
+    activeTab: "device",
+  });
   const select = card.shadowRoot.querySelector("select.ha-select");
   const selectedOpt = [...select.options].find((o) => o.hasAttribute("selected"));
   expect(selectedOpt?.value).toBe("pulse");
 });
 
 test("toggle mode: 'toggle' option has the selected attribute", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: toggleCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: toggleCfg(),
+    activeTab: "device",
+  });
   const select = card.shadowRoot.querySelector("select.ha-select");
   const selectedOpt = [...select.options].find((o) => o.hasAttribute("selected"));
   expect(selectedOpt?.value).toBe("toggle");
 });
 
 test("toggle_opposite mode: its option has the selected attribute", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: toggleOppositeCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: toggleOppositeCfg(),
+    activeTab: "device",
+  });
   const select = card.shadowRoot.querySelector("select.ha-select");
   const selectedOpt = [...select.options].find((o) => o.hasAttribute("selected"));
   expect(selectedOpt?.value).toBe("toggle_opposite");
 });
 
 test("toggle_opposite mode shows the relay_reports_off toggle", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: toggleOppositeCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: toggleOppositeCfg(),
+    activeTab: "device",
+  });
   const labels = [...card.shadowRoot.querySelectorAll(".toggle-label")].map((n) => n.textContent);
   // The relay_reports_off toggle label is present (same as toggle mode).
   expect(labels.some((t) => /report/i.test(t))).toBe(true);
 });
 
 test("wrapped mode: 'wrapped' option has the selected attribute", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg(),
+    activeTab: "device",
+  });
   const select = card.shadowRoot.querySelector("select.ha-select");
   const selectedOpt = [...select.options].find((o) => o.hasAttribute("selected"));
   expect(selectedOpt?.value).toBe("wrapped");
@@ -356,12 +424,20 @@ test("pulse mode renders .inline-field (pulse-time) in control mode section", as
 });
 
 test("switch mode has no .inline-field (pulse-time absent)", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   expect(card.shadowRoot.querySelector(".inline-field")).toBeNull();
 });
 
 test("toggle mode has no .inline-field", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: toggleCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: toggleCfg(),
+    activeTab: "device",
+  });
   expect(card.shadowRoot.querySelector(".inline-field")).toBeNull();
 });
 
@@ -370,13 +446,21 @@ test("toggle mode has no .inline-field", async () => {
 // ---------------------------------------------------------------------------
 
 test("_renderToggleWithHelp: .info-popover absent when _openHelp is null", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   expect(card._openHelp).toBeNull();
   expect(card.shadowRoot.querySelector(".info-popover")).toBeNull();
 });
 
 test("_renderToggleWithHelp: .info-popover present when _openHelp matches the helper key", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   card._openHelp = "assumed_state.helper";
   card.requestUpdate();
   await card.updateComplete;
@@ -384,7 +468,11 @@ test("_renderToggleWithHelp: .info-popover present when _openHelp matches the he
 });
 
 test("_renderToggleWithHelp: .info-popover absent when _openHelp is a different key", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   card._openHelp = "some.other.key";
   card.requestUpdate();
   await card.updateComplete;
@@ -393,7 +481,11 @@ test("_renderToggleWithHelp: .info-popover absent when _openHelp is a different 
 });
 
 test("wrapped mode: _openHelp=ignore_reported_position_helper shows the popover", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg(),
+    activeTab: "device",
+  });
   card._openHelp = "entities.ignore_reported_position_helper";
   card.requestUpdate();
   await card.updateComplete;
@@ -405,7 +497,11 @@ test("wrapped mode: _openHelp=ignore_reported_position_helper shows the popover"
 // ---------------------------------------------------------------------------
 
 test("wrapped mode renders cover entity-picker (with includeDomains cover)", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg(),
+    activeTab: "device",
+  });
   const pickers = card.shadowRoot.querySelectorAll("ha-entity-picker");
   // Exactly: top entity-picker + cover entity picker
   expect(pickers.length).toBe(2);
@@ -418,7 +514,11 @@ test("wrapped mode renders cover entity-picker (with includeDomains cover)", asy
 });
 
 test("wrapped mode renders ha-switch toggles (ignore-reported-position, force-time-based, reports-command-not-endpoint, invert, assumed-state, force-endpoint-redrive, recalibrate-before-position)", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg(),
+    activeTab: "device",
+  });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
   // Exactly 7 toggles: ignore_reported_position, force_time_based_position,
   // reports_command_not_endpoint, invert, assumed_state, force_endpoint_redrive,
@@ -427,7 +527,11 @@ test("wrapped mode renders ha-switch toggles (ignore-reported-position, force-ti
 });
 
 test("wrapped mode: toggling reports-command-not-endpoint calls _updateLocal", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg(),
+    activeTab: "device",
+  });
   const captured = [];
   card._updateLocal = (u) => captured.push(u);
   // Order in renderInputEntities: [0] ignore_reported_position,
@@ -440,7 +544,11 @@ test("wrapped mode: toggling reports-command-not-endpoint calls _updateLocal", a
 });
 
 test("wrapped mode: _openHelp=reports_command_not_endpoint_helper shows the popover", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg(),
+    activeTab: "device",
+  });
   card._openHelp = "entities.reports_command_not_endpoint_helper";
   card.requestUpdate();
   await card.updateComplete;
@@ -448,38 +556,62 @@ test("wrapped mode: _openHelp=reports_command_not_endpoint_helper shows the popo
 });
 
 test("switch mode renders open + close switch pickers (no stop switch)", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   const pickers = card.shadowRoot.querySelectorAll("ha-entity-picker");
   // top picker + open switch + close switch = 3
   expect(pickers.length).toBe(3);
 });
 
 test("pulse mode renders open + close + stop switch pickers (3 extra + top picker = 4)", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: pulseCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: pulseCfg(),
+    activeTab: "device",
+  });
   const pickers = card.shadowRoot.querySelectorAll("ha-entity-picker");
   // top picker + open + close + stop = 4
   expect(pickers.length).toBe(4);
 });
 
 test("toggle mode renders open + close switch pickers (no stop switch)", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: toggleCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: toggleCfg(),
+    activeTab: "device",
+  });
   const pickers = card.shadowRoot.querySelectorAll("ha-entity-picker");
   // top picker + open + close = 3
   expect(pickers.length).toBe(3);
 });
 
 test("switch mode renders .entity-grid div", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   expect(card.shadowRoot.querySelector(".entity-grid")).not.toBeNull();
 });
 
 test("wrapped mode has no .entity-grid", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: wrappedCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg(),
+    activeTab: "device",
+  });
   expect(card.shadowRoot.querySelector(".entity-grid")).toBeNull();
 });
 
 test("switch mode shows assumed-state toggle", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
   // Exactly 3 toggles: assumed-state, force-endpoint-redrive and
   // recalibrate-before-position (switch mode has no other toggle-with-help)
@@ -491,7 +623,11 @@ test("switch mode shows assumed-state toggle", async () => {
 // ---------------------------------------------------------------------------
 
 test("tilt select always renders with at least 4 options (none/sequential_close/sequential_open/inline)", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   const selects = card.shadowRoot.querySelectorAll("select.ha-select");
   // First select = control_mode, second = tilt mode
   expect(selects.length).toBeGreaterThanOrEqual(2);
@@ -504,7 +640,11 @@ test("tilt select always renders with at least 4 options (none/sequential_close/
 });
 
 test("tilt select shows dual_motor option for non-wrapped mode", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "device",
+  });
   const selects = card.shadowRoot.querySelectorAll("select.ha-select");
   const tiltSelect = selects[1];
   const values = [...tiltSelect.options].map((o) => o.value);
@@ -515,7 +655,11 @@ test("tilt select shows dual_motor option for non-wrapped mode", async () => {
 // .selected property (native select state), for the same happy-dom reason as above.
 
 test("tilt mode none: 'none' option has the selected attribute", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg({ tilt_mode: "none" }), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg({ tilt_mode: "none" }),
+    activeTab: "device",
+  });
   const selects = card.shadowRoot.querySelectorAll("select.ha-select");
   const tiltSelect = selects[1];
   const selectedOpt = [...tiltSelect.options].find((o) => o.hasAttribute("selected"));
@@ -616,12 +760,20 @@ test("tilt_mode=dual_motor + pulse renders tilt stop switch picker (6 pickers to
 });
 
 test("tilt_mode=none has no .dual-motor-config", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg({ tilt_mode: "none" }), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg({ tilt_mode: "none" }),
+    activeTab: "device",
+  });
   expect(card.shadowRoot.querySelector(".dual-motor-config")).toBeNull();
 });
 
 test("tilt_mode=sequential_close has no .dual-motor-config", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg({ tilt_mode: "sequential_close" }), activeTab: "device" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg({ tilt_mode: "sequential_close" }),
+    activeTab: "device",
+  });
   expect(card.shadowRoot.querySelector(".dual-motor-config")).toBeNull();
 });
 
@@ -641,12 +793,20 @@ test("tilt_mode=dual_motor + wrapped: shows .dual-motor-config but NO .entity-gr
 // ---------------------------------------------------------------------------
 
 test("timing tab renders .timing-table", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
   expect(card.shadowRoot.querySelector(".timing-table")).not.toBeNull();
 });
 
 test("switch mode timing table includes endpoint_runon_time row (5 travel rows: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time, endpoint_runon_time)", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
   const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
   // switch mode: travel_time_close, travel_time_open, travel_startup_delay, min_movement_time, endpoint_runon_time
   expect(inputs.length).toBe(5);
@@ -684,7 +844,11 @@ test("direction_change_delay row is gone, even for an entry that still stores it
 });
 
 test("timing row input has min attribute set (travel_time_close has min=0.1)", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
   const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
   // First input = travel_time_close, min should be "0.1"
   expect(inputs[0].getAttribute("min")).toBe("0.1");
@@ -712,7 +876,11 @@ test("timing table with tilt mode (inline) renders a second tilt timing table", 
 });
 
 test("timing table without tilt mode renders only one timing table", async () => {
-  card = await mountCard(makeHass(), { selectedEntity: "cover.x", config: switchCfg(), activeTab: "timing" });
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(),
+    activeTab: "timing",
+  });
   const tables = card.shadowRoot.querySelectorAll(".timing-table");
   expect(tables.length).toBe(1);
 });
@@ -804,13 +972,16 @@ test("position reset shows cover + tilt controls when _hasTiltMotor() is true (d
 });
 
 test("position section absent while calibrating", async () => {
-  card = await mountCard(makeHass({
-    states: { "cover.x": { state: "open", attributes: { calibration_active: true } } },
-  }), {
-    selectedEntity: "cover.x",
-    config: switchCfg(),
-    activeTab: "timing",
-  });
+  card = await mountCard(
+    makeHass({
+      states: { "cover.x": { state: "open", attributes: { calibration_active: true } } },
+    }),
+    {
+      selectedEntity: "cover.x",
+      config: switchCfg(),
+      activeTab: "timing",
+    },
+  );
   // _isCalibrating() returns true → _renderPositionReset is NOT called
   expect(card.shadowRoot.querySelector("#position-select")).toBeNull();
 });
@@ -821,18 +992,21 @@ test("position section absent while calibrating", async () => {
 // ---------------------------------------------------------------------------
 
 test("F1: while calibrating, every .timing-input is inside a disabled fieldset", async () => {
-  card = await mountCard(makeHass({
-    states: {
-      "cover.x": {
-        state: "open",
-        attributes: { calibration_active: true, calibration_attribute: "travel_time_close" },
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.x": {
+          state: "open",
+          attributes: { calibration_active: true, calibration_attribute: "travel_time_close" },
+        },
       },
+    }),
+    {
+      selectedEntity: "cover.x",
+      config: switchCfg(),
+      activeTab: "timing",
     },
-  }), {
-    selectedEntity: "cover.x",
-    config: switchCfg(),
-    activeTab: "timing",
-  });
+  );
 
   expect(card._isCalibrating()).toBe(true);
   const inputs = [...card.shadowRoot.querySelectorAll(".timing-input")];
@@ -845,18 +1019,21 @@ test("F1: while calibrating, every .timing-input is inside a disabled fieldset",
 });
 
 test("F1: while calibrating, the Cancel/Finish calibration buttons stay OUTSIDE the disabled fieldset", async () => {
-  card = await mountCard(makeHass({
-    states: {
-      "cover.x": {
-        state: "open",
-        attributes: { calibration_active: true, calibration_attribute: "travel_time_close" },
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.x": {
+          state: "open",
+          attributes: { calibration_active: true, calibration_attribute: "travel_time_close" },
+        },
       },
+    }),
+    {
+      selectedEntity: "cover.x",
+      config: switchCfg(),
+      activeTab: "timing",
     },
-  }), {
-    selectedEntity: "cover.x",
-    config: switchCfg(),
-    activeTab: "timing",
-  });
+  );
 
   const calActive = card.shadowRoot.querySelector(".calibration-active");
   expect(calActive).not.toBeNull();
@@ -944,9 +1121,7 @@ test("not calibrating: shows helper text 'set_position_first' when knownPosition
   });
   // helper-text div should contain "Set position to start calibration"
   const helperTexts = card.shadowRoot.querySelectorAll(".helper-text");
-  const setPositionText = [...helperTexts].find((el) =>
-    el.textContent.includes("Set position")
-  );
+  const setPositionText = [...helperTexts].find((el) => el.textContent.includes("Set position"));
   expect(setPositionText).not.toBeUndefined();
 });
 
@@ -980,13 +1155,21 @@ test("not calibrating: cal-attribute select shows tilt attributes when tilt_mode
 });
 
 test("calibrating: shows .calibration-active section with Cancel + Finish buttons", async () => {
-  card = await mountCard(makeHass({
-    states: { "cover.x": { state: "open", attributes: { calibration_active: true, calibration_attribute: "travel_time_close" } } },
-  }), {
-    selectedEntity: "cover.x",
-    config: switchCfg(),
-    activeTab: "timing",
-  });
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.x": {
+          state: "open",
+          attributes: { calibration_active: true, calibration_attribute: "travel_time_close" },
+        },
+      },
+    }),
+    {
+      selectedEntity: "cover.x",
+      config: switchCfg(),
+      activeTab: "timing",
+    },
+  );
   const calActive = card.shadowRoot.querySelector(".calibration-active");
   expect(calActive).not.toBeNull();
   // Cancel + Finish buttons
@@ -998,62 +1181,92 @@ test("calibrating: shows .calibration-active section with Cancel + Finish button
 });
 
 test("calibrating: shows the calibrating attribute label", async () => {
-  card = await mountCard(makeHass({
-    states: { "cover.x": { state: "open", attributes: { calibration_active: true, calibration_attribute: "travel_time_close" } } },
-  }), {
-    selectedEntity: "cover.x",
-    config: switchCfg(),
-    activeTab: "timing",
-  });
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.x": {
+          state: "open",
+          attributes: { calibration_active: true, calibration_attribute: "travel_time_close" },
+        },
+      },
+    }),
+    {
+      selectedEntity: "cover.x",
+      config: switchCfg(),
+      activeTab: "timing",
+    },
+  );
   const calActive = card.shadowRoot.querySelector(".calibration-active");
   // The label "Travel time (close)" should appear in the calibration section body
   expect(calActive.textContent).toContain("Travel time");
 });
 
 test("calibrating: shows .cal-step for calibration_step attribute", async () => {
-  card = await mountCard(makeHass({
-    states: {
-      "cover.x": {
-        state: "open",
-        attributes: { calibration_active: true, calibration_attribute: "travel_time_close", calibration_step: "2" },
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.x": {
+          state: "open",
+          attributes: {
+            calibration_active: true,
+            calibration_attribute: "travel_time_close",
+            calibration_step: "2",
+          },
+        },
       },
+    }),
+    {
+      selectedEntity: "cover.x",
+      config: switchCfg(),
+      activeTab: "timing",
     },
-  }), {
-    selectedEntity: "cover.x",
-    config: switchCfg(),
-    activeTab: "timing",
-  });
+  );
   const calStep = card.shadowRoot.querySelector(".cal-step");
   expect(calStep).not.toBeNull();
   expect(calStep.textContent).toContain("Step 2");
 });
 
 test("calibrating: shows final_step span when calibration_final_step is truthy", async () => {
-  card = await mountCard(makeHass({
-    states: {
-      "cover.x": {
-        state: "open",
-        attributes: { calibration_active: true, calibration_attribute: "travel_time_close", calibration_final_step: true },
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.x": {
+          state: "open",
+          attributes: {
+            calibration_active: true,
+            calibration_attribute: "travel_time_close",
+            calibration_final_step: true,
+          },
+        },
       },
+    }),
+    {
+      selectedEntity: "cover.x",
+      config: switchCfg(),
+      activeTab: "timing",
     },
-  }), {
-    selectedEntity: "cover.x",
-    config: switchCfg(),
-    activeTab: "timing",
-  });
+  );
   const calStep = card.shadowRoot.querySelector(".cal-step");
   expect(calStep).not.toBeNull();
   expect(calStep.textContent).toContain("Final step");
 });
 
 test("calibrating: no #cal-attribute select (start form is absent)", async () => {
-  card = await mountCard(makeHass({
-    states: { "cover.x": { state: "open", attributes: { calibration_active: true, calibration_attribute: "travel_time_close" } } },
-  }), {
-    selectedEntity: "cover.x",
-    config: switchCfg(),
-    activeTab: "timing",
-  });
+  card = await mountCard(
+    makeHass({
+      states: {
+        "cover.x": {
+          state: "open",
+          attributes: { calibration_active: true, calibration_attribute: "travel_time_close" },
+        },
+      },
+    }),
+    {
+      selectedEntity: "cover.x",
+      config: switchCfg(),
+      activeTab: "timing",
+    },
+  );
   expect(card.shadowRoot.querySelector("#cal-attribute")).toBeNull();
 });
 
@@ -1075,13 +1288,16 @@ test("calibrating via _calibratingOverride=true: shows calibration-active", asyn
 // ---------------------------------------------------------------------------
 
 test("device tab fieldset is disabled while calibrating", async () => {
-  card = await mountCard(makeHass({
-    states: { "cover.x": { state: "open", attributes: { calibration_active: true } } },
-  }), {
-    selectedEntity: "cover.x",
-    config: switchCfg(),
-    activeTab: "device",
-  });
+  card = await mountCard(
+    makeHass({
+      states: { "cover.x": { state: "open", attributes: { calibration_active: true } } },
+    }),
+    {
+      selectedEntity: "cover.x",
+      config: switchCfg(),
+      activeTab: "device",
+    },
+  );
   const fieldset = card.shadowRoot.querySelector("fieldset");
   expect(fieldset).not.toBeNull();
   expect(fieldset.disabled).toBe(true);
@@ -1364,7 +1580,7 @@ test("max_tilt_allowed_position ha-input @change with empty string sets field to
 
   const haInputs = card.shadowRoot.querySelectorAll(".dual-motor-config ha-input");
   const maxTiltInput = haInputs[1];
-  maxTiltInput.value = "  ";  // whitespace-only → trims to ""
+  maxTiltInput.value = "  "; // whitespace-only → trims to ""
   maxTiltInput.dispatchEvent(new Event("change", { bubbles: true }));
 
   expect(updates.length).toBeGreaterThan(0);

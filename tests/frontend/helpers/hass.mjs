@@ -10,13 +10,7 @@ const DEFAULT_WS = {
   "cover_time_based/raw_command": () => ({}),
 };
 
-export function makeHass({
-  states = {},
-  entities = {},
-  language = "en",
-  ws = {},
-  service,
-} = {}) {
+export function makeHass({ states = {}, entities = {}, language = "en", ws = {}, service } = {}) {
   const routes = { ...DEFAULT_WS, ...ws };
   return {
     states,

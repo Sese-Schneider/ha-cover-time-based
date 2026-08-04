@@ -39,8 +39,7 @@ const calibratingHass = (attrs) =>
 
 // The Finish button is the "unelevated" one in the active-calibration panel
 // (Cancel is not unelevated; the non-calibrating Start button is not shown).
-const finishButton = (c) =>
-  c.shadowRoot.querySelector(".cal-active-buttons ha-button[unelevated]");
+const finishButton = (c) => c.shadowRoot.querySelector(".cal-active-buttons ha-button[unelevated]");
 
 async function mountCalibrating(attrs) {
   return mountCard(calibratingHass(attrs), {

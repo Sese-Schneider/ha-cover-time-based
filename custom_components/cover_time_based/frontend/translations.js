@@ -1,12 +1,13 @@
 export const EN = {
-  "header": "Cover Time Based Configuration",
-  "loading": "Loading...",
-  "saving": "Saving...",
-  "save_failed": "Save failed — value reverted",
-  "confirm_cancel_calibration": "A calibration is running. Cancel it and continue?",
-  "create_new": "+ Create new cover entity",
-  "yaml_warning": "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings \u2192 Devices & Services \u2192 Helpers \u2192 Create Helper \u2192 Cover Time Based.",
-  "load_failed": "Failed to load configuration. Please try again.",
+  header: "Cover Time Based Configuration",
+  loading: "Loading...",
+  saving: "Saving...",
+  save_failed: "Save failed — value reverted",
+  confirm_cancel_calibration: "A calibration is running. Cancel it and continue?",
+  create_new: "+ Create new cover entity",
+  yaml_warning:
+    "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings \u2192 Devices & Services \u2192 Helpers \u2192 Create Helper \u2192 Cover Time Based.",
+  load_failed: "Failed to load configuration. Please try again.",
   "tabs.device": "Device",
   "tabs.calibration": "Calibration",
   "control_mode.label": "Control Mode",
@@ -54,7 +55,8 @@ export const EN = {
   "tilt_motor.safe_position": "Safe tilt position",
   "tilt_motor.safe_position_helper": "Tilt moves here before travel (100 = fully open)",
   "tilt_motor.max_allowed_position": "Max tilt allowed position (optional)",
-  "tilt_motor.max_allowed_helper": "Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)",
+  "tilt_motor.max_allowed_helper":
+    "Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)",
   "tilt.close_includes_tilt": "Close cover also closes slats",
   "tilt.close_includes_tilt_helper": "When closing, slats tilt closed at the end of travel",
   "assumed_state.label": "Assumed state",
@@ -72,7 +74,7 @@ export const EN = {
   "recalibrate_before_position.label": "Fully open before moving to a position (Beta)",
   "recalibrate_before_position.helper":
     "For covers with no position feedback that a remote can also move. Drives the cover fully open before each position command, so the move starts from a known position instead of a drifted guess. Roughly doubles the travel of every move, and on inline or sequential tilt it moves the cover when you adjust the slats.",
-  "more_info": "More info",
+  more_info: "More info",
   "timing.travel_attribute_header": "Travel Attribute",
   "timing.tilt_attribute_header": "Tilt Attribute",
   "timing.value_header": "Value",
@@ -109,22 +111,38 @@ export const EN = {
   "controls.tilt_open": "Tilt open",
   "controls.tilt_stop": "Tilt stop",
   "controls.tilt_close": "Tilt close",
-  "hints.sequential_close.travel_time_close": "Start with cover fully open. Click Finish when the cover is fully closed, before the slats start tilting.",
-  "hints.sequential_close.travel_time_open": "Start with cover closed and slats open. Click Finish when the cover is fully open.",
-  "hints.sequential_close.tilt_time_close": "Start with cover closed but slats open. Click Finish when the slats are fully closed.",
-  "hints.sequential_close.tilt_time_open": "Start with cover and slats closed. Click Finish when the slats are open.",
-  "hints.sequential_open.travel_time_close": "Start with cover fully open and slats closed. Click Finish when the cover is fully closed, before the slats start tilting open.",
-  "hints.sequential_open.travel_time_open": "Start with cover closed and slats closed. Click Finish when the cover is fully open.",
-  "hints.sequential_open.tilt_time_close": "Start with cover closed but slats open. Click Finish when the slats are fully closed.",
-  "hints.sequential_open.tilt_time_open": "Start with cover and slats closed. Click Finish when the slats are fully open.",
-  "hints.dual_motor.travel_time_close": "Start with cover open and slats in safe position. Click Finish when the cover is fully closed.",
-  "hints.dual_motor.travel_time_open": "Start with cover closed and slats in safe position. Click Finish when the cover is fully open.",
-  "hints.dual_motor.tilt_time_close": "Start with cover closed and slats open. Click Finish when the slats are fully closed.",
-  "hints.dual_motor.tilt_time_open": "Start with both cover and slats closed. Click Finish when the slats are fully open.",
-  "hints.inline.travel_time_close": "Start with both cover and slats fully open. Click Finish when both are fully closed.",
-  "hints.inline.travel_time_open": "Start with both cover and slats fully closed. Click Finish when both are fully open.",
-  "hints.inline.tilt_time_close": "Start with slats fully open. Click Finish when the slats are fully closed.",
-  "hints.inline.tilt_time_open": "Start with slats fully closed. Click Finish when the slats are fully open.",
+  "hints.sequential_close.travel_time_close":
+    "Start with cover fully open. Click Finish when the cover is fully closed, before the slats start tilting.",
+  "hints.sequential_close.travel_time_open":
+    "Start with cover closed and slats open. Click Finish when the cover is fully open.",
+  "hints.sequential_close.tilt_time_close":
+    "Start with cover closed but slats open. Click Finish when the slats are fully closed.",
+  "hints.sequential_close.tilt_time_open":
+    "Start with cover and slats closed. Click Finish when the slats are open.",
+  "hints.sequential_open.travel_time_close":
+    "Start with cover fully open and slats closed. Click Finish when the cover is fully closed, before the slats start tilting open.",
+  "hints.sequential_open.travel_time_open":
+    "Start with cover closed and slats closed. Click Finish when the cover is fully open.",
+  "hints.sequential_open.tilt_time_close":
+    "Start with cover closed but slats open. Click Finish when the slats are fully closed.",
+  "hints.sequential_open.tilt_time_open":
+    "Start with cover and slats closed. Click Finish when the slats are fully open.",
+  "hints.dual_motor.travel_time_close":
+    "Start with cover open and slats in safe position. Click Finish when the cover is fully closed.",
+  "hints.dual_motor.travel_time_open":
+    "Start with cover closed and slats in safe position. Click Finish when the cover is fully open.",
+  "hints.dual_motor.tilt_time_close":
+    "Start with cover closed and slats open. Click Finish when the slats are fully closed.",
+  "hints.dual_motor.tilt_time_open":
+    "Start with both cover and slats closed. Click Finish when the slats are fully open.",
+  "hints.inline.travel_time_close":
+    "Start with both cover and slats fully open. Click Finish when both are fully closed.",
+  "hints.inline.travel_time_open":
+    "Start with both cover and slats fully closed. Click Finish when both are fully open.",
+  "hints.inline.tilt_time_close":
+    "Start with slats fully open. Click Finish when the slats are fully closed.",
+  "hints.inline.tilt_time_open":
+    "Start with slats fully closed. Click Finish when the slats are fully open.",
   "hints.none.travel_time_close": "Click Finish when the cover is fully closed.",
   "hints.none.travel_time_open": "Click Finish when the cover is fully open.",
   "hints.min_movement_time": "Click Finish as soon as you notice the cover moving.",
@@ -133,14 +151,15 @@ export const EN = {
 export const TRANSLATIONS = {
   en: EN,
   pt: {
-    "header": "Configuração de Estore Baseado em Tempo",
-    "loading": "A carregar...",
-    "saving": "A guardar...",
-    "save_failed": "Falha ao guardar — valor revertido",
-    "confirm_cancel_calibration": "Existe uma calibração em curso. Cancelar e continuar?",
-    "create_new": "+ Criar nova entidade de estore",
-    "yaml_warning": "Esta entidade utiliza configuração YAML e não pode ser configurada a partir deste cartão. Por favor, migre para a interface gráfica: Definições > Dispositivos e Serviços > Auxiliares > Criar Auxiliar > Estore Baseado em Tempo.",
-    "load_failed": "Falha ao carregar a configuração. Por favor, tente novamente.",
+    header: "Configuração de Estore Baseado em Tempo",
+    loading: "A carregar...",
+    saving: "A guardar...",
+    save_failed: "Falha ao guardar — valor revertido",
+    confirm_cancel_calibration: "Existe uma calibração em curso. Cancelar e continuar?",
+    create_new: "+ Criar nova entidade de estore",
+    yaml_warning:
+      "Esta entidade utiliza configuração YAML e não pode ser configurada a partir deste cartão. Por favor, migre para a interface gráfica: Definições > Dispositivos e Serviços > Auxiliares > Criar Auxiliar > Estore Baseado em Tempo.",
+    load_failed: "Falha ao carregar a configuração. Por favor, tente novamente.",
     "tabs.device": "Dispositivo",
     "tabs.calibration": "Calibração",
     "control_mode.label": "Modo de Controlo",
@@ -186,11 +205,14 @@ export const TRANSLATIONS = {
     "tilt_motor.close_switch_pulse": "Interruptor ou script de fechar inclinação",
     "tilt_motor.stop_switch_pulse": "Interruptor ou script de parar inclinação",
     "tilt_motor.safe_position": "Posição de inclinação segura",
-    "tilt_motor.safe_position_helper": "A inclinação move-se para aqui antes do deslocamento (100 = totalmente aberto)",
+    "tilt_motor.safe_position_helper":
+      "A inclinação move-se para aqui antes do deslocamento (100 = totalmente aberto)",
     "tilt_motor.max_allowed_position": "Posição máxima permitida de inclinação (opcional)",
-    "tilt_motor.max_allowed_helper": "A inclinação só é permitida quando a posição do estore está neste valor ou abaixo (0 = fechado, 100 = aberto)",
+    "tilt_motor.max_allowed_helper":
+      "A inclinação só é permitida quando a posição do estore está neste valor ou abaixo (0 = fechado, 100 = aberto)",
     "tilt.close_includes_tilt": "Fechar estore também fecha lâminas",
-    "tilt.close_includes_tilt_helper": "Ao fechar, as lâminas inclinam para fechado no fim do percurso",
+    "tilt.close_includes_tilt_helper":
+      "Ao fechar, as lâminas inclinam para fechado no fim do percurso",
     "assumed_state.label": "Estado assumido",
     "assumed_state.helper":
       "Quando ativo, o Home Assistant trata a posição como estimada e mantém ativos os controlos de abrir e fechar. Desative se confiar no cálculo por tempo e quiser que a interface desative as ações indisponíveis (por exemplo, fechar quando já está fechado).",
@@ -206,7 +228,7 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Abrir totalmente antes de mover para uma posição (Beta)",
     "recalibrate_before_position.helper":
       "Para estores sem retorno de posição que também podem ser movidos por um telecomando. Antes de cada comando de definir posição, move primeiro o estore para totalmente aberto, para que o movimento comece a partir de uma posição conhecida em vez de uma estimativa desviada. Isto duplica, grosso modo, o tempo de deslocamento de cada movimento e, na inclinação durante o deslocamento ou na inclinação sequencial, ajustar as lâminas também move o estore.",
-    "more_info": "Mais informação",
+    more_info: "Mais informação",
     "timing.travel_attribute_header": "Atributo de deslocamento",
     "timing.tilt_attribute_header": "Atributo de inclinação",
     "timing.value_header": "Valor",
@@ -243,35 +265,53 @@ export const TRANSLATIONS = {
     "controls.tilt_open": "Inclinar abrir",
     "controls.tilt_stop": "Inclinar parar",
     "controls.tilt_close": "Inclinar fechar",
-    "hints.sequential_close.travel_time_close": "Comece com o estore totalmente aberto. Clique em Concluir quando o estore estiver totalmente fechado, antes de as lâminas começarem a inclinar.",
-    "hints.sequential_close.travel_time_open": "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando o estore estiver totalmente aberto.",
-    "hints.sequential_close.tilt_time_close": "Comece com o estore fechado mas as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
-    "hints.sequential_close.tilt_time_open": "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem abertas.",
-    "hints.sequential_open.travel_time_close": "Comece com o estore totalmente aberto e as lâminas fechadas. Clique em Concluir quando o estore estiver totalmente fechado, antes de as lâminas começarem a inclinar-se abertas.",
-    "hints.sequential_open.travel_time_open": "Comece com o estore fechado e as lâminas fechadas. Clique em Concluir quando o estore estiver totalmente aberto.",
-    "hints.sequential_open.tilt_time_close": "Comece com o estore fechado mas as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
-    "hints.sequential_open.tilt_time_open": "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
-    "hints.dual_motor.travel_time_close": "Comece com o estore aberto e as lâminas na posição segura. Clique em Concluir quando o estore estiver totalmente fechado.",
-    "hints.dual_motor.travel_time_open": "Comece com o estore fechado e as lâminas na posição segura. Clique em Concluir quando o estore estiver totalmente aberto.",
-    "hints.dual_motor.tilt_time_close": "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
-    "hints.dual_motor.tilt_time_open": "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
-    "hints.inline.travel_time_close": "Comece com o estore e as lâminas totalmente abertos. Clique em Concluir quando ambos estiverem totalmente fechados.",
-    "hints.inline.travel_time_open": "Comece com o estore e as lâminas totalmente fechados. Clique em Concluir quando ambos estiverem totalmente abertos.",
-    "hints.inline.tilt_time_close": "Comece com as lâminas totalmente abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
-    "hints.inline.tilt_time_open": "Comece com as lâminas totalmente fechadas. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
-    "hints.none.travel_time_close": "Clique em Concluir quando o estore estiver totalmente fechado.",
+    "hints.sequential_close.travel_time_close":
+      "Comece com o estore totalmente aberto. Clique em Concluir quando o estore estiver totalmente fechado, antes de as lâminas começarem a inclinar.",
+    "hints.sequential_close.travel_time_open":
+      "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.sequential_close.tilt_time_close":
+      "Comece com o estore fechado mas as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.sequential_close.tilt_time_open":
+      "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem abertas.",
+    "hints.sequential_open.travel_time_close":
+      "Comece com o estore totalmente aberto e as lâminas fechadas. Clique em Concluir quando o estore estiver totalmente fechado, antes de as lâminas começarem a inclinar-se abertas.",
+    "hints.sequential_open.travel_time_open":
+      "Comece com o estore fechado e as lâminas fechadas. Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.sequential_open.tilt_time_close":
+      "Comece com o estore fechado mas as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.sequential_open.tilt_time_open":
+      "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
+    "hints.dual_motor.travel_time_close":
+      "Comece com o estore aberto e as lâminas na posição segura. Clique em Concluir quando o estore estiver totalmente fechado.",
+    "hints.dual_motor.travel_time_open":
+      "Comece com o estore fechado e as lâminas na posição segura. Clique em Concluir quando o estore estiver totalmente aberto.",
+    "hints.dual_motor.tilt_time_close":
+      "Comece com o estore fechado e as lâminas abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.dual_motor.tilt_time_open":
+      "Comece com o estore e as lâminas fechados. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
+    "hints.inline.travel_time_close":
+      "Comece com o estore e as lâminas totalmente abertos. Clique em Concluir quando ambos estiverem totalmente fechados.",
+    "hints.inline.travel_time_open":
+      "Comece com o estore e as lâminas totalmente fechados. Clique em Concluir quando ambos estiverem totalmente abertos.",
+    "hints.inline.tilt_time_close":
+      "Comece com as lâminas totalmente abertas. Clique em Concluir quando as lâminas estiverem totalmente fechadas.",
+    "hints.inline.tilt_time_open":
+      "Comece com as lâminas totalmente fechadas. Clique em Concluir quando as lâminas estiverem totalmente abertas.",
+    "hints.none.travel_time_close":
+      "Clique em Concluir quando o estore estiver totalmente fechado.",
     "hints.none.travel_time_open": "Clique em Concluir quando o estore estiver totalmente aberto.",
     "hints.min_movement_time": "Clique em Concluir assim que notar o estore a mover-se.",
   },
   pl: {
-    "header": "Konfiguracja rolet sterowanych czasowo",
-    "loading": "Ładowanie...",
-    "saving": "Zapisywanie...",
-    "save_failed": "Zapis nie powiódł się — wartość przywrócona",
-    "confirm_cancel_calibration": "Kalibracja jest w toku. Anulować ją i kontynuować?",
-    "create_new": "+ Utwórz nową encję rolety",
-    "yaml_warning": "Ta encja używa konfiguracji YAML i nie może być konfigurowana z tej karty. Proszę przeprowadzić migrację do interfejsu użytkownika: Ustawienia > Urządzenia i usługi > Pomocniki > Utwórz pomocnik > Roleta sterowana czasowo.",
-    "load_failed": "Nie udało się załadować konfiguracji. Spróbuj ponownie.",
+    header: "Konfiguracja rolet sterowanych czasowo",
+    loading: "Ładowanie...",
+    saving: "Zapisywanie...",
+    save_failed: "Zapis nie powiódł się — wartość przywrócona",
+    confirm_cancel_calibration: "Kalibracja jest w toku. Anulować ją i kontynuować?",
+    create_new: "+ Utwórz nową encję rolety",
+    yaml_warning:
+      "Ta encja używa konfiguracji YAML i nie może być konfigurowana z tej karty. Proszę przeprowadzić migrację do interfejsu użytkownika: Ustawienia > Urządzenia i usługi > Pomocniki > Utwórz pomocnik > Roleta sterowana czasowo.",
+    load_failed: "Nie udało się załadować konfiguracji. Spróbuj ponownie.",
     "tabs.device": "Urządzenie",
     "tabs.calibration": "Kalibracja",
     "control_mode.label": "Tryb sterowania",
@@ -317,11 +357,14 @@ export const TRANSLATIONS = {
     "tilt_motor.close_switch_pulse": "Przełącznik lub skrypt zamykania nachylenia",
     "tilt_motor.stop_switch_pulse": "Przełącznik lub skrypt zatrzymania nachylenia",
     "tilt_motor.safe_position": "Bezpieczna pozycja nachylenia",
-    "tilt_motor.safe_position_helper": "Nachylenie przesuwa się tu przed ruchem (100 = w pełni otwarte)",
+    "tilt_motor.safe_position_helper":
+      "Nachylenie przesuwa się tu przed ruchem (100 = w pełni otwarte)",
     "tilt_motor.max_allowed_position": "Maks. dozwolona pozycja nachylenia (opcjonalna)",
-    "tilt_motor.max_allowed_helper": "Nachylenie dozwolone tylko gdy pozycja rolety wynosi tyle lub mniej (0 = zamknięta, 100 = otwarta)",
+    "tilt_motor.max_allowed_helper":
+      "Nachylenie dozwolone tylko gdy pozycja rolety wynosi tyle lub mniej (0 = zamknięta, 100 = otwarta)",
     "tilt.close_includes_tilt": "Zamknięcie rolety zamyka również lamele",
-    "tilt.close_includes_tilt_helper": "Podczas zamykania lamele nachylają się do pozycji zamkniętej na końcu ruchu",
+    "tilt.close_includes_tilt_helper":
+      "Podczas zamykania lamele nachylają się do pozycji zamkniętej na końcu ruchu",
     "assumed_state.label": "Stan zakładany",
     "assumed_state.helper":
       "Gdy włączone, Home Assistant traktuje pozycję jako szacowaną i pozostawia aktywne przyciski otwierania i zamykania. Wyłącz, jeśli ufasz obliczeniom czasowym i chcesz, aby interfejs wyszarzał niedostępne akcje (np. zamknięcie, gdy roleta jest już zamknięta).",
@@ -331,15 +374,13 @@ export const TRANSLATIONS = {
     "send_endpoint_stop.label": "Wysyłaj sygnał zatrzymania na krańcach",
     "send_endpoint_stop.helper":
       "Gdy roleta osiągnie pełne otwarcie lub zamknięcie, wyślij impuls zatrzymania. Pozostaw włączone dla sterowników, które działają, dopóki nie otrzymają zatrzymania (w przeciwnym razie roleta blokuje się, a fizyczne przyciski przestają reagować). Wyłącz, jeśli silnik sam zatrzymuje się na krańcach, a dodatkowe zatrzymanie powoduje przejście do zaprogramowanej/ulubionej pozycji.",
-    "force_endpoint_redrive.label":
-      "Zawsze ponownie wysyłaj otwórz/zamknij na krańcach",
+    "force_endpoint_redrive.label": "Zawsze ponownie wysyłaj otwórz/zamknij na krańcach",
     "force_endpoint_redrive.helper":
       "Dla rolet bez informacji zwrotnej o pozycji, które mogą być sterowane również zewnętrznym pilotem, przez co Home Assistant może błędnie sądzić, że są już całkowicie otwarte lub zamknięte. Po włączeniu polecenie otwarcia lub zamknięcia jest zawsze wykonywane przez pełny czas ruchu, nawet jeśli Home Assistant sądzi, że roleta już tam jest — dzięki czemu polecenie na pewno dotrze do silnika. Pozostaw wyłączone dla rolet zgłaszających własną pozycję.",
-    "recalibrate_before_position.label":
-      "Otwórz w pełni przed przejściem do pozycji (Beta)",
+    "recalibrate_before_position.label": "Otwórz w pełni przed przejściem do pozycji (Beta)",
     "recalibrate_before_position.helper":
       "Dla rolet bez informacji zwrotnej o pozycji, które mogą być poruszane również pilotem. Przed każdym poleceniem ustawienia pozycji najpierw otwiera roletę w pełni, dzięki czemu ruch zaczyna się od znanej pozycji, a nie od nieaktualnego przybliżenia. Z grubsza podwaja czas ruchu przy każdym przesunięciu, a przy nachyleniu w trakcie ruchu lub nachyleniu sekwencyjnym regulacja listew porusza także samą roletę.",
-    "more_info": "Więcej informacji",
+    more_info: "Więcej informacji",
     "timing.travel_attribute_header": "Atrybut ruchu",
     "timing.tilt_attribute_header": "Atrybut nachylenia",
     "timing.value_header": "Wartość",
@@ -376,35 +417,52 @@ export const TRANSLATIONS = {
     "controls.tilt_open": "Otwórz nachylenie",
     "controls.tilt_stop": "Zatrzymaj nachylenie",
     "controls.tilt_close": "Zamknij nachylenie",
-    "hints.sequential_close.travel_time_close": "Zacznij z roletą w pełni otwartą. Kliknij Zakończ, gdy roleta jest w pełni zamknięta, zanim listwy zaczną się nachylać.",
-    "hints.sequential_close.travel_time_open": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
-    "hints.sequential_close.tilt_time_close": "Zacznij z zamkniętą roletą, ale otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
-    "hints.sequential_close.tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są otwarte.",
-    "hints.sequential_open.travel_time_close": "Zacznij z roletą w pełni otwartą i zamkniętymi listwami. Kliknij Zakończ, gdy roleta jest w pełni zamknięta, zanim listwy zaczną się nachylać otwarte.",
-    "hints.sequential_open.travel_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
-    "hints.sequential_open.tilt_time_close": "Zacznij z zamkniętą roletą, ale otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
-    "hints.sequential_open.tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
-    "hints.dual_motor.travel_time_close": "Zacznij z otwartą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni zamknięta.",
-    "hints.dual_motor.travel_time_open": "Zacznij z zamkniętą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
-    "hints.dual_motor.tilt_time_close": "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
-    "hints.dual_motor.tilt_time_open": "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
-    "hints.inline.travel_time_close": "Zacznij z roletą i listwami w pełni otwartymi. Kliknij Zakończ, gdy obie są w pełni zamknięte.",
-    "hints.inline.travel_time_open": "Zacznij z roletą i listwami w pełni zamkniętymi. Kliknij Zakończ, gdy obie są w pełni otwarte.",
-    "hints.inline.tilt_time_close": "Zacznij z listwami w pełni otwartymi. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
-    "hints.inline.tilt_time_open": "Zacznij z listwami w pełni zamkniętymi. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
+    "hints.sequential_close.travel_time_close":
+      "Zacznij z roletą w pełni otwartą. Kliknij Zakończ, gdy roleta jest w pełni zamknięta, zanim listwy zaczną się nachylać.",
+    "hints.sequential_close.travel_time_open":
+      "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.sequential_close.tilt_time_close":
+      "Zacznij z zamkniętą roletą, ale otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.sequential_close.tilt_time_open":
+      "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są otwarte.",
+    "hints.sequential_open.travel_time_close":
+      "Zacznij z roletą w pełni otwartą i zamkniętymi listwami. Kliknij Zakończ, gdy roleta jest w pełni zamknięta, zanim listwy zaczną się nachylać otwarte.",
+    "hints.sequential_open.travel_time_open":
+      "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.sequential_open.tilt_time_close":
+      "Zacznij z zamkniętą roletą, ale otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.sequential_open.tilt_time_open":
+      "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
+    "hints.dual_motor.travel_time_close":
+      "Zacznij z otwartą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni zamknięta.",
+    "hints.dual_motor.travel_time_open":
+      "Zacznij z zamkniętą roletą i listwami w bezpiecznej pozycji. Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
+    "hints.dual_motor.tilt_time_close":
+      "Zacznij z zamkniętą roletą i otwartymi listwami. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.dual_motor.tilt_time_open":
+      "Zacznij z zamkniętą roletą i zamkniętymi listwami. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
+    "hints.inline.travel_time_close":
+      "Zacznij z roletą i listwami w pełni otwartymi. Kliknij Zakończ, gdy obie są w pełni zamknięte.",
+    "hints.inline.travel_time_open":
+      "Zacznij z roletą i listwami w pełni zamkniętymi. Kliknij Zakończ, gdy obie są w pełni otwarte.",
+    "hints.inline.tilt_time_close":
+      "Zacznij z listwami w pełni otwartymi. Kliknij Zakończ, gdy listwy są w pełni zamknięte.",
+    "hints.inline.tilt_time_open":
+      "Zacznij z listwami w pełni zamkniętymi. Kliknij Zakończ, gdy listwy są w pełni otwarte.",
     "hints.none.travel_time_close": "Kliknij Zakończ, gdy roleta jest w pełni zamknięta.",
     "hints.none.travel_time_open": "Kliknij Zakończ, gdy roleta jest w pełni otwarta.",
     "hints.min_movement_time": "Kliknij Zakończ, gdy tylko zauważysz ruch rolety.",
   },
   de: {
-    "header": "Konfiguration von Cover Time Based",
-    "loading": "Wird geladen...",
-    "saving": "Wird gespeichert...",
-    "save_failed": "Speichern fehlgeschlagen — Wert zurückgesetzt",
-    "confirm_cancel_calibration": "Eine Kalibrierung läuft. Abbrechen und fortfahren?",
-    "create_new": "+ Neue Rollladen-Entität anlegen",
-    "yaml_warning": "Diese Entität verwendet eine YAML-Konfiguration und kann nicht über diese Karte konfiguriert werden. Bitte migriere sie auf die Benutzeroberfläche: Einstellungen → Geräte & Dienste → Helfer → Helfer erstellen → Cover Time Based.",
-    "load_failed": "Laden der Konfiguration fehlgeschlagen. Bitte versuche es erneut.",
+    header: "Konfiguration von Cover Time Based",
+    loading: "Wird geladen...",
+    saving: "Wird gespeichert...",
+    save_failed: "Speichern fehlgeschlagen — Wert zurückgesetzt",
+    confirm_cancel_calibration: "Eine Kalibrierung läuft. Abbrechen und fortfahren?",
+    create_new: "+ Neue Rollladen-Entität anlegen",
+    yaml_warning:
+      "Diese Entität verwendet eine YAML-Konfiguration und kann nicht über diese Karte konfiguriert werden. Bitte migriere sie auf die Benutzeroberfläche: Einstellungen → Geräte & Dienste → Helfer → Helfer erstellen → Cover Time Based.",
+    load_failed: "Laden der Konfiguration fehlgeschlagen. Bitte versuche es erneut.",
     "tabs.device": "Gerät",
     "tabs.calibration": "Kalibrierung",
     "control_mode.label": "Steuerungsmodus",
@@ -450,11 +508,14 @@ export const TRANSLATIONS = {
     "tilt_motor.close_switch_pulse": "Schalter oder Skript zum Schließen der Neigung",
     "tilt_motor.stop_switch_pulse": "Schalter oder Skript zum Stoppen der Neigung",
     "tilt_motor.safe_position": "Sichere Neigungsposition",
-    "tilt_motor.safe_position_helper": "Die Neigung fährt vor der Fahrt hierhin (100 = vollständig geöffnet)",
+    "tilt_motor.safe_position_helper":
+      "Die Neigung fährt vor der Fahrt hierhin (100 = vollständig geöffnet)",
     "tilt_motor.max_allowed_position": "Maximal erlaubte Neigungsposition (optional)",
-    "tilt_motor.max_allowed_helper": "Neigen ist nur erlaubt, wenn die Rollladenposition auf oder unter diesem Wert liegt (0 = geschlossen, 100 = offen)",
+    "tilt_motor.max_allowed_helper":
+      "Neigen ist nur erlaubt, wenn die Rollladenposition auf oder unter diesem Wert liegt (0 = geschlossen, 100 = offen)",
     "tilt.close_includes_tilt": "Schließen des Rollladens schließt auch die Lamellen",
-    "tilt.close_includes_tilt_helper": "Beim Schließen neigen sich die Lamellen am Ende der Fahrt zu",
+    "tilt.close_includes_tilt_helper":
+      "Beim Schließen neigen sich die Lamellen am Ende der Fahrt zu",
     "assumed_state.label": "Angenommener Zustand",
     "assumed_state.helper":
       "Wenn aktiviert, behandelt Home Assistant die Position als geschätzt und hält die Bedienelemente zum Öffnen und Schließen aktiv. Deaktiviere dies, wenn du der zeitbasierten Berechnung vertraust und möchtest, dass die Oberfläche nicht verfügbare Aktionen ausgraut (z. B. Schließen, wenn bereits geschlossen).",
@@ -467,10 +528,11 @@ export const TRANSLATIONS = {
     "force_endpoint_redrive.label": "Öffnen/Schließen an den Endlagen immer erneut senden",
     "force_endpoint_redrive.helper":
       "Für Rollläden ohne Positionsrückmeldung, die sich zusätzlich per externer Fernbedienung bewegen lassen, sodass Home Assistant fälschlich annehmen kann, sie seien bereits vollständig geöffnet oder geschlossen. Wenn aktiviert, wird ein Öffnen- oder Schließen-Befehl immer über die volle Fahrzeit ausgeführt, selbst wenn Home Assistant den Rollladen dort schon vermutet — so erreicht der Befehl garantiert den Motor. Für Rollläden, die ihre eigene Position melden, deaktiviert lassen.",
-    "recalibrate_before_position.label": "Vor einer Positionsfahrt zuerst vollständig öffnen (Beta)",
+    "recalibrate_before_position.label":
+      "Vor einer Positionsfahrt zuerst vollständig öffnen (Beta)",
     "recalibrate_before_position.helper":
       "Für Rollläden ohne Positionsrückmeldung, die sich auch per Fernbedienung bewegen lassen. Fährt den Rollladen vor jedem Positionsbefehl zuerst vollständig auf, sodass die Fahrt von einer bekannten Position statt von einer abgedrifteten Schätzung beginnt. Verdoppelt dadurch etwa die Fahrzeit jeder Fahrt, und bei Neigung während der Fahrt oder bei sequenzieller Neigung bewegt sich der Rollladen mit, sobald du die Lamellen verstellst.",
-    "more_info": "Weitere Informationen",
+    more_info: "Weitere Informationen",
     "timing.travel_attribute_header": "Fahrattribut",
     "timing.tilt_attribute_header": "Neigungsattribut",
     "timing.value_header": "Wert",
@@ -507,35 +569,55 @@ export const TRANSLATIONS = {
     "controls.tilt_open": "Neigung öffnen",
     "controls.tilt_stop": "Neigung stoppen",
     "controls.tilt_close": "Neigung schließen",
-    "hints.sequential_close.travel_time_close": "Beginne mit vollständig geöffnetem Rollladen. Klicke auf Fertig, wenn der Rollladen vollständig geschlossen ist, bevor sich die Lamellen zu neigen beginnen.",
-    "hints.sequential_close.travel_time_open": "Beginne mit geschlossenem Rollladen und offenen Lamellen. Klicke auf Fertig, wenn der Rollladen vollständig geöffnet ist.",
-    "hints.sequential_close.tilt_time_close": "Beginne mit geschlossenem Rollladen, aber offenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig geschlossen sind.",
-    "hints.sequential_close.tilt_time_open": "Beginne mit geschlossenem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn die Lamellen offen sind.",
-    "hints.sequential_open.travel_time_close": "Beginne mit vollständig geöffnetem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn der Rollladen vollständig geschlossen ist, bevor sich die Lamellen zu öffnen beginnen.",
-    "hints.sequential_open.travel_time_open": "Beginne mit geschlossenem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn der Rollladen vollständig geöffnet ist.",
-    "hints.sequential_open.tilt_time_close": "Beginne mit geschlossenem Rollladen, aber offenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig geschlossen sind.",
-    "hints.sequential_open.tilt_time_open": "Beginne mit geschlossenem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig offen sind.",
-    "hints.dual_motor.travel_time_close": "Beginne mit geöffnetem Rollladen und Lamellen in der sicheren Position. Klicke auf Fertig, wenn der Rollladen vollständig geschlossen ist.",
-    "hints.dual_motor.travel_time_open": "Beginne mit geschlossenem Rollladen und Lamellen in der sicheren Position. Klicke auf Fertig, wenn der Rollladen vollständig geöffnet ist.",
-    "hints.dual_motor.tilt_time_close": "Beginne mit geschlossenem Rollladen und offenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig geschlossen sind.",
-    "hints.dual_motor.tilt_time_open": "Beginne mit geschlossenem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig offen sind.",
-    "hints.inline.travel_time_close": "Beginne mit vollständig geöffnetem Rollladen und offenen Lamellen. Klicke auf Fertig, wenn beide vollständig geschlossen sind.",
-    "hints.inline.travel_time_open": "Beginne mit vollständig geschlossenem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn beide vollständig geöffnet sind.",
-    "hints.inline.tilt_time_close": "Beginne mit vollständig offenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig geschlossen sind.",
-    "hints.inline.tilt_time_open": "Beginne mit vollständig geschlossenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig offen sind.",
-    "hints.none.travel_time_close": "Klicke auf Fertig, wenn der Rollladen vollständig geschlossen ist.",
-    "hints.none.travel_time_open": "Klicke auf Fertig, wenn der Rollladen vollständig geöffnet ist.",
-    "hints.min_movement_time": "Klicke auf Fertig, sobald du bemerkst, dass sich der Rollladen bewegt.",
+    "hints.sequential_close.travel_time_close":
+      "Beginne mit vollständig geöffnetem Rollladen. Klicke auf Fertig, wenn der Rollladen vollständig geschlossen ist, bevor sich die Lamellen zu neigen beginnen.",
+    "hints.sequential_close.travel_time_open":
+      "Beginne mit geschlossenem Rollladen und offenen Lamellen. Klicke auf Fertig, wenn der Rollladen vollständig geöffnet ist.",
+    "hints.sequential_close.tilt_time_close":
+      "Beginne mit geschlossenem Rollladen, aber offenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig geschlossen sind.",
+    "hints.sequential_close.tilt_time_open":
+      "Beginne mit geschlossenem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn die Lamellen offen sind.",
+    "hints.sequential_open.travel_time_close":
+      "Beginne mit vollständig geöffnetem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn der Rollladen vollständig geschlossen ist, bevor sich die Lamellen zu öffnen beginnen.",
+    "hints.sequential_open.travel_time_open":
+      "Beginne mit geschlossenem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn der Rollladen vollständig geöffnet ist.",
+    "hints.sequential_open.tilt_time_close":
+      "Beginne mit geschlossenem Rollladen, aber offenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig geschlossen sind.",
+    "hints.sequential_open.tilt_time_open":
+      "Beginne mit geschlossenem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig offen sind.",
+    "hints.dual_motor.travel_time_close":
+      "Beginne mit geöffnetem Rollladen und Lamellen in der sicheren Position. Klicke auf Fertig, wenn der Rollladen vollständig geschlossen ist.",
+    "hints.dual_motor.travel_time_open":
+      "Beginne mit geschlossenem Rollladen und Lamellen in der sicheren Position. Klicke auf Fertig, wenn der Rollladen vollständig geöffnet ist.",
+    "hints.dual_motor.tilt_time_close":
+      "Beginne mit geschlossenem Rollladen und offenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig geschlossen sind.",
+    "hints.dual_motor.tilt_time_open":
+      "Beginne mit geschlossenem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig offen sind.",
+    "hints.inline.travel_time_close":
+      "Beginne mit vollständig geöffnetem Rollladen und offenen Lamellen. Klicke auf Fertig, wenn beide vollständig geschlossen sind.",
+    "hints.inline.travel_time_open":
+      "Beginne mit vollständig geschlossenem Rollladen und geschlossenen Lamellen. Klicke auf Fertig, wenn beide vollständig geöffnet sind.",
+    "hints.inline.tilt_time_close":
+      "Beginne mit vollständig offenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig geschlossen sind.",
+    "hints.inline.tilt_time_open":
+      "Beginne mit vollständig geschlossenen Lamellen. Klicke auf Fertig, wenn die Lamellen vollständig offen sind.",
+    "hints.none.travel_time_close":
+      "Klicke auf Fertig, wenn der Rollladen vollständig geschlossen ist.",
+    "hints.none.travel_time_open":
+      "Klicke auf Fertig, wenn der Rollladen vollständig geöffnet ist.",
+    "hints.min_movement_time":
+      "Klicke auf Fertig, sobald du bemerkst, dass sich der Rollladen bewegt.",
   },
   it: {
-    "header": "Configurazione di Cover Time Based",
-    "loading": "Caricamento...",
-    "saving": "Salvataggio...",
-    "save_failed": "Salvataggio non riuscito — valore ripristinato",
-    "confirm_cancel_calibration": "È in corso una calibrazione. Annullarla e continuare?",
-    "create_new": "+ Crea una nuova entità tapparella",
-    "yaml_warning": "Questa entità utilizza la configurazione YAML e non può essere configurata da questa scheda. Esegui la migrazione all'interfaccia utente: Impostazioni → Dispositivi e servizi → Helper → Crea helper → Cover Time Based.",
-    "load_failed": "Caricamento della configurazione non riuscito. Riprova.",
+    header: "Configurazione di Cover Time Based",
+    loading: "Caricamento...",
+    saving: "Salvataggio...",
+    save_failed: "Salvataggio non riuscito — valore ripristinato",
+    confirm_cancel_calibration: "È in corso una calibrazione. Annullarla e continuare?",
+    create_new: "+ Crea una nuova entità tapparella",
+    yaml_warning:
+      "Questa entità utilizza la configurazione YAML e non può essere configurata da questa scheda. Esegui la migrazione all'interfaccia utente: Impostazioni → Dispositivi e servizi → Helper → Crea helper → Cover Time Based.",
+    load_failed: "Caricamento della configurazione non riuscito. Riprova.",
     "tabs.device": "Dispositivo",
     "tabs.calibration": "Calibrazione",
     "control_mode.label": "Modalità di controllo",
@@ -581,11 +663,14 @@ export const TRANSLATIONS = {
     "tilt_motor.close_switch_pulse": "Interruttore o script di chiusura dell'inclinazione",
     "tilt_motor.stop_switch_pulse": "Interruttore o script di arresto dell'inclinazione",
     "tilt_motor.safe_position": "Posizione di inclinazione sicura",
-    "tilt_motor.safe_position_helper": "L'inclinazione si porta qui prima della corsa (100 = completamente aperta)",
+    "tilt_motor.safe_position_helper":
+      "L'inclinazione si porta qui prima della corsa (100 = completamente aperta)",
     "tilt_motor.max_allowed_position": "Posizione di inclinazione massima consentita (facoltativa)",
-    "tilt_motor.max_allowed_helper": "L'inclinazione è consentita solo quando la posizione della tapparella è pari o inferiore a questo valore (0 = chiusa, 100 = aperta)",
+    "tilt_motor.max_allowed_helper":
+      "L'inclinazione è consentita solo quando la posizione della tapparella è pari o inferiore a questo valore (0 = chiusa, 100 = aperta)",
     "tilt.close_includes_tilt": "La chiusura della tapparella chiude anche le lamelle",
-    "tilt.close_includes_tilt_helper": "In chiusura, le lamelle si inclinano fino a chiudersi al termine della corsa",
+    "tilt.close_includes_tilt_helper":
+      "In chiusura, le lamelle si inclinano fino a chiudersi al termine della corsa",
     "assumed_state.label": "Stato presunto",
     "assumed_state.helper":
       "Quando è attivo, Home Assistant considera la posizione come stimata e mantiene attivi sia il comando di apertura sia quello di chiusura. Disattivalo se ti fidi del calcolo basato sul tempo e vuoi che l'interfaccia disattivi le azioni non disponibili (ad esempio chiudere quando è già chiusa).",
@@ -595,15 +680,13 @@ export const TRANSLATIONS = {
     "send_endpoint_stop.label": "Invia il segnale di arresto ai finecorsa",
     "send_endpoint_stop.helper":
       "Quando la tapparella raggiunge l'apertura o la chiusura completa, invia l'impulso di arresto. Mantienilo attivo per le centraline che continuano a funzionare finché non ricevono un arresto (altrimenti la tapparella si blocca e i pulsanti fisici smettono di rispondere). Disattivalo se il motore si ferma da solo ai finecorsa e un arresto aggiuntivo lo fa spostare su una posizione preimpostata/preferita.",
-    "force_endpoint_redrive.label":
-      "Invia sempre di nuovo apertura/chiusura ai finecorsa",
+    "force_endpoint_redrive.label": "Invia sempre di nuovo apertura/chiusura ai finecorsa",
     "force_endpoint_redrive.helper":
       "Per le tapparelle senza retroazione di posizione che possono essere azionate anche da un telecomando esterno, per cui Home Assistant potrebbe credere erroneamente che siano già completamente aperte o chiuse. Quando è attivo, un comando di apertura o chiusura viene sempre eseguito per l'intero tempo di corsa anche se Home Assistant ritiene che la tapparella si trovi già lì — garantendo che il comando raggiunga il motore. Lascialo disattivato per le tapparelle che riportano la propria posizione.",
-    "recalibrate_before_position.label":
-      "Apri completamente prima di spostare in posizione (Beta)",
+    "recalibrate_before_position.label": "Apri completamente prima di spostare in posizione (Beta)",
     "recalibrate_before_position.helper":
       "Per le tapparelle senza retroazione di posizione che possono essere spostate anche da un telecomando. Porta la tapparella in apertura completa prima di ogni comando di posizionamento, così il movimento parte da una posizione nota anziché da una stima alla deriva. Raddoppia circa il tempo di corsa di ogni movimento e, con l'inclinazione durante la corsa o quella sequenziale, muove la tapparella anche quando regoli le lamelle.",
-    "more_info": "Maggiori informazioni",
+    more_info: "Maggiori informazioni",
     "timing.travel_attribute_header": "Attributo di corsa",
     "timing.tilt_attribute_header": "Attributo di inclinazione",
     "timing.value_header": "Valore",
@@ -640,35 +723,52 @@ export const TRANSLATIONS = {
     "controls.tilt_open": "Apri inclinazione",
     "controls.tilt_stop": "Ferma inclinazione",
     "controls.tilt_close": "Chiudi inclinazione",
-    "hints.sequential_close.travel_time_close": "Parti con la tapparella completamente aperta. Clicca su Fine quando la tapparella è completamente chiusa, prima che le lamelle inizino a inclinarsi.",
-    "hints.sequential_close.travel_time_open": "Parti con la tapparella chiusa e le lamelle aperte. Clicca su Fine quando la tapparella è completamente aperta.",
-    "hints.sequential_close.tilt_time_close": "Parti con la tapparella chiusa ma le lamelle aperte. Clicca su Fine quando le lamelle sono completamente chiuse.",
-    "hints.sequential_close.tilt_time_open": "Parti con la tapparella e le lamelle chiuse. Clicca su Fine quando le lamelle sono aperte.",
-    "hints.sequential_open.travel_time_close": "Parti con la tapparella completamente aperta e le lamelle chiuse. Clicca su Fine quando la tapparella è completamente chiusa, prima che le lamelle inizino ad aprirsi.",
-    "hints.sequential_open.travel_time_open": "Parti con la tapparella chiusa e le lamelle chiuse. Clicca su Fine quando la tapparella è completamente aperta.",
-    "hints.sequential_open.tilt_time_close": "Parti con la tapparella chiusa ma le lamelle aperte. Clicca su Fine quando le lamelle sono completamente chiuse.",
-    "hints.sequential_open.tilt_time_open": "Parti con la tapparella e le lamelle chiuse. Clicca su Fine quando le lamelle sono completamente aperte.",
-    "hints.dual_motor.travel_time_close": "Parti con la tapparella aperta e le lamelle nella posizione sicura. Clicca su Fine quando la tapparella è completamente chiusa.",
-    "hints.dual_motor.travel_time_open": "Parti con la tapparella chiusa e le lamelle nella posizione sicura. Clicca su Fine quando la tapparella è completamente aperta.",
-    "hints.dual_motor.tilt_time_close": "Parti con la tapparella chiusa e le lamelle aperte. Clicca su Fine quando le lamelle sono completamente chiuse.",
-    "hints.dual_motor.tilt_time_open": "Parti con la tapparella e le lamelle entrambe chiuse. Clicca su Fine quando le lamelle sono completamente aperte.",
-    "hints.inline.travel_time_close": "Parti con la tapparella e le lamelle entrambe completamente aperte. Clicca su Fine quando entrambe sono completamente chiuse.",
-    "hints.inline.travel_time_open": "Parti con la tapparella e le lamelle entrambe completamente chiuse. Clicca su Fine quando entrambe sono completamente aperte.",
-    "hints.inline.tilt_time_close": "Parti con le lamelle completamente aperte. Clicca su Fine quando le lamelle sono completamente chiuse.",
-    "hints.inline.tilt_time_open": "Parti con le lamelle completamente chiuse. Clicca su Fine quando le lamelle sono completamente aperte.",
+    "hints.sequential_close.travel_time_close":
+      "Parti con la tapparella completamente aperta. Clicca su Fine quando la tapparella è completamente chiusa, prima che le lamelle inizino a inclinarsi.",
+    "hints.sequential_close.travel_time_open":
+      "Parti con la tapparella chiusa e le lamelle aperte. Clicca su Fine quando la tapparella è completamente aperta.",
+    "hints.sequential_close.tilt_time_close":
+      "Parti con la tapparella chiusa ma le lamelle aperte. Clicca su Fine quando le lamelle sono completamente chiuse.",
+    "hints.sequential_close.tilt_time_open":
+      "Parti con la tapparella e le lamelle chiuse. Clicca su Fine quando le lamelle sono aperte.",
+    "hints.sequential_open.travel_time_close":
+      "Parti con la tapparella completamente aperta e le lamelle chiuse. Clicca su Fine quando la tapparella è completamente chiusa, prima che le lamelle inizino ad aprirsi.",
+    "hints.sequential_open.travel_time_open":
+      "Parti con la tapparella chiusa e le lamelle chiuse. Clicca su Fine quando la tapparella è completamente aperta.",
+    "hints.sequential_open.tilt_time_close":
+      "Parti con la tapparella chiusa ma le lamelle aperte. Clicca su Fine quando le lamelle sono completamente chiuse.",
+    "hints.sequential_open.tilt_time_open":
+      "Parti con la tapparella e le lamelle chiuse. Clicca su Fine quando le lamelle sono completamente aperte.",
+    "hints.dual_motor.travel_time_close":
+      "Parti con la tapparella aperta e le lamelle nella posizione sicura. Clicca su Fine quando la tapparella è completamente chiusa.",
+    "hints.dual_motor.travel_time_open":
+      "Parti con la tapparella chiusa e le lamelle nella posizione sicura. Clicca su Fine quando la tapparella è completamente aperta.",
+    "hints.dual_motor.tilt_time_close":
+      "Parti con la tapparella chiusa e le lamelle aperte. Clicca su Fine quando le lamelle sono completamente chiuse.",
+    "hints.dual_motor.tilt_time_open":
+      "Parti con la tapparella e le lamelle entrambe chiuse. Clicca su Fine quando le lamelle sono completamente aperte.",
+    "hints.inline.travel_time_close":
+      "Parti con la tapparella e le lamelle entrambe completamente aperte. Clicca su Fine quando entrambe sono completamente chiuse.",
+    "hints.inline.travel_time_open":
+      "Parti con la tapparella e le lamelle entrambe completamente chiuse. Clicca su Fine quando entrambe sono completamente aperte.",
+    "hints.inline.tilt_time_close":
+      "Parti con le lamelle completamente aperte. Clicca su Fine quando le lamelle sono completamente chiuse.",
+    "hints.inline.tilt_time_open":
+      "Parti con le lamelle completamente chiuse. Clicca su Fine quando le lamelle sono completamente aperte.",
     "hints.none.travel_time_close": "Clicca su Fine quando la tapparella è completamente chiusa.",
     "hints.none.travel_time_open": "Clicca su Fine quando la tapparella è completamente aperta.",
     "hints.min_movement_time": "Clicca su Fine non appena noti che la tapparella si muove.",
   },
   nl: {
-    "header": "Configuratie van Cover Time Based",
-    "loading": "Laden...",
-    "saving": "Opslaan...",
-    "save_failed": "Opslaan mislukt — waarde teruggezet",
-    "confirm_cancel_calibration": "Er loopt een kalibratie. Deze annuleren en doorgaan?",
-    "create_new": "+ Nieuwe rolluikentiteit aanmaken",
-    "yaml_warning": "Deze entiteit gebruikt YAML-configuratie en kan niet vanuit deze kaart worden geconfigureerd. Migreer naar de gebruikersinterface: Instellingen → Apparaten en diensten → Helpers → Helper aanmaken → Cover Time Based.",
-    "load_failed": "Laden van de configuratie mislukt. Probeer het opnieuw.",
+    header: "Configuratie van Cover Time Based",
+    loading: "Laden...",
+    saving: "Opslaan...",
+    save_failed: "Opslaan mislukt — waarde teruggezet",
+    confirm_cancel_calibration: "Er loopt een kalibratie. Deze annuleren en doorgaan?",
+    create_new: "+ Nieuwe rolluikentiteit aanmaken",
+    yaml_warning:
+      "Deze entiteit gebruikt YAML-configuratie en kan niet vanuit deze kaart worden geconfigureerd. Migreer naar de gebruikersinterface: Instellingen → Apparaten en diensten → Helpers → Helper aanmaken → Cover Time Based.",
+    load_failed: "Laden van de configuratie mislukt. Probeer het opnieuw.",
     "tabs.device": "Apparaat",
     "tabs.calibration": "Kalibratie",
     "control_mode.label": "Besturingsmodus",
@@ -714,11 +814,14 @@ export const TRANSLATIONS = {
     "tilt_motor.close_switch_pulse": "Schakelaar of script voor kanteling sluiten",
     "tilt_motor.stop_switch_pulse": "Schakelaar of script voor kanteling stoppen",
     "tilt_motor.safe_position": "Veilige kantelpositie",
-    "tilt_motor.safe_position_helper": "De kanteling gaat hierheen vóór de beweging (100 = volledig open)",
+    "tilt_motor.safe_position_helper":
+      "De kanteling gaat hierheen vóór de beweging (100 = volledig open)",
     "tilt_motor.max_allowed_position": "Maximaal toegestane kantelpositie (optioneel)",
-    "tilt_motor.max_allowed_helper": "Kantelen is alleen toegestaan wanneer de rolluikpositie op of onder deze waarde ligt (0 = gesloten, 100 = open)",
+    "tilt_motor.max_allowed_helper":
+      "Kantelen is alleen toegestaan wanneer de rolluikpositie op of onder deze waarde ligt (0 = gesloten, 100 = open)",
     "tilt.close_includes_tilt": "Rolluik sluiten sluit ook de lamellen",
-    "tilt.close_includes_tilt_helper": "Bij het sluiten kantelen de lamellen dicht aan het einde van de beweging",
+    "tilt.close_includes_tilt_helper":
+      "Bij het sluiten kantelen de lamellen dicht aan het einde van de beweging",
     "assumed_state.label": "Aangenomen status",
     "assumed_state.helper":
       "Wanneer dit aanstaat, behandelt Home Assistant de positie als geschat en houdt het zowel de open- als de sluitknop actief. Schakel dit uit als je de tijdgebaseerde berekening vertrouwt en wilt dat de interface niet-beschikbare acties grijs maakt (bijvoorbeeld sluiten wanneer het rolluik al gesloten is).",
@@ -728,15 +831,14 @@ export const TRANSLATIONS = {
     "send_endpoint_stop.label": "Stopsignaal bij de eindstanden versturen",
     "send_endpoint_stop.helper":
       "Stuur de stoppuls zodra je rolluik volledig open of gesloten is. Laat dit aanstaan voor besturingen die blijven doorlopen totdat ze een stop ontvangen (anders blijft het rolluik hangen en reageren de fysieke knoppen niet meer). Schakel het uit als je motor bij zijn eindstanden vanzelf stopt en een extra stop hem naar een vooraf ingestelde favoriete positie laat bewegen.",
-    "force_endpoint_redrive.label":
-      "Openen/sluiten altijd opnieuw versturen bij de eindstanden",
+    "force_endpoint_redrive.label": "Openen/sluiten altijd opnieuw versturen bij de eindstanden",
     "force_endpoint_redrive.helper":
       "Voor rolluiken zonder positieterugkoppeling die ook met een externe afstandsbediening bediend kunnen worden, waardoor Home Assistant ten onrechte kan denken dat ze al volledig open of gesloten zijn. Wanneer dit aanstaat, wordt een open- of sluitcommando altijd gedurende de volledige looptijd uitgevoerd, ook als Home Assistant denkt dat het rolluik daar al staat — zo bereikt het commando gegarandeerd de motor. Laat dit uitstaan voor rolluiken die hun eigen positie rapporteren.",
     "recalibrate_before_position.label":
       "Volledig openen voordat naar een positie wordt bewogen (Beta)",
     "recalibrate_before_position.helper":
       "Voor rolluiken zonder positieterugkoppeling die ook door een afstandsbediening bewogen kunnen worden. Beweegt het rolluik vóór elk positiecommando eerst volledig open, zodat de beweging start vanaf een bekende positie in plaats van een afgedwaalde schatting. Verdubbelt daarmee ongeveer de looptijd van elke beweging, en bij kantelen tijdens de beweging of sequentieel kantelen beweegt het rolluik mee zodra je de lamellen verstelt.",
-    "more_info": "Meer informatie",
+    more_info: "Meer informatie",
     "timing.travel_attribute_header": "Loopattribuut",
     "timing.tilt_attribute_header": "Kantelattribuut",
     "timing.value_header": "Waarde",
@@ -773,35 +875,52 @@ export const TRANSLATIONS = {
     "controls.tilt_open": "Kanteling openen",
     "controls.tilt_stop": "Kanteling stoppen",
     "controls.tilt_close": "Kanteling sluiten",
-    "hints.sequential_close.travel_time_close": "Begin met het rolluik volledig open. Klik op Voltooien wanneer het rolluik volledig gesloten is, voordat de lamellen beginnen te kantelen.",
-    "hints.sequential_close.travel_time_open": "Begin met het rolluik gesloten en de lamellen open. Klik op Voltooien wanneer het rolluik volledig open is.",
-    "hints.sequential_close.tilt_time_close": "Begin met het rolluik gesloten maar de lamellen open. Klik op Voltooien wanneer de lamellen volledig gesloten zijn.",
-    "hints.sequential_close.tilt_time_open": "Begin met het rolluik en de lamellen gesloten. Klik op Voltooien wanneer de lamellen open zijn.",
-    "hints.sequential_open.travel_time_close": "Begin met het rolluik volledig open en de lamellen gesloten. Klik op Voltooien wanneer het rolluik volledig gesloten is, voordat de lamellen open beginnen te kantelen.",
-    "hints.sequential_open.travel_time_open": "Begin met het rolluik gesloten en de lamellen gesloten. Klik op Voltooien wanneer het rolluik volledig open is.",
-    "hints.sequential_open.tilt_time_close": "Begin met het rolluik gesloten maar de lamellen open. Klik op Voltooien wanneer de lamellen volledig gesloten zijn.",
-    "hints.sequential_open.tilt_time_open": "Begin met het rolluik en de lamellen gesloten. Klik op Voltooien wanneer de lamellen volledig open zijn.",
-    "hints.dual_motor.travel_time_close": "Begin met het rolluik open en de lamellen in de veilige positie. Klik op Voltooien wanneer het rolluik volledig gesloten is.",
-    "hints.dual_motor.travel_time_open": "Begin met het rolluik gesloten en de lamellen in de veilige positie. Klik op Voltooien wanneer het rolluik volledig open is.",
-    "hints.dual_motor.tilt_time_close": "Begin met het rolluik gesloten en de lamellen open. Klik op Voltooien wanneer de lamellen volledig gesloten zijn.",
-    "hints.dual_motor.tilt_time_open": "Begin met zowel het rolluik als de lamellen gesloten. Klik op Voltooien wanneer de lamellen volledig open zijn.",
-    "hints.inline.travel_time_close": "Begin met zowel het rolluik als de lamellen volledig open. Klik op Voltooien wanneer beide volledig gesloten zijn.",
-    "hints.inline.travel_time_open": "Begin met zowel het rolluik als de lamellen volledig gesloten. Klik op Voltooien wanneer beide volledig open zijn.",
-    "hints.inline.tilt_time_close": "Begin met de lamellen volledig open. Klik op Voltooien wanneer de lamellen volledig gesloten zijn.",
-    "hints.inline.tilt_time_open": "Begin met de lamellen volledig gesloten. Klik op Voltooien wanneer de lamellen volledig open zijn.",
+    "hints.sequential_close.travel_time_close":
+      "Begin met het rolluik volledig open. Klik op Voltooien wanneer het rolluik volledig gesloten is, voordat de lamellen beginnen te kantelen.",
+    "hints.sequential_close.travel_time_open":
+      "Begin met het rolluik gesloten en de lamellen open. Klik op Voltooien wanneer het rolluik volledig open is.",
+    "hints.sequential_close.tilt_time_close":
+      "Begin met het rolluik gesloten maar de lamellen open. Klik op Voltooien wanneer de lamellen volledig gesloten zijn.",
+    "hints.sequential_close.tilt_time_open":
+      "Begin met het rolluik en de lamellen gesloten. Klik op Voltooien wanneer de lamellen open zijn.",
+    "hints.sequential_open.travel_time_close":
+      "Begin met het rolluik volledig open en de lamellen gesloten. Klik op Voltooien wanneer het rolluik volledig gesloten is, voordat de lamellen open beginnen te kantelen.",
+    "hints.sequential_open.travel_time_open":
+      "Begin met het rolluik gesloten en de lamellen gesloten. Klik op Voltooien wanneer het rolluik volledig open is.",
+    "hints.sequential_open.tilt_time_close":
+      "Begin met het rolluik gesloten maar de lamellen open. Klik op Voltooien wanneer de lamellen volledig gesloten zijn.",
+    "hints.sequential_open.tilt_time_open":
+      "Begin met het rolluik en de lamellen gesloten. Klik op Voltooien wanneer de lamellen volledig open zijn.",
+    "hints.dual_motor.travel_time_close":
+      "Begin met het rolluik open en de lamellen in de veilige positie. Klik op Voltooien wanneer het rolluik volledig gesloten is.",
+    "hints.dual_motor.travel_time_open":
+      "Begin met het rolluik gesloten en de lamellen in de veilige positie. Klik op Voltooien wanneer het rolluik volledig open is.",
+    "hints.dual_motor.tilt_time_close":
+      "Begin met het rolluik gesloten en de lamellen open. Klik op Voltooien wanneer de lamellen volledig gesloten zijn.",
+    "hints.dual_motor.tilt_time_open":
+      "Begin met zowel het rolluik als de lamellen gesloten. Klik op Voltooien wanneer de lamellen volledig open zijn.",
+    "hints.inline.travel_time_close":
+      "Begin met zowel het rolluik als de lamellen volledig open. Klik op Voltooien wanneer beide volledig gesloten zijn.",
+    "hints.inline.travel_time_open":
+      "Begin met zowel het rolluik als de lamellen volledig gesloten. Klik op Voltooien wanneer beide volledig open zijn.",
+    "hints.inline.tilt_time_close":
+      "Begin met de lamellen volledig open. Klik op Voltooien wanneer de lamellen volledig gesloten zijn.",
+    "hints.inline.tilt_time_open":
+      "Begin met de lamellen volledig gesloten. Klik op Voltooien wanneer de lamellen volledig open zijn.",
     "hints.none.travel_time_close": "Klik op Voltooien wanneer het rolluik volledig gesloten is.",
     "hints.none.travel_time_open": "Klik op Voltooien wanneer het rolluik volledig open is.",
     "hints.min_movement_time": "Klik op Voltooien zodra je het rolluik ziet bewegen.",
   },
   fr: {
-    "header": "Configuration de Cover Time Based",
-    "loading": "Chargement...",
-    "saving": "Enregistrement...",
-    "save_failed": "Échec de l'enregistrement — valeur rétablie",
-    "confirm_cancel_calibration": "Un étalonnage est en cours. L'annuler et continuer\u00a0?",
-    "create_new": "+ Créer une nouvelle entité de volet",
-    "yaml_warning": "Cette entité utilise une configuration YAML et ne peut pas être configurée depuis cette carte. Veuillez migrer vers l'interface utilisateur\u00a0: Paramètres → Appareils et services → Entrées → Créer une entrée → Cover Time Based.",
-    "load_failed": "Échec du chargement de la configuration. Veuillez réessayer.",
+    header: "Configuration de Cover Time Based",
+    loading: "Chargement...",
+    saving: "Enregistrement...",
+    save_failed: "Échec de l'enregistrement — valeur rétablie",
+    confirm_cancel_calibration: "Un étalonnage est en cours. L'annuler et continuer\u00a0?",
+    create_new: "+ Créer une nouvelle entité de volet",
+    yaml_warning:
+      "Cette entité utilise une configuration YAML et ne peut pas être configurée depuis cette carte. Veuillez migrer vers l'interface utilisateur\u00a0: Paramètres → Appareils et services → Entrées → Créer une entrée → Cover Time Based.",
+    load_failed: "Échec du chargement de la configuration. Veuillez réessayer.",
     "tabs.device": "Appareil",
     "tabs.calibration": "Étalonnage",
     "control_mode.label": "Mode de commande",
@@ -847,11 +966,14 @@ export const TRANSLATIONS = {
     "tilt_motor.close_switch_pulse": "Interrupteur ou script de fermeture de l'inclinaison",
     "tilt_motor.stop_switch_pulse": "Interrupteur ou script d'arrêt de l'inclinaison",
     "tilt_motor.safe_position": "Position d'inclinaison de sécurité",
-    "tilt_motor.safe_position_helper": "L'inclinaison se place ici avant la course (100 = complètement ouverte)",
+    "tilt_motor.safe_position_helper":
+      "L'inclinaison se place ici avant la course (100 = complètement ouverte)",
     "tilt_motor.max_allowed_position": "Position d'inclinaison maximale autorisée (facultatif)",
-    "tilt_motor.max_allowed_helper": "L'inclinaison n'est autorisée que lorsque la position du volet est égale ou inférieure à cette valeur (0 = fermé, 100 = ouvert)",
+    "tilt_motor.max_allowed_helper":
+      "L'inclinaison n'est autorisée que lorsque la position du volet est égale ou inférieure à cette valeur (0 = fermé, 100 = ouvert)",
     "tilt.close_includes_tilt": "Fermer le volet ferme aussi les lames",
-    "tilt.close_includes_tilt_helper": "À la fermeture, les lames s'inclinent en position fermée en fin de course",
+    "tilt.close_includes_tilt_helper":
+      "À la fermeture, les lames s'inclinent en position fermée en fin de course",
     "assumed_state.label": "État supposé",
     "assumed_state.helper":
       "Lorsque cette option est activée, Home Assistant considère la position comme estimée et garde actives les commandes d'ouverture et de fermeture. Désactivez-la si vous faites confiance au calcul temporisé et souhaitez que l'interface grise les actions indisponibles (par exemple fermer alors que le volet est déjà fermé).",
@@ -867,7 +989,7 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Ouvrir complètement avant d'aller à une position (Bêta)",
     "recalibrate_before_position.helper":
       "Pour les volets sans retour de position qu'une télécommande peut aussi actionner. Ouvre complètement le volet avant chaque commande de position, afin que le mouvement parte d'une position connue plutôt que d'une estimation partie à la dérive. Cela double à peu près la course de chaque mouvement et, avec une inclinaison pendant la course ou une inclinaison séquentielle, le volet bouge lorsque vous réglez les lames.",
-    "more_info": "Plus d'informations",
+    more_info: "Plus d'informations",
     "timing.travel_attribute_header": "Attribut de course",
     "timing.tilt_attribute_header": "Attribut d'inclinaison",
     "timing.value_header": "Valeur",
@@ -904,35 +1026,52 @@ export const TRANSLATIONS = {
     "controls.tilt_open": "Ouvrir l'inclinaison",
     "controls.tilt_stop": "Arrêter l'inclinaison",
     "controls.tilt_close": "Fermer l'inclinaison",
-    "hints.sequential_close.travel_time_close": "Commencez avec le volet complètement ouvert. Cliquez sur Terminer lorsque le volet est complètement fermé, avant que les lames ne commencent à s'incliner.",
-    "hints.sequential_close.travel_time_open": "Commencez avec le volet fermé et les lames ouvertes. Cliquez sur Terminer lorsque le volet est complètement ouvert.",
-    "hints.sequential_close.tilt_time_close": "Commencez avec le volet fermé mais les lames ouvertes. Cliquez sur Terminer lorsque les lames sont complètement fermées.",
-    "hints.sequential_close.tilt_time_open": "Commencez avec le volet et les lames fermés. Cliquez sur Terminer lorsque les lames sont ouvertes.",
-    "hints.sequential_open.travel_time_close": "Commencez avec le volet complètement ouvert et les lames fermées. Cliquez sur Terminer lorsque le volet est complètement fermé, avant que les lames ne commencent à s'ouvrir.",
-    "hints.sequential_open.travel_time_open": "Commencez avec le volet fermé et les lames fermées. Cliquez sur Terminer lorsque le volet est complètement ouvert.",
-    "hints.sequential_open.tilt_time_close": "Commencez avec le volet fermé mais les lames ouvertes. Cliquez sur Terminer lorsque les lames sont complètement fermées.",
-    "hints.sequential_open.tilt_time_open": "Commencez avec le volet et les lames fermés. Cliquez sur Terminer lorsque les lames sont complètement ouvertes.",
-    "hints.dual_motor.travel_time_close": "Commencez avec le volet ouvert et les lames en position de sécurité. Cliquez sur Terminer lorsque le volet est complètement fermé.",
-    "hints.dual_motor.travel_time_open": "Commencez avec le volet fermé et les lames en position de sécurité. Cliquez sur Terminer lorsque le volet est complètement ouvert.",
-    "hints.dual_motor.tilt_time_close": "Commencez avec le volet fermé et les lames ouvertes. Cliquez sur Terminer lorsque les lames sont complètement fermées.",
-    "hints.dual_motor.tilt_time_open": "Commencez avec le volet et les lames fermés. Cliquez sur Terminer lorsque les lames sont complètement ouvertes.",
-    "hints.inline.travel_time_close": "Commencez avec le volet et les lames complètement ouverts. Cliquez sur Terminer lorsque les deux sont complètement fermés.",
-    "hints.inline.travel_time_open": "Commencez avec le volet et les lames complètement fermés. Cliquez sur Terminer lorsque les deux sont complètement ouverts.",
-    "hints.inline.tilt_time_close": "Commencez avec les lames complètement ouvertes. Cliquez sur Terminer lorsque les lames sont complètement fermées.",
-    "hints.inline.tilt_time_open": "Commencez avec les lames complètement fermées. Cliquez sur Terminer lorsque les lames sont complètement ouvertes.",
+    "hints.sequential_close.travel_time_close":
+      "Commencez avec le volet complètement ouvert. Cliquez sur Terminer lorsque le volet est complètement fermé, avant que les lames ne commencent à s'incliner.",
+    "hints.sequential_close.travel_time_open":
+      "Commencez avec le volet fermé et les lames ouvertes. Cliquez sur Terminer lorsque le volet est complètement ouvert.",
+    "hints.sequential_close.tilt_time_close":
+      "Commencez avec le volet fermé mais les lames ouvertes. Cliquez sur Terminer lorsque les lames sont complètement fermées.",
+    "hints.sequential_close.tilt_time_open":
+      "Commencez avec le volet et les lames fermés. Cliquez sur Terminer lorsque les lames sont ouvertes.",
+    "hints.sequential_open.travel_time_close":
+      "Commencez avec le volet complètement ouvert et les lames fermées. Cliquez sur Terminer lorsque le volet est complètement fermé, avant que les lames ne commencent à s'ouvrir.",
+    "hints.sequential_open.travel_time_open":
+      "Commencez avec le volet fermé et les lames fermées. Cliquez sur Terminer lorsque le volet est complètement ouvert.",
+    "hints.sequential_open.tilt_time_close":
+      "Commencez avec le volet fermé mais les lames ouvertes. Cliquez sur Terminer lorsque les lames sont complètement fermées.",
+    "hints.sequential_open.tilt_time_open":
+      "Commencez avec le volet et les lames fermés. Cliquez sur Terminer lorsque les lames sont complètement ouvertes.",
+    "hints.dual_motor.travel_time_close":
+      "Commencez avec le volet ouvert et les lames en position de sécurité. Cliquez sur Terminer lorsque le volet est complètement fermé.",
+    "hints.dual_motor.travel_time_open":
+      "Commencez avec le volet fermé et les lames en position de sécurité. Cliquez sur Terminer lorsque le volet est complètement ouvert.",
+    "hints.dual_motor.tilt_time_close":
+      "Commencez avec le volet fermé et les lames ouvertes. Cliquez sur Terminer lorsque les lames sont complètement fermées.",
+    "hints.dual_motor.tilt_time_open":
+      "Commencez avec le volet et les lames fermés. Cliquez sur Terminer lorsque les lames sont complètement ouvertes.",
+    "hints.inline.travel_time_close":
+      "Commencez avec le volet et les lames complètement ouverts. Cliquez sur Terminer lorsque les deux sont complètement fermés.",
+    "hints.inline.travel_time_open":
+      "Commencez avec le volet et les lames complètement fermés. Cliquez sur Terminer lorsque les deux sont complètement ouverts.",
+    "hints.inline.tilt_time_close":
+      "Commencez avec les lames complètement ouvertes. Cliquez sur Terminer lorsque les lames sont complètement fermées.",
+    "hints.inline.tilt_time_open":
+      "Commencez avec les lames complètement fermées. Cliquez sur Terminer lorsque les lames sont complètement ouvertes.",
     "hints.none.travel_time_close": "Cliquez sur Terminer lorsque le volet est complètement fermé.",
     "hints.none.travel_time_open": "Cliquez sur Terminer lorsque le volet est complètement ouvert.",
     "hints.min_movement_time": "Cliquez sur Terminer dès que vous voyez le volet bouger.",
   },
   es: {
-    "header": "Configuración de Cover Time Based",
-    "loading": "Cargando...",
-    "saving": "Guardando...",
-    "save_failed": "Error al guardar — valor restaurado",
-    "confirm_cancel_calibration": "Hay una calibración en curso. ¿Cancelarla y continuar?",
-    "create_new": "+ Crear una nueva entidad de persiana",
-    "yaml_warning": "Esta entidad usa configuración YAML y no se puede configurar desde esta tarjeta. Migra a la interfaz de usuario: Configuración → Dispositivos y servicios → Ayudantes → Crear ayudante → Cover Time Based.",
-    "load_failed": "Error al cargar la configuración. Inténtalo de nuevo.",
+    header: "Configuración de Cover Time Based",
+    loading: "Cargando...",
+    saving: "Guardando...",
+    save_failed: "Error al guardar — valor restaurado",
+    confirm_cancel_calibration: "Hay una calibración en curso. ¿Cancelarla y continuar?",
+    create_new: "+ Crear una nueva entidad de persiana",
+    yaml_warning:
+      "Esta entidad usa configuración YAML y no se puede configurar desde esta tarjeta. Migra a la interfaz de usuario: Configuración → Dispositivos y servicios → Ayudantes → Crear ayudante → Cover Time Based.",
+    load_failed: "Error al cargar la configuración. Inténtalo de nuevo.",
     "tabs.device": "Dispositivo",
     "tabs.calibration": "Calibración",
     "control_mode.label": "Modo de control",
@@ -978,11 +1117,14 @@ export const TRANSLATIONS = {
     "tilt_motor.close_switch_pulse": "Interruptor o script de cierre de la inclinación",
     "tilt_motor.stop_switch_pulse": "Interruptor o script de parada de la inclinación",
     "tilt_motor.safe_position": "Posición de inclinación segura",
-    "tilt_motor.safe_position_helper": "La inclinación se mueve aquí antes del recorrido (100 = totalmente abierta)",
+    "tilt_motor.safe_position_helper":
+      "La inclinación se mueve aquí antes del recorrido (100 = totalmente abierta)",
     "tilt_motor.max_allowed_position": "Posición máxima de inclinación permitida (opcional)",
-    "tilt_motor.max_allowed_helper": "La inclinación solo se permite cuando la posición de la persiana es igual o inferior a este valor (0 = cerrada, 100 = abierta)",
+    "tilt_motor.max_allowed_helper":
+      "La inclinación solo se permite cuando la posición de la persiana es igual o inferior a este valor (0 = cerrada, 100 = abierta)",
     "tilt.close_includes_tilt": "Cerrar la persiana también cierra las lamas",
-    "tilt.close_includes_tilt_helper": "Al cerrar, las lamas se inclinan a cerrado al final del recorrido",
+    "tilt.close_includes_tilt_helper":
+      "Al cerrar, las lamas se inclinan a cerrado al final del recorrido",
     "assumed_state.label": "Estado supuesto",
     "assumed_state.helper":
       "Cuando está activado, Home Assistant trata la posición como estimada y mantiene activos los controles de apertura y cierre. Desactívalo si confías en el cálculo por tiempo y quieres que la interfaz atenúe las acciones no disponibles (por ejemplo, cerrar cuando ya está cerrada).",
@@ -998,7 +1140,7 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Abrir totalmente antes de mover a una posición (Beta)",
     "recalibrate_before_position.helper":
       "Para persianas sin realimentación de posición que un mando a distancia también puede mover. Abre la persiana por completo antes de cada comando de posición, para que el movimiento parta de una posición conocida en lugar de una estimación desviada. Duplica aproximadamente el recorrido de cada movimiento y, con la inclinación durante el recorrido o la inclinación secuencial, mueve la persiana cuando ajustas las lamas.",
-    "more_info": "Más información",
+    more_info: "Más información",
     "timing.travel_attribute_header": "Atributo de recorrido",
     "timing.tilt_attribute_header": "Atributo de inclinación",
     "timing.value_header": "Valor",
@@ -1012,7 +1154,8 @@ export const TRANSLATIONS = {
     "timing.min_movement_time": "Tiempo mínimo de movimiento",
     "timing.endpoint_runon_time": "Tiempo de prolongación en los finales de carrera",
     "position.label": "Posición actual",
-    "position.helper": "Mueve la persiana a un final de carrera conocido y luego establece la posición.",
+    "position.helper":
+      "Mueve la persiana a un final de carrera conocido y luego establece la posición.",
     "position.unknown": "Desconocida",
     "position.open": "Totalmente abierta",
     "position.closed": "Totalmente cerrada",
@@ -1035,35 +1178,54 @@ export const TRANSLATIONS = {
     "controls.tilt_open": "Abrir la inclinación",
     "controls.tilt_stop": "Detener la inclinación",
     "controls.tilt_close": "Cerrar la inclinación",
-    "hints.sequential_close.travel_time_close": "Empieza con la persiana totalmente abierta. Haz clic en Terminar cuando la persiana esté totalmente cerrada, antes de que las lamas empiecen a inclinarse.",
-    "hints.sequential_close.travel_time_open": "Empieza con la persiana cerrada y las lamas abiertas. Haz clic en Terminar cuando la persiana esté totalmente abierta.",
-    "hints.sequential_close.tilt_time_close": "Empieza con la persiana cerrada pero las lamas abiertas. Haz clic en Terminar cuando las lamas estén totalmente cerradas.",
-    "hints.sequential_close.tilt_time_open": "Empieza con la persiana y las lamas cerradas. Haz clic en Terminar cuando las lamas estén abiertas.",
-    "hints.sequential_open.travel_time_close": "Empieza con la persiana totalmente abierta y las lamas cerradas. Haz clic en Terminar cuando la persiana esté totalmente cerrada, antes de que las lamas empiecen a inclinarse hacia abierto.",
-    "hints.sequential_open.travel_time_open": "Empieza con la persiana cerrada y las lamas cerradas. Haz clic en Terminar cuando la persiana esté totalmente abierta.",
-    "hints.sequential_open.tilt_time_close": "Empieza con la persiana cerrada pero las lamas abiertas. Haz clic en Terminar cuando las lamas estén totalmente cerradas.",
-    "hints.sequential_open.tilt_time_open": "Empieza con la persiana y las lamas cerradas. Haz clic en Terminar cuando las lamas estén totalmente abiertas.",
-    "hints.dual_motor.travel_time_close": "Empieza con la persiana abierta y las lamas en la posición segura. Haz clic en Terminar cuando la persiana esté totalmente cerrada.",
-    "hints.dual_motor.travel_time_open": "Empieza con la persiana cerrada y las lamas en la posición segura. Haz clic en Terminar cuando la persiana esté totalmente abierta.",
-    "hints.dual_motor.tilt_time_close": "Empieza con la persiana cerrada y las lamas abiertas. Haz clic en Terminar cuando las lamas estén totalmente cerradas.",
-    "hints.dual_motor.tilt_time_open": "Empieza con la persiana y las lamas cerradas. Haz clic en Terminar cuando las lamas estén totalmente abiertas.",
-    "hints.inline.travel_time_close": "Empieza con la persiana y las lamas totalmente abiertas. Haz clic en Terminar cuando ambas estén totalmente cerradas.",
-    "hints.inline.travel_time_open": "Empieza con la persiana y las lamas totalmente cerradas. Haz clic en Terminar cuando ambas estén totalmente abiertas.",
-    "hints.inline.tilt_time_close": "Empieza con las lamas totalmente abiertas. Haz clic en Terminar cuando las lamas estén totalmente cerradas.",
-    "hints.inline.tilt_time_open": "Empieza con las lamas totalmente cerradas. Haz clic en Terminar cuando las lamas estén totalmente abiertas.",
-    "hints.none.travel_time_close": "Haz clic en Terminar cuando la persiana esté totalmente cerrada.",
-    "hints.none.travel_time_open": "Haz clic en Terminar cuando la persiana esté totalmente abierta.",
+    "hints.sequential_close.travel_time_close":
+      "Empieza con la persiana totalmente abierta. Haz clic en Terminar cuando la persiana esté totalmente cerrada, antes de que las lamas empiecen a inclinarse.",
+    "hints.sequential_close.travel_time_open":
+      "Empieza con la persiana cerrada y las lamas abiertas. Haz clic en Terminar cuando la persiana esté totalmente abierta.",
+    "hints.sequential_close.tilt_time_close":
+      "Empieza con la persiana cerrada pero las lamas abiertas. Haz clic en Terminar cuando las lamas estén totalmente cerradas.",
+    "hints.sequential_close.tilt_time_open":
+      "Empieza con la persiana y las lamas cerradas. Haz clic en Terminar cuando las lamas estén abiertas.",
+    "hints.sequential_open.travel_time_close":
+      "Empieza con la persiana totalmente abierta y las lamas cerradas. Haz clic en Terminar cuando la persiana esté totalmente cerrada, antes de que las lamas empiecen a inclinarse hacia abierto.",
+    "hints.sequential_open.travel_time_open":
+      "Empieza con la persiana cerrada y las lamas cerradas. Haz clic en Terminar cuando la persiana esté totalmente abierta.",
+    "hints.sequential_open.tilt_time_close":
+      "Empieza con la persiana cerrada pero las lamas abiertas. Haz clic en Terminar cuando las lamas estén totalmente cerradas.",
+    "hints.sequential_open.tilt_time_open":
+      "Empieza con la persiana y las lamas cerradas. Haz clic en Terminar cuando las lamas estén totalmente abiertas.",
+    "hints.dual_motor.travel_time_close":
+      "Empieza con la persiana abierta y las lamas en la posición segura. Haz clic en Terminar cuando la persiana esté totalmente cerrada.",
+    "hints.dual_motor.travel_time_open":
+      "Empieza con la persiana cerrada y las lamas en la posición segura. Haz clic en Terminar cuando la persiana esté totalmente abierta.",
+    "hints.dual_motor.tilt_time_close":
+      "Empieza con la persiana cerrada y las lamas abiertas. Haz clic en Terminar cuando las lamas estén totalmente cerradas.",
+    "hints.dual_motor.tilt_time_open":
+      "Empieza con la persiana y las lamas cerradas. Haz clic en Terminar cuando las lamas estén totalmente abiertas.",
+    "hints.inline.travel_time_close":
+      "Empieza con la persiana y las lamas totalmente abiertas. Haz clic en Terminar cuando ambas estén totalmente cerradas.",
+    "hints.inline.travel_time_open":
+      "Empieza con la persiana y las lamas totalmente cerradas. Haz clic en Terminar cuando ambas estén totalmente abiertas.",
+    "hints.inline.tilt_time_close":
+      "Empieza con las lamas totalmente abiertas. Haz clic en Terminar cuando las lamas estén totalmente cerradas.",
+    "hints.inline.tilt_time_open":
+      "Empieza con las lamas totalmente cerradas. Haz clic en Terminar cuando las lamas estén totalmente abiertas.",
+    "hints.none.travel_time_close":
+      "Haz clic en Terminar cuando la persiana esté totalmente cerrada.",
+    "hints.none.travel_time_open":
+      "Haz clic en Terminar cuando la persiana esté totalmente abierta.",
     "hints.min_movement_time": "Haz clic en Terminar en cuanto notes que la persiana se mueve.",
   },
   ca: {
-    "header": "Configuració de Cover Time Based",
-    "loading": "Carregant...",
-    "saving": "Desant...",
-    "save_failed": "Error en desar — valor revertit",
-    "confirm_cancel_calibration": "Hi ha una calibració en curs. Vols cancel·lar-la i continuar?",
-    "create_new": "+ Crea una nova entitat de persiana",
-    "yaml_warning": "Aquesta entitat utilitza configuració YAML i no es pot configurar des d'aquesta targeta. Migra a la interfície d'usuari: Configuració → Dispositius i serveis → Ajudants → Crea ajudant → Cover Time Based.",
-    "load_failed": "No s'ha pogut carregar la configuració. Torna-ho a provar.",
+    header: "Configuració de Cover Time Based",
+    loading: "Carregant...",
+    saving: "Desant...",
+    save_failed: "Error en desar — valor revertit",
+    confirm_cancel_calibration: "Hi ha una calibració en curs. Vols cancel·lar-la i continuar?",
+    create_new: "+ Crea una nova entitat de persiana",
+    yaml_warning:
+      "Aquesta entitat utilitza configuració YAML i no es pot configurar des d'aquesta targeta. Migra a la interfície d'usuari: Configuració → Dispositius i serveis → Ajudants → Crea ajudant → Cover Time Based.",
+    load_failed: "No s'ha pogut carregar la configuració. Torna-ho a provar.",
     "tabs.device": "Dispositiu",
     "tabs.calibration": "Calibració",
     "control_mode.label": "Mode de control",
@@ -1109,11 +1271,14 @@ export const TRANSLATIONS = {
     "tilt_motor.close_switch_pulse": "Interruptor o script de tancament de la inclinació",
     "tilt_motor.stop_switch_pulse": "Interruptor o script d'aturada de la inclinació",
     "tilt_motor.safe_position": "Posició d'inclinació segura",
-    "tilt_motor.safe_position_helper": "La inclinació es mou aquí abans del recorregut (100 = totalment oberta)",
+    "tilt_motor.safe_position_helper":
+      "La inclinació es mou aquí abans del recorregut (100 = totalment oberta)",
     "tilt_motor.max_allowed_position": "Posició màxima d'inclinació permesa (opcional)",
-    "tilt_motor.max_allowed_helper": "La inclinació només es permet quan la posició de la persiana és igual o inferior a aquest valor (0 = tancada, 100 = oberta)",
+    "tilt_motor.max_allowed_helper":
+      "La inclinació només es permet quan la posició de la persiana és igual o inferior a aquest valor (0 = tancada, 100 = oberta)",
     "tilt.close_includes_tilt": "Tancar la persiana també tanca les lamel·les",
-    "tilt.close_includes_tilt_helper": "En tancar, les lamel·les s'inclinen a tancat al final del recorregut",
+    "tilt.close_includes_tilt_helper":
+      "En tancar, les lamel·les s'inclinen a tancat al final del recorregut",
     "assumed_state.label": "Estat suposat",
     "assumed_state.helper":
       "Quan està activat, Home Assistant tracta la posició com a estimada i manté actius els controls d'obertura i tancament. Desactiva-ho si confies en el càlcul per temps i vols que la interfície atenuï les accions no disponibles (per exemple, tancar quan ja està tancada).",
@@ -1129,7 +1294,7 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Obre del tot abans de moure's a una posició (Beta)",
     "recalibrate_before_position.helper":
       "Per a persianes sense realimentació de posició que un comandament a distància també pot moure. Obre la persiana del tot abans de cada ordre de posició, perquè el moviment parteixi d'una posició coneguda en lloc d'una estimació desviada. Duplica aproximadament el recorregut de cada moviment i, amb la inclinació durant el recorregut o la inclinació seqüencial, mou la persiana quan ajustes les lamel·les.",
-    "more_info": "Més informació",
+    more_info: "Més informació",
     "timing.travel_attribute_header": "Atribut de recorregut",
     "timing.tilt_attribute_header": "Atribut d'inclinació",
     "timing.value_header": "Valor",
@@ -1143,7 +1308,8 @@ export const TRANSLATIONS = {
     "timing.min_movement_time": "Temps mínim de moviment",
     "timing.endpoint_runon_time": "Temps de prolongació als finals de cursa",
     "position.label": "Posició actual",
-    "position.helper": "Mou la persiana a un final de cursa conegut i després estableix la posició.",
+    "position.helper":
+      "Mou la persiana a un final de cursa conegut i després estableix la posició.",
     "position.unknown": "Desconeguda",
     "position.open": "Totalment oberta",
     "position.closed": "Totalment tancada",
@@ -1166,24 +1332,42 @@ export const TRANSLATIONS = {
     "controls.tilt_open": "Obre la inclinació",
     "controls.tilt_stop": "Atura la inclinació",
     "controls.tilt_close": "Tanca la inclinació",
-    "hints.sequential_close.travel_time_close": "Comença amb la persiana totalment oberta. Fes clic a Finalitza quan la persiana estigui totalment tancada, abans que les lamel·les comencin a inclinar-se.",
-    "hints.sequential_close.travel_time_open": "Comença amb la persiana tancada i les lamel·les obertes. Fes clic a Finalitza quan la persiana estigui totalment oberta.",
-    "hints.sequential_close.tilt_time_close": "Comença amb la persiana tancada però les lamel·les obertes. Fes clic a Finalitza quan les lamel·les estiguin totalment tancades.",
-    "hints.sequential_close.tilt_time_open": "Comença amb la persiana i les lamel·les tancades. Fes clic a Finalitza quan les lamel·les estiguin obertes.",
-    "hints.sequential_open.travel_time_close": "Comença amb la persiana totalment oberta i les lamel·les tancades. Fes clic a Finalitza quan la persiana estigui totalment tancada, abans que les lamel·les comencin a obrir-se.",
-    "hints.sequential_open.travel_time_open": "Comença amb la persiana tancada i les lamel·les tancades. Fes clic a Finalitza quan la persiana estigui totalment oberta.",
-    "hints.sequential_open.tilt_time_close": "Comença amb la persiana tancada però les lamel·les obertes. Fes clic a Finalitza quan les lamel·les estiguin totalment tancades.",
-    "hints.sequential_open.tilt_time_open": "Comença amb la persiana i les lamel·les tancades. Fes clic a Finalitza quan les lamel·les estiguin totalment obertes.",
-    "hints.dual_motor.travel_time_close": "Comença amb la persiana oberta i les lamel·les en la posició segura. Fes clic a Finalitza quan la persiana estigui totalment tancada.",
-    "hints.dual_motor.travel_time_open": "Comença amb la persiana tancada i les lamel·les en la posició segura. Fes clic a Finalitza quan la persiana estigui totalment oberta.",
-    "hints.dual_motor.tilt_time_close": "Comença amb la persiana tancada i les lamel·les obertes. Fes clic a Finalitza quan les lamel·les estiguin totalment tancades.",
-    "hints.dual_motor.tilt_time_open": "Comença amb la persiana i les lamel·les tancades. Fes clic a Finalitza quan les lamel·les estiguin totalment obertes.",
-    "hints.inline.travel_time_close": "Comença amb la persiana i les lamel·les totalment obertes. Fes clic a Finalitza quan totes dues estiguin totalment tancades.",
-    "hints.inline.travel_time_open": "Comença amb la persiana i les lamel·les totalment tancades. Fes clic a Finalitza quan totes dues estiguin totalment obertes.",
-    "hints.inline.tilt_time_close": "Comença amb les lamel·les totalment obertes. Fes clic a Finalitza quan les lamel·les estiguin totalment tancades.",
-    "hints.inline.tilt_time_open": "Comença amb les lamel·les totalment tancades. Fes clic a Finalitza quan les lamel·les estiguin totalment obertes.",
-    "hints.none.travel_time_close": "Fes clic a Finalitza quan la persiana estigui totalment tancada.",
-    "hints.none.travel_time_open": "Fes clic a Finalitza quan la persiana estigui totalment oberta.",
+    "hints.sequential_close.travel_time_close":
+      "Comença amb la persiana totalment oberta. Fes clic a Finalitza quan la persiana estigui totalment tancada, abans que les lamel·les comencin a inclinar-se.",
+    "hints.sequential_close.travel_time_open":
+      "Comença amb la persiana tancada i les lamel·les obertes. Fes clic a Finalitza quan la persiana estigui totalment oberta.",
+    "hints.sequential_close.tilt_time_close":
+      "Comença amb la persiana tancada però les lamel·les obertes. Fes clic a Finalitza quan les lamel·les estiguin totalment tancades.",
+    "hints.sequential_close.tilt_time_open":
+      "Comença amb la persiana i les lamel·les tancades. Fes clic a Finalitza quan les lamel·les estiguin obertes.",
+    "hints.sequential_open.travel_time_close":
+      "Comença amb la persiana totalment oberta i les lamel·les tancades. Fes clic a Finalitza quan la persiana estigui totalment tancada, abans que les lamel·les comencin a obrir-se.",
+    "hints.sequential_open.travel_time_open":
+      "Comença amb la persiana tancada i les lamel·les tancades. Fes clic a Finalitza quan la persiana estigui totalment oberta.",
+    "hints.sequential_open.tilt_time_close":
+      "Comença amb la persiana tancada però les lamel·les obertes. Fes clic a Finalitza quan les lamel·les estiguin totalment tancades.",
+    "hints.sequential_open.tilt_time_open":
+      "Comença amb la persiana i les lamel·les tancades. Fes clic a Finalitza quan les lamel·les estiguin totalment obertes.",
+    "hints.dual_motor.travel_time_close":
+      "Comença amb la persiana oberta i les lamel·les en la posició segura. Fes clic a Finalitza quan la persiana estigui totalment tancada.",
+    "hints.dual_motor.travel_time_open":
+      "Comença amb la persiana tancada i les lamel·les en la posició segura. Fes clic a Finalitza quan la persiana estigui totalment oberta.",
+    "hints.dual_motor.tilt_time_close":
+      "Comença amb la persiana tancada i les lamel·les obertes. Fes clic a Finalitza quan les lamel·les estiguin totalment tancades.",
+    "hints.dual_motor.tilt_time_open":
+      "Comença amb la persiana i les lamel·les tancades. Fes clic a Finalitza quan les lamel·les estiguin totalment obertes.",
+    "hints.inline.travel_time_close":
+      "Comença amb la persiana i les lamel·les totalment obertes. Fes clic a Finalitza quan totes dues estiguin totalment tancades.",
+    "hints.inline.travel_time_open":
+      "Comença amb la persiana i les lamel·les totalment tancades. Fes clic a Finalitza quan totes dues estiguin totalment obertes.",
+    "hints.inline.tilt_time_close":
+      "Comença amb les lamel·les totalment obertes. Fes clic a Finalitza quan les lamel·les estiguin totalment tancades.",
+    "hints.inline.tilt_time_open":
+      "Comença amb les lamel·les totalment tancades. Fes clic a Finalitza quan les lamel·les estiguin totalment obertes.",
+    "hints.none.travel_time_close":
+      "Fes clic a Finalitza quan la persiana estigui totalment tancada.",
+    "hints.none.travel_time_open":
+      "Fes clic a Finalitza quan la persiana estigui totalment oberta.",
     "hints.min_movement_time": "Fes clic a Finalitza tan bon punt notis que la persiana es mou.",
   },
 };

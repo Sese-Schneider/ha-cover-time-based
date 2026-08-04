@@ -11,9 +11,7 @@ import { filterEntitiesByValidEntries } from "../../custom_components/cover_time
 const PLATFORM = "cover_time_based";
 
 test("includes entities backed by a live config entry", () => {
-  const registry = [
-    { entity_id: "cover.live", platform: PLATFORM, config_entry_id: "live_entry" },
-  ];
+  const registry = [{ entity_id: "cover.live", platform: PLATFORM, config_entry_id: "live_entry" }];
   const result = filterEntitiesByValidEntries(registry, ["live_entry"], PLATFORM);
   assert.deepEqual(result, ["cover.live"]);
 });

@@ -11,7 +11,7 @@
 
 import { test, expect, afterEach, vi } from "vitest";
 import { makeHass } from "./helpers/hass.mjs";
-import { mountCard } from "./helpers/mount.mjs";   // NOTE: no defineHaStubs in this file
+import { mountCard } from "./helpers/mount.mjs"; // NOTE: no defineHaStubs in this file
 
 let card;
 afterEach(() => {
@@ -66,7 +66,9 @@ test("_loadEntityList swallows errors and sets _configEntryEntities to []", asyn
   const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     ws: {
-      "config/entity_registry/list": () => { throw new Error("boom"); },
+      "config/entity_registry/list": () => {
+        throw new Error("boom");
+      },
     },
   });
   card = await mountCard(hass);
@@ -84,7 +86,9 @@ test("_loadEntityList error path re-renders so the (now-empty) picker replaces s
   const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   const hass = makeHass({
     ws: {
-      "config/entity_registry/list": () => { throw new Error("boom"); },
+      "config/entity_registry/list": () => {
+        throw new Error("boom");
+      },
     },
   });
   card = await mountCard(hass);
@@ -134,7 +138,9 @@ test("_loadConfig on a transient/unknown WS failure sets _loadError to the gener
       // A plain Error with no .code — e.g. a dropped connection or an
       // unexpected server exception — is NOT "this entity has no config
       // entry", so it must not show the YAML-migration lecture.
-      "cover_time_based/get_config": () => { throw new Error("network fail"); },
+      "cover_time_based/get_config": () => {
+        throw new Error("network fail");
+      },
     },
   });
   card = await mountCard(hass);
@@ -179,11 +185,11 @@ test("_loadConfig returns early without calling callWS when _selectedEntity is e
   card = await mountCard(hass);
   // Reset call count after mount
   hass.callWS.mockClear();
-  card._selectedEntity = "";   // ensure no entity is selected
+  card._selectedEntity = ""; // ensure no entity is selected
   await card._loadConfig();
   // callWS should NOT have been called for get_config (or at all)
   const getConfigCalls = hass.callWS.mock.calls.filter(
-    ([arg]) => arg?.type === "cover_time_based/get_config"
+    ([arg]) => arg?.type === "cover_time_based/get_config",
   );
   expect(getConfigCalls).toHaveLength(0);
 });

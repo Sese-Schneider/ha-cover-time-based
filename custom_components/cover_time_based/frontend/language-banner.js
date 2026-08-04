@@ -18,11 +18,9 @@ import { html } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module"
 import { isLanguageSupported, normaliseLocale } from "./translations.js";
 
 /** Upstream repository — the issue link must not point at a fork. */
-export const GITHUB_REPO_URL =
-  "https://github.com/Sese-Schneider/ha-cover-time-based";
+export const GITHUB_REPO_URL = "https://github.com/Sese-Schneider/ha-cover-time-based";
 
-export const LANG_DISMISSED_STORAGE_KEY =
-  "cover_time_based_card.dismissed_lang_requests";
+export const LANG_DISMISSED_STORAGE_KEY = "cover_time_based_card.dismissed_lang_requests";
 
 /**
  * The banner's copy, deliberately NOT in the translation table.
@@ -63,7 +61,7 @@ export function buildTranslationRequestUrl(code, displayName) {
   if (base !== code) {
     body.push(
       ``,
-      `A \`${base}\` catalogue would cover this — the card falls back to the base language.`
+      `A \`${base}\` catalogue would cover this — the card falls back to the base language.`,
     );
   }
   body.push(``, `- [ ] I'm happy to review the translation`);
@@ -121,10 +119,7 @@ export function persistLangDismissed(code) {
   try {
     const current = loadDismissedLangs();
     if (current.includes(code)) return;
-    window.localStorage.setItem(
-      LANG_DISMISSED_STORAGE_KEY,
-      JSON.stringify([...current, code])
-    );
+    window.localStorage.setItem(LANG_DISMISSED_STORAGE_KEY, JSON.stringify([...current, code]));
   } catch (_) {
     // storage unavailable — the dismissal simply isn't remembered
   }

@@ -14,10 +14,7 @@ const registry = (names) => ({
 });
 
 test("prefers ha-input when registered", () => {
-  assert.equal(
-    textfieldTagName(registry(["ha-input", "ha-textfield"])),
-    "ha-input",
-  );
+  assert.equal(textfieldTagName(registry(["ha-input", "ha-textfield"])), "ha-input");
 });
 
 test("returns ha-input even if ha-textfield is absent", () => {

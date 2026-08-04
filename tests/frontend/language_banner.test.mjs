@@ -132,7 +132,7 @@ test("the banner names the language and links to a prefilled issue", async () =>
   expect(text).toContain(languageDisplayName(UNSHIPPED_LANG));
   const href = banner(el).querySelector("a").getAttribute("href");
   expect(href).toBe(
-    buildTranslationRequestUrl(UNSHIPPED_LANG, languageDisplayName(UNSHIPPED_LANG))
+    buildTranslationRequestUrl(UNSHIPPED_LANG, languageDisplayName(UNSHIPPED_LANG)),
   );
 });
 
@@ -171,9 +171,8 @@ test("languageDisplayName falls back to the raw code when Intl throws", () => {
 test("the issue body names the base language for a region variant", () => {
   // de-AT, de-DE and de all want one `de` catalogue. Without this, each files a
   // differently-titled issue and the maintainer can't tell which key to create.
-  const params = new URL(
-    buildTranslationRequestUrl("de-AT", "Österreichisches Deutsch")
-  ).searchParams;
+  const params = new URL(buildTranslationRequestUrl("de-AT", "Österreichisches Deutsch"))
+    .searchParams;
   expect(params.get("body")).toContain("de");
   expect(params.get("body")).toContain("base language");
 });
