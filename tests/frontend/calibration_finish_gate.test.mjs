@@ -65,7 +65,9 @@ test("startup-delay calibration: Finish is enabled once the final step is reache
     calibration_attribute: "travel_startup_delay",
     calibration_final_step: true,
   });
-  expect(finishButton(card).hasAttribute("disabled")).toBe(false);
+  const finish = finishButton(card);
+  expect(finish).not.toBeNull();
+  expect(finish.hasAttribute("disabled")).toBe(false);
 });
 
 test("tilt startup-delay calibration: Finish is disabled during the stepped phase", async () => {
@@ -73,10 +75,14 @@ test("tilt startup-delay calibration: Finish is disabled during the stepped phas
     calibration_attribute: "tilt_startup_delay",
     calibration_step: 1,
   });
-  expect(finishButton(card).hasAttribute("disabled")).toBe(true);
+  const finish = finishButton(card);
+  expect(finish).not.toBeNull();
+  expect(finish.hasAttribute("disabled")).toBe(true);
 });
 
 test("simple travel-time calibration: Finish is enabled immediately (no stepped phase)", async () => {
   card = await mountCalibrating({ calibration_attribute: "travel_time_close" });
-  expect(finishButton(card).hasAttribute("disabled")).toBe(false);
+  const finish = finishButton(card);
+  expect(finish).not.toBeNull();
+  expect(finish.hasAttribute("disabled")).toBe(false);
 });
