@@ -68,7 +68,7 @@ test("restoring a remembered device loads its config", async () => {
     expect.objectContaining({
       type: "cover_time_based/get_config",
       entity_id: "cover.remembered",
-    })
+    }),
   );
 });
 
@@ -79,7 +79,7 @@ test("a remembered device that no longer exists is not restored", async () => {
   await card._entityListReady;
   expect(card._selectedEntity).toBe("");
   expect(hass.callWS).not.toHaveBeenCalledWith(
-    expect.objectContaining({ type: "cover_time_based/get_config" })
+    expect.objectContaining({ type: "cover_time_based/get_config" }),
   );
 });
 
@@ -107,7 +107,7 @@ test("a selection made while the entity list is in flight is not clobbered", asy
   // What distinguishes them is that the guarded restore bows out entirely and
   // never drives a config load of its own — loading is the picker's job.
   expect(hass.callWS).not.toHaveBeenCalledWith(
-    expect.objectContaining({ type: "cover_time_based/get_config" })
+    expect.objectContaining({ type: "cover_time_based/get_config" }),
   );
 });
 
@@ -120,7 +120,7 @@ test("a card detached mid-lookup does not restore or call out", async () => {
 
   expect(card._selectedEntity).toBe("");
   expect(hass.callWS).not.toHaveBeenCalledWith(
-    expect.objectContaining({ type: "cover_time_based/get_config" })
+    expect.objectContaining({ type: "cover_time_based/get_config" }),
   );
 });
 
@@ -234,9 +234,7 @@ test("selecting a device through the picker remembers it", async () => {
   card = await mountCard(hassWithEntities(["cover.picked"]));
   await card._entityListReady;
   const picker = card.shadowRoot.querySelector("ha-entity-picker");
-  picker.dispatchEvent(
-    new CustomEvent("value-changed", { detail: { value: "cover.picked" } })
-  );
+  picker.dispatchEvent(new CustomEvent("value-changed", { detail: { value: "cover.picked" } }));
   expect(loadSelectedEntity()).toBe("cover.picked");
 });
 
@@ -245,8 +243,6 @@ test("clearing the selection through the picker forgets it", async () => {
   card = await mountCard(hassWithEntities(["cover.picked"]));
   await card._entityListReady;
   const picker = card.shadowRoot.querySelector("ha-entity-picker");
-  picker.dispatchEvent(
-    new CustomEvent("value-changed", { detail: { value: "" } })
-  );
+  picker.dispatchEvent(new CustomEvent("value-changed", { detail: { value: "" } }));
   expect(loadSelectedEntity()).toBe("");
 });

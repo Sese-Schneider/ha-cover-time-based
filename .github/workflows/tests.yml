@@ -77,6 +77,12 @@ jobs:
       - name: Run frontend tests with coverage gate
         run: npm run test:fe:cov
 
+      - name: Check formatting (Prettier)
+        run: npm run format:check
+
+      - name: Check linting (ESLint)
+        run: npm run lint
+
   lint:
     runs-on: ubuntu-latest
     steps:

@@ -59,7 +59,10 @@ test("picker value-changed with a value sets _selectedEntity, nulls _config, cal
 });
 
 test("picker value-changed with empty value sets _selectedEntity but does NOT call _loadConfig", async () => {
-  card = await mountCard(makeHass(), { config: { control_mode: "switch" }, selectedEntity: "cover.x" });
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "switch" },
+    selectedEntity: "cover.x",
+  });
   const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
   firePickerValueChanged(card, { value: "" });
   expect(card._selectedEntity).toBe("");
@@ -71,7 +74,10 @@ test("picker value-changed with the currently-selected entity is a no-op", async
   // The live handler short-circuits when the picker fires with the value it
   // already has (e.g. a spurious change event) — the dead _onEntityChange
   // method never had this guard at all.
-  card = await mountCard(makeHass(), { config: { control_mode: "switch" }, selectedEntity: "cover.x" });
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "switch" },
+    selectedEntity: "cover.x",
+  });
   const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
   const flushSpy = vi.spyOn(card, "_flushAutoSave");
   firePickerValueChanged(card, { value: "cover.x" });
@@ -81,7 +87,10 @@ test("picker value-changed with the currently-selected entity is a no-op", async
 });
 
 test("picker value-changed to a new entity flushes the outgoing edit and resets load error/position/tab/calibration latches", async () => {
-  card = await mountCard(makeHass(), { config: { control_mode: "switch" }, selectedEntity: "cover.old" });
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "switch" },
+    selectedEntity: "cover.old",
+  });
   const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
   const flushSpy = vi.spyOn(card, "_flushAutoSave").mockImplementation(() => {});
   card._loadError = "stale error";
@@ -105,7 +114,10 @@ test("picker value-changed to a new entity flushes the outgoing edit and resets 
 
 test("picker value-changed while calibrating and the user cancels the confirm reverts the picker and leaves the selection untouched", async () => {
   window.confirm = vi.fn(() => false);
-  card = await mountCard(makeHass(), { config: { control_mode: "switch" }, selectedEntity: "cover.x" });
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "switch" },
+    selectedEntity: "cover.x",
+  });
   const stopSpy = vi.spyOn(card, "_onStopCalibration").mockResolvedValue(undefined);
   const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
   card._calibratingOverride = true; // _isCalibrating() === true
@@ -121,7 +133,10 @@ test("picker value-changed while calibrating and the user cancels the confirm re
 
 test("picker value-changed while calibrating and the user confirms stops calibration and proceeds with the swap", async () => {
   window.confirm = vi.fn(() => true);
-  card = await mountCard(makeHass(), { config: { control_mode: "switch" }, selectedEntity: "cover.x" });
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "switch" },
+    selectedEntity: "cover.x",
+  });
   const stopSpy = vi.spyOn(card, "_onStopCalibration").mockResolvedValue(undefined);
   const loadSpy = vi.spyOn(card, "_loadConfig").mockResolvedValue(undefined);
   card._calibratingOverride = true; // _isCalibrating() === true
@@ -139,21 +154,25 @@ test("picker value-changed while calibrating and the user confirms stops calibra
 // ---------------------------------------------------------------------------
 
 test("_onControlModeChange to wrapped clears switch slots and resets dual_motor tilt", async () => {
-  card = await mountCard(makeHass(), { config: { control_mode: "switch", tilt_mode: "dual_motor" } });
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "switch", tilt_mode: "dual_motor" },
+  });
   const updates = captureUpdates(card);
   card._onControlModeChange({ target: { value: "wrapped" } });
   expect(updates[0].control_mode).toBe("wrapped");
-  expect(updates[0].open_switch_entity_id).toBeNull();   // cleared by clearedEntitiesForMode
+  expect(updates[0].open_switch_entity_id).toBeNull(); // cleared by clearedEntitiesForMode
   expect(updates[0].close_switch_entity_id).toBeNull();
   expect(updates[0].stop_switch_entity_id).toBeNull();
   expect(updates[0].tilt_open_switch).toBeNull();
   expect(updates[0].tilt_close_switch).toBeNull();
   expect(updates[0].tilt_stop_switch).toBeNull();
-  expect(updates[0].tilt_mode).toBe("none");             // dual_motor reset on wrapped
+  expect(updates[0].tilt_mode).toBe("none"); // dual_motor reset on wrapped
 });
 
 test("_onControlModeChange to wrapped with non-dual_motor tilt does NOT reset tilt", async () => {
-  card = await mountCard(makeHass(), { config: { control_mode: "switch", tilt_mode: "sequential_close" } });
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "switch", tilt_mode: "sequential_close" },
+  });
   const updates = captureUpdates(card);
   card._onControlModeChange({ target: { value: "wrapped" } });
   expect(updates[0].control_mode).toBe("wrapped");
@@ -166,8 +185,8 @@ test("_onControlModeChange to switch clears cover_entity_id and stop_switch_enti
   const updates = captureUpdates(card);
   card._onControlModeChange({ target: { value: "switch" } });
   expect(updates[0].control_mode).toBe("switch");
-  expect(updates[0].cover_entity_id).toBeNull();        // cleared by clearedEntitiesForMode
-  expect(updates[0].stop_switch_entity_id).toBeNull();   // non-pulse clears stop
+  expect(updates[0].cover_entity_id).toBeNull(); // cleared by clearedEntitiesForMode
+  expect(updates[0].stop_switch_entity_id).toBeNull(); // non-pulse clears stop
   expect(updates[0].tilt_stop_switch).toBeNull();
 });
 
@@ -230,9 +249,9 @@ test("_onControlModeChange staying on pulse does not touch script-valued slots",
 test("_onPulseTimeChange ignores sub-0.1 / NaN, accepts valid", async () => {
   card = await mountCard(makeHass(), { config: { control_mode: "pulse" } });
   const updates = captureUpdates(card);
-  card._onPulseTimeChange({ target: { value: "0.05" } });   // rejected (< 0.1)
-  card._onPulseTimeChange({ target: { value: "abc" } });    // rejected (NaN)
-  card._onPulseTimeChange({ target: { value: "1.5" } });    // accepted
+  card._onPulseTimeChange({ target: { value: "0.05" } }); // rejected (< 0.1)
+  card._onPulseTimeChange({ target: { value: "abc" } }); // rejected (NaN)
+  card._onPulseTimeChange({ target: { value: "1.5" } }); // accepted
   expect(updates).toEqual([{ pulse_time: 1.5 }]);
 });
 
@@ -269,7 +288,9 @@ test("_onSwitchEntityChange with a value sets the named field", async () => {
 });
 
 test("_onSwitchEntityChange with empty value nulls the named field", async () => {
-  card = await mountCard(makeHass(), { config: { control_mode: "switch", open_switch_entity_id: "switch.open" } });
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "switch", open_switch_entity_id: "switch.open" },
+  });
   const updates = captureUpdates(card);
   card._onSwitchEntityChange("open_switch_entity_id", { detail: { value: "" } });
   expect(updates[0]).toEqual({ open_switch_entity_id: null });
@@ -350,7 +371,9 @@ test("_onCoverEntityChange without dual_motor tilt just sets cover_entity_id", a
       "cover.notilt": { state: "open", attributes: { supported_features: 0 } },
     },
   });
-  card = await mountCard(hass, { config: { control_mode: "wrapped", tilt_mode: "sequential_close" } });
+  card = await mountCard(hass, {
+    config: { control_mode: "wrapped", tilt_mode: "sequential_close" },
+  });
   const updates = captureUpdates(card);
   card._onCoverEntityChange({ detail: { value: "cover.notilt" } });
   expect(updates[0]).toEqual({ cover_entity_id: "cover.notilt" });
@@ -368,7 +391,9 @@ test("_onCoverEntityChange with empty value sets cover_entity_id to null", async
 // ---------------------------------------------------------------------------
 
 test("_onTiltModeChange='none' clears all tilt config", async () => {
-  card = await mountCard(makeHass(), { config: { control_mode: "switch", tilt_mode: "dual_motor" } });
+  card = await mountCard(makeHass(), {
+    config: { control_mode: "switch", tilt_mode: "dual_motor" },
+  });
   const updates = captureUpdates(card);
   card._onTiltModeChange({ target: { value: "none" } });
   expect(updates[0].tilt_mode).toBe("none");
@@ -404,7 +429,7 @@ test("_onTiltModeChange='sequential_close' clears dual_motor fields, defaults cl
   expect(updates[0].tilt_open_switch).toBeNull();
   expect(updates[0].tilt_close_switch).toBeNull();
   expect(updates[0].tilt_stop_switch).toBeNull();
-  expect(updates[0].close_includes_tilt).toBe(true);  // defaulted
+  expect(updates[0].close_includes_tilt).toBe(true); // defaulted
 });
 
 test("_onTiltModeChange='sequential_close' does NOT override existing close_includes_tilt when set to false", async () => {

@@ -131,14 +131,10 @@ class CoverTimeBasedCard extends LitElement {
         try {
           await Promise.race([
             customElements.whenDefined("ha-entity-picker"),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("timeout")), 10000)
-            ),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 10000)),
           ]);
         } catch (_) {
-          console.warn(
-            "[cover-time-based-card] ha-entity-picker not available"
-          );
+          console.warn("[cover-time-based-card] ha-entity-picker not available");
         }
       }
 
@@ -242,20 +238,13 @@ class CoverTimeBasedCard extends LitElement {
         this.hass.callWS({ type: "config_entries/get", domain: DOMAIN }),
       ]);
       const validEntryIds = configEntries.map((e) => e.entry_id);
-      this._configEntryEntities = filterEntitiesByValidEntries(
-        registry,
-        validEntryIds,
-        DOMAIN
-      );
+      this._configEntryEntities = filterEntitiesByValidEntries(registry, validEntryIds, DOMAIN);
       // Restore before requesting the update so the populated picker and the
       // restored selection render together, rather than in two passes.
       this._restoreSelection();
       this.requestUpdate();
     } catch (err) {
-      console.error(
-        "Failed to load entity registry / config entries:",
-        err
-      );
+      console.error("Failed to load entity registry / config entries:", err);
       this._configEntryEntities = [];
       // _configEntryEntities isn't a reactive Lit property, so without this
       // the picker keeps showing whatever it last rendered (e.g. a stale
@@ -354,9 +343,7 @@ class CoverTimeBasedCard extends LitElement {
       // unrelated to YAML config and should say so generically instead of
       // sending the user off on a wild goose chase to "migrate" an entity
       // that is already fine.
-      this._loadError = this._t(
-        err?.code === "not_found" ? "yaml_warning" : "load_failed"
-      );
+      this._loadError = this._t(err?.code === "not_found" ? "yaml_warning" : "load_failed");
     } finally {
       // Only the newest request owns the spinner: an older one must not clear
       // it while a newer load is still running, but a request that was merely
@@ -385,7 +372,10 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   async _autoSave() {
-    if (this._isCalibrating()) { this._scheduleAutoSave(); return; }
+    if (this._isCalibrating()) {
+      this._scheduleAutoSave();
+      return;
+    }
     if (!this._selectedEntity || !this.hass || !this._config) return;
     this._saving = true;
     this._saveError = false;
@@ -439,8 +429,8 @@ class CoverTimeBasedCard extends LitElement {
     if (attr === "travel_startup_delay") {
       effectiveAttr = pos === "open" ? "travel_time_close" : "travel_time_open";
     } else if (attr === "tilt_startup_delay") {
-      effectiveAttr = (pos === "closed_tilt_open" || pos === "open")
-        ? "tilt_time_close" : "tilt_time_open";
+      effectiveAttr =
+        pos === "closed_tilt_open" || pos === "open" ? "tilt_time_close" : "tilt_time_open";
     }
 
     if (attr === "min_movement_time") {
@@ -455,7 +445,8 @@ class CoverTimeBasedCard extends LitElement {
     if (c.control_mode === "wrapped") {
       if (!c.cover_entity_id) return false;
     } else if (c.control_mode === "pulse") {
-      if (!c.open_switch_entity_id || !c.close_switch_entity_id || !c.stop_switch_entity_id) return false;
+      if (!c.open_switch_entity_id || !c.close_switch_entity_id || !c.stop_switch_entity_id)
+        return false;
     } else {
       if (!c.open_switch_entity_id || !c.close_switch_entity_id) return false;
     }
@@ -721,11 +712,7 @@ class CoverTimeBasedCard extends LitElement {
 
   _onCreateNew() {
     // Navigate to helpers/add with domain param — HA auto-opens the config flow
-    window.history.pushState(
-      null,
-      "",
-      `/config/helpers/add?domain=${DOMAIN}`
-    );
+    window.history.pushState(null, "", `/config/helpers/add?domain=${DOMAIN}`);
     window.dispatchEvent(new Event("location-changed"));
   }
 

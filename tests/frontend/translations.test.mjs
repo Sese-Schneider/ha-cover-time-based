@@ -56,9 +56,7 @@ test("translate falls back to English for an unshipped language", () => {
 });
 
 test("translate returns the key itself when no catalogue defines it", () => {
-  expect(translate("pt", "definitely.not.a.real.key")).toBe(
-    "definitely.not.a.real.key"
-  );
+  expect(translate("pt", "definitely.not.a.real.key")).toBe("definitely.not.a.real.key");
 });
 
 test("translate substitutes placeholders", () => {
@@ -80,15 +78,11 @@ test("isLanguageSupported is true for English so English users are never nudged"
 
 test("translate substitutes every occurrence of a repeated placeholder", () => {
   // A string repeating a placeholder must not leave the later ones raw.
-  expect(translate("en", "no.such.key.{a}.and.{a}", { a: "Z" })).toBe(
-    "no.such.key.Z.and.Z"
-  );
+  expect(translate("en", "no.such.key.{a}.and.{a}", { a: "Z" })).toBe("no.such.key.Z.and.Z");
 });
 
 test("translate treats $-patterns in a replacement value as literal text", () => {
   // String.replace interprets $&, $` and $' in the replacement — a display name
   // containing one must not be able to splice the surrounding string into itself.
-  expect(translate("en", "no.such.key.{a}", { a: "$& $` $'" })).toBe(
-    "no.such.key.$& $` $'"
-  );
+  expect(translate("en", "no.such.key.{a}", { a: "$& $` $'" })).toBe("no.such.key.$& $` $'");
 });

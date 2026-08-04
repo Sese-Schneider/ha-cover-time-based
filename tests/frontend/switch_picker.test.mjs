@@ -39,10 +39,7 @@ test("non-pulse modes allow only the switch domain", () => {
 });
 
 test("pulse mode maps a label key to its _pulse variant", () => {
-  assert.equal(
-    switchLabelKey("entities.open_switch", "pulse"),
-    "entities.open_switch_pulse"
-  );
+  assert.equal(switchLabelKey("entities.open_switch", "pulse"), "entities.open_switch_pulse");
 });
 
 test("non-pulse modes use the base label key unchanged", () => {
@@ -101,10 +98,7 @@ test("clearedTiltConfig resets tilt mode and every tilt field", () => {
 test("coverHasNativeTilt reads the tilt feature bits", () => {
   assert.equal(coverHasNativeTilt({ attributes: { supported_features: 16 } }), true);
   assert.equal(coverHasNativeTilt({ attributes: { supported_features: 32 } }), true);
-  assert.equal(
-    coverHasNativeTilt({ attributes: { supported_features: 1 | 2 | 8 } }),
-    false
-  );
+  assert.equal(coverHasNativeTilt({ attributes: { supported_features: 1 | 2 | 8 } }), false);
   assert.equal(coverHasNativeTilt({ attributes: {} }), false);
   assert.equal(coverHasNativeTilt(null), false);
   assert.equal(coverHasNativeTilt(undefined), false);
@@ -114,18 +108,15 @@ test("coverConfirmedWithoutTilt only confirms for an available, tilt-less cover"
   // Positively lacks tilt and is available → safe to reset dual_motor.
   assert.equal(
     coverConfirmedWithoutTilt({ state: "open", attributes: { supported_features: 11 } }),
-    true
+    true,
   );
   // Has tilt → not "without tilt".
   assert.equal(
     coverConfirmedWithoutTilt({ state: "open", attributes: { supported_features: 16 } }),
-    false
+    false,
   );
   // Unavailable / unknown / missing → can't confirm; must NOT reset a valid config.
-  assert.equal(
-    coverConfirmedWithoutTilt({ state: "unavailable", attributes: {} }),
-    false
-  );
+  assert.equal(coverConfirmedWithoutTilt({ state: "unavailable", attributes: {} }), false);
   assert.equal(coverConfirmedWithoutTilt({ state: "unknown", attributes: {} }), false);
   assert.equal(coverConfirmedWithoutTilt(null), false);
   assert.equal(coverConfirmedWithoutTilt(undefined), false);

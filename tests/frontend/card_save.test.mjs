@@ -50,7 +50,7 @@ test("_autoSave sends update_config with entry_id stripped and other fields incl
   });
   // entry_id must NOT appear in the payload
   expect(hass.callWS).not.toHaveBeenCalledWith(
-    expect.objectContaining({ entry_id: expect.anything() })
+    expect.objectContaining({ entry_id: expect.anything() }),
   );
   expect(card._saving).toBe(false);
 });
@@ -119,9 +119,7 @@ test("_autoSave on failure stores the server's error message in _saveErrorDetail
   const hass = makeHass({
     ws: {
       "cover_time_based/update_config": () => {
-        throw new Error(
-          "Script entities are only supported in pulse mode (got script.ir_open)"
-        );
+        throw new Error("Script entities are only supported in pulse mode (got script.ir_open)");
       },
       "cover_time_based/get_config": () => ({ control_mode: "toggle" }),
     },
@@ -135,7 +133,7 @@ test("_autoSave on failure stores the server's error message in _saveErrorDetail
   await card._autoSave();
 
   expect(card._saveErrorDetail).toBe(
-    "Script entities are only supported in pulse mode (got script.ir_open)"
+    "Script entities are only supported in pulse mode (got script.ir_open)",
   );
 });
 
@@ -146,7 +144,6 @@ test("_autoSave on failure with no err.message falls back to an empty _saveError
   const hass = makeHass({
     ws: {
       "cover_time_based/update_config": () => {
-        // eslint-disable-next-line no-throw-literal
         throw "boom"; // a non-Error throw has no .message
       },
       "cover_time_based/get_config": () => ({ control_mode: "toggle" }),
@@ -198,7 +195,7 @@ test("_autoSave early-returns without a selected entity", async () => {
   await card._autoSave();
 
   expect(hass.callWS).not.toHaveBeenCalledWith(
-    expect.objectContaining({ type: "cover_time_based/update_config" })
+    expect.objectContaining({ type: "cover_time_based/update_config" }),
   );
 });
 
@@ -209,6 +206,6 @@ test("_autoSave early-returns when _config is null", async () => {
   await card._autoSave();
 
   expect(hass.callWS).not.toHaveBeenCalledWith(
-    expect.objectContaining({ type: "cover_time_based/update_config" })
+    expect.objectContaining({ type: "cover_time_based/update_config" }),
   );
 });

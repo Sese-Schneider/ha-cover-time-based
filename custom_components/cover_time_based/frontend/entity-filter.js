@@ -9,19 +9,10 @@
  * set passed by the caller.
  */
 
-export function filterEntitiesByValidEntries(
-  entityRegistry,
-  validConfigEntryIds,
-  platform
-) {
+export function filterEntitiesByValidEntries(entityRegistry, validConfigEntryIds, platform) {
   const valid = new Set(validConfigEntryIds);
   return entityRegistry
-    .filter(
-      (e) =>
-        e.platform === platform &&
-        e.config_entry_id &&
-        valid.has(e.config_entry_id)
-    )
+    .filter((e) => e.platform === platform && e.config_entry_id && valid.has(e.config_entry_id))
     .map((e) => e.entity_id);
 }
 
@@ -135,8 +126,12 @@ export function clearedScriptEntities(mode, config) {
   if (mode === "pulse" || !config) return {};
   const updates = {};
   for (const key of [
-    "open_switch_entity_id", "close_switch_entity_id", "stop_switch_entity_id",
-    "tilt_open_switch", "tilt_close_switch", "tilt_stop_switch",
+    "open_switch_entity_id",
+    "close_switch_entity_id",
+    "stop_switch_entity_id",
+    "tilt_open_switch",
+    "tilt_close_switch",
+    "tilt_stop_switch",
   ]) {
     if (typeof config[key] === "string" && config[key].startsWith("script.")) {
       updates[key] = null;

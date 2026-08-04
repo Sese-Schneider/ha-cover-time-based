@@ -43,8 +43,6 @@ test.each(OTHER_LANGS)("%s has a non-blank value for every key", (lang) => {
 });
 
 test.each(OTHER_LANGS)("%s defines no key English lacks", (lang) => {
-  const stale = Object.keys(TRANSLATIONS[lang]).filter(
-    (k) => !Object.hasOwn(EN, k),
-  );
+  const stale = Object.keys(TRANSLATIONS[lang]).filter((k) => !Object.hasOwn(EN, k));
   expect(stale).toEqual([]);
 });

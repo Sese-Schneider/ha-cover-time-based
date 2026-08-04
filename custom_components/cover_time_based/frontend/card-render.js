@@ -12,24 +12,24 @@ export function renderCard(card) {
       <div class="card-content">
         ${renderLanguageBanner(card)}
         ${renderEntityPicker(card)}
-        ${card._selectedEntity && card._config
-          ? renderConfigSections(card)
-          : ""}
-        ${card._loadError
-          ? html`<div class="yaml-warning">${card._loadError}</div>`
-          : ""}
-        ${card._loading
-          ? html`<div class="loading">
+        ${card._selectedEntity && card._config ? renderConfigSections(card) : ""}
+        ${card._loadError ? html`<div class="yaml-warning">${card._loadError}</div>` : ""}
+        ${
+          card._loading
+            ? html`<div class="loading">
               <ha-icon icon="mdi:loading" class="spin"></ha-icon> ${card._t("loading")}
             </div>`
-          : ""}
+            : ""
+        }
       </div>
-      ${card._openHelp
-        ? html`<div
+      ${
+        card._openHelp
+          ? html`<div
             class="popover-backdrop"
             @click=${card._closeHelp}
           ></div>`
-        : ""}
+          : ""
+      }
     </ha-card>
   `;
 }
@@ -95,8 +95,7 @@ export function renderConfigSections(card) {
       <div class="entity-info-row">
         <div>
           <strong>
-            ${card._getEntityState()?.attributes?.friendly_name ||
-            card._selectedEntity}
+            ${card._getEntityState()?.attributes?.friendly_name || card._selectedEntity}
           </strong>
           <span class="entity-id">${card._selectedEntity}</span>
         </div>
@@ -106,25 +105,30 @@ export function renderConfigSections(card) {
     <div class="tabs">
       <button
         class="tab ${card._activeTab === "device" ? "active" : ""}"
-        @click=${() => { card._activeTab = "device"; }}
+        @click=${() => {
+          card._activeTab = "device";
+        }}
       >${card._t("tabs.device")}</button>
       <button
         class="tab ${card._activeTab === "timing" ? "active" : ""}"
         ?disabled=${!card._hasRequiredEntities(c)}
-        @click=${() => { card._activeTab = "timing"; }}
+        @click=${() => {
+          card._activeTab = "timing";
+        }}
       >${card._t("tabs.calibration")}</button>
     </div>
 
-    ${card._activeTab === "device"
-      ? html`
+    ${
+      card._activeTab === "device"
+        ? html`
           <fieldset ?disabled=${disabled}>
             ${renderControlMode(card, c)} ${renderInputEntities(card, c)}
             ${renderTiltSupport(card, c)}
             ${renderTiltMotorSection(card, c)}
           </fieldset>
         `
-      : calibrating
-        ? html`
+        : calibrating
+          ? html`
             <!-- The active-calibration panel (Cancel/Finish) must stay OUTSIDE
                  the disabled fieldset so its controls remain clickable while
                  calibrating; the timing table stays inside it so it locks. -->
@@ -133,7 +137,7 @@ export function renderConfigSections(card) {
               ${renderTimingTable(card, c)}
             </fieldset>
           `
-        : html`
+          : html`
             <!-- Not calibrating: position reset, the calibration controls and
                  the timing table all sit inside the disabled fieldset so they
                  lock together while saving, matching the device tab. Order:
@@ -143,18 +147,23 @@ export function renderConfigSections(card) {
               ${renderCalibration(card, calibrating)}
               ${renderTimingTable(card, c)}
             </fieldset>
-          `}
+          `
+    }
 
-    ${card._saving
-      ? html`<div class="save-bar"><span class="saving-indicator">${card._t("saving")}</span></div>`
-      : ""}
-    ${card._saveError
-      ? html`<div class="save-bar"><span class="save-error"
-          >${card._t("save_failed")}${card._saveErrorDetail
-            ? html` — ${card._saveErrorDetail}`
-            : ""}</span
+    ${
+      card._saving
+        ? html`<div class="save-bar"><span class="saving-indicator">${card._t("saving")}</span></div>`
+        : ""
+    }
+    ${
+      card._saveError
+        ? html`<div class="save-bar"><span class="save-error"
+          >${card._t("save_failed")}${
+            card._saveErrorDetail ? html` — ${card._saveErrorDetail}` : ""
+          }</span
         ></div>`
-      : ""}
+        : ""
+    }
   `;
 }
 
@@ -182,8 +191,9 @@ export function renderControlMode(card, c) {
           ${card._t("control_mode.toggle_opposite")}
         </option>
       </select>
-      ${showPulseTime
-        ? html`
+      ${
+        showPulseTime
+          ? html`
             <div class="inline-field">
               ${renderTextfield({
                 type: "number",
@@ -197,7 +207,8 @@ export function renderControlMode(card, c) {
               })}
             </div>
           `
-        : ""}
+          : ""
+      }
     </div>
   `;
 }
@@ -228,11 +239,13 @@ export function renderToggleWithHelp(card, labelKey, helperKey, checked, onChang
             }
           }}
         ></ha-icon>
-        ${open
-          ? html`<div class="info-popover" role="tooltip">
+        ${
+          open
+            ? html`<div class="info-popover" role="tooltip">
               ${card._t(helperKey)}
             </div>`
-          : ""}
+            : ""
+        }
       </span>
       <ha-switch
         class="toggle-switch"
@@ -260,16 +273,14 @@ export function renderInputEntities(card, c) {
           "entities.ignore_reported_position",
           "entities.ignore_reported_position_helper",
           !!c.ignore_reported_position,
-          (e) =>
-            card._updateLocal({ ignore_reported_position: e.target.checked }),
+          (e) => card._updateLocal({ ignore_reported_position: e.target.checked }),
         )}
         ${renderToggleWithHelp(
           card,
           "entities.force_time_based_position",
           "entities.force_time_based_position_helper",
           !!c.force_time_based_position,
-          (e) =>
-            card._updateLocal({ force_time_based_position: e.target.checked }),
+          (e) => card._updateLocal({ force_time_based_position: e.target.checked }),
         )}
         ${renderToggleWithHelp(
           card,
@@ -281,12 +292,8 @@ export function renderInputEntities(card, c) {
               reports_command_not_endpoint: e.target.checked,
             }),
         )}
-        ${renderToggleWithHelp(
-          card,
-          "entities.invert",
-          "entities.invert_helper",
-          !!c.invert,
-          (e) => card._updateLocal({ invert: e.target.checked }),
+        ${renderToggleWithHelp(card, "entities.invert", "entities.invert_helper", !!c.invert, (e) =>
+          card._updateLocal({ invert: e.target.checked }),
         )}
         ${renderToggleWithHelp(
           card,
@@ -325,46 +332,51 @@ export function renderInputEntities(card, c) {
           .value=${c.open_switch_entity_id || ""}
           .includeDomains=${switchPickerDomains(c.control_mode)}
           label=${card._switchLabel("entities.open_switch", c.control_mode)}
-          @value-changed=${(e) =>
-            card._onSwitchEntityChange("open_switch_entity_id", e)}
+          @value-changed=${(e) => card._onSwitchEntityChange("open_switch_entity_id", e)}
         ></ha-entity-picker>
         <ha-entity-picker
           .hass=${card.hass}
           .value=${c.close_switch_entity_id || ""}
           .includeDomains=${switchPickerDomains(c.control_mode)}
           label=${card._switchLabel("entities.close_switch", c.control_mode)}
-          @value-changed=${(e) =>
-            card._onSwitchEntityChange("close_switch_entity_id", e)}
+          @value-changed=${(e) => card._onSwitchEntityChange("close_switch_entity_id", e)}
         ></ha-entity-picker>
-        ${c.control_mode === "pulse" ? html`
+        ${
+          c.control_mode === "pulse"
+            ? html`
         <ha-entity-picker
           .hass=${card.hass}
           .value=${c.stop_switch_entity_id || ""}
           .includeDomains=${switchPickerDomains(c.control_mode)}
           label=${card._switchLabel("entities.stop_switch", c.control_mode)}
-          @value-changed=${(e) =>
-            card._onSwitchEntityChange("stop_switch_entity_id", e)}
+          @value-changed=${(e) => card._onSwitchEntityChange("stop_switch_entity_id", e)}
         ></ha-entity-picker>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
-      ${c.control_mode === "toggle" || c.control_mode === "toggle_opposite"
-        ? renderToggleWithHelp(
-            card,
-            "relay_reports_off.label",
-            "relay_reports_off.helper",
-            c.relay_reports_off !== false,
-            (e) => card._updateLocal({ relay_reports_off: e.target.checked }),
-          )
-        : ""}
-      ${c.control_mode === "pulse"
-        ? renderToggleWithHelp(
-            card,
-            "send_endpoint_stop.label",
-            "send_endpoint_stop.helper",
-            c.send_endpoint_stop !== false,
-            (e) => card._updateLocal({ send_endpoint_stop: e.target.checked }),
-          )
-        : ""}
+      ${
+        c.control_mode === "toggle" || c.control_mode === "toggle_opposite"
+          ? renderToggleWithHelp(
+              card,
+              "relay_reports_off.label",
+              "relay_reports_off.helper",
+              c.relay_reports_off !== false,
+              (e) => card._updateLocal({ relay_reports_off: e.target.checked }),
+            )
+          : ""
+      }
+      ${
+        c.control_mode === "pulse"
+          ? renderToggleWithHelp(
+              card,
+              "send_endpoint_stop.label",
+              "send_endpoint_stop.helper",
+              c.send_endpoint_stop !== false,
+              (e) => card._updateLocal({ send_endpoint_stop: e.target.checked }),
+            )
+          : ""
+      }
       ${renderToggleWithHelp(
         card,
         "assumed_state.label",
@@ -401,8 +413,7 @@ export function renderTiltSupport(card, c) {
   // Inline and sequential modes drive the main open/close motor, so they
   // work on any wrapped cover and stay available regardless.
   const allowDualMotor =
-    c.control_mode !== "wrapped" ||
-    card._coverSupportsNativeTilt(c.cover_entity_id);
+    c.control_mode !== "wrapped" || card._coverSupportsNativeTilt(c.cover_entity_id);
   // The handlers reset dual_motor when it stops being backable, so in normal
   // UI flow allowDualMotor already covers it. Keep showing it when it is the
   // stored mode as a safety net for hand-edited configs or a wrapped cover
@@ -423,30 +434,33 @@ export function renderTiltSupport(card, c) {
         <option value="sequential_open" ?selected=${tiltMode === "sequential_open"}>
           ${card._t("tilt.sequential_open")}
         </option>
-        ${showDualMotor
-          ? html`
+        ${
+          showDualMotor
+            ? html`
               <option value="dual_motor" ?selected=${tiltMode === "dual_motor"}>
                 ${card._t("tilt.dual_motor")}
               </option>
             `
-          : ""}
+            : ""
+        }
         <option value="inline" ?selected=${tiltMode === "inline"}>
           ${card._t("tilt.inline")}
         </option>
       </select>
-      ${tiltMode === "sequential_close" || tiltMode === "dual_motor"
-        ? html`
+      ${
+        tiltMode === "sequential_close" || tiltMode === "dual_motor"
+          ? html`
             <div class="inline-field">
               <ha-formfield .label=${card._t("tilt.close_includes_tilt")}>
                 <ha-switch
                   .checked=${c.close_includes_tilt !== false}
-                  @change=${(e) =>
-                    card._updateLocal({ close_includes_tilt: e.target.checked })}
+                  @change=${(e) => card._updateLocal({ close_includes_tilt: e.target.checked })}
                 ></ha-switch>
               </ha-formfield>
             </div>
           `
-        : ""}
+          : ""
+      }
     </div>
   `;
 }
@@ -457,36 +471,41 @@ export function renderTiltMotorSection(card, c) {
   return html`
     <div class="section">
       <div class="field-label">${card._switchLabel("tilt_motor.label", c.control_mode)}</div>
-      ${c.control_mode !== "wrapped" ? html`
+      ${
+        c.control_mode !== "wrapped"
+          ? html`
       <div class="entity-grid">
         <ha-entity-picker
           .hass=${card.hass}
           .value=${c.tilt_open_switch || ""}
           .includeDomains=${switchPickerDomains(c.control_mode)}
           label=${card._switchLabel("tilt_motor.open_switch", c.control_mode)}
-          @value-changed=${(e) =>
-            card._onSwitchEntityChange("tilt_open_switch", e)}
+          @value-changed=${(e) => card._onSwitchEntityChange("tilt_open_switch", e)}
         ></ha-entity-picker>
         <ha-entity-picker
           .hass=${card.hass}
           .value=${c.tilt_close_switch || ""}
           .includeDomains=${switchPickerDomains(c.control_mode)}
           label=${card._switchLabel("tilt_motor.close_switch", c.control_mode)}
-          @value-changed=${(e) =>
-            card._onSwitchEntityChange("tilt_close_switch", e)}
+          @value-changed=${(e) => card._onSwitchEntityChange("tilt_close_switch", e)}
         ></ha-entity-picker>
-        ${c.control_mode === "pulse" ? html`
+        ${
+          c.control_mode === "pulse"
+            ? html`
         <ha-entity-picker
           .hass=${card.hass}
           .value=${c.tilt_stop_switch || ""}
           .includeDomains=${switchPickerDomains(c.control_mode)}
           label=${card._switchLabel("tilt_motor.stop_switch", c.control_mode)}
-          @value-changed=${(e) =>
-            card._onSwitchEntityChange("tilt_stop_switch", e)}
+          @value-changed=${(e) => card._onSwitchEntityChange("tilt_stop_switch", e)}
         ></ha-entity-picker>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
-      ` : ""}
+      `
+          : ""
+      }
       <div class="dual-motor-config">
         ${renderTextfield({
           type: "number",
@@ -510,10 +529,7 @@ export function renderTiltMotorSection(card, c) {
           step: "1",
           label: card._t("tilt_motor.max_allowed_position"),
           hint: card._t("tilt_motor.max_allowed_helper"),
-          value:
-            c.max_tilt_allowed_position != null
-              ? String(c.max_tilt_allowed_position)
-              : "",
+          value: c.max_tilt_allowed_position != null ? String(c.max_tilt_allowed_position) : "",
           onChange: (e) => {
             const v = e.target.value.trim();
             card._updateLocal({
@@ -550,7 +566,11 @@ export function renderTimingRow(card, [labelKey, key, value, min = 0]) {
 }
 
 export function renderTimingTable(card, c) {
-  const hasTiltTimes = c.tilt_mode === "sequential_close" || c.tilt_mode === "sequential_open" || c.tilt_mode === "dual_motor" || c.tilt_mode === "inline";
+  const hasTiltTimes =
+    c.tilt_mode === "sequential_close" ||
+    c.tilt_mode === "sequential_open" ||
+    c.tilt_mode === "dual_motor" ||
+    c.tilt_mode === "inline";
 
   const travelRows = [
     ["timing.travel_time_close", "travel_time_close", c.travel_time_close, 0.1],
@@ -568,11 +588,7 @@ export function renderTimingTable(card, c) {
   const sendsEndpointStop =
     mode === "switch" || (mode === "pulse" && c.send_endpoint_stop !== false);
   if (sendsEndpointStop) {
-    travelRows.push([
-      "timing.endpoint_runon_time",
-      "endpoint_runon_time",
-      c.endpoint_runon_time,
-    ]);
+    travelRows.push(["timing.endpoint_runon_time", "endpoint_runon_time", c.endpoint_runon_time]);
   }
 
   const tiltRows = [
@@ -594,7 +610,9 @@ export function renderTimingTable(card, c) {
           ${travelRows.map((row) => renderTimingRow(card, row))}
         </tbody>
       </table>
-      ${hasTiltTimes ? html`
+      ${
+        hasTiltTimes
+          ? html`
       <table class="timing-table" style="margin-top: 8px;">
         <thead>
           <tr>
@@ -606,14 +624,20 @@ export function renderTimingTable(card, c) {
           ${tiltRows.map((row) => renderTimingRow(card, row))}
         </tbody>
       </table>
-      ` : ""}
+      `
+          : ""
+      }
     </div>
   `;
 }
 
 export function renderPositionReset(card) {
   const tiltMode = card._config?.tilt_mode || "none";
-  const hasIndependentTilt = tiltMode === "sequential_close" || tiltMode === "sequential_open" || tiltMode === "dual_motor" || tiltMode === "inline";
+  const hasIndependentTilt =
+    tiltMode === "sequential_close" ||
+    tiltMode === "sequential_open" ||
+    tiltMode === "dual_motor" ||
+    tiltMode === "inline";
 
   return html`
     <div class="section">
@@ -621,7 +645,9 @@ export function renderPositionReset(card) {
       <div class="helper-text">
         ${card._t("position.helper")}
       </div>
-      ${!card._hasTiltMotor() ? html`
+      ${
+        !card._hasTiltMotor()
+          ? html`
         <div class="cover-controls">
           <ha-button title=${card._t("controls.open")} @click=${() => card._onCoverCommand("open_cover")}>
             <ha-icon icon="mdi:window-shutter-open" style="--mdc-icon-size: 18px;"></ha-icon>
@@ -633,7 +659,8 @@ export function renderPositionReset(card) {
             <ha-icon icon="mdi:window-shutter" style="--mdc-icon-size: 18px;"></ha-icon>
           </ha-button>
         </div>
-      ` : html`
+      `
+          : html`
         <div class="cover-controls-wrapper">
           <div class="cover-controls">
             <span class="controls-label">${card._t("controls.cover_label")}</span>
@@ -660,7 +687,8 @@ export function renderPositionReset(card) {
             </ha-button>
           </div>
         </div>
-      `}
+      `
+      }
       <div class="cal-form">
         <div class="cal-field">
           <select
@@ -670,14 +698,16 @@ export function renderPositionReset(card) {
           >
             <option value="unknown" ?selected=${card._knownPosition === "unknown"}>${card._t("position.unknown")}</option>
             <option value="open" ?selected=${card._knownPosition === "open"}>${card._t("position.open")}</option>
-            ${hasIndependentTilt
-              ? html`
+            ${
+              hasIndependentTilt
+                ? html`
                   <option value="closed_tilt_open" ?selected=${card._knownPosition === "closed_tilt_open"}>${card._t("position.closed_tilt_open")}</option>
                   <option value="closed_tilt_closed" ?selected=${card._knownPosition === "closed_tilt_closed"}>${card._t("position.closed_tilt_closed")}</option>
                 `
-              : html`
+                : html`
                   <option value="closed" ?selected=${card._knownPosition === "closed"}>${card._t("position.closed")}</option>
-                `}
+                `
+            }
           </select>
         </div>
       </div>
@@ -689,14 +719,16 @@ export function renderCalibration(card, calibrating) {
   const state = card._getEntityState();
   const attrs = state?.attributes || {};
   const tiltMode = card._config?.tilt_mode || "none";
-  const hasTiltCalibration = tiltMode === "sequential_close" || tiltMode === "sequential_open" || tiltMode === "dual_motor" || tiltMode === "inline";
+  const hasTiltCalibration =
+    tiltMode === "sequential_close" ||
+    tiltMode === "sequential_open" ||
+    tiltMode === "dual_motor" ||
+    tiltMode === "inline";
 
-  const availableAttributes = TIMING_ATTRIBUTES.filter(
-    ([key]) => {
-      if (!hasTiltCalibration && key.startsWith("tilt_")) return false;
-      return true;
-    }
-  );
+  const availableAttributes = TIMING_ATTRIBUTES.filter(([key]) => {
+    if (!hasTiltCalibration && key.startsWith("tilt_")) return false;
+    return true;
+  });
 
   const c = card._config;
   const hasTravel = c?.travel_time_close || c?.travel_time_open;
@@ -758,8 +790,7 @@ export function renderCalibration(card, calibrating) {
     // finishing during the stepped phase records a hard-coded 0. Gate Finish
     // until the calibration reports its final step. Simple travel/tilt-time
     // tests have no stepped phase, so their Finish stays enabled throughout.
-    const isOverheadTest =
-      calAttr === "travel_startup_delay" || calAttr === "tilt_startup_delay";
+    const isOverheadTest = calAttr === "travel_startup_delay" || calAttr === "tilt_startup_delay";
     const finishDisabled = isOverheadTest && !attrs.calibration_final_step;
     return html`
       <div class="section calibration-active">
@@ -769,15 +800,17 @@ export function renderCalibration(card, calibrating) {
         </div>
         <div class="cal-active-body">
           <strong>${calLabel}</strong>
-          ${attrs.calibration_final_step
-            ? html`<span class="cal-step"
+          ${
+            attrs.calibration_final_step
+              ? html`<span class="cal-step"
                 >${card._t("calibration.final_step")}</span
               >`
-            : attrs.calibration_step
-              ? html`<span class="cal-step"
+              : attrs.calibration_step
+                ? html`<span class="cal-step"
                   >${card._t("calibration.step", { step: attrs.calibration_step })}</span
                 >`
-              : ""}
+                : ""
+          }
           <div class="cal-active-buttons">
             <ha-button @click=${() => card._onStopCalibration(true)}
               >${card._t("calibration.cancel")}</ha-button
@@ -805,7 +838,7 @@ export function renderCalibration(card, calibrating) {
           >
             ${availableAttributes.map(
               ([key, labelKey]) =>
-                html`<option value=${key} ?disabled=${disabledKeys.has(key)}>${card._t(labelKey)}</option>`
+                html`<option value=${key} ?disabled=${disabledKeys.has(key)}>${card._t(labelKey)}</option>`,
             )}
           </select>
         </div>
@@ -813,13 +846,15 @@ export function renderCalibration(card, calibrating) {
           >${card._t("calibration.start")}</ha-button
         >
       </div>
-      ${card._knownPosition === "unknown"
-        ? html`<div class="helper-text" style="margin-top: 8px;">
+      ${
+        card._knownPosition === "unknown"
+          ? html`<div class="helper-text" style="margin-top: 8px;">
             ${card._t("calibration.set_position_first")}
           </div>`
-        : html`<div class="helper-text" style="margin-top: 8px;">
+          : html`<div class="helper-text" style="margin-top: 8px;">
             ${card._getCalibrationHint()}
-          </div>`}
+          </div>`
+      }
     </div>
   `;
 }
