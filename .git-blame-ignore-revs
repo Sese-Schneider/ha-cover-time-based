@@ -1,0 +1,7 @@
+# Commits that only reformat code (no behaviour change) — skipped by git blame.
+#
+# GitHub's blame view uses this file automatically. To use it locally:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: reformat all JS with Prettier + enforce in CI (#227)
+979367188b836c0f9000bf0bb52347c25d0f7113
