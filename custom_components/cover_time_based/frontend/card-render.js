@@ -739,6 +739,14 @@ export function renderCalibration(card, calibrating) {
   if (calibrating) {
     const calAttr = attrs.calibration_attribute || card._calibratingAttribute;
     const calLabel = card._t(`timing.${calAttr}`);
+    // The startup-delay ("overhead") test steps the motor before a final
+    // continuous run; only that final run yields a real measurement, and
+    // finishing during the stepped phase records a hard-coded 0. Gate Finish
+    // until the calibration reports its final step. Simple travel/tilt-time
+    // tests have no stepped phase, so their Finish stays enabled throughout.
+    const isOverheadTest =
+      calAttr === "travel_startup_delay" || calAttr === "tilt_startup_delay";
+    const finishDisabled = isOverheadTest && !attrs.calibration_final_step;
     return html`
       <div class="section calibration-active">
         <div class="field-label cal-label">
@@ -760,7 +768,10 @@ export function renderCalibration(card, calibrating) {
             <ha-button @click=${() => card._onStopCalibration(true)}
               >${card._t("calibration.cancel")}</ha-button
             >
-            <ha-button unelevated @click=${() => card._onStopCalibration(false)}
+            <ha-button
+              unelevated
+              ?disabled=${finishDisabled}
+              @click=${() => card._onStopCalibration(false)}
               >${card._t("calibration.finish")}</ha-button
             >
           </div>
