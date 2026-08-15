@@ -14,6 +14,7 @@ from custom_components.cover_time_based.const import (
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SEND_ENDPOINT_STOP,
+    CONF_WAIT_FOR_RELAY_FEEDBACK,
 )
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -112,6 +113,7 @@ def make_cover(make_hass, _mock_position_store):
         force_time_based_position=None,
         reports_command_not_endpoint=None,
         force_endpoint_redrive=None,
+        wait_for_relay_feedback=None,
         recalibrate_before_position=None,
         invert=None,
     ):
@@ -177,6 +179,8 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_REPORTS_COMMAND_NOT_ENDPOINT] = reports_command_not_endpoint
         if force_endpoint_redrive is not None:
             options[CONF_FORCE_ENDPOINT_REDRIVE] = force_endpoint_redrive
+        if wait_for_relay_feedback is not None:
+            options[CONF_WAIT_FOR_RELAY_FEEDBACK] = wait_for_relay_feedback
         if recalibrate_before_position is not None:
             options[CONF_RECALIBRATE_BEFORE_POSITION] = recalibrate_before_position
         if invert is not None:

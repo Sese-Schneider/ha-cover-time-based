@@ -613,9 +613,9 @@ test("switch mode shows assumed-state toggle", async () => {
     activeTab: "device",
   });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // Exactly 3 toggles: assumed-state, force-endpoint-redrive and
-  // recalibrate-before-position (switch mode has no other toggle-with-help)
-  expect(toggles.length).toBe(3);
+  // Exactly 4 toggles: assumed-state, force-endpoint-redrive,
+  // wait-for-relay-feedback (switch-mode only) and recalibrate-before-position
+  expect(toggles.length).toBe(4);
 });
 
 // ---------------------------------------------------------------------------

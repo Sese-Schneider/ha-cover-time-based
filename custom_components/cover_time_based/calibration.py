@@ -44,4 +44,8 @@ class CalibrationState:
     saved_startup_delay: float | None = None
     timeout_task: Task | None = field(default=None, repr=False)
     automation_task: Task | None = field(default=None, repr=False)
+    # Waits for the driving relay's confirmation echo (wait_for_relay_feedback)
+    # to re-baseline the timing stamp, so a calibrated time excludes the Zigbee
+    # round-trip the tracker also excludes at runtime.
+    feedback_task: Task | None = field(default=None, repr=False)
     uses_tilt_motor: bool = False

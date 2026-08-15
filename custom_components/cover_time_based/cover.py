@@ -45,6 +45,7 @@ from .const import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    CONF_WAIT_FOR_RELAY_FEEDBACK,
     DEFAULT_ASSUMED_STATE,
     DEFAULT_CLOSE_INCLUDES_TILT,
     DEFAULT_ENDPOINT_RUNON_TIME,
@@ -56,6 +57,7 @@ from .const import (
     DEFAULT_RELAY_REPORTS_OFF,
     DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
+    DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
 from .helpers import resolve_entity
@@ -367,6 +369,9 @@ def _create_cover_from_options(options, device_id="", name=""):
         "assumed_state": options.get(CONF_ASSUMED_STATE, DEFAULT_ASSUMED_STATE),
         "force_endpoint_redrive": options.get(
             CONF_FORCE_ENDPOINT_REDRIVE, DEFAULT_FORCE_ENDPOINT_REDRIVE
+        ),
+        "wait_for_relay_feedback": options.get(
+            CONF_WAIT_FOR_RELAY_FEEDBACK, DEFAULT_WAIT_FOR_RELAY_FEEDBACK
         ),
         "recalibrate_before_position": options.get(
             CONF_RECALIBRATE_BEFORE_POSITION, DEFAULT_RECALIBRATE_BEFORE_POSITION

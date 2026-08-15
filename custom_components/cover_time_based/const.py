@@ -80,6 +80,12 @@ DEFAULT_SEND_ENDPOINT_STOP = True
 CONF_FORCE_ENDPOINT_REDRIVE = "force_endpoint_redrive"
 DEFAULT_FORCE_ENDPOINT_REDRIVE = False
 
+# When True, movement commands wait for the underlying relay to confirm its state
+# change before proceeding. Behaviour is implemented elsewhere; this constant is
+# the plumbed per-cover config option.
+CONF_WAIT_FOR_RELAY_FEEDBACK = "wait_for_relay_feedback"
+DEFAULT_WAIT_FOR_RELAY_FEEDBACK = False
+
 # All modes. When True, a set_cover_position command first drives the cover
 # fully open — a physical datum, since the motor stalls against its limit — and
 # only then moves to the requested position. For a cover with no position

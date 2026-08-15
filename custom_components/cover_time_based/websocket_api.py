@@ -43,6 +43,7 @@ from .cover import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    CONF_WAIT_FOR_RELAY_FEEDBACK,
     CONTROL_MODE_PULSE,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
@@ -60,6 +61,7 @@ from .cover import (
     DEFAULT_RELAY_REPORTS_OFF,
     DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
+    DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
 )
 from .helpers import resolve_entity_or_none
 
@@ -72,6 +74,7 @@ _FIELD_MAP = {
     "relay_reports_off": CONF_RELAY_REPORTS_OFF,
     "send_endpoint_stop": CONF_SEND_ENDPOINT_STOP,
     "force_endpoint_redrive": CONF_FORCE_ENDPOINT_REDRIVE,
+    "wait_for_relay_feedback": CONF_WAIT_FOR_RELAY_FEEDBACK,
     "recalibrate_before_position": CONF_RECALIBRATE_BEFORE_POSITION,
     "open_switch_entity_id": CONF_OPEN_SWITCH_ENTITY_ID,
     "close_switch_entity_id": CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -235,6 +238,9 @@ async def ws_get_config(
             "force_endpoint_redrive": options.get(
                 CONF_FORCE_ENDPOINT_REDRIVE, DEFAULT_FORCE_ENDPOINT_REDRIVE
             ),
+            "wait_for_relay_feedback": options.get(
+                CONF_WAIT_FOR_RELAY_FEEDBACK, DEFAULT_WAIT_FOR_RELAY_FEEDBACK
+            ),
             "recalibrate_before_position": options.get(
                 CONF_RECALIBRATE_BEFORE_POSITION, DEFAULT_RECALIBRATE_BEFORE_POSITION
             ),
@@ -261,6 +267,7 @@ async def ws_get_config(
         vol.Optional("relay_reports_off"): vol.Any(None, bool),
         vol.Optional("send_endpoint_stop"): vol.Any(None, bool),
         vol.Optional("force_endpoint_redrive"): vol.Any(None, bool),
+        vol.Optional("wait_for_relay_feedback"): vol.Any(None, bool),
         vol.Optional("recalibrate_before_position"): vol.Any(None, bool),
         vol.Optional("open_switch_entity_id"): vol.Any(str, None),
         vol.Optional("close_switch_entity_id"): vol.Any(str, None),

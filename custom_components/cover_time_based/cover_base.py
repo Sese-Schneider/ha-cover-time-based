@@ -46,6 +46,7 @@ from .const import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    CONF_WAIT_FOR_RELAY_FEEDBACK,
     DIRECTION_CHANGE_DELAY,
 )
 from .cover_calibration import CalibrationMixin
@@ -60,6 +61,18 @@ from .tilt_strategies.planning import (
 from .travel_calculator import TravelCalculator, TravelStatus
 
 _LOGGER = logging.getLogger(__name__)
+
+# How long a feedback-gated move (wait_for_relay_feedback) waits for its relay's
+# ON confirmation echo before falling back to the inline command-fire start.
+# Generous relative to the few seconds a cold Zigbee mesh has been seen to take,
+# since the fallback only matters for a relay that never reports its state at all.
+RELAY_FEEDBACK_TIMEOUT = 10.0
+
+# Safety window the awaited relay's pending-echo count lives for while a feedback
+# wait is armed. Kept above RELAY_FEEDBACK_TIMEOUT so the timeout fires first: a
+# late echo is then still filtered as our own rather than reclassified as an
+# external press.
+RELAY_FEEDBACK_PENDING_TIMEOUT = 12.0
 
 # (task, cover) pairs for the external-state handlers currently running.
 #
@@ -118,12 +131,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         close_includes_tilt=True,
         assumed_state=True,
         force_endpoint_redrive=False,
+        wait_for_relay_feedback=False,
         recalibrate_before_position=False,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
         self._assumed_state = assumed_state
         self._force_endpoint_redrive = force_endpoint_redrive
+        self._wait_for_relay_feedback = wait_for_relay_feedback
         self._recalibrate_before_position = recalibrate_before_position
 
         self._tilt_strategy = tilt_strategy
@@ -197,6 +212,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_switch = {}
         self._pending_switch_timers = {}
         self._state_listener_unsubs = []
+        # Relay-feedback timing (wait_for_relay_feedback). Three short-lived
+        # fields spanning one deferred move:
+        #   _feedback_armed_entity — set by the _send_* that just energized a
+        #     relay OFF->ON; read and cleared by _begin_movement to decide
+        #     whether to defer tracking. Never outlives the send->begin hop.
+        #   _feedback_wait_entity / _feedback_wait_future — the relay whose ON
+        #     echo the deferred move (or a feedback-timed calibration drive) is
+        #     waiting on, and the future its confirming echo resolves. Live only
+        #     while the wait is in flight.
+        self._feedback_armed_entity: str | None = None
+        self._feedback_wait_entity: str | None = None
+        self._feedback_wait_future: asyncio.Future | None = None
 
         self.travel_calc = TravelCalculator(
             self._travel_time_close,
@@ -489,6 +516,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._min_movement_time is not None:
             attr[CONF_MIN_MOVEMENT_TIME] = self._min_movement_time
         attr[CONF_FORCE_ENDPOINT_REDRIVE] = self._force_endpoint_redrive
+        attr[CONF_WAIT_FOR_RELAY_FEEDBACK] = self._wait_for_relay_feedback
         attr[CONF_RECALIBRATE_BEFORE_POSITION] = self._recalibrate_before_position
         if self._calibration is not None:
             attr["calibration_active"] = True
@@ -2472,13 +2500,35 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         delay so its position stays put until the pre-step finishes.
         """
 
-        def start():
-            primary_calc.start_travel(target, delay=pre_step_delay)
+        def start(base_timestamp=None, extra_delay=0.0):
+            primary_calc.start_travel(
+                target,
+                delay=pre_step_delay + extra_delay,
+                base_timestamp=base_timestamp,
+            )
             if coupled_target is not None:
-                coupled_calc.start_travel(int(coupled_target))
+                # extra_delay (mechanical startup delay) applies to the coupled
+                # calc too: the old sleep-based path delayed the whole start
+                # callback, offsetting both calcs equally. pre_step_delay is the
+                # primary's alone — the coupled calc IS the pre-step.
+                coupled_calc.start_travel(
+                    int(coupled_target),
+                    delay=extra_delay,
+                    base_timestamp=base_timestamp,
+                )
             self.start_auto_updater()
 
-        self._start_movement(startup_delay, start)
+        # A _send_* that just energized a relay OFF->ON under
+        # wait_for_relay_feedback parks the start here until that relay's ON echo
+        # (or a timeout), instead of the fixed startup-delay sleep. The variable
+        # Zigbee round-trip then falls outside the tracked travel (issue #231).
+        feedback_entity = self._consume_feedback_arm()
+        if feedback_entity is not None:
+            self._startup_delay_task = self.hass.async_create_task(
+                self._execute_with_relay_feedback(feedback_entity, start, startup_delay)
+            )
+        else:
+            self._start_movement(startup_delay, start)
 
     def _start_movement(self, startup_delay, start_callback):
         """Start position tracking, optionally after a motor startup delay.
@@ -2892,6 +2942,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         travel reversal parked in its settle gap just as a travel command does.
         """
         self._supersede_movement()
+        # A fresh move must not inherit a relay-feedback arm left set by an
+        # earlier operation that armed but never reached _begin_movement (e.g.
+        # an endpoint resync). Otherwise a following suppress_start_command
+        # redrive — which fires no _send_* to re-arm — would read the stale arm
+        # and wait for an ON echo its already-latched relay will never send.
+        self._feedback_armed_entity = None
         was_restoring = self._tilt_restore_active
         was_pre_stepping = (
             self._pending_travel_target is not None
@@ -3467,10 +3523,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         and only when the relay call will actually flip state. Otherwise
         the orphan pending count consumes the next real state change.
         """
+        self._feedback_armed_entity = None
         if self._switch_is_on(self._tilt_close_switch_id):
             self._mark_switch_pending(self._tilt_close_switch_id, 1)
         if not self._switch_is_on(self._tilt_open_switch_id):
-            self._mark_switch_pending(self._tilt_open_switch_id, 1)
+            self._mark_driving_relay_pending(self._tilt_open_switch_id)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -3489,10 +3546,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         See _send_tilt_open for the pending-count rationale.
         """
+        self._feedback_armed_entity = None
         if self._switch_is_on(self._tilt_open_switch_id):
             self._mark_switch_pending(self._tilt_open_switch_id, 1)
         if not self._switch_is_on(self._tilt_close_switch_id):
-            self._mark_switch_pending(self._tilt_close_switch_id, 1)
+            self._mark_driving_relay_pending(self._tilt_close_switch_id)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -3542,8 +3600,69 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         state = self.hass.states.get(entity_id)
         return state is not None and state.state == "on"
 
-    def _mark_switch_pending(self, entity_id, expected_transitions):
-        """Mark a switch as having pending echo transitions to ignore."""
+    def _switch_is_optimistic(self, entity_id) -> bool:
+        """Whether the underlying switch reports optimistic (assumed) state.
+
+        An optimistic switch writes its new state immediately, before the
+        device confirms, so its state-change echo proves nothing about the
+        relay — a feedback-gated move must fall back to the inline start.
+        """
+        state = self.hass.states.get(entity_id)
+        return bool(state is not None and state.attributes.get("assumed_state"))
+
+    def _arm_relay_feedback(self, entity_id) -> bool:
+        """Arm a relay-feedback wait for a relay this move is energizing.
+
+        Records ``entity_id`` as the relay whose ON echo should start tracking,
+        and returns True, only when ``wait_for_relay_feedback`` is enabled and
+        the relay actually reports its state (not optimistic). Otherwise clears
+        the arm and returns False, so the caller falls back to the inline
+        command-fire start used everywhere today. Called from the ``_send_*``
+        method that flips the relay, and consumed by ``_begin_movement``.
+        """
+        self._feedback_armed_entity = None
+        if not self._wait_for_relay_feedback:
+            return False
+        if entity_id is None or self._switch_is_optimistic(entity_id):
+            return False
+        self._feedback_armed_entity = entity_id
+        return True
+
+    def _consume_feedback_arm(self):
+        """Read and clear the arm the preceding ``_send_*`` left, if any.
+
+        The single hand-off channel from a ``_send_*`` (which knows it energized
+        a relay) to the deferral point (``_begin_movement`` or a feedback-timed
+        calibration drive), consumed exactly once.
+        """
+        entity_id = self._feedback_armed_entity
+        self._feedback_armed_entity = None
+        return entity_id
+
+    def _mark_driving_relay_pending(self, entity_id):
+        """Mark the direction relay a move is energizing OFF->ON as pending.
+
+        Call only when the relay will actually flip (inside the
+        ``if not <relay>_is_on`` guard). Under ``wait_for_relay_feedback`` this
+        also arms the wait on the relay's ON echo and widens the echo's safety
+        window (``RELAY_FEEDBACK_PENDING_TIMEOUT``) so a slow confirmation is
+        still filtered as our own rather than read as an external press.
+        """
+        if self._arm_relay_feedback(entity_id):
+            self._mark_switch_pending(
+                entity_id, 1, timeout=RELAY_FEEDBACK_PENDING_TIMEOUT
+            )
+        else:
+            self._mark_switch_pending(entity_id, 1)
+
+    def _mark_switch_pending(self, entity_id, expected_transitions, timeout=5):
+        """Mark a switch as having pending echo transitions to ignore.
+
+        ``timeout`` is the safety window (seconds) after which a still-unmatched
+        count is cleared. The default matches a promptly-reporting relay; a
+        feedback-gated move extends it (RELAY_FEEDBACK_PENDING_TIMEOUT) so the
+        awaited echo stays classifiable as our own for the full feedback wait.
+        """
         self._pending_switch[entity_id] = (
             self._pending_switch.get(entity_id, 0) + expected_transitions
         )
@@ -3557,7 +3676,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if entity_id in self._pending_switch_timers:
             self._pending_switch_timers[entity_id]()
 
-        # Safety timeout: clear pending after 5 seconds
+        # Safety timeout: clear pending after the window elapses
         @callback
         def _clear_pending(_now):
             if entity_id in self._pending_switch:
@@ -3566,8 +3685,76 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._pending_switch_timers.pop(entity_id, None)
 
         self._pending_switch_timers[entity_id] = async_call_later(
-            self.hass, 5, _clear_pending
+            self.hass, timeout, _clear_pending
         )
+
+    def _resolve_relay_feedback(self, entity_id, new_val, new_state) -> None:
+        """Start a parked feedback-gated move when its relay confirms.
+
+        Called from the echo-filter branch of _async_switch_state_changed: the
+        relay reporting ON *is* the "motor now energized" signal. Resolves the
+        waiting future with the echo's ``last_changed`` timestamp so tracking
+        starts from when the relay actually switched, not when the listener ran.
+        """
+        future = self._feedback_wait_future
+        if (
+            future is not None
+            and not future.done()
+            and entity_id == self._feedback_wait_entity
+            and new_val == "on"
+        ):
+            last_changed = getattr(new_state, "last_changed", None)
+            base_ts = last_changed.timestamp() if last_changed is not None else None
+            self._log(
+                "_resolve_relay_feedback :: %s confirmed on (base_ts=%s)",
+                entity_id,
+                base_ts,
+            )
+            future.set_result(base_ts)
+
+    async def _wait_for_relay_echo(self, entity_id, timeout):
+        """Await ``entity_id``'s ON echo; return its last_changed ts, or None.
+
+        Returns None on timeout (relay never confirmed) so the caller falls back
+        to a command-fire timeline. Uses the running loop's future — the mock
+        hass in unit tests has no real ``hass.loop``.
+        """
+        future = asyncio.get_running_loop().create_future()
+        self._feedback_wait_entity = entity_id
+        self._feedback_wait_future = future
+        try:
+            return await asyncio.wait_for(future, timeout)
+        except TimeoutError:
+            self._log(
+                "_wait_for_relay_echo :: %s did not confirm within %ss",
+                entity_id,
+                timeout,
+            )
+            return None
+        finally:
+            self._feedback_wait_entity = None
+            self._feedback_wait_future = None
+
+    async def _execute_with_relay_feedback(
+        self, entity_id, start_callback, startup_delay
+    ):
+        """Defer tracking start until the relay confirms it switched (or timeout).
+
+        Runs as ``_startup_delay_task`` so every consumer of that task —
+        _movement_started, the reverse/same-direction conflict blocks, and
+        _cancel_startup_delay_task — treats a feedback wait exactly like a fixed
+        startup delay. On confirmation, tracking is timestamped from the echo;
+        the fixed mechanical ``startup_delay`` is then folded on top of the same
+        anchor. On timeout the move starts inline, as it does with the option off.
+        """
+        try:
+            base_ts = await self._wait_for_relay_echo(entity_id, RELAY_FEEDBACK_TIMEOUT)
+            start_callback(base_timestamp=base_ts, extra_delay=startup_delay or 0.0)
+            self._startup_delay_task = None
+        except asyncio.CancelledError:
+            self._log("_execute_with_relay_feedback :: cancelled")
+            self._startup_delay_task = None
+            raise
 
     def _unmark_switch_pending(self, entity_id, count=1):
         """Drop ``count`` pending echo transitions previously marked.
@@ -3648,6 +3835,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 "_async_switch_state_changed :: echo filtered, remaining=%s",
                 self._pending_switch.get(entity_id, 0),
             )
+            # This own-echo is also the relay confirming it switched: if a
+            # feedback-gated move is parked on this relay's ON transition, start
+            # its tracking now (issue #231). Harmless no-op otherwise.
+            self._resolve_relay_feedback(entity_id, new_val, new_state)
             return
 
         # Skip external state handling during calibration — calibration drives

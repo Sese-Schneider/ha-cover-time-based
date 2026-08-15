@@ -1,3 +1,9 @@
+## 4.12.0 (unreleased)
+
+### Features
+
+- **Added a per-cover "Wait for relay confirmation before tracking" option** ([#231](https://github.com/Sese-Schneider/ha-cover-time-based/issues/231)): for **Switch (latching)** covers driven through a relay that reports its own state (e.g. a Zigbee or Z-Wave relay), the position timer can now start when the relay confirms it switched — its state-change echo — instead of the instant the command is queued. The relay command is sent without waiting for the relay, so on a slow or cold mesh it can take seconds to actually reach the motor; until now that variable delay was counted as travel and the tracked position ran ahead of the physical cover, resyncing only when driven to a fully-open or fully-closed endpoint. With the option on, the round-trip falls outside the tracked travel, and the fixed **Travel startup delay** goes back to meaning only the motor's mechanical spin-up. Calibration honours the same signal, so a travel or tilt **time** measured with the option on isn't inflated by the round-trip either. Off by default; it needs a relay that reports its real state (an optimistic/assumed switch is skipped, starting inline as before), and a relay that never confirms falls back to the previous behaviour after a short timeout. Applies to travel and tilt moves in **Switch** mode only.
+
 ## 4.11.0 (2026-08-04)
 
 ### Features

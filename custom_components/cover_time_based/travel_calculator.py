@@ -115,7 +115,12 @@ class TravelCalculator:
         self._position_confirmed = False
         self.travel_direction = TravelStatus.STOPPED
 
-    def start_travel(self, _travel_to_position: int, delay: float = 0.0) -> None:
+    def start_travel(
+        self,
+        _travel_to_position: int,
+        delay: float = 0.0,
+        base_timestamp: float | None = None,
+    ) -> None:
         """Start traveling to position.
 
         Args:
@@ -123,12 +128,20 @@ class TravelCalculator:
             delay: Seconds to wait before tracking starts. Used for
                 sequential multi-step movements where a pre-step (e.g. tilt)
                 must complete before this calculator begins progressing.
+            base_timestamp: Unix timestamp the move actually began at, instead
+                of ``time.time()``. Used for relay-feedback timing, where the
+                motor got power at the switch echo's ``last_changed`` rather
+                than when the command was queued; the Zigbee round-trip then
+                falls outside the tracked travel. A base in the past means the
+                move is already partly complete; ``delay`` is still added on
+                top (e.g. mechanical spin-up folded into the same anchor).
         """
         if self._last_known_position is None:
             self.set_position(_travel_to_position)
             return
         self.stop()
-        self._last_known_position_timestamp = time.time() + delay
+        base = time.time() if base_timestamp is None else base_timestamp
+        self._last_known_position_timestamp = base + delay
         self._travel_to_position = _travel_to_position
         self._position_confirmed = False
 
