@@ -44,6 +44,10 @@ class CalibrationMixin:
         tilt_calc: TravelCalculator
 
         async def _async_handle_command(self, _command: str, *_args: Any) -> None: ...
+        def _consume_feedback_arm(self) -> str | None: ...
+        async def _wait_for_relay_echo(
+            self, entity_id: str, timeout: float
+        ) -> float | None: ...
         async def _send_stop(self) -> None: ...
         async def _send_tilt_open(self) -> None: ...
         async def _send_tilt_close(self) -> None: ...
@@ -163,6 +167,35 @@ class CalibrationMixin:
         else:
             await self._async_handle_command(move_command)
 
+    def _arm_calibration_feedback_timing(self, field: str) -> None:
+        """Re-baseline a calibration timing stamp on the relay's confirmation.
+
+        When wait_for_relay_feedback is on, the ``_send_*`` the drive just made
+        armed ``_feedback_armed_entity`` with the relay it energized. Wait for
+        that relay's ON echo (in the background) and re-stamp ``field``
+        (``started_at`` for a time test, ``continuous_start`` for the overhead
+        test) to the confirmation, so the Zigbee round-trip is excluded from the
+        measured time — the same delay the tracker now excludes at runtime.
+        """
+        entity_id = self._consume_feedback_arm()
+        if entity_id is None or self._calibration is None:
+            return
+        self._calibration.feedback_task = self.hass.async_create_task(
+            self._await_calibration_feedback(entity_id, field)
+        )
+
+    async def _await_calibration_feedback(self, entity_id: str, field: str) -> None:
+        from .cover_base import RELAY_FEEDBACK_TIMEOUT
+
+        confirmed = await self._wait_for_relay_echo(entity_id, RELAY_FEEDBACK_TIMEOUT)
+        # None means the relay never confirmed: keep the command-fire baseline,
+        # exactly as it behaves with the option off.
+        if confirmed is not None and self._calibration is not None:
+            setattr(self._calibration, field, time.monotonic())
+            _LOGGER.debug(
+                "calibration: %s re-baselined on %s confirmation", field, entity_id
+            )
+
     async def _calibration_stop(self) -> None:
         assert self._calibration is not None
         if self._calibration.uses_tilt_motor:
@@ -184,6 +217,7 @@ class CalibrationMixin:
             move_command = SERVICE_OPEN_COVER
         self._calibration.move_command = move_command
         await self._calibration_drive(move_command)
+        self._arm_calibration_feedback_timing("started_at")
 
     def _tilt_calibration_command(self, closing_tilt: bool) -> str:
         """Resolve the relay direction for tilt calibration.
@@ -311,6 +345,7 @@ class CalibrationMixin:
             self.async_write_ha_state()
             self._calibration.continuous_start = time.monotonic()
             await self._calibration_drive(move_command)
+            self._arm_calibration_feedback_timing("continuous_start")
 
             # Wait indefinitely until user calls stop_calibration
             while True:
@@ -372,6 +407,7 @@ class CalibrationMixin:
         for task in (
             self._calibration.timeout_task,
             self._calibration.automation_task,
+            self._calibration.feedback_task,
         ):
             if task is not None and not task.done():
                 task.cancel()

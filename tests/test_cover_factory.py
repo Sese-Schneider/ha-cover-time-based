@@ -29,6 +29,7 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVEL_TIME_OPEN,
     CONF_TRAVELLING_TIME_DOWN,
     CONF_TRAVELLING_TIME_UP,
+    CONF_WAIT_FOR_RELAY_FEEDBACK,
     CONTROL_MODE_PULSE,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
@@ -249,6 +250,31 @@ class TestCreateCoverFromOptions:
         assert cover._tilting_time_close == 5.0
         assert cover._tilting_time_open == 4.0
         assert cover._min_movement_time == 0.5
+
+    def test_wait_for_relay_feedback_from_options(self):
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                CONF_WAIT_FOR_RELAY_FEEDBACK: True,
+            },
+            device_id="myid",
+            name="My Cover",
+        )
+        assert cover._wait_for_relay_feedback is True
+
+    def test_wait_for_relay_feedback_defaults_false(self):
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+            },
+            device_id="myid",
+            name="My Cover",
+        )
+        assert cover._wait_for_relay_feedback is False
 
 
 # ===================================================================

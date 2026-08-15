@@ -145,10 +145,14 @@ class SwitchModeCover(SwitchCoverTimeBased):
         # when the relay is already ON — e.g. a continuation re-driving the
         # user's still-latched relay — and that orphan then swallows the next
         # real event (such as the user switching it off to stop).
+        # Only the driving relay turning ON confirms the motor is energized; the
+        # opposite relay's turn_off is just the interlock. _mark_driving_relay_pending
+        # marks that ON echo and, under feedback, arms the wait on it.
+        self._feedback_armed_entity = None
         if self._switch_is_on(self._close_switch_entity_id):
             self._mark_switch_pending(self._close_switch_entity_id, 1)
         if not self._switch_is_on(self._open_switch_entity_id):
-            self._mark_switch_pending(self._open_switch_entity_id, 1)
+            self._mark_driving_relay_pending(self._open_switch_entity_id)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -164,10 +168,11 @@ class SwitchModeCover(SwitchCoverTimeBased):
 
     async def _send_close(self) -> None:
         # See _send_open: mark only when the relay will actually flip state.
+        self._feedback_armed_entity = None
         if self._switch_is_on(self._open_switch_entity_id):
             self._mark_switch_pending(self._open_switch_entity_id, 1)
         if not self._switch_is_on(self._close_switch_entity_id):
-            self._mark_switch_pending(self._close_switch_entity_id, 1)
+            self._mark_driving_relay_pending(self._close_switch_entity_id)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",

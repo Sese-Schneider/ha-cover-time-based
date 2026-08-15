@@ -30,6 +30,7 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVEL_STARTUP_DELAY,
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
+    CONF_WAIT_FOR_RELAY_FEEDBACK,
     CONTROL_MODE_PULSE,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
@@ -2594,6 +2595,97 @@ class TestForceEndpointRedriveRoundTrip:
             }
         )
         assert validated["force_endpoint_redrive"] is True
+
+
+class TestWaitForRelayFeedbackRoundTrip:
+    """wait_for_relay_feedback is returned in get_config and saved in update_config."""
+
+    @pytest.mark.asyncio
+    async def test_get_config_defaults_to_false(self):
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["wait_for_relay_feedback"] is False
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_stored_true(self):
+        hass, _, entity_reg = _make_hass(options={CONF_WAIT_FOR_RELAY_FEEDBACK: True})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["wait_for_relay_feedback"] is True
+
+    @pytest.mark.asyncio
+    async def test_update_config_saves_true(self):
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "wait_for_relay_feedback": True,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_options[CONF_WAIT_FOR_RELAY_FEEDBACK] is True
+
+    def test_field_map_contains_wait_for_relay_feedback(self):
+        from custom_components.cover_time_based.websocket_api import _FIELD_MAP
+
+        assert _FIELD_MAP["wait_for_relay_feedback"] == CONF_WAIT_FOR_RELAY_FEEDBACK
+
+    def test_update_schema_accepts_wait_for_relay_feedback(self):
+        # Guards the schema/_FIELD_MAP pair: a real websocket update_config
+        # carrying `wait_for_relay_feedback` must validate, else persistence
+        # is silently rejected.
+        schema = ws_update_config._ws_schema
+        validated = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": "cover.x",
+                "wait_for_relay_feedback": True,
+            }
+        )
+        assert validated["wait_for_relay_feedback"] is True
 
 
 class TestDirectionChangeDelayRemoved:

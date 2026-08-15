@@ -391,6 +391,17 @@ export function renderInputEntities(card, c) {
         c.force_endpoint_redrive === true,
         (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
       )}
+      ${
+        (c.control_mode || "switch") === "switch"
+          ? renderToggleWithHelp(
+              card,
+              "wait_for_relay_feedback.label",
+              "wait_for_relay_feedback.helper",
+              c.wait_for_relay_feedback === true,
+              (e) => card._updateLocal({ wait_for_relay_feedback: e.target.checked }),
+            )
+          : ""
+      }
       ${renderToggleWithHelp(
         card,
         "recalibrate_before_position.label",
