@@ -22,6 +22,7 @@ from homeassistant.const import (
     SERVICE_OPEN_COVER,
 )
 
+from .cover_base import RELAY_FEEDBACK_PENDING_TIMEOUT
 from .cover_switch import SwitchCoverTimeBased
 
 
@@ -70,7 +71,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             return True
         return False
 
-    async def _pulse_relay(self, entity_id):
+    async def _pulse_relay(self, entity_id, arm_feedback=False):
         """Pulse a relay ON with a guaranteed rising edge.
 
         A toggle motor controller acts on the relay's OFF→ON edge, so a plain
@@ -98,8 +99,21 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         Each branch logs the relay's reported state and whether its ``turn_on``
         can carry a rising edge, so a user-supplied debug log shows which
         pulses could have moved the motor (issue #153).
+
+        When ``arm_feedback`` is set (a movement send, not a stop) and a genuine
+        rising edge will be produced, arm ``wait_for_relay_feedback`` on this
+        relay's ON echo and widen its pending window so a slow confirmation
+        stays classifiable as our own for the whole feedback wait (issue #231).
+        The no-rising-edge branch never arms — there is no echo to gate on.
         """
         is_on = self._switch_is_on(entity_id)
+        produces_edge = (not is_on) or (self._relay_reports_off and is_on)
+        armed = (
+            self._arm_relay_feedback(entity_id)
+            if (arm_feedback and produces_edge)
+            else False
+        )
+        pending_timeout = RELAY_FEEDBACK_PENDING_TIMEOUT if armed else 5
         if self._relay_reports_off and is_on:
             # Relay reports ON and we trust that report: release it first so the
             # following turn_on is a genuine OFF->ON edge. Two state changes
@@ -109,7 +123,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
                 " turn_on is a rising edge",
                 entity_id,
             )
-            self._mark_switch_pending(entity_id, 2)
+            self._mark_switch_pending(entity_id, 2, timeout=pending_timeout)
             await self._turn_off_relay(entity_id)
         elif not is_on:
             # Relay reports OFF: the turn_on produces a real OFF->ON edge → one
@@ -118,7 +132,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
                 "_pulse_relay :: %s reports off, turn_on is a rising edge",
                 entity_id,
             )
-            self._mark_switch_pending(entity_id, 1)
+            self._mark_switch_pending(entity_id, 1, timeout=pending_timeout)
         else:
             # relay_reports_off is disabled and the relay still *reports* ON
             # (it never announced its self-release). The turn_on lands on an
@@ -305,23 +319,30 @@ class ToggleBaseCover(SwitchCoverTimeBased):
     # --- Internal relay commands ---
 
     async def _send_open(self) -> None:
+        # Clear any stale feedback arm (mirrors switch mode; matters for the
+        # direct calibration _raw_direction_command path). The driving pulse
+        # arms on its ON edge under wait_for_relay_feedback.
+        self._feedback_armed_entity = None
         await self._release_relay(self._close_switch_entity_id)
         # Motor controller acts on the ON edge (_pulse_relay marks its echoes)
-        await self._pulse_relay(self._open_switch_entity_id)
+        await self._pulse_relay(self._open_switch_entity_id, arm_feedback=True)
 
     async def _send_close(self) -> None:
+        self._feedback_armed_entity = None
         await self._release_relay(self._open_switch_entity_id)
         # Motor controller acts on the ON edge (_pulse_relay marks its echoes)
-        await self._pulse_relay(self._close_switch_entity_id)
+        await self._pulse_relay(self._close_switch_entity_id, arm_feedback=True)
 
     # --- Tilt motor relay commands ---
 
     async def _send_tilt_open(self) -> None:
+        self._feedback_armed_entity = None
         await self._release_relay(self._tilt_close_switch_id)
-        await self._pulse_relay(self._tilt_open_switch_id)
+        await self._pulse_relay(self._tilt_open_switch_id, arm_feedback=True)
         self._last_tilt_direction = "open"
 
     async def _send_tilt_close(self) -> None:
+        self._feedback_armed_entity = None
         await self._release_relay(self._tilt_open_switch_id)
-        await self._pulse_relay(self._tilt_close_switch_id)
+        await self._pulse_relay(self._tilt_close_switch_id, arm_feedback=True)
         self._last_tilt_direction = "close"

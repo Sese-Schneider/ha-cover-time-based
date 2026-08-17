@@ -392,7 +392,9 @@ export function renderInputEntities(card, c) {
         (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
       )}
       ${
-        (c.control_mode || "switch") === "switch"
+        // Every relay-driven mode confirms via a relay ON echo; wrapped covers
+        // drive an underlying cover entity, so there is no relay to wait on.
+        (c.control_mode || "switch") !== "wrapped"
           ? renderToggleWithHelp(
               card,
               "wait_for_relay_feedback.label",

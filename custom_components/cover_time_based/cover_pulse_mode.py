@@ -3,6 +3,7 @@
 import asyncio
 from asyncio import sleep
 
+from .cover_base import RELAY_FEEDBACK_PENDING_TIMEOUT
 from .cover_switch import SwitchCoverTimeBased
 
 
@@ -159,7 +160,7 @@ class PulseModeCover(SwitchCoverTimeBased):
 
     # --- Relay pulse helpers -----------------------------------------------
 
-    def _mark_pulse_on(self, entity_id) -> None:
+    def _mark_pulse_on(self, entity_id, arm_feedback=False) -> None:
         """Pre-count the echoes for turning a relay ON then pulsing it OFF.
 
         An OFF relay flips ON now (one echo) and OFF later via its completion
@@ -168,11 +169,19 @@ class PulseModeCover(SwitchCoverTimeBased):
         echoes → mark 1. ``_schedule_pulse_completion`` (called by the caller
         after ``turn_on``) reconciles the deferred OFF against any superseded
         completion, so exactly one OFF echo is ever counted.
+
+        When ``arm_feedback`` is set (a movement send, not a stop) and the relay
+        is OFF — so ``turn_on`` produces a real ON edge — arm
+        ``wait_for_relay_feedback`` on that echo and widen its pending window so
+        a slow confirmation stays classifiable as our own (issue #231). An
+        already-ON relay produces no ON edge, so it is never armed.
         """
         if self._switch_is_on(entity_id):
             self._mark_switch_pending(entity_id, 1)
         else:
-            self._mark_switch_pending(entity_id, 2)
+            armed = self._arm_relay_feedback(entity_id) if arm_feedback else False
+            timeout = RELAY_FEEDBACK_PENDING_TIMEOUT if armed else 5
+            self._mark_switch_pending(entity_id, 2, timeout=timeout)
 
     def _mark_pulse_off(self, entity_id) -> None:
         """Cancel a relay's completion and pre-count our own ``turn_off`` echo.
@@ -186,11 +195,14 @@ class PulseModeCover(SwitchCoverTimeBased):
             self._mark_switch_pending(entity_id, 1)
 
     async def _send_open(self) -> None:
+        # Clear any stale feedback arm (mirrors switch mode; matters for the
+        # direct calibration path). The driving turn_on arms on its ON edge.
+        self._feedback_armed_entity = None
         # Opposite (close) relay: cancel its completion, then account for our
         # turn_off so its echo bookkeeping matches its live state.
         self._mark_pulse_off(self._close_switch_entity_id)
         # Open relay: ON edge now + deferred OFF from the completion.
-        self._mark_pulse_on(self._open_switch_entity_id)
+        self._mark_pulse_on(self._open_switch_entity_id, arm_feedback=True)
         if self._stop_switch_entity_id is not None:
             # A stop pulse may still be in flight (direction command right after
             # a stop): cancel its completion and mark our own turn_off per live
@@ -219,8 +231,9 @@ class PulseModeCover(SwitchCoverTimeBased):
         self._schedule_pulse_completion(self._open_switch_entity_id)
 
     async def _send_close(self) -> None:
+        self._feedback_armed_entity = None
         self._mark_pulse_off(self._open_switch_entity_id)
-        self._mark_pulse_on(self._close_switch_entity_id)
+        self._mark_pulse_on(self._close_switch_entity_id, arm_feedback=True)
         if self._stop_switch_entity_id is not None:
             # A stop pulse may still be in flight (direction command right after
             # a stop): cancel its completion and mark our own turn_off per live
@@ -282,8 +295,9 @@ class PulseModeCover(SwitchCoverTimeBased):
     # --- Tilt motor relay commands ---
 
     async def _send_tilt_open(self) -> None:
+        self._feedback_armed_entity = None
         self._mark_pulse_off(self._tilt_close_switch_id)
-        self._mark_pulse_on(self._tilt_open_switch_id)
+        self._mark_pulse_on(self._tilt_open_switch_id, arm_feedback=True)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -299,8 +313,9 @@ class PulseModeCover(SwitchCoverTimeBased):
         self._schedule_pulse_completion(self._tilt_open_switch_id)
 
     async def _send_tilt_close(self) -> None:
+        self._feedback_armed_entity = None
         self._mark_pulse_off(self._tilt_open_switch_id)
-        self._mark_pulse_on(self._tilt_close_switch_id)
+        self._mark_pulse_on(self._tilt_close_switch_id, arm_feedback=True)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
