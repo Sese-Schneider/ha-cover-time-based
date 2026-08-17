@@ -3,8 +3,13 @@
 import asyncio
 from asyncio import sleep
 
-from .cover_base import RELAY_FEEDBACK_PENDING_TIMEOUT
 from .cover_switch import SwitchCoverTimeBased
+
+# The completion turn_off fires pulse_time after a pulse, and its OFF echo then
+# round-trips back. A pulse relay's pending window is sized to pulse_time plus
+# this margin so that own OFF echo stays filtered rather than read as an
+# external change, even on a pulse longer than the default 5s window.
+_PULSE_COMPLETION_ECHO_MARGIN = 2.0
 
 
 class PulseModeCover(SwitchCoverTimeBased):
@@ -170,18 +175,30 @@ class PulseModeCover(SwitchCoverTimeBased):
         after ``turn_on``) reconciles the deferred OFF against any superseded
         completion, so exactly one OFF echo is ever counted.
 
+        The pending window must outlast the pulse: the deferred completion OFF
+        echo arrives ~pulse_time after this call, so a pulse longer than the
+        default window would otherwise clear the count early and misread its own
+        OFF echo as an external change.
+
         When ``arm_feedback`` is set (a movement send, not a stop) and the relay
-        is OFF — so ``turn_on`` produces a real ON edge — arm
-        ``wait_for_relay_feedback`` on that echo and widen its pending window so
-        a slow confirmation stays classifiable as our own (issue #231). An
-        already-ON relay produces no ON edge, so it is never armed.
+        is OFF — so ``turn_on`` produces a real ON edge — the OFF branch also
+        arms ``wait_for_relay_feedback`` on that echo (via
+        ``_mark_driving_relay_pending``) and widens the window further (issue
+        #231). An already-ON relay produces no ON edge, so it is never armed.
         """
+        pulse_window = max(5, self._pulse_time + _PULSE_COMPLETION_ECHO_MARGIN)
         if self._switch_is_on(entity_id):
-            self._mark_switch_pending(entity_id, 1)
+            # Re-pulse on an already-ON relay: no ON edge, only the completion's
+            # deferred OFF echo.
+            self._mark_switch_pending(entity_id, 1, timeout=pulse_window)
         else:
-            armed = self._arm_relay_feedback(entity_id) if arm_feedback else False
-            timeout = RELAY_FEEDBACK_PENDING_TIMEOUT if armed else 5
-            self._mark_switch_pending(entity_id, 2, timeout=timeout)
+            # ON edge now + deferred OFF from the completion.
+            self._mark_driving_relay_pending(
+                entity_id,
+                expected_transitions=2,
+                arm=arm_feedback,
+                base_timeout=pulse_window,
+            )
 
     def _mark_pulse_off(self, entity_id) -> None:
         """Cancel a relay's completion and pre-count our own ``turn_off`` echo.

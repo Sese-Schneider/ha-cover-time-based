@@ -864,3 +864,35 @@ class TestRelayFeedbackPulseMode:
             open_calls[0].kwargs.get("timeout")
             == cover_base.RELAY_FEEDBACK_PENDING_TIMEOUT
         )
+
+    @pytest.mark.asyncio
+    async def test_long_pulse_pending_window_outlasts_the_pulse(self, make_cover):
+        """The deferred completion OFF echo fires ~pulse_time after the pulse, so
+        the pending window must outlast the pulse. A pulse_time above the 5s
+        default would otherwise clear the count early and misread the pulse's own
+        OFF echo as an external change. Independent of relay feedback (option
+        off here), since the completion OFF exists regardless."""
+        cover = make_cover(
+            control_mode="pulse",
+            stop_switch="switch.stop",
+            pulse_time=8,
+            wait_for_relay_feedback=False,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+
+        with (
+            patch.object(
+                cover, "_mark_switch_pending", wraps=cover._mark_switch_pending
+            ) as spy,
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+        open_calls = [c for c in spy.call_args_list if c.args[0] == "switch.open"]
+        assert open_calls, "open relay should have been marked pending"
+        assert open_calls[0].kwargs.get("timeout") >= 8, (
+            "pending window must cover the 8s pulse so the completion OFF echo "
+            "is still filtered as our own"
+        )

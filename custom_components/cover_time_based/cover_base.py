@@ -3639,21 +3639,35 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._feedback_armed_entity = None
         return entity_id
 
-    def _mark_driving_relay_pending(self, entity_id):
+    def _mark_driving_relay_pending(
+        self, entity_id, expected_transitions=1, arm=True, base_timeout=5
+    ):
         """Mark the direction relay a move is energizing OFF->ON as pending.
 
-        Call only when the relay will actually flip (inside the
-        ``if not <relay>_is_on`` guard). Under ``wait_for_relay_feedback`` this
-        also arms the wait on the relay's ON echo and widens the echo's safety
-        window (``RELAY_FEEDBACK_PENDING_TIMEOUT``) so a slow confirmation is
-        still filtered as our own rather than read as an external press.
+        Call only when the relay will actually flip (inside a rising-edge
+        guard). When ``arm`` and ``wait_for_relay_feedback`` can use this relay
+        (enabled and not optimistic), also arm the wait on the relay's ON echo
+        and widen the echo's safety window to at least
+        ``RELAY_FEEDBACK_PENDING_TIMEOUT`` so a slow confirmation is still
+        filtered as our own rather than read as an external press.
+
+        ``expected_transitions`` is how many own echoes this drive emits: 1 for
+        a plain turn_on, 2 when the relay is released first (toggle) or when a
+        pulse also schedules a deferred OFF completion. ``base_timeout`` is the
+        pending window used when not armed — pulse mode passes its pulse
+        duration so the deferred completion OFF echo stays filtered even when
+        the pulse is longer than the default window.
         """
-        if self._arm_relay_feedback(entity_id):
+        if arm and self._arm_relay_feedback(entity_id):
             self._mark_switch_pending(
-                entity_id, 1, timeout=RELAY_FEEDBACK_PENDING_TIMEOUT
+                entity_id,
+                expected_transitions,
+                timeout=max(base_timeout, RELAY_FEEDBACK_PENDING_TIMEOUT),
             )
         else:
-            self._mark_switch_pending(entity_id, 1)
+            self._mark_switch_pending(
+                entity_id, expected_transitions, timeout=base_timeout
+            )
 
     def _mark_switch_pending(self, entity_id, expected_transitions, timeout=5):
         """Mark a switch as having pending echo transitions to ignore.

@@ -22,7 +22,6 @@ from homeassistant.const import (
     SERVICE_OPEN_COVER,
 )
 
-from .cover_base import RELAY_FEEDBACK_PENDING_TIMEOUT
 from .cover_switch import SwitchCoverTimeBased
 
 
@@ -100,20 +99,14 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         can carry a rising edge, so a user-supplied debug log shows which
         pulses could have moved the motor (issue #153).
 
-        When ``arm_feedback`` is set (a movement send, not a stop) and a genuine
-        rising edge will be produced, arm ``wait_for_relay_feedback`` on this
-        relay's ON echo and widen its pending window so a slow confirmation
-        stays classifiable as our own for the whole feedback wait (issue #231).
-        The no-rising-edge branch never arms — there is no echo to gate on.
+        When ``arm_feedback`` is set (a movement send, not a stop), the two
+        rising-edge branches arm ``wait_for_relay_feedback`` on this relay's ON
+        echo via ``_mark_driving_relay_pending``, which also widens the pending
+        window so a slow confirmation stays classifiable as our own for the
+        whole feedback wait (issue #231). The no-rising-edge branch marks
+        nothing and never arms — there is no echo to gate on.
         """
         is_on = self._switch_is_on(entity_id)
-        produces_edge = (not is_on) or (self._relay_reports_off and is_on)
-        armed = (
-            self._arm_relay_feedback(entity_id)
-            if (arm_feedback and produces_edge)
-            else False
-        )
-        pending_timeout = RELAY_FEEDBACK_PENDING_TIMEOUT if armed else 5
         if self._relay_reports_off and is_on:
             # Relay reports ON and we trust that report: release it first so the
             # following turn_on is a genuine OFF->ON edge. Two state changes
@@ -123,7 +116,9 @@ class ToggleBaseCover(SwitchCoverTimeBased):
                 " turn_on is a rising edge",
                 entity_id,
             )
-            self._mark_switch_pending(entity_id, 2, timeout=pending_timeout)
+            self._mark_driving_relay_pending(
+                entity_id, expected_transitions=2, arm=arm_feedback
+            )
             await self._turn_off_relay(entity_id)
         elif not is_on:
             # Relay reports OFF: the turn_on produces a real OFF->ON edge → one
@@ -132,7 +127,9 @@ class ToggleBaseCover(SwitchCoverTimeBased):
                 "_pulse_relay :: %s reports off, turn_on is a rising edge",
                 entity_id,
             )
-            self._mark_switch_pending(entity_id, 1, timeout=pending_timeout)
+            self._mark_driving_relay_pending(
+                entity_id, expected_transitions=1, arm=arm_feedback
+            )
         else:
             # relay_reports_off is disabled and the relay still *reports* ON
             # (it never announced its self-release). The turn_on lands on an
@@ -244,6 +241,22 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             # (travel_was_moving) still fires. See CoverTimeBased.async_stop_cover.
             # (Toggle modes are always momentary, so _self_stops_at_endpoints is
             # True here; the term mirrors the base gate.)
+            #
+            # KNOWN LIMITATION (wait_for_relay_feedback + toggle): if this stop
+            # lands during a feedback wait — before the driving relay has
+            # confirmed its first ON echo — HA still reports that relay OFF, so
+            # _send_stop sends it another turn_on (a toggle stop is a tap, not an
+            # off). A toggle motor only reads that as a stop if it sees a fresh
+            # OFF->ON edge while already running, i.e. only if the relay released
+            # to off between the two taps. On the slow mesh this option targets,
+            # the two taps can arrive bunched (or the second lands on an
+            # already-on relay), so the stop may be swallowed and the motor keep
+            # running. Either way tracking is cancelled above, so the position
+            # desyncs — mildly if the motor did stop, or until an endpoint if it
+            # ran on untracked. Narrow, opt-in, and inherent to toggle's
+            # non-idempotent stop (#153 family); a genuine fix needs the stop
+            # deferred until the relay confirms. Switch/pulse modes are immune
+            # (they de-energize / use a dedicated stop relay).
             await self._send_stop()
         elif (
             tilt_axis_reported
