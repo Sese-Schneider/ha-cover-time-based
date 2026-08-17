@@ -5,6 +5,12 @@ from asyncio import sleep
 
 from .cover_switch import SwitchCoverTimeBased
 
+# The completion turn_off fires pulse_time after a pulse, and its OFF echo then
+# round-trips back. A pulse relay's pending window is sized to pulse_time plus
+# this margin so that own OFF echo stays filtered rather than read as an
+# external change, even on a pulse longer than the default 5s window.
+_PULSE_COMPLETION_ECHO_MARGIN = 2.0
+
 
 class PulseModeCover(SwitchCoverTimeBased):
     """Cover controlled by momentary pulse relays (pulse mode).
@@ -159,7 +165,7 @@ class PulseModeCover(SwitchCoverTimeBased):
 
     # --- Relay pulse helpers -----------------------------------------------
 
-    def _mark_pulse_on(self, entity_id) -> None:
+    def _mark_pulse_on(self, entity_id, arm_feedback=False) -> None:
         """Pre-count the echoes for turning a relay ON then pulsing it OFF.
 
         An OFF relay flips ON now (one echo) and OFF later via its completion
@@ -168,11 +174,31 @@ class PulseModeCover(SwitchCoverTimeBased):
         echoes → mark 1. ``_schedule_pulse_completion`` (called by the caller
         after ``turn_on``) reconciles the deferred OFF against any superseded
         completion, so exactly one OFF echo is ever counted.
+
+        The pending window must outlast the pulse: the deferred completion OFF
+        echo arrives ~pulse_time after this call, so a pulse longer than the
+        default window would otherwise clear the count early and misread its own
+        OFF echo as an external change.
+
+        When ``arm_feedback`` is set (a movement send, not a stop) and the relay
+        is OFF — so ``turn_on`` produces a real ON edge — the OFF branch also
+        arms ``wait_for_relay_feedback`` on that echo (via
+        ``_mark_driving_relay_pending``) and widens the window further (issue
+        #231). An already-ON relay produces no ON edge, so it is never armed.
         """
+        pulse_window = max(5, self._pulse_time + _PULSE_COMPLETION_ECHO_MARGIN)
         if self._switch_is_on(entity_id):
-            self._mark_switch_pending(entity_id, 1)
+            # Re-pulse on an already-ON relay: no ON edge, only the completion's
+            # deferred OFF echo.
+            self._mark_switch_pending(entity_id, 1, timeout=pulse_window)
         else:
-            self._mark_switch_pending(entity_id, 2)
+            # ON edge now + deferred OFF from the completion.
+            self._mark_driving_relay_pending(
+                entity_id,
+                expected_transitions=2,
+                arm=arm_feedback,
+                base_timeout=pulse_window,
+            )
 
     def _mark_pulse_off(self, entity_id) -> None:
         """Cancel a relay's completion and pre-count our own ``turn_off`` echo.
@@ -186,11 +212,14 @@ class PulseModeCover(SwitchCoverTimeBased):
             self._mark_switch_pending(entity_id, 1)
 
     async def _send_open(self) -> None:
+        # Clear any stale feedback arm (mirrors switch mode; matters for the
+        # direct calibration path). The driving turn_on arms on its ON edge.
+        self._feedback_armed_entity = None
         # Opposite (close) relay: cancel its completion, then account for our
         # turn_off so its echo bookkeeping matches its live state.
         self._mark_pulse_off(self._close_switch_entity_id)
         # Open relay: ON edge now + deferred OFF from the completion.
-        self._mark_pulse_on(self._open_switch_entity_id)
+        self._mark_pulse_on(self._open_switch_entity_id, arm_feedback=True)
         if self._stop_switch_entity_id is not None:
             # A stop pulse may still be in flight (direction command right after
             # a stop): cancel its completion and mark our own turn_off per live
@@ -219,8 +248,9 @@ class PulseModeCover(SwitchCoverTimeBased):
         self._schedule_pulse_completion(self._open_switch_entity_id)
 
     async def _send_close(self) -> None:
+        self._feedback_armed_entity = None
         self._mark_pulse_off(self._open_switch_entity_id)
-        self._mark_pulse_on(self._close_switch_entity_id)
+        self._mark_pulse_on(self._close_switch_entity_id, arm_feedback=True)
         if self._stop_switch_entity_id is not None:
             # A stop pulse may still be in flight (direction command right after
             # a stop): cancel its completion and mark our own turn_off per live
@@ -282,8 +312,9 @@ class PulseModeCover(SwitchCoverTimeBased):
     # --- Tilt motor relay commands ---
 
     async def _send_tilt_open(self) -> None:
+        self._feedback_armed_entity = None
         self._mark_pulse_off(self._tilt_close_switch_id)
-        self._mark_pulse_on(self._tilt_open_switch_id)
+        self._mark_pulse_on(self._tilt_open_switch_id, arm_feedback=True)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -299,8 +330,9 @@ class PulseModeCover(SwitchCoverTimeBased):
         self._schedule_pulse_completion(self._tilt_open_switch_id)
 
     async def _send_tilt_close(self) -> None:
+        self._feedback_armed_entity = None
         self._mark_pulse_off(self._tilt_open_switch_id)
-        self._mark_pulse_on(self._tilt_close_switch_id)
+        self._mark_pulse_on(self._tilt_close_switch_id, arm_feedback=True)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",

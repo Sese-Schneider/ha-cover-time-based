@@ -1,10 +1,11 @@
 """Tests for the opt-in ``wait_for_relay_feedback`` behaviour (issue #231).
 
-When enabled (switch mode only), the travel/tilt timer starts when the relay
-confirms it switched — the state-change echo — instead of the instant the
-non-blocking command is queued. The variable Zigbee round-trip then falls
-outside the tracked travel, so the calculated position no longer drifts ahead
-of the physical cover on a slow/cold mesh.
+When enabled (every relay-driven mode — switch, toggle, toggle-opposite and
+pulse), the travel/tilt timer starts when the relay confirms it switched — the
+state-change echo — instead of the instant the non-blocking command is queued.
+The variable Zigbee round-trip then falls outside the tracked travel, so the
+calculated position no longer drifts ahead of the physical cover on a slow/cold
+mesh.
 
 These tests drive real state-change events through ``_async_switch_state_changed``
 with an injected command->echo gap, rather than forcing internal flags — the
@@ -525,4 +526,373 @@ class TestRelayFeedbackGuards:
         assert (
             cover_base.RELAY_FEEDBACK_PENDING_TIMEOUT
             > cover_base.RELAY_FEEDBACK_TIMEOUT
+        )
+
+
+class TestRelayFeedbackToggleMode:
+    """Toggle (momentary) mode gates on the pulse relay's OFF->ON rising edge.
+
+    The relay pulses ON then self-releases, but the ON edge is still the "motor
+    energized" signal — the same seam switch mode uses, reached through
+    ToggleBaseCover._pulse_relay instead of a latched turn_on.
+    """
+
+    @pytest.mark.asyncio
+    async def test_move_parks_until_relay_echo_then_tracks_from_last_changed(
+        self, make_cover
+    ):
+        cover = make_cover(
+            control_mode="toggle",
+            wait_for_relay_feedback=True,
+            travel_time_open=30,
+            travel_time_close=30,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        echo_time = datetime.now(UTC)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+            # Pulse fired, but tracking is parked on the relay's ON edge.
+            assert cover.travel_calc.is_traveling() is False
+            assert cover.travel_calc.current_position() == 0
+            assert cover._feedback_wait_entity == "switch.open"
+
+            await cover._async_switch_state_changed(
+                _echo_event("switch.open", "off", "on", echo_time)
+            )
+            await asyncio.sleep(0)
+
+        assert cover.travel_calc.is_traveling() is True
+        assert cover.travel_calc._last_known_position_timestamp == echo_time.timestamp()
+        assert cover._feedback_wait_entity is None
+
+    @pytest.mark.asyncio
+    async def test_disabled_starts_tracking_immediately(self, make_cover):
+        cover = make_cover(
+            control_mode="toggle",
+            wait_for_relay_feedback=False,
+            travel_time_open=30,
+            travel_time_close=30,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+        assert cover.travel_calc.is_traveling() is True
+        assert cover._feedback_wait_entity is None
+        assert cover._startup_delay_task is None
+
+    @pytest.mark.asyncio
+    async def test_tilt_move_parks_until_tilt_relay_echo(self, make_cover):
+        cover = make_cover(
+            control_mode="toggle",
+            wait_for_relay_feedback=True,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_time_open=3,
+            tilt_time_close=3,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+        echo_time = datetime.now(UTC)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover_tilt()
+            await asyncio.sleep(0)
+
+            assert cover.tilt_calc.is_traveling() is False
+            assert cover._feedback_wait_entity == "switch.tilt_open"
+
+            await cover._async_switch_state_changed(
+                _echo_event("switch.tilt_open", "off", "on", echo_time)
+            )
+            await asyncio.sleep(0)
+
+        assert cover.tilt_calc.is_traveling() is True
+        assert cover.tilt_calc._last_known_position_timestamp == echo_time.timestamp()
+
+    @pytest.mark.asyncio
+    async def test_no_rising_edge_relay_starts_inline(self, make_cover):
+        """A relay that never reports its OFF (relay_reports_off disabled) and is
+        stale-ON produces no rising edge on turn_on — there is no echo to wait
+        for, so tracking must start inline rather than block on a phantom echo."""
+        cover = make_cover(
+            control_mode="toggle",
+            wait_for_relay_feedback=True,
+            relay_reports_off=False,
+        )
+        _stub_switches(cover, on=("switch.open",))
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+        assert cover.travel_calc.is_traveling() is True
+        assert cover._feedback_wait_entity is None
+        assert cover._startup_delay_task is None
+
+    @pytest.mark.asyncio
+    async def test_relay_reporting_on_is_released_then_pulsed_and_still_waits(
+        self, make_cover
+    ):
+        """Unlike switch mode's "already on -> inline" shortcut, a toggle relay
+        reporting ON (with relay_reports_off on) is released then re-pulsed, so a
+        genuine OFF->ON edge is produced — tracking still gates on that ON echo,
+        which arrives as the second of the two echoes."""
+        cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
+        _stub_switches(cover, on=("switch.open",))
+        cover.travel_calc.set_position(0)
+        echo_time = datetime.now(UTC)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+            assert cover.travel_calc.is_traveling() is False
+            assert cover._feedback_wait_entity == "switch.open"
+
+            # The release echo (on->off) is not the confirmation.
+            await cover._async_switch_state_changed(
+                _echo_event("switch.open", "on", "off")
+            )
+            await asyncio.sleep(0)
+            assert cover.travel_calc.is_traveling() is False
+
+            # The re-pulse echo (off->on) is.
+            await cover._async_switch_state_changed(
+                _echo_event("switch.open", "off", "on", echo_time)
+            )
+            await asyncio.sleep(0)
+
+        assert cover.travel_calc.is_traveling() is True
+        assert cover.travel_calc._last_known_position_timestamp == echo_time.timestamp()
+
+    @pytest.mark.asyncio
+    async def test_armed_relay_gets_extended_pending_window(self, make_cover):
+        cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+
+        with (
+            patch.object(
+                cover, "_mark_switch_pending", wraps=cover._mark_switch_pending
+            ) as spy,
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+        open_calls = [c for c in spy.call_args_list if c.args[0] == "switch.open"]
+        assert open_calls, "open relay should have been marked pending"
+        assert (
+            open_calls[0].kwargs.get("timeout")
+            == cover_base.RELAY_FEEDBACK_PENDING_TIMEOUT
+        )
+
+
+class TestRelayFeedbackToggleOppositeMode:
+    """Toggle-opposite shares ToggleBaseCover's send path, so the same arming
+    applies — one smoke test proves the inheritance rather than re-covering it."""
+
+    @pytest.mark.asyncio
+    async def test_move_parks_until_relay_echo(self, make_cover):
+        cover = make_cover(
+            control_mode="toggle_opposite",
+            wait_for_relay_feedback=True,
+            travel_time_open=30,
+            travel_time_close=30,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        echo_time = datetime.now(UTC)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+            assert cover.travel_calc.is_traveling() is False
+            assert cover._feedback_wait_entity == "switch.open"
+
+            await cover._async_switch_state_changed(
+                _echo_event("switch.open", "off", "on", echo_time)
+            )
+            await asyncio.sleep(0)
+
+        assert cover.travel_calc.is_traveling() is True
+        assert cover.travel_calc._last_known_position_timestamp == echo_time.timestamp()
+
+
+class TestRelayFeedbackPulseMode:
+    """Pulse mode gates on the driving relay's ON edge (turn_on), before the
+    deferred turn_off that completes the pulse."""
+
+    @pytest.mark.asyncio
+    async def test_move_parks_until_relay_echo_then_tracks_from_last_changed(
+        self, make_cover
+    ):
+        cover = make_cover(
+            control_mode="pulse",
+            stop_switch="switch.stop",
+            wait_for_relay_feedback=True,
+            travel_time_open=30,
+            travel_time_close=30,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        echo_time = datetime.now(UTC)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+            assert cover.travel_calc.is_traveling() is False
+            assert cover.travel_calc.current_position() == 0
+            assert cover._feedback_wait_entity == "switch.open"
+
+            await cover._async_switch_state_changed(
+                _echo_event("switch.open", "off", "on", echo_time)
+            )
+            await asyncio.sleep(0)
+
+        assert cover.travel_calc.is_traveling() is True
+        assert cover.travel_calc._last_known_position_timestamp == echo_time.timestamp()
+        assert cover._feedback_wait_entity is None
+
+    @pytest.mark.asyncio
+    async def test_disabled_starts_tracking_immediately(self, make_cover):
+        cover = make_cover(
+            control_mode="pulse",
+            stop_switch="switch.stop",
+            wait_for_relay_feedback=False,
+            travel_time_open=30,
+            travel_time_close=30,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+        assert cover.travel_calc.is_traveling() is True
+        assert cover._feedback_wait_entity is None
+        assert cover._startup_delay_task is None
+
+    @pytest.mark.asyncio
+    async def test_tilt_move_parks_until_tilt_relay_echo(self, make_cover):
+        cover = make_cover(
+            control_mode="pulse",
+            stop_switch="switch.stop",
+            wait_for_relay_feedback=True,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+            tilt_time_open=3,
+            tilt_time_close=3,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+        echo_time = datetime.now(UTC)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover_tilt()
+            await asyncio.sleep(0)
+
+            assert cover.tilt_calc.is_traveling() is False
+            assert cover._feedback_wait_entity == "switch.tilt_open"
+
+            await cover._async_switch_state_changed(
+                _echo_event("switch.tilt_open", "off", "on", echo_time)
+            )
+            await asyncio.sleep(0)
+
+        assert cover.tilt_calc.is_traveling() is True
+        assert cover.tilt_calc._last_known_position_timestamp == echo_time.timestamp()
+
+    @pytest.mark.asyncio
+    async def test_driving_relay_already_on_starts_inline(self, make_cover):
+        """A re-pulse on an already-ON relay flips no state on turn_on, so there
+        is no ON echo to wait for — start inline."""
+        cover = make_cover(
+            control_mode="pulse",
+            stop_switch="switch.stop",
+            wait_for_relay_feedback=True,
+        )
+        _stub_switches(cover, on=("switch.open",))
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+        assert cover.travel_calc.is_traveling() is True
+        assert cover._feedback_wait_entity is None
+
+    @pytest.mark.asyncio
+    async def test_armed_relay_gets_extended_pending_window(self, make_cover):
+        cover = make_cover(
+            control_mode="pulse",
+            stop_switch="switch.stop",
+            wait_for_relay_feedback=True,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+
+        with (
+            patch.object(
+                cover, "_mark_switch_pending", wraps=cover._mark_switch_pending
+            ) as spy,
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+        open_calls = [c for c in spy.call_args_list if c.args[0] == "switch.open"]
+        assert open_calls, "open relay should have been marked pending"
+        assert (
+            open_calls[0].kwargs.get("timeout")
+            == cover_base.RELAY_FEEDBACK_PENDING_TIMEOUT
+        )
+
+    @pytest.mark.asyncio
+    async def test_long_pulse_pending_window_outlasts_the_pulse(self, make_cover):
+        """The deferred completion OFF echo fires ~pulse_time after the pulse, so
+        the pending window must outlast the pulse. A pulse_time above the 5s
+        default would otherwise clear the count early and misread the pulse's own
+        OFF echo as an external change. Independent of relay feedback (option
+        off here), since the completion OFF exists regardless."""
+        cover = make_cover(
+            control_mode="pulse",
+            stop_switch="switch.stop",
+            pulse_time=8,
+            wait_for_relay_feedback=False,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+
+        with (
+            patch.object(
+                cover, "_mark_switch_pending", wraps=cover._mark_switch_pending
+            ) as spy,
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+
+        open_calls = [c for c in spy.call_args_list if c.args[0] == "switch.open"]
+        assert open_calls, "open relay should have been marked pending"
+        assert open_calls[0].kwargs.get("timeout") >= 8, (
+            "pending window must cover the 8s pulse so the completion OFF echo "
+            "is still filtered as our own"
         )

@@ -12,6 +12,7 @@ from custom_components.cover_time_based.const import (
     CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
     CONF_RECALIBRATE_BEFORE_POSITION,
+    CONF_RELAY_REPORTS_OFF,
     CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SEND_ENDPOINT_STOP,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
@@ -115,6 +116,7 @@ def make_cover(make_hass, _mock_position_store):
         force_endpoint_redrive=None,
         wait_for_relay_feedback=None,
         recalibrate_before_position=None,
+        relay_reports_off=None,
         invert=None,
     ):
         if cover_entity_id is not None:
@@ -183,6 +185,8 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_WAIT_FOR_RELAY_FEEDBACK] = wait_for_relay_feedback
         if recalibrate_before_position is not None:
             options[CONF_RECALIBRATE_BEFORE_POSITION] = recalibrate_before_position
+        if relay_reports_off is not None:
+            options[CONF_RELAY_REPORTS_OFF] = relay_reports_off
         if invert is not None:
             options[CONF_INVERT] = invert
 

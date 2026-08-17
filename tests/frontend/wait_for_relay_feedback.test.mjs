@@ -1,8 +1,9 @@
 /**
- * wait_for_relay_feedback (switch-mode "wait for relay confirmation") UI.
+ * wait_for_relay_feedback ("wait for relay confirmation") UI.
  *
- * The toggle renders only in switch (latching) mode — the default — and is
- * hidden for wrapped / pulse / toggle modes. Default off.
+ * The toggle renders for every relay-driven mode — switch (the default),
+ * toggle, toggle_opposite and pulse — and is hidden only for wrapped covers,
+ * which drive an underlying cover entity rather than a relay. Default off.
  *
  * Run: npm run test:fe -- tests/frontend/wait_for_relay_feedback.test.mjs
  */
@@ -36,8 +37,9 @@ function row(card) {
   );
 }
 
-// Switch is the default mode, so an unset control_mode must render it too.
-for (const mode of ["switch", undefined]) {
+// Every relay-driven mode renders it; switch is the default, so an unset
+// control_mode must render it too.
+for (const mode of ["switch", undefined, "toggle", "toggle_opposite", "pulse"]) {
   test(`wait_for_relay_feedback toggle renders for ${mode ?? "unset"} mode`, async () => {
     card = await mountCard(makeHass(), {
       selectedEntity: "cover.x",
@@ -48,8 +50,8 @@ for (const mode of ["switch", undefined]) {
   });
 }
 
-// Gated to switch mode only — hidden everywhere else.
-for (const mode of ["wrapped", "pulse", "toggle", "toggle_opposite"]) {
+// Hidden only for wrapped covers (no relay to confirm).
+for (const mode of ["wrapped"]) {
   test(`wait_for_relay_feedback toggle does not render for ${mode} mode`, async () => {
     card = await mountCard(makeHass(), {
       selectedEntity: "cover.x",

@@ -70,7 +70,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             return True
         return False
 
-    async def _pulse_relay(self, entity_id):
+    async def _pulse_relay(self, entity_id, arm_feedback=False):
         """Pulse a relay ON with a guaranteed rising edge.
 
         A toggle motor controller acts on the relay's OFF→ON edge, so a plain
@@ -98,6 +98,13 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         Each branch logs the relay's reported state and whether its ``turn_on``
         can carry a rising edge, so a user-supplied debug log shows which
         pulses could have moved the motor (issue #153).
+
+        When ``arm_feedback`` is set (a movement send, not a stop), the two
+        rising-edge branches arm ``wait_for_relay_feedback`` on this relay's ON
+        echo via ``_mark_driving_relay_pending``, which also widens the pending
+        window so a slow confirmation stays classifiable as our own for the
+        whole feedback wait (issue #231). The no-rising-edge branch marks
+        nothing and never arms — there is no echo to gate on.
         """
         is_on = self._switch_is_on(entity_id)
         if self._relay_reports_off and is_on:
@@ -109,7 +116,9 @@ class ToggleBaseCover(SwitchCoverTimeBased):
                 " turn_on is a rising edge",
                 entity_id,
             )
-            self._mark_switch_pending(entity_id, 2)
+            self._mark_driving_relay_pending(
+                entity_id, expected_transitions=2, arm=arm_feedback
+            )
             await self._turn_off_relay(entity_id)
         elif not is_on:
             # Relay reports OFF: the turn_on produces a real OFF->ON edge → one
@@ -118,7 +127,9 @@ class ToggleBaseCover(SwitchCoverTimeBased):
                 "_pulse_relay :: %s reports off, turn_on is a rising edge",
                 entity_id,
             )
-            self._mark_switch_pending(entity_id, 1)
+            self._mark_driving_relay_pending(
+                entity_id, expected_transitions=1, arm=arm_feedback
+            )
         else:
             # relay_reports_off is disabled and the relay still *reports* ON
             # (it never announced its self-release). The turn_on lands on an
@@ -230,6 +241,22 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             # (travel_was_moving) still fires. See CoverTimeBased.async_stop_cover.
             # (Toggle modes are always momentary, so _self_stops_at_endpoints is
             # True here; the term mirrors the base gate.)
+            #
+            # KNOWN LIMITATION (wait_for_relay_feedback + toggle): if this stop
+            # lands during a feedback wait — before the driving relay has
+            # confirmed its first ON echo — HA still reports that relay OFF, so
+            # _send_stop sends it another turn_on (a toggle stop is a tap, not an
+            # off). A toggle motor only reads that as a stop if it sees a fresh
+            # OFF->ON edge while already running, i.e. only if the relay released
+            # to off between the two taps. On the slow mesh this option targets,
+            # the two taps can arrive bunched (or the second lands on an
+            # already-on relay), so the stop may be swallowed and the motor keep
+            # running. Either way tracking is cancelled above, so the position
+            # desyncs — mildly if the motor did stop, or until an endpoint if it
+            # ran on untracked. Narrow, opt-in, and inherent to toggle's
+            # non-idempotent stop (#153 family); a genuine fix needs the stop
+            # deferred until the relay confirms. Switch/pulse modes are immune
+            # (they de-energize / use a dedicated stop relay).
             await self._send_stop()
         elif (
             tilt_axis_reported
@@ -305,23 +332,30 @@ class ToggleBaseCover(SwitchCoverTimeBased):
     # --- Internal relay commands ---
 
     async def _send_open(self) -> None:
+        # Clear any stale feedback arm (mirrors switch mode; matters for the
+        # direct calibration _raw_direction_command path). The driving pulse
+        # arms on its ON edge under wait_for_relay_feedback.
+        self._feedback_armed_entity = None
         await self._release_relay(self._close_switch_entity_id)
         # Motor controller acts on the ON edge (_pulse_relay marks its echoes)
-        await self._pulse_relay(self._open_switch_entity_id)
+        await self._pulse_relay(self._open_switch_entity_id, arm_feedback=True)
 
     async def _send_close(self) -> None:
+        self._feedback_armed_entity = None
         await self._release_relay(self._open_switch_entity_id)
         # Motor controller acts on the ON edge (_pulse_relay marks its echoes)
-        await self._pulse_relay(self._close_switch_entity_id)
+        await self._pulse_relay(self._close_switch_entity_id, arm_feedback=True)
 
     # --- Tilt motor relay commands ---
 
     async def _send_tilt_open(self) -> None:
+        self._feedback_armed_entity = None
         await self._release_relay(self._tilt_close_switch_id)
-        await self._pulse_relay(self._tilt_open_switch_id)
+        await self._pulse_relay(self._tilt_open_switch_id, arm_feedback=True)
         self._last_tilt_direction = "open"
 
     async def _send_tilt_close(self) -> None:
+        self._feedback_armed_entity = None
         await self._release_relay(self._tilt_open_switch_id)
-        await self._pulse_relay(self._tilt_close_switch_id)
+        await self._pulse_relay(self._tilt_close_switch_id, arm_feedback=True)
         self._last_tilt_direction = "close"
