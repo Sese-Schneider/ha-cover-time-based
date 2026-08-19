@@ -31,6 +31,7 @@ from .const import (
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
+    CONF_IGNORE_ENDPOINT_STATES,
     CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
     CONF_MIN_MOVEMENT_TIME,
@@ -51,6 +52,7 @@ from .const import (
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
+    DEFAULT_IGNORE_ENDPOINT_STATES,
     DEFAULT_IGNORE_REPORTED_POSITION,
     DEFAULT_INVERT,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
@@ -390,6 +392,9 @@ def _create_cover_from_options(options, device_id="", name=""):
             reports_command_not_endpoint=options.get(
                 CONF_REPORTS_COMMAND_NOT_ENDPOINT,
                 DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
+            ),
+            ignore_endpoint_states=options.get(
+                CONF_IGNORE_ENDPOINT_STATES, DEFAULT_IGNORE_ENDPOINT_STATES
             ),
             invert=options.get(CONF_INVERT, DEFAULT_INVERT),
             **common,

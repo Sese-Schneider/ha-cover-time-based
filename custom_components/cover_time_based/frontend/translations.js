@@ -18,15 +18,22 @@ export const EN = {
   "control_mode.toggle_opposite": "Toggle (opposite button)",
   "control_mode.pulse_time": "Pulse time",
   "entities.cover_entity": "Cover Entity",
-  "entities.ignore_reported_position": "Ignore reported position",
-  "entities.ignore_reported_position_helper":
+  "position_reporting.label": "Position reporting",
+  "position_reporting.reliable": "Reliable position feedback",
+  "position_reporting.reliable_helper":
+    "The wrapped cover reports a trustworthy position and reaches its real open/closed endpoints. The default — the right choice unless the tracked position drifts from where the cover actually is.",
+  "position_reporting.unreliable": "Position unreliable — track by time",
+  "position_reporting.unreliable_helper":
     "Track position by time only and ignore the position the wrapped cover reports. Enable this if the underlying cover reports an unreliable position.",
+  "position_reporting.no_endpoints": "No real endpoints — reports open/closed when stopped",
+  "position_reporting.no_endpoints_helper":
+    "For covers with no position feedback that report open/closed when the motor stops mid-travel rather than only at the physical endpoints. A reported closed state stops tracking at the calculated position instead of snapping to 0%.",
+  "position_reporting.command_echo": "State mirrors the last command",
+  "position_reporting.command_echo_helper":
+    "Enable for covers (e.g. some Tuya shutters) whose open/closed/unknown state is a command echo rather than a real endpoint — they report no opening/closing transition and no position. The state is treated as an open/close/stop command and the position is tracked by time.",
   "entities.force_time_based_position": "Force time-based positioning",
   "entities.force_time_based_position_helper":
     "By default, if the wrapped cover supports setting a position, the set-position command is sent straight to it. Enable this to instead drive it with timed open/close/stop, ignoring its native set-position support.",
-  "entities.reports_command_not_endpoint": "Reports commands, not endpoints",
-  "entities.reports_command_not_endpoint_helper":
-    "Enable for covers (e.g. some Tuya shutters) whose open/closed/unknown state is a command echo rather than a real endpoint — they report no opening/closing transition and no position. The state is treated as an open/close/stop command and the position is tracked by time.",
   "entities.invert": "Invert position",
   "entities.invert_helper":
     "Flip the position axis: report 100 − the wrapped cover's position, and swap open/close. Use for covers that run backwards, e.g. an awning where the underlying entity reports open = extended. Position axis only; the tilt logic is unchanged — intended for position-only covers (awnings/shutters), not tilting venetians.",
@@ -173,15 +180,22 @@ export const TRANSLATIONS = {
     "control_mode.toggle_opposite": "Alternar (botão oposto)",
     "control_mode.pulse_time": "Duração do pulso",
     "entities.cover_entity": "Entidade de Estore",
-    "entities.ignore_reported_position": "Ignorar posição reportada",
-    "entities.ignore_reported_position_helper":
+    "position_reporting.label": "Reporte de posição",
+    "position_reporting.reliable": "Retorno de posição fiável",
+    "position_reporting.reliable_helper":
+      "O estore envolvido reporta uma posição fiável e alcança os seus extremos reais de aberto/fechado. A predefinição — a escolha certa a menos que a posição rastreada se desvie de onde o estore realmente está.",
+    "position_reporting.unreliable": "Posição não fiável — rastrear pelo tempo",
+    "position_reporting.unreliable_helper":
       "Rastrear a posição apenas pelo tempo e ignorar a posição reportada pelo estore. Ative isto se o estore subjacente reportar uma posição não fiável.",
+    "position_reporting.no_endpoints": "Sem extremos reais — reporta aberto/fechado quando parado",
+    "position_reporting.no_endpoints_helper":
+      "Para estores sem retorno de posição que reportam aberto/fechado quando o motor para a meio do deslocamento, em vez de apenas nos extremos físicos. Um estado fechado reportado interrompe o rastreio na posição calculada, em vez de saltar para 0%.",
+    "position_reporting.command_echo": "O estado espelha o último comando",
+    "position_reporting.command_echo_helper":
+      "Ative para estores (por exemplo, alguns estores Tuya) cujo estado aberto/fechado/desconhecido é um eco do comando em vez de uma posição final real — não reportam transição de abertura/fecho nem posição. O estado é tratado como um comando abrir/fechar/parar e a posição é rastreada pelo tempo.",
     "entities.force_time_based_position": "Forçar posicionamento por tempo",
     "entities.force_time_based_position_helper":
       "Por predefinição, se o estore envolvido suportar definir a posição, o comando de definir posição é enviado diretamente para ele. Ative isto para o controlar com abrir/fechar/parar temporizados, ignorando o suporte nativo de definir posição.",
-    "entities.reports_command_not_endpoint": "Reporta comandos, não posições finais",
-    "entities.reports_command_not_endpoint_helper":
-      "Ative para estores (por exemplo, alguns estores Tuya) cujo estado aberto/fechado/desconhecido é um eco do comando em vez de uma posição final real — não reportam transição de abertura/fecho nem posição. O estado é tratado como um comando abrir/fechar/parar e a posição é rastreada pelo tempo.",
     "entities.invert": "Inverter posição",
     "entities.invert_helper":
       "Inverte o eixo da posição: reporta 100 − a posição do estore envolvido e troca abrir/fechar. Use para estores que funcionam ao contrário, por exemplo um toldo cuja entidade subjacente reporta aberto = estendido. Apenas o eixo da posição; a lógica de inclinação não é alterada — destinado a estores apenas de posição (toldos/estores), não a venezianas de lâminas orientáveis.",
@@ -328,15 +342,23 @@ export const TRANSLATIONS = {
     "control_mode.toggle_opposite": "Przełączanie (przeciwny przycisk)",
     "control_mode.pulse_time": "Czas impulsu",
     "entities.cover_entity": "Encja rolety",
-    "entities.ignore_reported_position": "Ignoruj zgłaszaną pozycję",
-    "entities.ignore_reported_position_helper":
+    "position_reporting.label": "Zgłaszanie pozycji",
+    "position_reporting.reliable": "Wiarygodna informacja zwrotna o pozycji",
+    "position_reporting.reliable_helper":
+      "Opakowana roleta zgłasza wiarygodną pozycję i osiąga rzeczywiste krańce otwarcia/zamknięcia. Ustawienie domyślne — właściwy wybór, chyba że śledzona pozycja dryfuje względem faktycznego położenia rolety.",
+    "position_reporting.unreliable": "Niewiarygodna pozycja — śledź na podstawie czasu",
+    "position_reporting.unreliable_helper":
       "Śledź pozycję wyłącznie na podstawie czasu i ignoruj pozycję zgłaszaną przez roletę. Włącz tę opcję, jeśli roleta zgłasza niewiarygodną pozycję.",
+    "position_reporting.no_endpoints":
+      "Brak rzeczywistych krańców — zgłasza otwarta/zamknięta po zatrzymaniu",
+    "position_reporting.no_endpoints_helper":
+      "Dla rolet bez informacji zwrotnej o pozycji, które zgłaszają otwarta/zamknięta, gdy silnik zatrzymuje się w trakcie ruchu, a nie tylko na fizycznych krańcach. Zgłoszony stan zamknięcia zatrzymuje śledzenie na obliczonej pozycji, zamiast przeskakiwać do 0%.",
+    "position_reporting.command_echo": "Stan odzwierciedla ostatnie polecenie",
+    "position_reporting.command_echo_helper":
+      "Włącz dla rolet (np. niektórych rolet Tuya), których stan otwarta/zamknięta/nieznana jest echem polecenia, a nie rzeczywistą pozycją końcową — nie zgłaszają przejścia otwierania/zamykania ani pozycji. Stan jest traktowany jako polecenie otwórz/zamknij/zatrzymaj, a pozycja jest śledzona na podstawie czasu.",
     "entities.force_time_based_position": "Wymuś pozycjonowanie czasowe",
     "entities.force_time_based_position_helper":
       "Domyślnie, jeśli opakowana roleta obsługuje ustawianie pozycji, polecenie ustawienia pozycji jest wysyłane bezpośrednio do niej. Włącz tę opcję, aby zamiast tego sterować nią za pomocą czasowego otwierania/zamykania/zatrzymywania, ignorując natywną obsługę ustawiania pozycji.",
-    "entities.reports_command_not_endpoint": "Zgłasza polecenia, a nie pozycje końcowe",
-    "entities.reports_command_not_endpoint_helper":
-      "Włącz dla rolet (np. niektórych rolet Tuya), których stan otwarta/zamknięta/nieznana jest echem polecenia, a nie rzeczywistą pozycją końcową — nie zgłaszają przejścia otwierania/zamykania ani pozycji. Stan jest traktowany jako polecenie otwórz/zamknij/zatrzymaj, a pozycja jest śledzona na podstawie czasu.",
     "entities.invert": "Odwróć pozycję",
     "entities.invert_helper":
       "Odwraca oś pozycji: zgłasza 100 − pozycję opakowanej rolety i zamienia otwieranie/zamykanie. Użyj dla rolet działających odwrotnie, np. markizy, której encja bazowa zgłasza otwarte = rozwinięte. Dotyczy tylko osi pozycji; logika nachylenia pozostaje bez zmian — przeznaczone dla rolet wyłącznie pozycyjnych (markizy/rolety), a nie żaluzji z regulowanymi lamelami.",
@@ -482,15 +504,23 @@ export const TRANSLATIONS = {
     "control_mode.toggle_opposite": "Umschalten (entgegengesetzte Taste)",
     "control_mode.pulse_time": "Impulsdauer",
     "entities.cover_entity": "Rollladen-Entität",
-    "entities.ignore_reported_position": "Gemeldete Position ignorieren",
-    "entities.ignore_reported_position_helper":
+    "position_reporting.label": "Positionsmeldung",
+    "position_reporting.reliable": "Zuverlässige Positionsrückmeldung",
+    "position_reporting.reliable_helper":
+      "Der eingebundene Rollladen meldet eine zuverlässige Position und erreicht seine echten Endlagen offen/geschlossen. Der Standard — die richtige Wahl, sofern die verfolgte Position nicht von der tatsächlichen Position des Rollladens abdriftet.",
+    "position_reporting.unreliable": "Position unzuverlässig — über die Zeit verfolgen",
+    "position_reporting.unreliable_helper":
       "Die Position ausschließlich über die Zeit verfolgen und die vom eingebundenen Rollladen gemeldete Position ignorieren. Aktiviere dies, wenn der zugrunde liegende Rollladen eine unzuverlässige Position meldet.",
+    "position_reporting.no_endpoints":
+      "Keine echten Endlagen — meldet offen/geschlossen beim Stoppen",
+    "position_reporting.no_endpoints_helper":
+      "Für Rollläden ohne Positionsrückmeldung, die offen/geschlossen melden, wenn der Motor mitten in der Fahrt stoppt, statt nur an den physischen Endlagen. Ein als geschlossen gemeldeter Zustand beendet die Verfolgung an der berechneten Position, statt auf 0% zu springen.",
+    "position_reporting.command_echo": "Zustand spiegelt den letzten Befehl",
+    "position_reporting.command_echo_helper":
+      "Aktiviere dies für Rollläden (z. B. manche Tuya-Rollläden), deren Zustand offen/geschlossen/unbekannt nur ein Echo des Befehls statt einer echten Endlage ist — sie melden weder einen Öffnungs-/Schließvorgang noch eine Position. Der Zustand wird als Öffnen-/Schließen-/Stopp-Befehl behandelt und die Position über die Zeit verfolgt.",
     "entities.force_time_based_position": "Zeitbasierte Positionierung erzwingen",
     "entities.force_time_based_position_helper":
       "Standardmäßig wird der Positionsbefehl direkt an den eingebundenen Rollladen gesendet, sofern dieser das Setzen einer Position unterstützt. Aktiviere dies, um ihn stattdessen mit zeitgesteuertem Öffnen/Schließen/Stoppen zu fahren und seine native Positionsunterstützung zu ignorieren.",
-    "entities.reports_command_not_endpoint": "Meldet Befehle, keine Endlagen",
-    "entities.reports_command_not_endpoint_helper":
-      "Aktiviere dies für Rollläden (z. B. manche Tuya-Rollläden), deren Zustand offen/geschlossen/unbekannt nur ein Echo des Befehls statt einer echten Endlage ist — sie melden weder einen Öffnungs-/Schließvorgang noch eine Position. Der Zustand wird als Öffnen-/Schließen-/Stopp-Befehl behandelt und die Position über die Zeit verfolgt.",
     "entities.invert": "Position invertieren",
     "entities.invert_helper":
       "Kehrt die Positionsachse um: meldet 100 − die Position des eingebundenen Rollladens und vertauscht Öffnen/Schließen. Verwende dies für Rollläden, die verkehrt herum laufen, z. B. eine Markise, deren zugrunde liegende Entität offen = ausgefahren meldet. Betrifft nur die Positionsachse; die Neigungslogik bleibt unverändert — gedacht für Behänge, die nur eine Position kennen (Markisen/Rollläden), nicht für Jalousien mit verstellbaren Lamellen.",
@@ -640,15 +670,23 @@ export const TRANSLATIONS = {
     "control_mode.toggle_opposite": "Commutazione (pulsante opposto)",
     "control_mode.pulse_time": "Durata dell'impulso",
     "entities.cover_entity": "Entità tapparella",
-    "entities.ignore_reported_position": "Ignora la posizione riportata",
-    "entities.ignore_reported_position_helper":
+    "position_reporting.label": "Segnalazione della posizione",
+    "position_reporting.reliable": "Retroazione di posizione affidabile",
+    "position_reporting.reliable_helper":
+      "La tapparella incapsulata riporta una posizione affidabile e raggiunge i suoi veri finecorsa di apertura/chiusura. È l'impostazione predefinita — la scelta giusta a meno che la posizione tracciata non vada alla deriva rispetto a dove si trova realmente la tapparella.",
+    "position_reporting.unreliable": "Posizione non affidabile — traccia in base al tempo",
+    "position_reporting.unreliable_helper":
       "Traccia la posizione solo in base al tempo e ignora la posizione riportata dalla tapparella incapsulata. Attiva questa opzione se la tapparella sottostante riporta una posizione non affidabile.",
+    "position_reporting.no_endpoints":
+      "Nessun finecorsa reale — riporta aperta/chiusa quando è ferma",
+    "position_reporting.no_endpoints_helper":
+      "Per le tapparelle senza retroazione di posizione che riportano aperta/chiusa quando il motore si ferma a metà corsa anziché solo ai finecorsa fisici. Uno stato di chiusura riportato interrompe il tracciamento alla posizione calcolata anziché saltare a 0%.",
+    "position_reporting.command_echo": "Lo stato rispecchia l'ultimo comando",
+    "position_reporting.command_echo_helper":
+      "Attiva questa opzione per le tapparelle (ad esempio alcune tapparelle Tuya) il cui stato aperto/chiuso/sconosciuto è l'eco di un comando anziché un vero finecorsa — non riportano alcuna transizione di apertura/chiusura né alcuna posizione. Lo stato viene trattato come un comando di apertura/chiusura/arresto e la posizione viene tracciata in base al tempo.",
     "entities.force_time_based_position": "Forza il posizionamento basato sul tempo",
     "entities.force_time_based_position_helper":
       "Per impostazione predefinita, se la tapparella incapsulata supporta l'impostazione della posizione, il comando di posizionamento le viene inviato direttamente. Attiva questa opzione per comandarla invece con apertura/chiusura/arresto temporizzati, ignorando il suo supporto nativo al posizionamento.",
-    "entities.reports_command_not_endpoint": "Riporta comandi, non finecorsa",
-    "entities.reports_command_not_endpoint_helper":
-      "Attiva questa opzione per le tapparelle (ad esempio alcune tapparelle Tuya) il cui stato aperto/chiuso/sconosciuto è l'eco di un comando anziché un vero finecorsa — non riportano alcuna transizione di apertura/chiusura né alcuna posizione. Lo stato viene trattato come un comando di apertura/chiusura/arresto e la posizione viene tracciata in base al tempo.",
     "entities.invert": "Inverti la posizione",
     "entities.invert_helper":
       "Inverte l'asse della posizione: riporta 100 − la posizione della tapparella incapsulata e scambia apertura/chiusura. Usa questa opzione per le tapparelle che funzionano al contrario, ad esempio una tenda da sole la cui entità sottostante riporta aperta = estesa. Riguarda solo l'asse della posizione; la logica di inclinazione resta invariata — è pensata per coperture con la sola posizione (tende da sole/tapparelle), non per veneziane con lamelle orientabili.",
@@ -794,15 +832,22 @@ export const TRANSLATIONS = {
     "control_mode.toggle_opposite": "Omschakelen (tegenovergestelde knop)",
     "control_mode.pulse_time": "Pulsduur",
     "entities.cover_entity": "Rolluikentiteit",
-    "entities.ignore_reported_position": "Gerapporteerde positie negeren",
-    "entities.ignore_reported_position_helper":
+    "position_reporting.label": "Positierapportage",
+    "position_reporting.reliable": "Betrouwbare positieterugkoppeling",
+    "position_reporting.reliable_helper":
+      "Het ingekapselde rolluik rapporteert een betrouwbare positie en bereikt zijn echte eindstanden voor open en gesloten. De standaard — de juiste keuze, tenzij de gevolgde positie afwijkt van waar het rolluik zich werkelijk bevindt.",
+    "position_reporting.unreliable": "Positie onbetrouwbaar — volgen op tijd",
+    "position_reporting.unreliable_helper":
       "Volg de positie uitsluitend op tijd en negeer de positie die het ingekapselde rolluik rapporteert. Schakel dit in als het onderliggende rolluik een onbetrouwbare positie rapporteert.",
+    "position_reporting.no_endpoints": "Geen echte eindstanden — meldt open/gesloten bij stoppen",
+    "position_reporting.no_endpoints_helper":
+      "Voor rolluiken zonder positieterugkoppeling die open/gesloten melden wanneer de motor halverwege de beweging stopt in plaats van alleen bij de fysieke eindstanden. Een gemelde gesloten status stopt het volgen op de berekende positie in plaats van naar 0% te springen.",
+    "position_reporting.command_echo": "Status weerspiegelt het laatste commando",
+    "position_reporting.command_echo_helper":
+      "Schakel dit in voor rolluiken (bijvoorbeeld sommige Tuya-rolluiken) waarvan de status open/gesloten/onbekend een echo van het commando is in plaats van een echte eindstand — ze rapporteren geen openings- of sluitingsovergang en geen positie. De status wordt behandeld als een commando openen/sluiten/stoppen en de positie wordt op tijd gevolgd.",
     "entities.force_time_based_position": "Tijdgebaseerde positionering forceren",
     "entities.force_time_based_position_helper":
       "Standaard wordt het positiecommando rechtstreeks naar het ingekapselde rolluik gestuurd als dat het instellen van een positie ondersteunt. Schakel dit in om het in plaats daarvan aan te sturen met getimed openen/sluiten/stoppen, waarbij de eigen positieondersteuning wordt genegeerd.",
-    "entities.reports_command_not_endpoint": "Rapporteert commando's, geen eindstanden",
-    "entities.reports_command_not_endpoint_helper":
-      "Schakel dit in voor rolluiken (bijvoorbeeld sommige Tuya-rolluiken) waarvan de status open/gesloten/onbekend een echo van het commando is in plaats van een echte eindstand — ze rapporteren geen openings- of sluitingsovergang en geen positie. De status wordt behandeld als een commando openen/sluiten/stoppen en de positie wordt op tijd gevolgd.",
     "entities.invert": "Positie omkeren",
     "entities.invert_helper":
       "Keert de positie-as om: rapporteert 100 − de positie van het ingekapselde rolluik en verwisselt openen/sluiten. Gebruik dit voor rolluiken die omgekeerd lopen, bijvoorbeeld een zonnescherm waarvan de onderliggende entiteit open = uitgeschoven rapporteert. Alleen de positie-as; de kantellogica blijft ongewijzigd — bedoeld voor raambekleding met alleen een positie (zonneschermen/rolluiken), niet voor jaloezieën met verstelbare lamellen.",
@@ -949,15 +994,23 @@ export const TRANSLATIONS = {
     "control_mode.toggle_opposite": "Bascule (bouton opposé)",
     "control_mode.pulse_time": "Durée de l'impulsion",
     "entities.cover_entity": "Entité de volet",
-    "entities.ignore_reported_position": "Ignorer la position rapportée",
-    "entities.ignore_reported_position_helper":
+    "position_reporting.label": "Rapport de position",
+    "position_reporting.reliable": "Retour de position fiable",
+    "position_reporting.reliable_helper":
+      "Le volet encapsulé rapporte une position fiable et atteint ses véritables fins de course ouvert/fermé. Option par défaut — le bon choix, sauf si la position suivie dérive par rapport à la position réelle du volet.",
+    "position_reporting.unreliable": "Position peu fiable — suivre d'après le temps",
+    "position_reporting.unreliable_helper":
       "Suivre la position uniquement d'après le temps et ignorer la position rapportée par le volet encapsulé. Activez cette option si le volet sous-jacent rapporte une position peu fiable.",
+    "position_reporting.no_endpoints":
+      "Pas de véritables fins de course — rapporte ouvert/fermé à l'arrêt",
+    "position_reporting.no_endpoints_helper":
+      "Pour les volets sans retour de position qui rapportent ouvert/fermé lorsque le moteur s'arrête en pleine course plutôt qu'uniquement aux fins de course physiques. Un état fermé rapporté arrête le suivi à la position calculée au lieu de la ramener à 0%.",
+    "position_reporting.command_echo": "L'état reflète la dernière commande",
+    "position_reporting.command_echo_helper":
+      "Activez cette option pour les volets (par exemple certains volets Tuya) dont l'état ouvert/fermé/inconnu est un écho de la commande plutôt qu'une véritable fin de course — ils ne rapportent ni transition d'ouverture/fermeture, ni position. L'état est traité comme une commande d'ouverture/fermeture/arrêt et la position est suivie d'après le temps.",
     "entities.force_time_based_position": "Forcer le positionnement temporisé",
     "entities.force_time_based_position_helper":
       "Par défaut, si le volet encapsulé prend en charge le réglage de la position, la commande de position lui est envoyée directement. Activez cette option pour le piloter à la place par ouverture/fermeture/arrêt temporisés, en ignorant sa prise en charge native du réglage de position.",
-    "entities.reports_command_not_endpoint": "Rapporte des commandes, pas des fins de course",
-    "entities.reports_command_not_endpoint_helper":
-      "Activez cette option pour les volets (par exemple certains volets Tuya) dont l'état ouvert/fermé/inconnu est un écho de la commande plutôt qu'une véritable fin de course — ils ne rapportent ni transition d'ouverture/fermeture, ni position. L'état est traité comme une commande d'ouverture/fermeture/arrêt et la position est suivie d'après le temps.",
     "entities.invert": "Inverser la position",
     "entities.invert_helper":
       "Inverse l'axe de position\u00a0: rapporte 100 − la position du volet encapsulé et permute ouverture/fermeture. À utiliser pour les volets qui fonctionnent à l'envers, par exemple un store banne dont l'entité sous-jacente rapporte ouvert = déployé. Concerne uniquement l'axe de position\u00a0; la logique d'inclinaison est inchangée — prévu pour les ouvertures qui ne gèrent que la position (stores bannes/volets roulants), pas pour les stores vénitiens à lames orientables.",
@@ -1103,15 +1156,23 @@ export const TRANSLATIONS = {
     "control_mode.toggle_opposite": "Alternar (botón opuesto)",
     "control_mode.pulse_time": "Duración del impulso",
     "entities.cover_entity": "Entidad de persiana",
-    "entities.ignore_reported_position": "Ignorar la posición informada",
-    "entities.ignore_reported_position_helper":
+    "position_reporting.label": "Informe de posición",
+    "position_reporting.reliable": "Realimentación de posición fiable",
+    "position_reporting.reliable_helper":
+      "La persiana envuelta informa de una posición fiable y alcanza sus finales de carrera reales de apertura y cierre. La opción predeterminada — la elección correcta a menos que la posición rastreada se desvíe de la posición real de la persiana.",
+    "position_reporting.unreliable": "Posición poco fiable — seguir por tiempo",
+    "position_reporting.unreliable_helper":
       "Seguir la posición solo por tiempo e ignorar la posición que indica la persiana envuelta. Activa esta opción si la persiana subyacente informa de una posición poco fiable.",
+    "position_reporting.no_endpoints":
+      "Sin finales de carrera reales — informa de abierto/cerrado al detenerse",
+    "position_reporting.no_endpoints_helper":
+      "Para persianas sin realimentación de posición que informan de abierto/cerrado cuando el motor se detiene a mitad del recorrido en lugar de solo en los finales de carrera físicos. Un estado cerrado informado detiene el seguimiento en la posición calculada en lugar de saltar a 0%.",
+    "position_reporting.command_echo": "El estado refleja el último comando",
+    "position_reporting.command_echo_helper":
+      "Actívalo para persianas (por ejemplo, algunas persianas Tuya) cuyo estado abierto/cerrado/desconocido es un eco del comando en lugar de una posición final real: no informan ninguna transición de apertura o cierre ni ninguna posición. El estado se trata como un comando de abrir/cerrar/detener y la posición se sigue por tiempo.",
     "entities.force_time_based_position": "Forzar el posicionamiento por tiempo",
     "entities.force_time_based_position_helper":
       "De forma predeterminada, si la persiana envuelta admite establecer la posición, el comando de posición se le envía directamente. Activa esta opción para accionarla en su lugar con apertura/cierre/parada temporizados, ignorando su compatibilidad nativa con el establecimiento de posición.",
-    "entities.reports_command_not_endpoint": "Informa de comandos, no de posiciones finales",
-    "entities.reports_command_not_endpoint_helper":
-      "Actívalo para persianas (por ejemplo, algunas persianas Tuya) cuyo estado abierto/cerrado/desconocido es un eco del comando en lugar de una posición final real: no informan ninguna transición de apertura o cierre ni ninguna posición. El estado se trata como un comando de abrir/cerrar/detener y la posición se sigue por tiempo.",
     "entities.invert": "Invertir la posición",
     "entities.invert_helper":
       "Invierte el eje de posición: informa de 100 − la posición de la persiana envuelta e intercambia apertura y cierre. Úsalo para persianas que funcionan al revés, por ejemplo un toldo cuya entidad subyacente indica abierto = extendido. Solo afecta al eje de posición; la lógica de inclinación no cambia: está pensado para persianas y toldos que solo tienen posición, no para venecianas con lamas orientables.",
@@ -1260,15 +1321,23 @@ export const TRANSLATIONS = {
     "control_mode.toggle_opposite": "Commutació (botó oposat)",
     "control_mode.pulse_time": "Durada de l'impuls",
     "entities.cover_entity": "Entitat de persiana",
-    "entities.ignore_reported_position": "Ignora la posició informada",
-    "entities.ignore_reported_position_helper":
+    "position_reporting.label": "Informe de posició",
+    "position_reporting.reliable": "Realimentació de posició fiable",
+    "position_reporting.reliable_helper":
+      "La persiana embolcallada informa d'una posició fiable i arriba als seus finals de cursa reals d'obertura i tancament. L'opció per defecte — la tria correcta tret que la posició seguida es desviï d'on és realment la persiana.",
+    "position_reporting.unreliable": "Posició poc fiable — segueix per temps",
+    "position_reporting.unreliable_helper":
       "Fes el seguiment de la posició només per temps i ignora la posició que indica la persiana embolcallada. Activa aquesta opció si la persiana subjacent informa d'una posició poc fiable.",
+    "position_reporting.no_endpoints":
+      "Sense finals de cursa reals — informa d'obert/tancat en aturar-se",
+    "position_reporting.no_endpoints_helper":
+      "Per a persianes sense realimentació de posició que informen d'obert/tancat quan el motor s'atura a mig recorregut en lloc de fer-ho només als finals de cursa físics. Quan s'informa d'un estat de tancat, el seguiment s'atura a la posició calculada en lloc de saltar a 0%.",
+    "position_reporting.command_echo": "L'estat reflecteix l'última ordre",
+    "position_reporting.command_echo_helper":
+      "Activa-ho per a persianes (per exemple, algunes persianes Tuya) l'estat obert/tancat/desconegut de les quals és un eco de l'ordre en lloc d'un final de cursa real: no informen cap transició d'obertura o tancament ni cap posició. L'estat es tracta com una ordre d'obrir/tancar/aturar i el seguiment de la posició es fa per temps.",
     "entities.force_time_based_position": "Força el posicionament per temps",
     "entities.force_time_based_position_helper":
       "Per defecte, si la persiana embolcallada admet establir la posició, l'ordre de posició se li envia directament. Activa aquesta opció per accionar-la amb obertura/tancament/aturada temporitzats, ignorant-ne la compatibilitat nativa amb l'establiment de posició.",
-    "entities.reports_command_not_endpoint": "Informa d'ordres, no de finals de cursa",
-    "entities.reports_command_not_endpoint_helper":
-      "Activa-ho per a persianes (per exemple, algunes persianes Tuya) l'estat obert/tancat/desconegut de les quals és un eco de l'ordre en lloc d'un final de cursa real: no informen cap transició d'obertura o tancament ni cap posició. L'estat es tracta com una ordre d'obrir/tancar/aturar i el seguiment de la posició es fa per temps.",
     "entities.invert": "Inverteix la posició",
     "entities.invert_helper":
       "Inverteix l'eix de posició: informa de 100 − la posició de la persiana embolcallada i intercanvia obertura i tancament. Fes-ho servir per a persianes que funcionen al revés, per exemple un tendal l'entitat subjacent del qual indica obert = desplegat. Només afecta l'eix de posició; la lògica d'inclinació no canvia: està pensat per a cobertes que només tenen posició (tendals/persianes enrotllables), no per a venecianes amb lamel·les orientables.",

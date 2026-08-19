@@ -57,6 +57,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         ignore_reported_position=False,
         force_time_based_position=False,
         reports_command_not_endpoint=False,
+        ignore_endpoint_states=False,
         invert=False,
         **kwargs,
     ):
@@ -65,6 +66,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._ignore_reported_position = ignore_reported_position
         self._force_time_based_position = force_time_based_position
         self._reports_command_not_endpoint = reports_command_not_endpoint
+        self._ignore_endpoint_states = ignore_endpoint_states
         self._invert = invert
         self._last_self_command_time: float | None = None
         # Set while a command-echo cover is mid-reconnect, so the retained
@@ -613,7 +615,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
 
         ``trust_closed=False`` drops that fallback, for a caller holding a
         state it does not consider a real endpoint report (see the reappearance
-        handling in _handle_external_state_change).
+        handling in _handle_external_state_change). ``ignore_endpoint_states``
+        drops it too, for a cover whose open/closed states fire when the motor
+        merely stops mid-travel rather than only at the physical endpoints
+        (issue #238) — there a `closed` proves nothing about position.
         """
         state = self.hass.states.get(self._cover_entity_id)
         if state is None:
@@ -626,7 +631,11 @@ class WrappedCoverTimeBased(CoverTimeBased):
             attr_pos = state.attributes.get(ATTR_CURRENT_POSITION)
             if isinstance(attr_pos, (int, float)) and 0 <= attr_pos <= 100:
                 return self._invert_position(int(attr_pos))
-        if trust_closed and state.state == STATE_CLOSED:
+        if (
+            trust_closed
+            and not self._ignore_endpoint_states
+            and state.state == STATE_CLOSED
+        ):
             return self._invert_position(0)
         return None
 

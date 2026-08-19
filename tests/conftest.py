@@ -9,6 +9,7 @@ from custom_components.cover_time_based.const import (
     CONF_CLOSE_INCLUDES_TILT,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
+    CONF_IGNORE_ENDPOINT_STATES,
     CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
     CONF_RECALIBRATE_BEFORE_POSITION,
@@ -113,6 +114,7 @@ def make_cover(make_hass, _mock_position_store):
         ignore_reported_position=None,
         force_time_based_position=None,
         reports_command_not_endpoint=None,
+        ignore_endpoint_states=None,
         force_endpoint_redrive=None,
         wait_for_relay_feedback=None,
         recalibrate_before_position=None,
@@ -179,6 +181,8 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_FORCE_TIME_BASED_POSITION] = force_time_based_position
         if reports_command_not_endpoint is not None:
             options[CONF_REPORTS_COMMAND_NOT_ENDPOINT] = reports_command_not_endpoint
+        if ignore_endpoint_states is not None:
+            options[CONF_IGNORE_ENDPOINT_STATES] = ignore_endpoint_states
         if force_endpoint_redrive is not None:
             options[CONF_FORCE_ENDPOINT_REDRIVE] = force_endpoint_redrive
         if wait_for_relay_feedback is not None:

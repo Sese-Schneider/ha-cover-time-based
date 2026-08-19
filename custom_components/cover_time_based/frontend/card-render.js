@@ -256,6 +256,71 @@ export function renderToggleWithHelp(card, labelKey, helperKey, checked, onChang
   `;
 }
 
+// The report-interpretation profile a wrapped cover is configured for. The
+// three underlying booleans are mutually exclusive in practice, so they read
+// back as one of these four profiles (all false = the reliable default). Kept
+// in sync with _onPositionReportingChange, which writes the inverse mapping.
+export function positionReportingProfile(c) {
+  if (c.reports_command_not_endpoint) return "command_echo";
+  if (c.ignore_endpoint_states) return "no_endpoints";
+  if (c.ignore_reported_position) return "unreliable";
+  return "reliable";
+}
+
+export function renderPositionReporting(card, c) {
+  const profile = positionReportingProfile(c);
+  const open = card._openHelp === "position_reporting.help";
+  const opt = (value) => html`
+    <option value=${value} ?selected=${profile === value}>
+      ${card._t(`position_reporting.${value}`)}
+    </option>
+  `;
+  return html`
+    <div class="position-reporting">
+      <div class="field-label">
+        ${card._t("position_reporting.label")}
+        <span class="help-anchor">
+          <ha-icon
+            class="help-icon"
+            icon="mdi:help-circle-outline"
+            role="button"
+            tabindex="0"
+            aria-label=${card._t("more_info")}
+            aria-expanded=${open ? "true" : "false"}
+            @click=${(e) => {
+              e.stopPropagation();
+              card._toggleHelp("position_reporting.help");
+            }}
+            @keydown=${(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                card._toggleHelp("position_reporting.help");
+              } else if (e.key === "Escape") {
+                card._closeHelp();
+              }
+            }}
+          ></ha-icon>
+          ${
+            open
+              ? html`<div class="info-popover" role="tooltip">
+                ${card._t(`position_reporting.${profile}_helper`)}
+              </div>`
+              : ""
+          }
+        </span>
+      </div>
+      <select
+        class="ha-select"
+        id="position-reporting-select"
+        @change=${card._onPositionReportingChange}
+      >
+        ${opt("reliable")} ${opt("unreliable")} ${opt("no_endpoints")}
+        ${opt("command_echo")}
+      </select>
+    </div>
+  `;
+}
+
 export function renderInputEntities(card, c) {
   if (c.control_mode === "wrapped") {
     return html`
@@ -268,29 +333,13 @@ export function renderInputEntities(card, c) {
           label=${card._t("entities.cover_entity")}
           @value-changed=${card._onCoverEntityChange}
         ></ha-entity-picker>
-        ${renderToggleWithHelp(
-          card,
-          "entities.ignore_reported_position",
-          "entities.ignore_reported_position_helper",
-          !!c.ignore_reported_position,
-          (e) => card._updateLocal({ ignore_reported_position: e.target.checked }),
-        )}
+        ${renderPositionReporting(card, c)}
         ${renderToggleWithHelp(
           card,
           "entities.force_time_based_position",
           "entities.force_time_based_position_helper",
           !!c.force_time_based_position,
           (e) => card._updateLocal({ force_time_based_position: e.target.checked }),
-        )}
-        ${renderToggleWithHelp(
-          card,
-          "entities.reports_command_not_endpoint",
-          "entities.reports_command_not_endpoint_helper",
-          !!c.reports_command_not_endpoint,
-          (e) =>
-            card._updateLocal({
-              reports_command_not_endpoint: e.target.checked,
-            }),
         )}
         ${renderToggleWithHelp(card, "entities.invert", "entities.invert_helper", !!c.invert, (e) =>
           card._updateLocal({ invert: e.target.checked }),

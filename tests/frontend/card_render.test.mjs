@@ -480,13 +480,13 @@ test("_renderToggleWithHelp: .info-popover absent when _openHelp is a different 
   expect(card.shadowRoot.querySelector(".info-popover")).toBeNull();
 });
 
-test("wrapped mode: _openHelp=ignore_reported_position_helper shows the popover", async () => {
+test("wrapped mode: _openHelp=position_reporting.help shows the popover", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: wrappedCfg(),
     activeTab: "device",
   });
-  card._openHelp = "entities.ignore_reported_position_helper";
+  card._openHelp = "position_reporting.help";
   card.requestUpdate();
   await card.updateComplete;
   expect(card.shadowRoot.querySelector(".info-popover")).not.toBeNull();
@@ -513,46 +513,17 @@ test("wrapped mode renders cover entity-picker (with includeDomains cover)", asy
   expect(coverPicker).not.toBeUndefined();
 });
 
-test("wrapped mode renders ha-switch toggles (ignore-reported-position, force-time-based, reports-command-not-endpoint, invert, assumed-state, force-endpoint-redrive, recalibrate-before-position)", async () => {
+test("wrapped mode renders ha-switch toggles (force-time-based, invert, assumed-state, force-endpoint-redrive, recalibrate-before-position)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: wrappedCfg(),
     activeTab: "device",
   });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // Exactly 7 toggles: ignore_reported_position, force_time_based_position,
-  // reports_command_not_endpoint, invert, assumed_state, force_endpoint_redrive,
-  // recalibrate_before_position
-  expect(toggles.length).toBe(7);
-});
-
-test("wrapped mode: toggling reports-command-not-endpoint calls _updateLocal", async () => {
-  card = await mountCard(makeHass(), {
-    selectedEntity: "cover.x",
-    config: wrappedCfg(),
-    activeTab: "device",
-  });
-  const captured = [];
-  card._updateLocal = (u) => captured.push(u);
-  // Order in renderInputEntities: [0] ignore_reported_position,
-  // [1] force_time_based_position, [2] reports_command_not_endpoint, [3] invert,
-  // [4] assumed_state, [5] force_endpoint_redrive
-  const toggle = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch")[2];
-  toggle.checked = true;
-  toggle.dispatchEvent(new Event("change"));
-  expect(captured).toContainEqual({ reports_command_not_endpoint: true });
-});
-
-test("wrapped mode: _openHelp=reports_command_not_endpoint_helper shows the popover", async () => {
-  card = await mountCard(makeHass(), {
-    selectedEntity: "cover.x",
-    config: wrappedCfg(),
-    activeTab: "device",
-  });
-  card._openHelp = "entities.reports_command_not_endpoint_helper";
-  card.requestUpdate();
-  await card.updateComplete;
-  expect(card.shadowRoot.querySelector(".info-popover")).not.toBeNull();
+  // Exactly 5 toggles: force_time_based_position, invert, assumed_state,
+  // force_endpoint_redrive, recalibrate_before_position. (ignore_reported_position
+  // and reports_command_not_endpoint are now the position-reporting dropdown.)
+  expect(toggles.length).toBe(5);
 });
 
 test("switch mode renders open + close switch pickers (no stop switch)", async () => {
@@ -1460,8 +1431,7 @@ test("tilt select omits dual_motor option for wrapped mode when cover lacks nati
     config: wrappedCfg({ tilt_mode: "none" }),
     activeTab: "device",
   });
-  const selects = card.shadowRoot.querySelectorAll("select.ha-select");
-  const tiltSelect = selects[1];
+  const tiltSelect = card.shadowRoot.querySelector("#tilt-mode-select");
   const values = [...tiltSelect.options].map((o) => o.value);
   // allowDualMotor is false (wrapped + cover has no tilt bits) → dual_motor absent
   expect(values).not.toContain("dual_motor");
@@ -1483,8 +1453,7 @@ test("tilt select shows dual_motor for wrapped mode when cover HAS native tilt b
     config: wrappedCfg({ tilt_mode: "none" }),
     activeTab: "device",
   });
-  const selects = card.shadowRoot.querySelectorAll("select.ha-select");
-  const tiltSelect = selects[1];
+  const tiltSelect = card.shadowRoot.querySelector("#tilt-mode-select");
   const values = [...tiltSelect.options].map((o) => o.value);
   // allowDualMotor is true (wrapped + cover has tilt bits) → dual_motor present
   expect(values).toContain("dual_motor");

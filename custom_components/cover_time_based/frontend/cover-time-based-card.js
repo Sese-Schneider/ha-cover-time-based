@@ -483,6 +483,36 @@ class CoverTimeBasedCard extends LitElement {
     this._updateLocal(updates);
   }
 
+  _onPositionReportingChange(e) {
+    // One dropdown stands in for three mutually-exclusive booleans describing
+    // how the wrapped cover reports position. Each profile writes all three so
+    // switching between them never leaves a stale flag set (all false is the
+    // reliable default). Mirrors positionReportingProfile() in card-render.js.
+    const PROFILES = {
+      reliable: {
+        ignore_reported_position: false,
+        ignore_endpoint_states: false,
+        reports_command_not_endpoint: false,
+      },
+      unreliable: {
+        ignore_reported_position: true,
+        ignore_endpoint_states: false,
+        reports_command_not_endpoint: false,
+      },
+      no_endpoints: {
+        ignore_reported_position: false,
+        ignore_endpoint_states: true,
+        reports_command_not_endpoint: false,
+      },
+      command_echo: {
+        ignore_reported_position: false,
+        ignore_endpoint_states: false,
+        reports_command_not_endpoint: true,
+      },
+    };
+    this._updateLocal(PROFILES[e.target.value] || PROFILES.reliable);
+  }
+
   _onPulseTimeChange(e) {
     const val = parseFloat(e.target.value);
     if (!isNaN(val) && val >= 0.1) {
