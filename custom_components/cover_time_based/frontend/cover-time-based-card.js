@@ -500,7 +500,7 @@ class CoverTimeBasedCard extends LitElement {
         reports_command_not_endpoint: false,
       },
       no_endpoints: {
-        ignore_reported_position: true,
+        ignore_reported_position: false,
         ignore_endpoint_states: true,
         reports_command_not_endpoint: false,
       },

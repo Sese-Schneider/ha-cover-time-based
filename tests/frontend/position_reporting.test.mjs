@@ -71,10 +71,10 @@ test("derives unreliable from ignore_reported_position", async () => {
   expect(selectedValue(select(card))).toBe("unreliable");
 });
 
-test("derives no_endpoints from ignore_endpoint_states", async () => {
+test("derives no_endpoints from ignore_endpoint_states alone", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
-    config: wrappedCfg({ ignore_reported_position: true, ignore_endpoint_states: true }),
+    config: wrappedCfg({ ignore_endpoint_states: true }),
     activeTab: "device",
   });
   expect(selectedValue(select(card))).toBe("no_endpoints");
@@ -89,10 +89,10 @@ test("derives command_echo from reports_command_not_endpoint", async () => {
   expect(selectedValue(select(card))).toBe("command_echo");
 });
 
-test("selecting no_endpoints writes the ignore_endpoint_states combination", async () => {
+test("selecting no_endpoints writes ignore_endpoint_states only (strict inverse of the read)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
-    config: wrappedCfg(),
+    config: wrappedCfg({ ignore_reported_position: true }),
     activeTab: "device",
   });
   const captured = [];
@@ -101,7 +101,7 @@ test("selecting no_endpoints writes the ignore_endpoint_states combination", asy
   sel.value = "no_endpoints";
   sel.dispatchEvent(new Event("change"));
   expect(captured).toContainEqual({
-    ignore_reported_position: true,
+    ignore_reported_position: false,
     ignore_endpoint_states: true,
     reports_command_not_endpoint: false,
   });
