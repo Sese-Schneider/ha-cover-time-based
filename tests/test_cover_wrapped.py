@@ -28,6 +28,7 @@ def _make_wrapped_cover(
     cover_entity_id="cover.inner",
     force_time_based_position=False,
     reports_command_not_endpoint=False,
+    ignore_endpoint_states=False,
     invert=False,
     tilt_time_close=None,
     tilt_time_open=None,
@@ -63,6 +64,7 @@ def _make_wrapped_cover(
         cover_entity_id=cover_entity_id,
         force_time_based_position=force_time_based_position,
         reports_command_not_endpoint=reports_command_not_endpoint,
+        ignore_endpoint_states=ignore_endpoint_states,
         invert=invert,
     )
     hass = MagicMock()
@@ -1040,6 +1042,75 @@ class TestWrappedCommandEchoMode:
         with patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock:
             await cover._handle_external_state_change("cover.inner", "open", "closed")
         snap_mock.assert_awaited_once_with(0)
+
+
+class TestWrappedIgnoreEndpointStates:
+    """ignore_endpoint_states: a wrapped cover with no position feedback that
+    reports open/closed when the motor merely stops mid-travel (not only at the
+    physical endpoints). With the flag on, a reported `closed` is no longer
+    trusted as the 0% endpoint — the tracker stops where it is instead of
+    snapping to 0. Unlike command-echo mode, opening/closing are still honored
+    as real movement. Issue #238.
+    """
+
+    @pytest.mark.asyncio
+    async def test_default_flag_is_false(self):
+        cover = _make_wrapped_cover()
+        assert cover._ignore_endpoint_states is False
+
+    def test_closed_reported_position_is_none_when_flag_on(self):
+        cover = _make_wrapped_cover(ignore_endpoint_states=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP, state="closed")
+        assert cover._wrapped_reported_position() is None
+
+    def test_closed_reported_position_is_none_when_flag_on_inverted(self):
+        # Inverted, the closed fallback would be 100; the flag must drop it too.
+        cover = _make_wrapped_cover(ignore_endpoint_states=True, invert=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP, state="closed")
+        assert cover._wrapped_reported_position() is None
+
+    def test_closed_still_maps_to_zero_when_flag_off(self):
+        # Regression: the default still trusts closed as the 0% endpoint.
+        cover = _make_wrapped_cover(ignore_endpoint_states=False)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP, state="closed")
+        assert cover._wrapped_reported_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_external_closing_to_closed_stops_at_tracked_position(self):
+        # The headline #238 case: a wall-switch close that stops mid-travel
+        # reports closing -> closed. With the flag on we stop the tracker where
+        # it is, never snapping to 0.
+        cover = _make_wrapped_cover(ignore_endpoint_states=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP, state="closed")
+        with (
+            patch.object(cover, "async_stop_cover", new=AsyncMock()) as stop_mock,
+            patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock,
+        ):
+            await cover._handle_external_state_change(
+                "cover.inner", "closing", "closed"
+            )
+        stop_mock.assert_awaited_once()
+        snap_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_external_closing_to_closed_snaps_to_zero_when_flag_off(self):
+        # Regression: with the flag off, closing -> closed still snaps to 0.
+        cover = _make_wrapped_cover(ignore_endpoint_states=False)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP, state="closed")
+        with patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock:
+            await cover._handle_external_state_change(
+                "cover.inner", "closing", "closed"
+            )
+        snap_mock.assert_awaited_once_with(0)
+
+    def test_option_flows_through_cover_factory(self, make_cover):
+        # The real options -> cover.py -> constructor path wires the flag.
+        cover = make_cover(cover_entity_id="cover.inner", ignore_endpoint_states=True)
+        assert cover._ignore_endpoint_states is True
+
+    def test_option_defaults_false_through_cover_factory(self, make_cover):
+        cover = make_cover(cover_entity_id="cover.inner")
+        assert cover._ignore_endpoint_states is False
 
 
 class TestUseNativeTilt:

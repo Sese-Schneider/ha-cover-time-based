@@ -60,9 +60,10 @@ test("invert toggle reflects stored true", async () => {
     activeTab: "device",
   });
   const toggles = [...card.shadowRoot.querySelectorAll("ha-switch.toggle-switch")];
-  // Wrapped order: [0] ignore, [1] force, [2] reports_command_not_endpoint,
-  // [3] invert, [4] assumed_state
-  expect(toggles[3].checked).toBe(true);
+  // Wrapped order (post #238 dropdown): [0] force_time_based_position,
+  // [1] invert, [2] assumed_state, [3] force_endpoint_redrive,
+  // [4] recalibrate_before_position
+  expect(toggles[1].checked).toBe(true);
 });
 
 test("toggling invert calls _updateLocal({ invert })", async () => {
@@ -73,7 +74,7 @@ test("toggling invert calls _updateLocal({ invert })", async () => {
   });
   const captured = [];
   card._updateLocal = (u) => captured.push(u);
-  const toggle = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch")[3];
+  const toggle = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch")[1];
   toggle.checked = true;
   toggle.dispatchEvent(new Event("change"));
   expect(captured).toContainEqual({ invert: true });

@@ -42,6 +42,14 @@ export const cardStyles = css`
         margin: -4px 0 8px;
       }
 
+      .position-reporting {
+        margin-top: 8px;
+      }
+
+      .position-reporting .field-label {
+        margin-bottom: 6px;
+      }
+
       .toggle-with-help {
         display: flex;
         align-items: center;

@@ -21,6 +21,7 @@ from .cover import (
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
+    CONF_IGNORE_ENDPOINT_STATES,
     CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
     CONF_MAX_TILT_ALLOWED_POSITION,
@@ -54,6 +55,7 @@ from .cover import (
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
+    DEFAULT_IGNORE_ENDPOINT_STATES,
     DEFAULT_IGNORE_REPORTED_POSITION,
     DEFAULT_INVERT,
     DEFAULT_PULSE_TIME,
@@ -83,6 +85,7 @@ _FIELD_MAP = {
     "ignore_reported_position": CONF_IGNORE_REPORTED_POSITION,
     "force_time_based_position": CONF_FORCE_TIME_BASED_POSITION,
     "reports_command_not_endpoint": CONF_REPORTS_COMMAND_NOT_ENDPOINT,
+    "ignore_endpoint_states": CONF_IGNORE_ENDPOINT_STATES,
     "invert": CONF_INVERT,
     "tilt_mode": CONF_TILT_MODE,
     "travel_time_close": CONF_TRAVEL_TIME_CLOSE,
@@ -214,6 +217,9 @@ async def ws_get_config(
                 CONF_REPORTS_COMMAND_NOT_ENDPOINT,
                 DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
             ),
+            "ignore_endpoint_states": options.get(
+                CONF_IGNORE_ENDPOINT_STATES, DEFAULT_IGNORE_ENDPOINT_STATES
+            ),
             "invert": options.get(CONF_INVERT, DEFAULT_INVERT),
             "tilt_mode": tilt_mode,
             "travel_time_close": options.get(CONF_TRAVEL_TIME_CLOSE),
@@ -276,6 +282,7 @@ async def ws_get_config(
         vol.Optional("ignore_reported_position"): vol.Any(None, bool),
         vol.Optional("force_time_based_position"): vol.Any(None, bool),
         vol.Optional("reports_command_not_endpoint"): vol.Any(None, bool),
+        vol.Optional("ignore_endpoint_states"): vol.Any(None, bool),
         vol.Optional("invert"): vol.Any(None, bool),
         vol.Optional("assumed_state"): vol.Any(None, bool),
         vol.Optional("tilt_mode"): vol.In(
