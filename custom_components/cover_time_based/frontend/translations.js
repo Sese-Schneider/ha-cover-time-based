@@ -1466,6 +1466,166 @@ export const TRANSLATIONS = {
       "Fes clic a Finalitza quan la persiana estigui totalment oberta.",
     "hints.min_movement_time": "Fes clic a Finalitza tan bon punt notis que la persiana es mou.",
   },
+  cs: {
+    header: "Konfigurace Cover Time Based",
+    loading: "Načítání...",
+    saving: "Ukládání...",
+    save_failed: "Uložení selhalo — hodnota vrácena",
+    confirm_cancel_calibration: "Probíhá kalibrace. Zrušit ji a pokračovat?",
+    create_new: "+ Vytvořit novou entitu rolety",
+    yaml_warning:
+      "Tato entita používá konfiguraci YAML a nelze ji nastavit z této karty. Přejděte prosím na uživatelské rozhraní: Nastavení → Zařízení a služby → Pomocníci → Vytvořit pomocníka → Cover Time Based.",
+    load_failed: "Nepodařilo se načíst konfiguraci. Zkuste to prosím znovu.",
+    "tabs.device": "Zařízení",
+    "tabs.calibration": "Kalibrace",
+    "control_mode.label": "Režim ovládání",
+    "control_mode.wrapped": "Zabalit existující entitu rolety",
+    "control_mode.switch": "Spínač (trvalý)",
+    "control_mode.pulse": "Impulz (dočasný)",
+    "control_mode.toggle": "Přepínání (stejné tlačítko)",
+    "control_mode.toggle_opposite": "Přepínání (opačné tlačítko)",
+    "control_mode.pulse_time": "Doba impulzu",
+    "entities.cover_entity": "Entita rolety",
+    "position_reporting.label": "Hlášení pozice",
+    "position_reporting.reliable": "Spolehlivá zpětná vazba pozice",
+    "position_reporting.reliable_helper":
+      "Zabalená roleta hlásí důvěryhodnou pozici a dosahuje svých skutečných koncových poloh otevřeno/zavřeno. Výchozí volba — správná, pokud se sledovaná pozice neodchyluje od toho, kde roleta ve skutečnosti je.",
+    "position_reporting.unreliable": "Pozice nespolehlivá — sledovat podle času",
+    "position_reporting.unreliable_helper":
+      "Sledovat pozici pouze podle času a ignorovat pozici, kterou hlásí zabalená roleta. Zapněte, pokud podkladová roleta hlásí nespolehlivou pozici.",
+    "position_reporting.no_endpoints":
+      "Žádné skutečné koncové polohy — hlásí otevřeno/zavřeno při zastavení",
+    "position_reporting.no_endpoints_helper":
+      "Pro rolety bez zpětné vazby pozice, které při zastavení motoru uprostřed pohybu hlásí otevřeno/zavřeno, nikoli pouze ve fyzických koncových polohách. Hlášený stav zavřeno zastaví sledování na vypočtené pozici místo skoku na 0 %.",
+    "position_reporting.command_echo": "Stav zrcadlí poslední příkaz",
+    "position_reporting.command_echo_helper":
+      "Zapněte pro rolety (např. některé rolety Tuya), jejichž stav otevřeno/zavřeno/neznámý je ozvěnou příkazu, nikoli skutečnou koncovou polohou — nehlásí žádný přechod otevírání/zavírání ani pozici. Stav je považován za příkaz otevřít/zavřít/zastavit a pozice se sleduje podle času.",
+    "entities.force_time_based_position": "Vynutit polohování podle času",
+    "entities.force_time_based_position_helper":
+      "Ve výchozím nastavení, pokud zabalená roleta podporuje nastavení pozice, je příkaz nastavení pozice odeslán přímo jí. Zapnutím ji místo toho budete ovládat časovaným otevřít/zavřít/zastavit a její nativní podpora nastavení pozice se bude ignorovat.",
+    "entities.invert": "Invertovat pozici",
+    "entities.invert_helper":
+      "Převrátí osu pozice: hlásí 100 − pozici zabalené rolety a prohodí otevřít/zavřít. Použijte pro rolety, které jedou obráceně, např. markýzu, kde podkladová entita hlásí otevřeno = vysunuto. Pouze osa pozice; logika náklonu zůstává beze změny — určeno pro rolety pouze s pozicí (markýzy/rolety), nikoli pro naklápěcí žaluzie.",
+    "entities.switch_entities": "Entity spínačů",
+    "entities.open_switch": "Spínač otevírání",
+    "entities.close_switch": "Spínač zavírání",
+    "entities.stop_switch": "Spínač zastavení",
+    "entities.switch_entities_pulse": "Entity spínačů / skriptů",
+    "entities.open_switch_pulse": "Spínač nebo skript otevírání",
+    "entities.close_switch_pulse": "Spínač nebo skript zavírání",
+    "entities.stop_switch_pulse": "Spínač nebo skript zastavení",
+    "tilt.label": "Režim náklonu",
+    "tilt.none": "Nepodporováno",
+    "tilt.sequential_close": "Zavře a poté nakloní do zavřeno",
+    "tilt.sequential_open": "Zavře a poté nakloní do otevřeno",
+    "tilt.dual_motor": "Samostatný motor náklonu",
+    "tilt.inline": "Naklání se současně s pohybem",
+    "tilt_motor.label": "Motor náklonu",
+    "tilt_motor.open_switch": "Spínač otevírání náklonu",
+    "tilt_motor.close_switch": "Spínač zavírání náklonu",
+    "tilt_motor.stop_switch": "Spínač zastavení náklonu",
+    "tilt_motor.label_pulse": "Motor náklonu (spínač nebo skript)",
+    "tilt_motor.open_switch_pulse": "Spínač nebo skript otevírání náklonu",
+    "tilt_motor.close_switch_pulse": "Spínač nebo skript zavírání náklonu",
+    "tilt_motor.stop_switch_pulse": "Spínač nebo skript zastavení náklonu",
+    "tilt_motor.safe_position": "Bezpečná pozice náklonu",
+    "tilt_motor.safe_position_helper": "Náklon se sem přesune před pohybem (100 = plně otevřeno)",
+    "tilt_motor.max_allowed_position": "Maximální povolená pozice náklonu (volitelné)",
+    "tilt_motor.max_allowed_helper":
+      "Náklon je povolen pouze tehdy, když je pozice rolety na této hodnotě nebo pod ní (0 = zavřeno, 100 = otevřeno)",
+    "tilt.close_includes_tilt": "Zavření rolety zavře i lamely",
+    "tilt.close_includes_tilt_helper": "Při zavírání se lamely na konci pohybu naklopí do zavřeno",
+    "assumed_state.label": "Předpokládaný stav",
+    "assumed_state.helper":
+      "Když je zapnuto, Home Assistant považuje pozici za odhadovanou a ponechává ovládací prvky otevření i zavření aktivní. Vypněte, pokud důvěřujete výpočtu podle času a chcete, aby rozhraní zešedlo nedostupné akce (např. zavřít, když je již zavřeno).",
+    "relay_reports_off.label": "Relé hlásí své vlastní vypnutí (OFF)",
+    "relay_reports_off.helper":
+      "Ponechte zapnuté pro běžná přepínací relé, která se po impulzu sama vypnou a nahlásí to. Vypněte pro pulzní moduly řízené hardwarem (např. Aqara T2), které pulzují interně, ale nikdy nenahlásí, když se vypnou, takže entita spínače zůstane zaseknutá v zapnutém stavu. Když je vypnuto, integrace odešle na jeden stisk vždy pouze jeden příkaz ZAPNOUT (ON) a nikdy VYPNOUT (OFF) — takže každý stisk je přesně jedna čistá aktivace bez zdvojených příkazů.",
+    "send_endpoint_stop.label": "Odeslat signál zastavení v koncových polohách",
+    "send_endpoint_stop.helper":
+      "Když vaše roleta dosáhne plně otevřeno nebo zavřeno, odešle se impulz zastavení. Ponechte zapnuté pro ovladače, které běží dál, dokud neobdrží zastavení (jinak se roleta zasekne a fyzická tlačítka přestanou reagovat). Vypněte, pokud se váš motor v koncových polohách zastaví sám a další zastavení jej přesune do přednastavené/oblíbené pozice.",
+    "force_endpoint_redrive.label": "V koncových polohách vždy znovu odeslat otevřít/zavřít",
+    "force_endpoint_redrive.helper":
+      "Pro rolety bez zpětné vazby pozice, které lze ovládat i externím dálkovým ovladačem, takže se Home Assistant může mylně domnívat, že jsou již plně otevřené nebo zavřené. Když je zapnuto, příkaz otevřít nebo zavřít je vždy vykonán po celou dobu pohybu, i když si Home Assistant myslí, že tam roleta již je — čímž se zaručí, že příkaz dorazí k motoru. Ponechte vypnuté pro rolety, které hlásí svou vlastní pozici.",
+    "wait_for_relay_feedback.label": "Před sledováním počkat na potvrzení relé",
+    "wait_for_relay_feedback.helper":
+      "Spustí časovač pozice ve chvíli, kdy relé nahlásí, že se zaplo, místo v okamžiku odeslání příkazu. V pomalé nebo studené síti Zigbee/Z-Wave může příkazu trvat několik sekund, než dorazí k relé; bez této volby se toto zpoždění počítá jako pohyb a sledovaná pozice předbíhá roletu. Ponechte vypnuté, pokud se pozice neodchyluje u rolet, jejichž relé reaguje pomalu.",
+    "recalibrate_before_position.label": "Před přesunem na pozici plně otevřít (Beta)",
+    "recalibrate_before_position.helper":
+      "Pro rolety bez zpětné vazby pozice, kterými může pohybovat i dálkový ovladač. Před každým příkazem na pozici roletu plně otevře, takže pohyb začíná ze známé pozice místo z odchýleného odhadu. Zhruba zdvojnásobí dráhu každého pohybu a u současného nebo sekvenčního náklonu pohne roletou, když upravujete lamely.",
+    more_info: "Více informací",
+    "timing.travel_attribute_header": "Atribut pohybu",
+    "timing.tilt_attribute_header": "Atribut náklonu",
+    "timing.value_header": "Hodnota",
+    "timing.not_set": "Nenastaveno",
+    "timing.travel_time_close": "Doba pohybu (zavírání)",
+    "timing.travel_time_open": "Doba pohybu (otevírání)",
+    "timing.travel_startup_delay": "Prodleva rozjezdu pohybu",
+    "timing.tilt_time_close": "Doba náklonu (zavírání)",
+    "timing.tilt_time_open": "Doba náklonu (otevírání)",
+    "timing.tilt_startup_delay": "Prodleva rozjezdu náklonu",
+    "timing.min_movement_time": "Minimální doba pohybu",
+    "timing.endpoint_runon_time": "Doba doběhu v koncové poloze",
+    "position.label": "Aktuální pozice",
+    "position.helper": "Přesuňte roletu do známé koncové polohy a poté nastavte pozici.",
+    "position.unknown": "Neznámá",
+    "position.open": "Plně otevřeno",
+    "position.closed": "Plně zavřeno",
+    "position.closed_tilt_open": "Plně zavřeno, náklon otevřen",
+    "position.closed_tilt_closed": "Plně zavřeno, náklon zavřen",
+    "calibration.label": "Kalibrace časování",
+    "calibration.attribute_label": "Atribut",
+    "calibration.start": "Spustit",
+    "calibration.active": "Kalibrace probíhá",
+    "calibration.step": "Krok {step}",
+    "calibration.final_step": "Poslední krok",
+    "calibration.cancel": "Zrušit",
+    "calibration.finish": "Dokončit",
+    "calibration.set_position_first": "Nastavte pozici pro spuštění kalibrace.",
+    "controls.cover_label": "Roleta",
+    "controls.tilt_label": "Náklon",
+    "controls.open": "Otevřít",
+    "controls.stop": "Zastavit",
+    "controls.close": "Zavřít",
+    "controls.tilt_open": "Otevřít náklon",
+    "controls.tilt_stop": "Zastavit náklon",
+    "controls.tilt_close": "Zavřít náklon",
+    "hints.sequential_close.travel_time_close":
+      "Začněte s plně otevřenou roletou. Klikněte na Dokončit, když je roleta plně zavřená, dříve než se lamely začnou naklánět.",
+    "hints.sequential_close.travel_time_open":
+      "Začněte se zavřenou roletou a otevřenými lamelami. Klikněte na Dokončit, když je roleta plně otevřená.",
+    "hints.sequential_close.tilt_time_close":
+      "Začněte se zavřenou roletou, ale otevřenými lamelami. Klikněte na Dokončit, když jsou lamely plně zavřené.",
+    "hints.sequential_close.tilt_time_open":
+      "Začněte se zavřenou roletou i lamelami. Klikněte na Dokončit, když jsou lamely otevřené.",
+    "hints.sequential_open.travel_time_close":
+      "Začněte s plně otevřenou roletou a zavřenými lamelami. Klikněte na Dokončit, když je roleta plně zavřená, dříve než se lamely začnou naklánět do otevřeno.",
+    "hints.sequential_open.travel_time_open":
+      "Začněte se zavřenou roletou i zavřenými lamelami. Klikněte na Dokončit, když je roleta plně otevřená.",
+    "hints.sequential_open.tilt_time_close":
+      "Začněte se zavřenou roletou, ale otevřenými lamelami. Klikněte na Dokončit, když jsou lamely plně zavřené.",
+    "hints.sequential_open.tilt_time_open":
+      "Začněte se zavřenou roletou i lamelami. Klikněte na Dokončit, když jsou lamely plně otevřené.",
+    "hints.dual_motor.travel_time_close":
+      "Začněte s otevřenou roletou a lamelami v bezpečné pozici. Klikněte na Dokončit, když je roleta plně zavřená.",
+    "hints.dual_motor.travel_time_open":
+      "Začněte se zavřenou roletou a lamelami v bezpečné pozici. Klikněte na Dokončit, když je roleta plně otevřená.",
+    "hints.dual_motor.tilt_time_close":
+      "Začněte se zavřenou roletou a otevřenými lamelami. Klikněte na Dokončit, když jsou lamely plně zavřené.",
+    "hints.dual_motor.tilt_time_open":
+      "Začněte se zavřenou roletou i lamelami. Klikněte na Dokončit, když jsou lamely plně otevřené.",
+    "hints.inline.travel_time_close":
+      "Začněte s plně otevřenou roletou i lamelami. Klikněte na Dokončit, když jsou obě plně zavřené.",
+    "hints.inline.travel_time_open":
+      "Začněte s plně zavřenou roletou i lamelami. Klikněte na Dokončit, když jsou obě plně otevřené.",
+    "hints.inline.tilt_time_close":
+      "Začněte s plně otevřenými lamelami. Klikněte na Dokončit, když jsou lamely plně zavřené.",
+    "hints.inline.tilt_time_open":
+      "Začněte s plně zavřenými lamelami. Klikněte na Dokončit, když jsou lamely plně otevřené.",
+    "hints.none.travel_time_close": "Klikněte na Dokončit, když je roleta plně zavřená.",
+    "hints.none.travel_time_open": "Klikněte na Dokončit, když je roleta plně otevřená.",
+    "hints.min_movement_time": "Klikněte na Dokončit, jakmile zaznamenáte, že se roleta pohybuje.",
+  },
 };
 
 /**
