@@ -1,0 +1,81 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Přidat časově řízenou roletu",
+        "description": "Zvolte název pro svou roletu. Po jejím vytvoření přidejte na dashboard kartu **Cover Time Based**, kde nastavíte všechny možnosti.",
+        "data": {
+          "name": "Název"
+        }
+      }
+    }
+  },
+  "issues": {
+    "card_installed": {
+      "title": "Obnovte prohlížeč, aby se karta Cover Time Based zobrazila",
+      "description": "Karta Cover Time Based pro dashboard byla nainstalována. Home Assistant načítá prostředky dashboardu pouze při načtení stránky, takže v již otevřených relacích prohlížeče karta chybí, dokud stránku znovu nenačtete — a často funguje jen **tvrdé obnovení**. Proveďte tvrdé obnovení (**Ctrl+Shift+R**, nebo **⌘+Shift+R** na macOS), aby se karta načetla; pokud stále zobrazuje chybu konfigurace, vymažte mezipaměť prohlížeče a načtěte stránku znovu. Jakmile se karta objeví, můžete tento problém ignorovat."
+    },
+    "deprecated_yaml": {
+      "title": "Konfigurace pomocí YAML je zastaralá",
+      "description": "Konfigurace Cover Time Based pomocí YAML je zastaralá a bude v budoucí verzi odstraněna.\n\nOdstraňte prosím konfiguraci YAML a znovu vytvořte své rolety pomocí uživatelského rozhraní: **Nastavení > Zařízení a služby > Pomocníci > Vytvořit pomocníka > Cover Time Based**."
+    }
+  },
+  "services": {
+    "set_known_position": {
+      "name": "Nastavit pozici rolety",
+      "description": "Interně nastaví známou pozici rolety.",
+      "fields": {
+        "position": {
+          "name": "Pozice",
+          "description": "Pozice rolety, mezi 0 a 100."
+        }
+      }
+    },
+    "set_known_tilt_position": {
+      "name": "Nastavit pozici náklonu rolety",
+      "description": "Interně nastaví známou pozici náklonu rolety.",
+      "fields": {
+        "tilt_position": {
+          "name": "Pozice",
+          "description": "Pozice náklonu rolety, mezi 0 a 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Spustit kalibraci",
+      "description": "Spustí kalibrační test pro změření časového parametru. Roleta se začne pohybovat — po dosažení požadované koncové polohy zavolejte stop_calibration.",
+      "fields": {
+        "entity_id": {
+          "name": "ID entity",
+          "description": "Roleta ke kalibraci"
+        },
+        "attribute": {
+          "name": "Atribut",
+          "description": "Časový parametr ke kalibraci"
+        },
+        "timeout": {
+          "name": "Časový limit",
+          "description": "Bezpečnostní časový limit v sekundách — motor se automaticky zastaví, pokud není zavolána stop_calibration"
+        },
+        "direction": {
+          "name": "Směr",
+          "description": "Směr pohybu během testu. Pokud není nastaven, určí se automaticky podle aktuální pozice"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Zastavit kalibraci",
+      "description": "Zastaví aktivní kalibrační test. Vypočítá výsledek a uloží jej do konfigurace, pokud není zrušen.",
+      "fields": {
+        "entity_id": {
+          "name": "ID entity",
+          "description": "Kalibrovaná roleta"
+        },
+        "cancel": {
+          "name": "Zrušit",
+          "description": "Pokud je true, zahodí výsledky testu bez uložení"
+        }
+      }
+    }
+  }
+}
