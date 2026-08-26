@@ -2942,3 +2942,141 @@ class TestRecalibrateBeforePositionRoundTrip:
             }
         )
         assert validated["recalibrate_before_position"] is True
+
+
+# ---------------------------------------------------------------------------
+# ws_update_config / ws_get_config — my_position field
+# ---------------------------------------------------------------------------
+
+
+class TestMyPositionField:
+    """Verify my_position round-trips through update_config -> get_config,
+    accepts int/None/coerced-float, and rejects out-of-range values."""
+
+    def test_ws_schema_accepts_my_position_int_and_none(self):
+        schema = ws_update_config._ws_schema
+        assert (
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": "cover.x",
+                    "my_position": 90,
+                }
+            )["my_position"]
+            == 90
+        )
+        assert (
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": "cover.x",
+                    "my_position": None,
+                }
+            )["my_position"]
+            is None
+        )
+        # JSON float coerces (bare int would reject) and range is enforced
+        assert (
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": "cover.x",
+                    "my_position": 90.0,
+                }
+            )["my_position"]
+            == 90
+        )
+
+    def test_ws_schema_rejects_out_of_range_my_position(self):
+        import voluptuous as vol
+
+        schema = ws_update_config._ws_schema
+        with pytest.raises(vol.Invalid):
+            schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": "cover.x",
+                    "my_position": 150,
+                }
+            )
+
+    def test_ws_field_map_persists_my_position(self):
+        from custom_components.cover_time_based.const import CONF_MY_POSITION
+        from custom_components.cover_time_based.websocket_api import _FIELD_MAP
+
+        assert _FIELD_MAP["my_position"] == CONF_MY_POSITION
+
+    @pytest.mark.asyncio
+    async def test_update_config_saves_my_position(self):
+        from custom_components.cover_time_based.const import CONF_MY_POSITION
+
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "my_position": 90,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_options[CONF_MY_POSITION] == 90
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_saved_my_position(self):
+        from custom_components.cover_time_based.const import CONF_MY_POSITION
+
+        hass, _, entity_reg = _make_hass(options={CONF_MY_POSITION: 90})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["my_position"] == 90
+
+    @pytest.mark.asyncio
+    async def test_get_config_defaults_my_position_to_none(self):
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["my_position"] is None

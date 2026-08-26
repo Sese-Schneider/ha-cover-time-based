@@ -26,6 +26,7 @@ from .cover import (
     CONF_INVERT,
     CONF_MAX_TILT_ALLOWED_POSITION,
     CONF_MIN_MOVEMENT_TIME,
+    CONF_MY_POSITION,
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_RECALIBRATE_BEFORE_POSITION,
@@ -78,6 +79,7 @@ _FIELD_MAP = {
     "force_endpoint_redrive": CONF_FORCE_ENDPOINT_REDRIVE,
     "wait_for_relay_feedback": CONF_WAIT_FOR_RELAY_FEEDBACK,
     "recalibrate_before_position": CONF_RECALIBRATE_BEFORE_POSITION,
+    "my_position": CONF_MY_POSITION,
     "open_switch_entity_id": CONF_OPEN_SWITCH_ENTITY_ID,
     "close_switch_entity_id": CONF_CLOSE_SWITCH_ENTITY_ID,
     "stop_switch_entity_id": CONF_STOP_SWITCH_ENTITY_ID,
@@ -234,6 +236,7 @@ async def ws_get_config(
             "min_movement_time": options.get(CONF_MIN_MOVEMENT_TIME),
             "safe_tilt_position": options.get(CONF_SAFE_TILT_POSITION, 100),
             "max_tilt_allowed_position": options.get(CONF_MAX_TILT_ALLOWED_POSITION),
+            "my_position": options.get(CONF_MY_POSITION),
             "tilt_open_switch": options.get(CONF_TILT_OPEN_SWITCH),
             "tilt_close_switch": options.get(CONF_TILT_CLOSE_SWITCH),
             "tilt_stop_switch": options.get(CONF_TILT_STOP_SWITCH),
@@ -328,6 +331,9 @@ async def ws_get_config(
             None, vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
         ),
         vol.Optional("max_tilt_allowed_position"): vol.Any(
+            None, vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
+        ),
+        vol.Optional("my_position"): vol.Any(
             None, vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
         ),
         vol.Optional("tilt_open_switch"): vol.Any(str, None),
