@@ -31,6 +31,7 @@ export const EN = {
   "position_reporting.command_echo": "State mirrors the last command",
   "position_reporting.command_echo_helper":
     "Enable for covers (e.g. some Tuya shutters) whose open/closed/unknown state is a command echo rather than a real endpoint — they report no opening/closing transition and no position. The state is treated as an open/close/stop command and the position is tracked by time.",
+  "position_reporting.docs_link": "Learn more",
   "entities.force_time_based_position": "Force time-based positioning",
   "entities.force_time_based_position_helper":
     "By default, if the wrapped cover supports setting a position, the set-position command is sent straight to it. Enable this to instead drive it with timed open/close/stop, ignoring its native set-position support.",
@@ -193,6 +194,7 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "O estado espelha o último comando",
     "position_reporting.command_echo_helper":
       "Ative para estores (por exemplo, alguns estores Tuya) cujo estado aberto/fechado/desconhecido é um eco do comando em vez de uma posição final real — não reportam transição de abertura/fecho nem posição. O estado é tratado como um comando abrir/fechar/parar e a posição é rastreada pelo tempo.",
+    "position_reporting.docs_link": "Saber mais",
     "entities.force_time_based_position": "Forçar posicionamento por tempo",
     "entities.force_time_based_position_helper":
       "Por predefinição, se o estore envolvido suportar definir a posição, o comando de definir posição é enviado diretamente para ele. Ative isto para o controlar com abrir/fechar/parar temporizados, ignorando o suporte nativo de definir posição.",
@@ -356,6 +358,7 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Stan odzwierciedla ostatnie polecenie",
     "position_reporting.command_echo_helper":
       "Włącz dla rolet (np. niektórych rolet Tuya), których stan otwarta/zamknięta/nieznana jest echem polecenia, a nie rzeczywistą pozycją końcową — nie zgłaszają przejścia otwierania/zamykania ani pozycji. Stan jest traktowany jako polecenie otwórz/zamknij/zatrzymaj, a pozycja jest śledzona na podstawie czasu.",
+    "position_reporting.docs_link": "Dowiedz się więcej",
     "entities.force_time_based_position": "Wymuś pozycjonowanie czasowe",
     "entities.force_time_based_position_helper":
       "Domyślnie, jeśli opakowana roleta obsługuje ustawianie pozycji, polecenie ustawienia pozycji jest wysyłane bezpośrednio do niej. Włącz tę opcję, aby zamiast tego sterować nią za pomocą czasowego otwierania/zamykania/zatrzymywania, ignorując natywną obsługę ustawiania pozycji.",
@@ -518,6 +521,7 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Zustand spiegelt den letzten Befehl",
     "position_reporting.command_echo_helper":
       "Aktiviere dies für Rollläden (z. B. manche Tuya-Rollläden), deren Zustand offen/geschlossen/unbekannt nur ein Echo des Befehls statt einer echten Endlage ist — sie melden weder einen Öffnungs-/Schließvorgang noch eine Position. Der Zustand wird als Öffnen-/Schließen-/Stopp-Befehl behandelt und die Position über die Zeit verfolgt.",
+    "position_reporting.docs_link": "Mehr erfahren",
     "entities.force_time_based_position": "Zeitbasierte Positionierung erzwingen",
     "entities.force_time_based_position_helper":
       "Standardmäßig wird der Positionsbefehl direkt an den eingebundenen Rollladen gesendet, sofern dieser das Setzen einer Position unterstützt. Aktiviere dies, um ihn stattdessen mit zeitgesteuertem Öffnen/Schließen/Stoppen zu fahren und seine native Positionsunterstützung zu ignorieren.",
@@ -684,6 +688,7 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Lo stato rispecchia l'ultimo comando",
     "position_reporting.command_echo_helper":
       "Attiva questa opzione per le tapparelle (ad esempio alcune tapparelle Tuya) il cui stato aperto/chiuso/sconosciuto è l'eco di un comando anziché un vero finecorsa — non riportano alcuna transizione di apertura/chiusura né alcuna posizione. Lo stato viene trattato come un comando di apertura/chiusura/arresto e la posizione viene tracciata in base al tempo.",
+    "position_reporting.docs_link": "Scopri di più",
     "entities.force_time_based_position": "Forza il posizionamento basato sul tempo",
     "entities.force_time_based_position_helper":
       "Per impostazione predefinita, se la tapparella incapsulata supporta l'impostazione della posizione, il comando di posizionamento le viene inviato direttamente. Attiva questa opzione per comandarla invece con apertura/chiusura/arresto temporizzati, ignorando il suo supporto nativo al posizionamento.",
@@ -845,6 +850,7 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Status weerspiegelt het laatste commando",
     "position_reporting.command_echo_helper":
       "Schakel dit in voor rolluiken (bijvoorbeeld sommige Tuya-rolluiken) waarvan de status open/gesloten/onbekend een echo van het commando is in plaats van een echte eindstand — ze rapporteren geen openings- of sluitingsovergang en geen positie. De status wordt behandeld als een commando openen/sluiten/stoppen en de positie wordt op tijd gevolgd.",
+    "position_reporting.docs_link": "Meer informatie",
     "entities.force_time_based_position": "Tijdgebaseerde positionering forceren",
     "entities.force_time_based_position_helper":
       "Standaard wordt het positiecommando rechtstreeks naar het ingekapselde rolluik gestuurd als dat het instellen van een positie ondersteunt. Schakel dit in om het in plaats daarvan aan te sturen met getimed openen/sluiten/stoppen, waarbij de eigen positieondersteuning wordt genegeerd.",
@@ -1008,6 +1014,7 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "L'état reflète la dernière commande",
     "position_reporting.command_echo_helper":
       "Activez cette option pour les volets (par exemple certains volets Tuya) dont l'état ouvert/fermé/inconnu est un écho de la commande plutôt qu'une véritable fin de course — ils ne rapportent ni transition d'ouverture/fermeture, ni position. L'état est traité comme une commande d'ouverture/fermeture/arrêt et la position est suivie d'après le temps.",
+    "position_reporting.docs_link": "En savoir plus",
     "entities.force_time_based_position": "Forcer le positionnement temporisé",
     "entities.force_time_based_position_helper":
       "Par défaut, si le volet encapsulé prend en charge le réglage de la position, la commande de position lui est envoyée directement. Activez cette option pour le piloter à la place par ouverture/fermeture/arrêt temporisés, en ignorant sa prise en charge native du réglage de position.",
@@ -1170,6 +1177,7 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "El estado refleja el último comando",
     "position_reporting.command_echo_helper":
       "Actívalo para persianas (por ejemplo, algunas persianas Tuya) cuyo estado abierto/cerrado/desconocido es un eco del comando en lugar de una posición final real: no informan ninguna transición de apertura o cierre ni ninguna posición. El estado se trata como un comando de abrir/cerrar/detener y la posición se sigue por tiempo.",
+    "position_reporting.docs_link": "Más información",
     "entities.force_time_based_position": "Forzar el posicionamiento por tiempo",
     "entities.force_time_based_position_helper":
       "De forma predeterminada, si la persiana envuelta admite establecer la posición, el comando de posición se le envía directamente. Activa esta opción para accionarla en su lugar con apertura/cierre/parada temporizados, ignorando su compatibilidad nativa con el establecimiento de posición.",
@@ -1335,6 +1343,7 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "L'estat reflecteix l'última ordre",
     "position_reporting.command_echo_helper":
       "Activa-ho per a persianes (per exemple, algunes persianes Tuya) l'estat obert/tancat/desconegut de les quals és un eco de l'ordre en lloc d'un final de cursa real: no informen cap transició d'obertura o tancament ni cap posició. L'estat es tracta com una ordre d'obrir/tancar/aturar i el seguiment de la posició es fa per temps.",
+    "position_reporting.docs_link": "Més informació",
     "entities.force_time_based_position": "Força el posicionament per temps",
     "entities.force_time_based_position_helper":
       "Per defecte, si la persiana embolcallada admet establir la posició, l'ordre de posició se li envia directament. Activa aquesta opció per accionar-la amb obertura/tancament/aturada temporitzats, ignorant-ne la compatibilitat nativa amb l'establiment de posició.",
@@ -1500,6 +1509,7 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Stav zrcadlí poslední příkaz",
     "position_reporting.command_echo_helper":
       "Zapněte pro rolety (např. některé rolety Tuya), jejichž stav otevřeno/zavřeno/neznámý je ozvěnou příkazu, nikoli skutečnou koncovou polohou — nehlásí žádný přechod otevírání/zavírání ani pozici. Stav je považován za příkaz otevřít/zavřít/zastavit a pozice se sleduje podle času.",
+    "position_reporting.docs_link": "Zjistit více",
     "entities.force_time_based_position": "Vynutit polohování podle času",
     "entities.force_time_based_position_helper":
       "Ve výchozím nastavení, pokud zabalená roleta podporuje nastavení pozice, je příkaz nastavení pozice odeslán přímo jí. Zapnutím ji místo toho budete ovládat časovaným otevřít/zavřít/zastavit a její nativní podpora nastavení pozice se bude ignorovat.",

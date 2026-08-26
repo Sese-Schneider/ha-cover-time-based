@@ -107,6 +107,18 @@ export const cardStyles = css`
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       }
 
+      .info-popover-link {
+        display: inline-block;
+        margin-top: 8px;
+        color: var(--primary-color);
+        text-decoration: none;
+        font-weight: 500;
+      }
+
+      .info-popover-link:hover {
+        text-decoration: underline;
+      }
+
       .sub-label {
         font-size: 12px;
         color: var(--secondary-text-color);
