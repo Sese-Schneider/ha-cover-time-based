@@ -388,8 +388,9 @@ export function renderInputEntities(card, c) {
                 value: c.my_position != null ? String(c.my_position) : "",
                 onChange: (e) => {
                   const v = e.target.value.trim();
+                  const n = parseInt(v, 10);
                   card._updateLocal({
-                    my_position: v === "" ? null : parseInt(v),
+                    my_position: v === "" || isNaN(n) ? null : n,
                   });
                 },
               })
@@ -504,8 +505,9 @@ export function renderInputEntities(card, c) {
               value: c.my_position != null ? String(c.my_position) : "",
               onChange: (e) => {
                 const v = e.target.value.trim();
+                const n = parseInt(v, 10);
                 card._updateLocal({
-                  my_position: v === "" ? null : parseInt(v),
+                  my_position: v === "" || isNaN(n) ? null : n,
                 });
               },
             })

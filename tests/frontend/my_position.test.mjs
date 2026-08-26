@@ -92,3 +92,19 @@ test("clearing my_position calls _updateLocal with my_position: null", async () 
 
   expect(updates).toEqual([{ my_position: null }]);
 });
+
+test("non-numeric my_position input calls _updateLocal with my_position: null", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: cfg("wrapped"),
+    activeTab: "device",
+  });
+  const updates = [];
+  card._updateLocal = (u) => updates.push(u);
+
+  const input = field(card);
+  input.value = "abc";
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+
+  expect(updates).toEqual([{ my_position: null }]);
+});
