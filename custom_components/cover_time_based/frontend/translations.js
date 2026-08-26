@@ -82,6 +82,9 @@ export const EN = {
   "wait_for_relay_feedback.label": "Wait for relay confirmation before tracking",
   "wait_for_relay_feedback.helper":
     "Starts the position timer when the relay reports it switched on, instead of the moment the command is sent. On a slow or cold Zigbee/Z-Wave mesh the command can take seconds to reach the relay; without this, that delay is counted as travel and the tracked position runs ahead of the cover. Leave off unless the position drifts on covers whose relay responds slowly.",
+  "my_position.label": "My position (%)",
+  "my_position.helper":
+    'For shutters with a hardware "my"/favourite preset (e.g. Somfy RTS). When set, pressing stop while the cover is already stopped assumes the shutter drives itself to this position and tracks it there. Leave empty to disable.',
   "recalibrate_before_position.label": "Fully open before moving to a position (Beta)",
   "recalibrate_before_position.helper":
     "For covers with no position feedback that a remote can also move. Drives the cover fully open before each position command, so the move starts from a known position instead of a drifted guess. Roughly doubles the travel of every move, and on inline or sequential tilt it moves the cover when you adjust the slats.",

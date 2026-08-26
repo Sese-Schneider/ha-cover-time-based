@@ -374,6 +374,27 @@ export function renderInputEntities(card, c) {
           c.force_endpoint_redrive === true,
           (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
         )}
+        ${
+          // Hardware "my"/favourite tracking: only wrapped covers and pulse
+          // controllers can reposition themselves on a stop-while-idle.
+          ["wrapped", "pulse"].includes(c.control_mode || "switch")
+            ? renderTextfield({
+                type: "number",
+                min: "0",
+                max: "100",
+                step: "1",
+                label: card._t("my_position.label"),
+                hint: card._t("my_position.helper"),
+                value: c.my_position != null ? String(c.my_position) : "",
+                onChange: (e) => {
+                  const v = e.target.value.trim();
+                  card._updateLocal({
+                    my_position: v === "" ? null : parseInt(v),
+                  });
+                },
+              })
+            : ""
+        }
         ${renderToggleWithHelp(
           card,
           "recalibrate_before_position.label",
@@ -467,6 +488,27 @@ export function renderInputEntities(card, c) {
               c.wait_for_relay_feedback === true,
               (e) => card._updateLocal({ wait_for_relay_feedback: e.target.checked }),
             )
+          : ""
+      }
+      ${
+        // Hardware "my"/favourite tracking: only wrapped covers and pulse
+        // controllers can reposition themselves on a stop-while-idle.
+        ["wrapped", "pulse"].includes(c.control_mode || "switch")
+          ? renderTextfield({
+              type: "number",
+              min: "0",
+              max: "100",
+              step: "1",
+              label: card._t("my_position.label"),
+              hint: card._t("my_position.helper"),
+              value: c.my_position != null ? String(c.my_position) : "",
+              onChange: (e) => {
+                const v = e.target.value.trim();
+                card._updateLocal({
+                  my_position: v === "" ? null : parseInt(v),
+                });
+              },
+            })
           : ""
       }
       ${renderToggleWithHelp(
