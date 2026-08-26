@@ -228,11 +228,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self.travel_calc = TravelCalculator(
             self._travel_time_close,
             self._travel_time_open,
+            name="travel",
         )
         if self._tilting_time_close is not None and self._tilting_time_open is not None:
             self.tilt_calc = TravelCalculator(
                 self._tilting_time_close,
                 self._tilting_time_open,
+                name="tilt",
             )
 
     def _log(self, msg, *args):
@@ -2501,6 +2503,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
 
         def start(base_timestamp=None, extra_delay=0.0):
+            self._log(
+                "_begin_movement.start :: target=%d from=%s coupled=%s base_ts=%s "
+                "extra_delay=%s self_initiated=%s external=%s",
+                target,
+                primary_calc.current_position(),
+                coupled_target,
+                base_timestamp,
+                extra_delay,
+                self._self_initiated_movement,
+                self._triggered_externally,
+            )
             primary_calc.start_travel(
                 target,
                 delay=pre_step_delay + extra_delay,
@@ -3763,6 +3776,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         try:
             base_ts = await self._wait_for_relay_echo(entity_id, RELAY_FEEDBACK_TIMEOUT)
+            if base_ts is not None:
+                self._log(
+                    "_execute_with_relay_feedback :: %s confirmed (base_ts=%s)"
+                    " -> starting tracking",
+                    entity_id,
+                    base_ts,
+                )
+            else:
+                self._log(
+                    "_execute_with_relay_feedback :: %s did NOT confirm within"
+                    " timeout -> command-fire start",
+                    entity_id,
+                )
             start_callback(base_timestamp=base_ts, extra_delay=startup_delay or 0.0)
             self._startup_delay_task = None
         except asyncio.CancelledError:
@@ -3900,6 +3926,20 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 entity_id,
             )
             return
+        # Not our own echo, not stale: a genuine external transition. Logged
+        # with the live position because these are what re-drive tracking mid
+        # move (e.g. a flaky relay's spurious off/on), the prime suspect for an
+        # out-of-sync jump on a slow mesh (issue #231).
+        self._log(
+            "_async_switch_state_changed :: EXTERNAL %s %s->%s (pos=%s, "
+            "traveling=%s, self_initiated=%s) -> dispatching",
+            entity_id,
+            old_val,
+            new_val,
+            self.travel_calc.current_position(),
+            self.travel_calc.is_traveling(),
+            self._self_initiated_movement,
+        )
         self._triggered_externally = True
         try:
             if is_tilt:
