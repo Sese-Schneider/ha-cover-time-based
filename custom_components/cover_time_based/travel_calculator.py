@@ -11,8 +11,11 @@ Home Assistant's cover position convention (0=closed, 100=open).
 
 from __future__ import annotations
 
+import logging
 import time
 from enum import Enum
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class TravelStatus(Enum):
@@ -32,6 +35,7 @@ class TravelCalculator:
     __slots__ = (
         "_last_known_position",
         "_last_known_position_timestamp",
+        "_name",
         "_position_confirmed",
         "_travel_to_position",
         "position_closed",
@@ -41,13 +45,18 @@ class TravelCalculator:
         "travel_time_up",
     )
 
-    def __init__(self, travel_time_down: float, travel_time_up: float) -> None:
+    def __init__(
+        self, travel_time_down: float, travel_time_up: float, name: str = ""
+    ) -> None:
         """Initialize TravelCalculator.
 
         Args:
             travel_time_down: Time in seconds to travel from open to closed.
             travel_time_up: Time in seconds to travel from closed to open.
+            name: Label used only in debug logs to tell the travel and tilt
+                calculators apart (issue #231 diagnostics).
         """
+        self._name = name
         self.travel_direction = TravelStatus.STOPPED
         self.travel_time_down = travel_time_down
         self.travel_time_up = travel_time_up
@@ -61,6 +70,27 @@ class TravelCalculator:
         self.position_closed: int = 0
         self.position_open: int = 100
 
+    def _log_state(self, action: str) -> None:
+        """Debug-log an anchor mutation so the position timeline is traceable.
+
+        The tracked position is derived entirely from ``_last_known_position``,
+        ``_travel_to_position`` and ``_last_known_position_timestamp``; logging
+        every change to them makes an out-of-sync jump (e.g. the anchor snapping
+        back to an earlier position, issue #231) visible in the log.
+        """
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
+        _LOGGER.debug(
+            "TravelCalculator[%s] %s :: known=%s target=%s ts=%.3f confirmed=%s dir=%s",
+            self._name,
+            action,
+            self._last_known_position,
+            self._travel_to_position,
+            self._last_known_position_timestamp,
+            self._position_confirmed,
+            self.travel_direction.name,
+        )
+
     def set_position(self, position: int) -> None:
         """Set position and target of cover."""
         self._travel_to_position = position
@@ -72,6 +102,7 @@ class TravelCalculator:
         self._last_known_position_timestamp = time.time()
         if position == self._travel_to_position:
             self._position_confirmed = True
+        self._log_state("update_position")
 
     def clear_position(self) -> None:
         """Clear position to unknown (e.g. after external movement)."""
@@ -79,6 +110,7 @@ class TravelCalculator:
         self._travel_to_position = None
         self._position_confirmed = False
         self.travel_direction = TravelStatus.STOPPED
+        self._log_state("clear_position")
 
     def snapshot(self) -> tuple:
         """Capture the mutable tracker state for exception-safe rollback.
@@ -104,6 +136,7 @@ class TravelCalculator:
             self._travel_to_position,
             self.travel_direction,
         ) = snapshot
+        self._log_state("restore")
 
     def stop(self) -> None:
         """Stop traveling."""
@@ -114,6 +147,7 @@ class TravelCalculator:
         self._travel_to_position = stop_position
         self._position_confirmed = False
         self.travel_direction = TravelStatus.STOPPED
+        self._log_state("stop")
 
     def start_travel(
         self,
@@ -150,6 +184,7 @@ class TravelCalculator:
             if _travel_to_position > self._last_known_position
             else TravelStatus.DIRECTION_DOWN
         )
+        self._log_state(f"start_travel(target={_travel_to_position}, delay={delay})")
 
     def start_travel_up(self) -> None:
         """Start traveling up (opening)."""
