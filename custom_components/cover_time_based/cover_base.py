@@ -133,6 +133,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         force_endpoint_redrive=False,
         wait_for_relay_feedback=False,
         recalibrate_before_position=False,
+        my_position=None,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -140,6 +141,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._force_endpoint_redrive = force_endpoint_redrive
         self._wait_for_relay_feedback = wait_for_relay_feedback
         self._recalibrate_before_position = recalibrate_before_position
+        self._my_position = my_position
 
         self._tilt_strategy = tilt_strategy
         # Keep the raw configured mode so calibration can still pick the right
@@ -172,6 +174,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # Claimed by every command that supersedes an in-flight movement; read
         # across the settle gap by _settle_before_reversing.
         self._movement_epoch = 0
+        # Set for the duration of a "my"/favourite tracking move so
+        # _motor_stops_itself() reports the device holds itself at the target
+        # and auto-stop sends no relay/underlying stop (see _maybe_start_my_move).
+        self._my_move_active = False
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
         #   - _plan_tilt_for_travel (mid-position moves: restore prior tilt;
@@ -1234,6 +1240,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     def _supersede_movement(self) -> None:
         """Claim the movement, cancelling any reversal waiting out its settle."""
         self._movement_epoch += 1
+        # A superseding command ends any in-flight "my" tracking move.
+        self._my_move_active = False
 
     def _claim_tilt_restore(self) -> int:
         """Mark a tilt restore active and return its identity."""
@@ -1375,9 +1383,73 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self._tilt_settle()
         self._moving_tilt_motor = False
         self._moving_tilt = False
+        await self._maybe_start_my_move(travel_was_moving, supersede)
         self.async_write_ha_state()
         self._last_command = None
         await self._async_persist_position()
+
+    def _my_move_supported(self) -> bool:
+        """Whether a stop-while-idle on this cover plausibly triggers a hardware
+        self-reposition worth tracking. True for relay-driven and timed covers;
+        the wrapped subclass turns it off for native-position underlyings, which
+        have no hardware 'my' and report their own position."""
+        return True
+
+    async def _maybe_start_my_move(
+        self, travel_was_moving: bool, supersede: bool
+    ) -> None:
+        """Track a hardware "my"/favourite reposition on a stop-while-idle.
+
+        Somfy RTS and similar shutters drive themselves to a preset "my"
+        position when a stop is issued while they are already stopped.
+        async_stop_cover already forwards that stop to the hardware; this
+        animates the tracked position to the configured my_position so HA
+        reflects where the shutter goes. It is a tracking move only: no
+        open/close is commanded, and the device self-stops at "my", so no stop
+        is sent when the tracker arrives (see _motor_stops_itself /
+        _my_move_active). Gated to a genuine, CTB-originated, idle stop:
+
+          - my_position configured,
+          - the cover was believed idle (a stop while moving just halts),
+          - supersede — a real HA/service/automation stop, not a device echo
+            or a reversal prelude (both pass supersede=False),
+          - not _triggered_externally — excludes the physical dedicated-stop
+            relay press, which is out of scope (and invisible for RTS),
+          - _my_move_supported — excludes a native-position wrapped cover
+            (issue #93), which reports its own position and has no hardware
+            "my" to track.
+        """
+        if (
+            self._my_position is None
+            or travel_was_moving
+            or not supersede
+            or self._triggered_externally
+            or not self._my_move_supported()
+        ):
+            return
+        current = self.travel_calc.current_position()
+        if current is not None and current == self._my_position:
+            return
+        if current is None:
+            # Position unknown — travel_calc.start_travel would just snap
+            # (there is no known start to animate from), so snap directly
+            # here instead and skip arming the my-move lifecycle: no flag,
+            # no auto-updater, nothing left for auto_stop_if_necessary to
+            # settle later.
+            self._log(
+                "_maybe_start_my_move :: position unknown, snapping to %d",
+                self._my_position,
+            )
+            self.travel_calc.set_position(self._my_position)
+            return
+        self._log(
+            "_maybe_start_my_move :: tracking hardware 'my' reposition to %d",
+            self._my_position,
+        )
+        self._self_initiated_movement = True
+        self._my_move_active = True
+        self.travel_calc.start_travel(self._my_position)
+        self.start_auto_updater()
 
     def _should_stop_tilt_motor(
         self, tilt_phase_was_active: bool, *, tilt_axis_reported: bool
@@ -2806,6 +2878,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
             self._last_command = None
+            self._my_move_active = False
             self._moving_tilt_motor = False
             self._moving_tilt = False
             await self._async_persist_position()
@@ -2815,12 +2888,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Return True if the device halts at the target without a stop command.
 
         Relay-driven covers (the default) must be told to stop when the tracker
-        reaches the target, so this is False. Subclasses whose device has native
-        position control and stops itself at the commanded position override this
-        to True so auto-stop skips the redundant (and potentially target-nudging)
-        relay stop.
+        reaches the target, so this is False. During a "my"/favourite tracking
+        move (_my_move_active) the hardware repositions and self-stops on its
+        own, so return True to skip the completion stop. Subclasses whose device
+        has native position control override this to True as well.
         """
-        return False
+        return self._my_move_active
 
     def _self_stops_at_endpoints(self) -> bool:
         """Return True if the motor self-stops at the physical endpoints.

@@ -35,6 +35,7 @@ from .const import (
     CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
     CONF_MIN_MOVEMENT_TIME,
+    CONF_MY_POSITION,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
     CONF_REPORTS_COMMAND_NOT_ENDPOINT,
@@ -378,6 +379,7 @@ def _create_cover_from_options(options, device_id="", name=""):
         "recalibrate_before_position": options.get(
             CONF_RECALIBRATE_BEFORE_POSITION, DEFAULT_RECALIBRATE_BEFORE_POSITION
         ),
+        "my_position": options.get(CONF_MY_POSITION),
     }
 
     if control_mode == CONTROL_MODE_WRAPPED:

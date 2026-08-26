@@ -106,3 +106,11 @@ DEFAULT_WAIT_FOR_RELAY_FEEDBACK = False
 # see CoverTimeBased._recalibration_plan.
 CONF_RECALIBRATE_BEFORE_POSITION = "recalibrate_before_position"
 DEFAULT_RECALIBRATE_BEFORE_POSITION = False
+
+# Wrapped/pulse modes. Some shutters (Somfy RTS and similar) drive themselves
+# to a hardware "my"/favourite preset when a stop is issued while they are
+# already stopped. When this is set to a percentage, CTB tracks that self-driven
+# reposition: on a stop-while-idle it animates the tracked position to this value
+# (see CoverTimeBased._maybe_start_my_move). None/absent disables it. It does not
+# drive the cover — it only reflects where the hardware goes on its own.
+CONF_MY_POSITION = "my_position"
