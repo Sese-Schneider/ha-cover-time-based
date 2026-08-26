@@ -129,7 +129,29 @@ the rest of the options on the tab change to match it.
 | **Toggle (same button)** | A brief pulse starts the motor, and a second pulse on the same button stops it. |
 | **Toggle (opposite button)** | A brief pulse starts the motor, and pressing the opposite direction stops it. There is no separate stop button. |
 
-The four switch modes are described under
+The card only ever shows the options that apply to the mode you pick, so this
+table is the quickest way to see what each mode offers. Follow a link for the
+detail. A blank cell means the option is not shown for that mode.
+
+| Option | Wrapped | Switch | Pulse | Toggle | Toggle (opp.) |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| [Cover entity](#wrapping-an-existing-cover) | ✓ | | | | |
+| [Open and Close switch](#controlling-a-cover-with-switches) | | ✓ | ✓ | ✓ | ✓ |
+| [Stop switch](#controlling-a-cover-with-switches) | | | ✓ | | |
+| [Position reporting](#position-reporting) | ✓ | | | | |
+| [Force time-based positioning](#force-time-based-positioning) | ✓ | | | | |
+| [Invert position](#invert-position) | ✓ | | | | |
+| [Pulse time](#pulse-time) | | | ✓ | | |
+| [Relay reports its own OFF](#relay-reports-its-own-off) | | | | ✓ | ✓ |
+| [Send stop signal at endpoints](#send-stop-signal-at-endpoints) | | | ✓ | | |
+| [Wait for relay confirmation](#wait-for-relay-confirmation-before-tracking) | | ✓ | ✓ | ✓ | ✓ |
+| [Assumed state](#assumed-state) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Always re-send at the endpoints](#always-re-send-openclose-at-the-endpoints) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Fully open before position (Beta)](#fully-open-before-moving-to-a-position-beta) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Tilt](#tilt) | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+The switch-based modes (Switch, Pulse, and the two Toggle modes) are described
+together under
 [Controlling a cover with switches](#controlling-a-cover-with-switches).
 
 ### Wrapping an existing cover
