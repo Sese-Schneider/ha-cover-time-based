@@ -251,10 +251,15 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """The device holds the target itself — the auto-updater must not send
         a relay stop.
 
-        True during a native tilt move (the wrapped cover positions its own
-        slats), and for native set_position covers (Plan 1). Timed covers on
-        either axis must be told to stop, so False otherwise.
+        True during a "my"/favourite tracking move (_my_move_active): the
+        hardware repositions and self-stops at "my", so re-forwarding a stop at
+        completion would re-trigger "my". Also true during a native tilt move
+        (the wrapped cover positions its own slats), and for native
+        set_position covers (Plan 1). Timed covers on either axis must be told
+        to stop, so False otherwise.
         """
+        if self._my_move_active:
+            return True
         if self._moving_tilt and self._use_native_tilt():
             return True
         return self._position_driver().holds_itself
