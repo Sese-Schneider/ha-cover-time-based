@@ -276,6 +276,41 @@ class TestCreateCoverFromOptions:
         )
         assert cover._wait_for_relay_feedback is False
 
+    def test_my_position_threaded_from_options(self):
+        # NB: CONF_CONTROL_MODE / CONTROL_MODE_* live in .cover; CONF_MY_POSITION in .const.
+        from custom_components.cover_time_based.const import CONF_MY_POSITION
+        from custom_components.cover_time_based.cover import (
+            CONF_CONTROL_MODE,
+            CONTROL_MODE_WRAPPED,
+            _create_cover_from_options,
+        )
+
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+                "cover_entity_id": "cover.underlying",
+                CONF_MY_POSITION: 90,
+            },
+            device_id="test",
+            name="Test",
+        )
+        assert cover._my_position == 90
+        assert cover._my_move_active is False
+
+    def test_my_position_defaults_to_none(self):
+        from custom_components.cover_time_based.cover import (
+            CONF_CONTROL_MODE,
+            CONTROL_MODE_WRAPPED,
+            _create_cover_from_options,
+        )
+
+        cover = _create_cover_from_options(
+            {CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED, "cover_entity_id": "cover.x"},
+            device_id="test",
+            name="Test",
+        )
+        assert cover._my_position is None
+
 
 # ===================================================================
 # devices_from_config

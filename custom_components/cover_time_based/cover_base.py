@@ -133,6 +133,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         force_endpoint_redrive=False,
         wait_for_relay_feedback=False,
         recalibrate_before_position=False,
+        my_position=None,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -140,6 +141,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._force_endpoint_redrive = force_endpoint_redrive
         self._wait_for_relay_feedback = wait_for_relay_feedback
         self._recalibrate_before_position = recalibrate_before_position
+        self._my_position = my_position
 
         self._tilt_strategy = tilt_strategy
         # Keep the raw configured mode so calibration can still pick the right
@@ -172,6 +174,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # Claimed by every command that supersedes an in-flight movement; read
         # across the settle gap by _settle_before_reversing.
         self._movement_epoch = 0
+        # Set for the duration of a "my"/favourite tracking move so
+        # _motor_stops_itself() reports the device holds itself at the target
+        # and auto-stop sends no relay/underlying stop (see _maybe_start_my_move).
+        self._my_move_active = False
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
         #   - _plan_tilt_for_travel (mid-position moves: restore prior tilt;
