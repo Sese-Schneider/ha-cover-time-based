@@ -222,6 +222,14 @@ as travel, so the tracked position runs ahead of the cover. Turn this **on** to
 start the timer only when the relay reports that it has switched on. Leave it
 **off** unless the position drifts on a cover whose relay responds slowly.
 
+> [!NOTE]
+> On the two **Toggle** modes this option has a narrow trade-off. If you press
+> stop very early in a movement, before the relay has confirmed that it switched
+> on, that stop can be missed on a slow mesh and the motor keeps running, which
+> leaves the tracked position out of sync. This is inherent to the way a toggle
+> stop works, since it is a tap rather than a guaranteed off, and it does not
+> affect Switch or Pulse mode, whose stops always take effect.
+
 #### Send stop signal at endpoints
 
 Applies to **Pulse** mode. Leave it **on** for controllers that keep the motor
