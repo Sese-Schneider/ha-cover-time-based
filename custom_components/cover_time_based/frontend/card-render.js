@@ -2,7 +2,11 @@ import { html } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module"
 import { renderTextfield } from "./textfield-render.js";
 import { switchPickerDomains, showsPulseTime } from "./entity-filter.js";
 import { TIMING_ATTRIBUTES } from "./constants.js";
-import { renderLanguageBanner } from "./language-banner.js";
+import { renderLanguageBanner, GITHUB_REPO_URL } from "./language-banner.js";
+
+// Deep-link to the README section documenting the position-reporting profiles,
+// surfaced from the field's help popover.
+const POSITION_REPORTING_DOCS_URL = `${GITHUB_REPO_URL}#position-reporting`;
 
 export function renderCard(card) {
   if (!card.hass) return html``;
@@ -302,8 +306,20 @@ export function renderPositionReporting(card, c) {
           ></ha-icon>
           ${
             open
-              ? html`<div class="info-popover" role="tooltip">
+              ? html`<div
+                  class="info-popover"
+                  role="note"
+                  aria-label=${card._t("position_reporting.label")}
+                >
                 ${card._t(`position_reporting.${profile}_helper`)}
+                <a
+                  class="info-popover-link"
+                  href=${POSITION_REPORTING_DOCS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  @click=${(e) => e.stopPropagation()}
+                  >${card._t("position_reporting.docs_link")}</a
+                >
               </div>`
               : ""
           }
