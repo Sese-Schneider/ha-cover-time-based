@@ -1388,7 +1388,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._last_command = None
         await self._async_persist_position()
 
-    async def _maybe_start_my_move(self, travel_was_moving, supersede):
+    def _my_move_supported(self) -> bool:
+        """Whether a stop-while-idle on this cover plausibly triggers a hardware
+        self-reposition worth tracking. True for relay-driven and timed covers;
+        the wrapped subclass turns it off for native-position underlyings, which
+        have no hardware 'my' and report their own position."""
+        return True
+
+    async def _maybe_start_my_move(
+        self, travel_was_moving: bool, supersede: bool
+    ) -> None:
         """Track a hardware "my"/favourite reposition on a stop-while-idle.
 
         Somfy RTS and similar shutters drive themselves to a preset "my"
@@ -1405,13 +1414,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
           - supersede — a real HA/service/automation stop, not a device echo
             or a reversal prelude (both pass supersede=False),
           - not _triggered_externally — excludes the physical dedicated-stop
-            relay press, which is out of scope (and invisible for RTS).
+            relay press, which is out of scope (and invisible for RTS),
+          - _my_move_supported — excludes a native-position wrapped cover
+            (issue #93), which reports its own position and has no hardware
+            "my" to track.
         """
         if (
             self._my_position is None
             or travel_was_moving
             or not supersede
             or self._triggered_externally
+            or not self._my_move_supported()
         ):
             return
         current = self.travel_calc.current_position()

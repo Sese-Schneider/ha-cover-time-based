@@ -380,3 +380,78 @@ async def test_supersede_clears_my_move(make_cover):
 
     cover._supersede_movement()
     assert cover._my_move_active is False
+
+
+@pytest.mark.asyncio
+async def test_real_open_supersedes_my_move_and_completes(make_cover):
+    """End-to-end: a real open command supersedes an in-flight my-move through
+    the ordinary command path (not _supersede_movement() called directly) and
+    its own completion is not suppressed by a stale _my_move_active.
+
+    A timed wrapped cover, my=90, believed idle at 30: an idle stop starts the
+    my-move (tracker animating 30->90). A real ``async_open_cover()`` arrives
+    mid-animation; because the my-move counts as motion, that first open halts
+    it exactly as an in-motion UI click does — and the halt supersedes the move,
+    clearing ``_my_move_active`` via the real ``async_stop_cover`` ->
+    ``_handle_stop`` -> ``_supersede_movement`` path. A second open then drives
+    to the top: with the flag cleared, ``_motor_stops_itself()`` is False, so the
+    open reaches 100 and settles normally — the completion was NOT suppressed by
+    a stale my-move flag (the regression this pins). This exercises the real
+    command path that test_supersede_clears_my_move covers white-box."""
+    cover = _make_my(make_cover, my=90, at=30)
+
+    await cover.async_stop_cover()
+    assert cover._my_move_active is True
+    assert cover.travel_calc.is_traveling() is True
+
+    # A real open mid-animation halts the my-move (documented in-motion "click
+    # stops" behaviour), and that halt supersedes it — clearing the flag via the
+    # ordinary command path rather than a direct _supersede_movement() call.
+    await cover.async_open_cover()
+    assert cover._my_move_active is False
+    assert cover.travel_calc.is_traveling() is False
+
+    # A second open now actually drives to the top. With no stale my-move flag,
+    # the move is a normal relay/underlying move, not a self-stopping one.
+    await cover.async_open_cover()
+    assert cover.travel_calc._travel_to_position == 100
+    assert cover._motor_stops_itself() is False, "no stale my-move suppression"
+
+    # Drive the open to its endpoint and run the completion tail: it settles at
+    # 100 with the flag still clear — the completion was not suppressed.
+    await _drive_to_target(cover, 100)
+
+    assert cover.current_cover_position == 100
+    assert cover._my_move_active is False
+    assert cover.travel_calc.is_traveling() is False
+
+
+# ---------------------------------------------------------------------------
+# Guard: a native-position wrapped cover (issue #93) has no hardware "my" — it
+# reports its own position and does not self-drive to a favourite on a
+# stop-while-idle. The feature must be strictly inert there: no my-move starts
+# even with my_position set and the cover believed idle.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_native_position_wrapped_cover_no_my_move(make_cover):
+    """A NATIVE-position wrapped cover (underlying advertises SET_POSITION, so
+    _use_native_set_position() is True) never starts a my-move on an idle stop:
+    the tracked position stays put and _my_move_active stays False."""
+    cover = _make_my(make_cover, my=90, at=30)
+    # Re-stub the underlying to advertise native SET_POSITION so the wrapped
+    # cover forwards position natively (issue #93) and has no hardware "my".
+    _stub_underlying(
+        cover, features=CoverEntityFeature.STOP | CoverEntityFeature.SET_POSITION
+    )
+    assert cover._use_native_set_position() is True  # precondition: native path
+
+    await cover.async_stop_cover()
+
+    # No my-move: the tracker did not animate to my and the flag stayed False.
+    assert cover._my_move_active is False
+    assert cover.travel_calc.is_traveling() is False
+    assert cover.current_cover_position == 30
+    assert _cover_calls(cover, "open_cover") == []
+    assert _cover_calls(cover, "close_cover") == []
