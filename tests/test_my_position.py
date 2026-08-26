@@ -20,7 +20,7 @@ hass).
 """
 
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from homeassistant.components.cover import CoverEntityFeature
@@ -105,8 +105,8 @@ async def _cancel_tasks(cover):
 def _make_my_pulse(make_cover, *, my=80, at=30, stop_switch="switch.stop", **kwargs):
     """Build a pulse cover with my_position=`my`, believed idle at `at`.
 
-    Pass ``stop_switch=None`` to build one with no dedicated stop relay
-    (case J).
+    A dedicated stop switch is mandatory for pulse mode (see the comment
+    ahead of case I below), so `stop_switch` always defaults to one.
     """
     cover = make_cover(
         control_mode=CONTROL_MODE_PULSE, stop_switch=stop_switch, **kwargs
@@ -300,6 +300,14 @@ async def test_h_completion_persists_my_position(make_cover, _mock_position_stor
 # ---------------------------------------------------------------------------
 # I. Pulse mode + dedicated stop relay: the idle stop's relay pulse IS the "my"
 #    trigger; the tracker animates to my and nothing pulses again on arrival.
+#
+# Pulse mode always requires a dedicated stop switch — see
+# PulseModeCover._get_missing_configuration (cover_pulse_mode.py:53-54), which
+# makes a stop-switch-less pulse cover "not configured" and unable to process
+# any stop at all. So the stop pulse — the hardware "my" trigger — always
+# fires for a pulse cover that can run async_stop_cover() in the first place;
+# a "pulse without a stop relay" footgun therefore cannot occur, and there is
+# no case J here.
 # ---------------------------------------------------------------------------
 
 
@@ -328,55 +336,6 @@ async def test_i_pulse_idle_stop_pulses_stop_relay_once_and_tracks_to_my(make_co
     assert cover._my_move_active is False
     assert cover.travel_calc.is_traveling() is False
     assert len(_relay_turn_on(cover, "switch.stop")) == 1, "no completion pulse"
-
-    await _cancel_tasks(cover)
-
-
-# ---------------------------------------------------------------------------
-# J. Pulse mode WITHOUT a dedicated stop relay: known footgun — the tracker
-#    still animates to my even though no "my" trigger physically fired.
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_j_pulse_without_stop_relay_still_tracks_to_my(make_cover):
-    """pulse WITHOUT a dedicated stop relay, my=80, believed idle at 30:
-    CURRENT (footgun) behaviour per the feature spec (#251) — the tracking
-    mechanic (_maybe_start_my_move) has no way to know whether a real "my"
-    trigger reached the hardware; it only looks at my_position /
-    travel_was_moving / supersede / _triggered_externally, so it animates the
-    tracker to 80 regardless. The card helper (a later task) is expected to
-    warn that a dedicated stop switch is required for my_position to mean
-    anything on pulse hardware; this pins that the software layer itself does
-    not guard against the misconfiguration.
-
-    NOTE: a stop-switch-less pulse cover is already "not configured" for ANY
-    stop — PulseModeCover._get_missing_configuration requires a stop switch
-    unconditionally (pre-existing, unrelated to my_position; verified by
-    running this scenario through the real async_stop_cover() first, which
-    raises HomeAssistantError("...missing stop switch...") before ever
-    reaching _maybe_start_my_move). So in practice this exact misconfigured
-    cover can't even process a plain HA stop, let alone a my-tracking one.
-    We patch out that unrelated precondition so the my-tracking mechanic can
-    be exercised and pinned in isolation, as the spec's footgun is about.
-    """
-    cover = _make_my_pulse(make_cover, my=80, at=30, stop_switch=None)
-    assert cover._stop_switch_entity_id is None
-
-    with patch.object(cover, "_require_configured"):
-        await cover.async_stop_cover()
-
-    # No stop relay exists, so _send_stop's relay branch never pulses anything
-    # — yet the tracker still starts animating toward my_position regardless.
-    assert _relay_turn_on(cover, "switch.stop") == []
-    assert cover._my_move_active is True
-    assert cover.travel_calc.is_traveling() is True
-    assert cover.travel_calc._travel_to_position == 80
-
-    await _drive_to_target(cover, 80)
-
-    assert cover.current_cover_position == 80
-    assert cover._my_move_active is False
 
     await _cancel_tasks(cover)
 
