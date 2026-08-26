@@ -449,26 +449,6 @@ This blocks relay activations too brief to physically move the cover, which
 prevents them nudging the tracked position out of true. Movements all the way to
 0% or 100% are always allowed. Values between **0.5 and 1.5 seconds** work well.
 
-### Reversing a moving cover
-
-Reversing is never a single step. The motor is stopped, given a moment to come to
-rest, and only then driven the other way. That pause is a fixed **1 second** and
-is not configurable.
-
-If reversals do not take on your hardware, the setting to change is on the device,
-not here: a momentary relay's own pulse length must be comfortably under a
-second, and a few hundred milliseconds is typical (for example `pulse_length` on
-a Zigbee2MQTT relay). A device pulse approaching or exceeding one second leaves
-the relay still closed when the reverse command arrives, and no integration
-setting can compensate for that.
-
-> [!WARNING]
-> In **Toggle (opposite button)** mode, "stop" is a pulse of the opposite relay.
-> That stops a moving motor, but on a motor that has already stopped it is simply
-> a movement command. So if the tracker and the cover ever disagree, the next
-> stop can drive the cover to its endpoint. This is inherent to the mode on
-> hardware with no position feedback.
-
 ## Services
 
 ### `cover_time_based.set_known_position`
@@ -631,6 +611,29 @@ self-stop, and the stop is sent in that case even in the modes that normally ski
 it. Under the two sequential modes, the endpoint run-on is skipped at the closed
 (0%) endpoint, because the motor is already driven past cover-closed for the tilt
 phase; it still applies at the open (100%) endpoint.
+
+</details>
+
+<details>
+<summary><strong>Reversing a moving cover</strong></summary>
+
+Reversing is never a single step. The motor is stopped, given a moment to come to
+rest, and only then driven the other way. That pause is a fixed **1 second** and
+is not configurable.
+
+If reversals do not take on your hardware, the setting to change is on the device,
+not here: a momentary relay's own pulse length must be comfortably under a
+second, and a few hundred milliseconds is typical (for example `pulse_length` on
+a Zigbee2MQTT relay). A device pulse approaching or exceeding one second leaves
+the relay still closed when the reverse command arrives, and no integration
+setting can compensate for that.
+
+> [!WARNING]
+> In **Toggle (opposite button)** mode, "stop" is a pulse of the opposite relay.
+> That stops a moving motor, but on a motor that has already stopped it is simply
+> a movement command. So if the tracker and the cover ever disagree, the next
+> stop can drive the cover to its endpoint. This is inherent to the mode on
+> hardware with no position feedback.
 
 </details>
 
