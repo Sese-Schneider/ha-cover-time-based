@@ -202,7 +202,7 @@ HA's cover entity exposes close/open for travel and close-tilt/open-tilt for art
 - **External close** (physical switch or automation firing the close relay): the integration assumes the motor runs the **full journey** — it closes the cover and then continues to articulate the slats past cover-closed to the opposite extreme. Tracking follows both phases.
 - **External open**: the integration restores slats to the resting position and then travels to fully open (same as the HA UI open path).
 
-**External-switch assumption.** External close on sequential modes assumes a motor controller that latches on a pulse and runs to a mechanical end without stopping at the cover-closed position (common with pulse-mode relays and many off-the-shelf blind motors). If your external switch stops the motor at cover-closed instead — for example a latching switch that you release partway, or a motor that naturally halts at travel=0 — the reported tilt position will drift until the next sync. Please [open an issue](https://github.com/clintongormley/ha-cover-time-based/issues) describing your hardware so we can support it.
+**External-switch assumption.** External close on sequential modes assumes a motor controller that latches on a pulse and runs to a mechanical end without stopping at the cover-closed position (common with pulse-mode relays and many off-the-shelf blind motors). If your external switch stops the motor at cover-closed instead — for example a latching switch that you release partway, or a motor that naturally halts at travel=0 — the reported tilt position will drift until the next sync. Please [open an issue](https://github.com/Sese-Schneider/ha-cover-time-based/issues) describing your hardware so we can support it.
 
 ### Tilt Motor
 
@@ -389,7 +389,7 @@ Restart Home Assistant to apply.
 
 ## Reporting Issues
 
-If you encounter a bug or have a feature request, please open an issue on [GitHub](https://github.com/clintongormley/ha-cover-time-based/issues). Include debug logs if possible — they help diagnose problems much faster.
+If you encounter a bug or have a feature request, please open an issue on [GitHub](https://github.com/Sese-Schneider/ha-cover-time-based/issues). Include debug logs if possible — they help diagnose problems much faster.
 
 ## YAML configuration (deprecated)
 
