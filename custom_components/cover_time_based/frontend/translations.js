@@ -250,6 +250,9 @@ export const TRANSLATIONS = {
     "wait_for_relay_feedback.label": "Aguardar confirmação do relé antes de rastrear",
     "wait_for_relay_feedback.helper":
       "Inicia o temporizador de posição quando o relé reporta que ligou, em vez do momento em que o comando é enviado. Numa malha Zigbee/Z-Wave lenta ou fria, o comando pode demorar segundos a chegar ao relé; sem esta opção, esse atraso é contado como deslocamento e a posição rastreada fica à frente do estore. Deixe inativo, a menos que a posição desvie em estores cujo relé responde lentamente.",
+    "my_position.label": "A minha posição (%)",
+    "my_position.helper":
+      'Para estores com uma predefinição "my"/favorita integrada (por exemplo, Somfy RTS). Quando definida, premir parar com o estore já parado assume que o estore se desloca sozinho para esta posição e a rastreia até lá. Deixe vazio para desativar.',
     "recalibrate_before_position.label": "Abrir totalmente antes de mover para uma posição (Beta)",
     "recalibrate_before_position.helper":
       "Para estores sem retorno de posição que também podem ser movidos por um telecomando. Antes de cada comando de definir posição, move primeiro o estore para totalmente aberto, para que o movimento comece a partir de uma posição conhecida em vez de uma estimativa desviada. Isto duplica, grosso modo, o tempo de deslocamento de cada movimento e, na inclinação durante o deslocamento ou na inclinação sequencial, ajustar as lâminas também move o estore.",
@@ -414,6 +417,9 @@ export const TRANSLATIONS = {
     "wait_for_relay_feedback.label": "Czekaj na potwierdzenie przekaźnika przed śledzeniem",
     "wait_for_relay_feedback.helper":
       "Uruchamia licznik czasu pozycji, gdy przekaźnik zgłosi, że się włączył, zamiast w chwili wysłania polecenia. W wolnej lub wychłodzonej sieci Zigbee/Z-Wave polecenie może docierać do przekaźnika przez kilka sekund; bez tej opcji to opóźnienie jest liczone jako ruch, a śledzona pozycja wyprzedza roletę. Pozostaw wyłączone, chyba że pozycja dryfuje w roletach, których przekaźnik reaguje wolno.",
+    "my_position.label": "Moja pozycja (%)",
+    "my_position.helper":
+      'Dla rolet ze sprzętową zaprogramowaną pozycją "my"/ulubioną (np. Somfy RTS). Po ustawieniu naciśnięcie zatrzymania, gdy roleta jest już zatrzymana, zakłada, że roleta sama przesuwa się do tej pozycji i śledzi ją tam. Pozostaw puste, aby wyłączyć.',
     "recalibrate_before_position.label": "Otwórz w pełni przed przejściem do pozycji (Beta)",
     "recalibrate_before_position.helper":
       "Dla rolet bez informacji zwrotnej o pozycji, które mogą być poruszane również pilotem. Przed każdym poleceniem ustawienia pozycji najpierw otwiera roletę w pełni, dzięki czemu ruch zaczyna się od znanej pozycji, a nie od nieaktualnego przybliżenia. Z grubsza podwaja czas ruchu przy każdym przesunięciu, a przy nachyleniu w trakcie ruchu lub nachyleniu sekwencyjnym regulacja listew porusza także samą roletę.",
@@ -577,6 +583,9 @@ export const TRANSLATIONS = {
     "wait_for_relay_feedback.label": "Vor dem Verfolgen auf die Relais-Bestätigung warten",
     "wait_for_relay_feedback.helper":
       "Startet den Positionszeitgeber, wenn das Relais sein Einschalten meldet, statt im Moment des Befehlsversands. In einem langsamen oder kalten Zigbee-/Z-Wave-Mesh kann der Befehl mehrere Sekunden bis zum Relais brauchen; ohne diese Option wird diese Verzögerung als Fahrt gezählt und die verfolgte Position läuft dem Rollladen voraus. Lass die Option aus, sofern die Position bei Rollläden mit langsam reagierendem Relais nicht abdriftet.",
+    "my_position.label": "Meine Position (%)",
+    "my_position.helper":
+      "Für Rollläden mit einer hardwareseitigen „my“/Favoriten-Voreinstellung (z. B. Somfy RTS). Wenn gesetzt, nimmt ein Stopp bei bereits stehendem Rollladen an, dass der Rollladen von selbst in diese Position fährt, und verfolgt ihn dorthin. Leer lassen, um zu deaktivieren.",
     "recalibrate_before_position.label":
       "Vor einer Positionsfahrt zuerst vollständig öffnen (Beta)",
     "recalibrate_before_position.helper":
@@ -744,6 +753,9 @@ export const TRANSLATIONS = {
     "wait_for_relay_feedback.label": "Attendi la conferma del relè prima di tracciare",
     "wait_for_relay_feedback.helper":
       "Avvia il timer di posizione quando il relè segnala di essersi acceso, anziché nel momento in cui viene inviato il comando. Su una rete mesh Zigbee/Z-Wave lenta o fredda il comando può impiegare alcuni secondi a raggiungere il relè; senza questa opzione, quel ritardo viene conteggiato come corsa e la posizione tracciata precede la tapparella. Lascialo disattivato, a meno che la posizione non vada alla deriva su tapparelle il cui relè risponde lentamente.",
+    "my_position.label": "La mia posizione (%)",
+    "my_position.helper":
+      'Per tapparelle con una preimpostazione hardware "my"/preferita (ad esempio Somfy RTS). Quando è impostata, premere l\'arresto quando la tapparella è già ferma presuppone che la tapparella si porti da sola in questa posizione e la traccia lì. Lascia vuoto per disattivare.',
     "recalibrate_before_position.label": "Apri completamente prima di spostare in posizione (Beta)",
     "recalibrate_before_position.helper":
       "Per le tapparelle senza retroazione di posizione che possono essere spostate anche da un telecomando. Porta la tapparella in apertura completa prima di ogni comando di posizionamento, così il movimento parte da una posizione nota anziché da una stima alla deriva. Raddoppia circa il tempo di corsa di ogni movimento e, con l'inclinazione durante la corsa o quella sequenziale, muove la tapparella anche quando regoli le lamelle.",
@@ -906,6 +918,9 @@ export const TRANSLATIONS = {
     "wait_for_relay_feedback.label": "Wacht op bevestiging van het relais voordat er gevolgd wordt",
     "wait_for_relay_feedback.helper":
       "Start de positietimer wanneer het relais meldt dat het is ingeschakeld, in plaats van op het moment dat het commando wordt verstuurd. Op een traag of koud Zigbee/Z-Wave-mesh kan het commando er seconden over doen om het relais te bereiken; zonder deze optie wordt die vertraging als beweging meegeteld en loopt de gevolgde positie voor op het rolluik. Laat dit uitstaan, tenzij de positie afwijkt bij rolluiken waarvan het relais traag reageert.",
+    "my_position.label": "Mijn positie (%)",
+    "my_position.helper":
+      'Voor rolluiken met een ingebouwde "my"/favoriete voorinstelling (bijvoorbeeld Somfy RTS). Wanneer ingesteld, gaat een druk op stop terwijl het rolluik al stilstaat ervan uit dat het rolluik zichzelf naar deze positie beweegt en volgt het daarheen. Laat leeg om uit te schakelen.',
     "recalibrate_before_position.label":
       "Volledig openen voordat naar een positie wordt bewogen (Beta)",
     "recalibrate_before_position.helper":
@@ -1070,6 +1085,9 @@ export const TRANSLATIONS = {
     "wait_for_relay_feedback.label": "Attendre la confirmation du relais avant le suivi",
     "wait_for_relay_feedback.helper":
       "Démarre le minuteur de position lorsque le relais signale qu'il s'est activé, plutôt qu'au moment où la commande est envoyée. Sur un réseau maillé Zigbee/Z-Wave lent ou froid, la commande peut mettre plusieurs secondes à atteindre le relais ; sans cette option, ce délai est compté comme de la course et la position suivie devance le volet. Laissez cette option désactivée, sauf si la position dérive sur des volets dont le relais répond lentement.",
+    "my_position.label": "Ma position (%)",
+    "my_position.helper":
+      "Pour les volets dotés d'un préréglage matériel \"my\"/favori (par exemple Somfy RTS). Une fois défini, appuyer sur arrêt alors que le volet est déjà arrêté suppose que le volet se déplace de lui-même vers cette position et l'y suit. Laissez vide pour désactiver.",
     "recalibrate_before_position.label": "Ouvrir complètement avant d'aller à une position (Bêta)",
     "recalibrate_before_position.helper":
       "Pour les volets sans retour de position qu'une télécommande peut aussi actionner. Ouvre complètement le volet avant chaque commande de position, afin que le mouvement parte d'une position connue plutôt que d'une estimation partie à la dérive. Cela double à peu près la course de chaque mouvement et, avec une inclinaison pendant la course ou une inclinaison séquentielle, le volet bouge lorsque vous réglez les lames.",
@@ -1233,6 +1251,9 @@ export const TRANSLATIONS = {
     "wait_for_relay_feedback.label": "Esperar la confirmación del relé antes de rastrear",
     "wait_for_relay_feedback.helper":
       "Inicia el temporizador de posición cuando el relé informa de que se ha encendido, en lugar del momento en que se envía el comando. En una red mallada Zigbee/Z-Wave lenta o fría, el comando puede tardar segundos en llegar al relé; sin esta opción, ese retardo se cuenta como recorrido y la posición rastreada se adelanta a la persiana. Déjalo desactivado, a menos que la posición se desvíe en persianas cuyo relé responde con lentitud.",
+    "my_position.label": "Mi posición (%)",
+    "my_position.helper":
+      'Para persianas con un preajuste de hardware "my"/favorito (por ejemplo, Somfy RTS). Cuando se establece, pulsar detener mientras la persiana ya está parada asume que la persiana se desplaza sola a esta posición y la rastrea allí. Déjalo vacío para desactivar.',
     "recalibrate_before_position.label": "Abrir totalmente antes de mover a una posición (Beta)",
     "recalibrate_before_position.helper":
       "Para persianas sin realimentación de posición que un mando a distancia también puede mover. Abre la persiana por completo antes de cada comando de posición, para que el movimiento parta de una posición conocida en lugar de una estimación desviada. Duplica aproximadamente el recorrido de cada movimiento y, con la inclinación durante el recorrido o la inclinación secuencial, mueve la persiana cuando ajustas las lamas.",
@@ -1399,6 +1420,9 @@ export const TRANSLATIONS = {
     "wait_for_relay_feedback.label": "Espera la confirmació del relé abans de fer el seguiment",
     "wait_for_relay_feedback.helper":
       "Inicia el temporitzador de posició quan el relé informa que s'ha activat, en lloc del moment en què s'envia l'ordre. En una xarxa mallada Zigbee/Z-Wave lenta o freda, l'ordre pot trigar segons a arribar al relé; sense aquesta opció, aquest retard es compta com a recorregut i la posició seguida s'avança a la persiana. Deixa-ho desactivat, tret que la posició es desviï en persianes el relé de les quals respon amb lentitud.",
+    "my_position.label": "La meva posició (%)",
+    "my_position.helper":
+      'Per a persianes amb una predefinició "my"/preferida de maquinari (per exemple, Somfy RTS). Un cop definit, prémer atura mentre la persiana ja està aturada assumeix que la persiana es desplaça sola cap a aquesta posició i la segueix fins allà. Deixa-ho buit per desactivar.',
     "recalibrate_before_position.label": "Obre del tot abans de moure's a una posició (Beta)",
     "recalibrate_before_position.helper":
       "Per a persianes sense realimentació de posició que un comandament a distància també pot moure. Obre la persiana del tot abans de cada ordre de posició, perquè el moviment parteixi d'una posició coneguda en lloc d'una estimació desviada. Duplica aproximadament el recorregut de cada moviment i, amb la inclinació durant el recorregut o la inclinació seqüencial, mou la persiana quan ajustes les lamel·les.",
@@ -1563,6 +1587,9 @@ export const TRANSLATIONS = {
     "wait_for_relay_feedback.label": "Před sledováním počkat na potvrzení relé",
     "wait_for_relay_feedback.helper":
       "Spustí časovač pozice ve chvíli, kdy relé nahlásí, že se zaplo, místo v okamžiku odeslání příkazu. V pomalé nebo studené síti Zigbee/Z-Wave může příkazu trvat několik sekund, než dorazí k relé; bez této volby se toto zpoždění počítá jako pohyb a sledovaná pozice předbíhá roletu. Ponechte vypnuté, pokud se pozice neodchyluje u rolet, jejichž relé reaguje pomalu.",
+    "my_position.label": "Moje pozice (%)",
+    "my_position.helper":
+      'Pro rolety s hardwarovou předvolbou "my"/oblíbenou (např. Somfy RTS). Když je nastaveno, stisknutí zastavení, když roleta již stojí, předpokládá, že roleta sama najede do této pozice a sleduje ji tam. Ponechte prázdné pro vypnutí.',
     "recalibrate_before_position.label": "Před přesunem na pozici plně otevřít (Beta)",
     "recalibrate_before_position.helper":
       "Pro rolety bez zpětné vazby pozice, kterými může pohybovat i dálkový ovladač. Před každým příkazem na pozici roletu plně otevře, takže pohyb začíná ze známé pozice místo z odchýleného odhadu. Zhruba zdvojnásobí dráhu každého pohybu a u současného nebo sekvenčního náklonu pohne roletou, když upravujete lamely.",
