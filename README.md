@@ -173,11 +173,36 @@ how much to believe it. Pick the profile that matches your hardware.
 | **No real endpoints — reports open/closed when stopped** | The cover has no real position feedback and reports "open" or "closed" whenever the motor stops anywhere, not only at the ends. Those reports are ignored, so stopping mid-travel does not snap the position to 0%. |
 | **State mirrors the last command** | The cover has no position feedback and simply echoes the last command: "open" while opening, "closed" while closing, and "unknown" when stopped, as some single-channel Tuya shutters do. Each state is read as an open, close, or stop command and tracked by time. |
 
-The last two profiles both suit covers with no position feedback, and choosing
-between them matters. See
-[Choosing between the no-feedback profiles](#advanced-hardware-notes) under
-Advanced hardware notes for the difference and the extra settings the "State
-mirrors the last command" profile needs.
+<details>
+<summary><strong>Choosing between no-real-endpoints and state-mirrors-last-command</strong></summary>
+
+The last two profiles both suit covers with no position feedback, but they treat
+the device's reports very differently.
+
+**No real endpoints** _ignores_ the device's open/closed reports and relies
+entirely on its own timers. Choose it for modules that periodically re-send a
+stale or false "open" or "closed" while sitting idle: the spurious report is
+dropped rather than triggering a phantom move.
+
+**State mirrors the last command** does the opposite: it reads _every_ reported
+state as a command. That is exactly right for a device whose state is only ever a
+command echo, but it means an unsolicited "open" or "closed" sent while the cover
+is idle would start a phantom move in that direction. If your module sends
+periodic or false updates when nothing is moving, use **No real endpoints**
+instead.
+
+Because a **State mirrors the last command** cover has no endpoint feedback, and
+in practice drives a motor with no internal limit switch, the integration also
+sends an explicit **stop** when the cover reaches 0% or 100% rather than assuming
+the motor stops itself there. It treats an open or close command issued while the
+cover is already parked at that endpoint as doing nothing. Set
+[Endpoint run-on time](#endpoint-run-on-time) to 0 for such a motor, so it is
+de-energised the instant it reaches the endpoint. If the cover can also be moved
+by an external remote, so "already parked there" may not be true, turn on
+[Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints)
+to drive the command through anyway.
+
+</details>
 
 #### Force time-based positioning
 
@@ -575,38 +600,6 @@ support. If the wrapped cover supports `set_cover_tilt_position` and you use the
 inline mode, the integration forwards the tilt commands straight through, letting
 the device position its own slats and snapping the tilt tracker to the reported
 angle once it settles. This is auto-detected; no extra configuration is needed.
-
-</details>
-
-<details>
-<summary><strong>Choosing between the no-feedback profiles</strong></summary>
-
-Both **No real endpoints — reports open/closed when stopped** and **State mirrors
-the last command** suit covers with no position feedback, but they treat the
-device's reports very differently.
-
-**No real endpoints** _ignores_ the device's open/closed reports and relies
-entirely on its own timers. Choose it for modules that periodically re-send a
-stale or false "open" or "closed" while sitting idle: the spurious report is
-dropped rather than triggering a phantom move.
-
-**State mirrors the last command** does the opposite: it reads _every_ reported
-state as a command. That is exactly right for a device whose state is only ever a
-command echo, but it means an unsolicited "open" or "closed" sent while the cover
-is idle would start a phantom move in that direction. If your module sends
-periodic or false updates when nothing is moving, use **No real endpoints**
-instead.
-
-Because a **State mirrors the last command** cover has no endpoint feedback, and
-in practice drives a motor with no internal limit switch, the integration also
-sends an explicit **stop** when the cover reaches 0% or 100% rather than assuming
-the motor stops itself there. It treats an open or close command issued while the
-cover is already parked at that endpoint as doing nothing. Set
-[Endpoint run-on time](#endpoint-run-on-time) to 0 for such a motor, so it is
-de-energised the instant it reaches the endpoint. If the cover can also be moved
-by an external remote, so "already parked there" may not be true, turn on
-[Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints)
-to drive the command through anyway.
 
 </details>
 
