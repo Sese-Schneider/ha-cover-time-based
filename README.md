@@ -1,6 +1,6 @@
-# Cover time based integration by [@Sese-Schneider](https://www.github.com/Sese-Schneider)
+# Cover Time Based
 
-A Home Assistant integration to control your cover based on time.
+A Home Assistant integration that controls and tracks a cover's position using travel time.
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Sese-Schneider&repository=ha-cover-time-based&category=integration)
 [![Active Installations][installations-shield]](https://analytics.home-assistant.io/)
@@ -10,382 +10,521 @@ A Home Assistant integration to control your cover based on time.
 ![Project Maintenance][maintenance-shield]
 [![GitHub Activity][commits-shield]][commits]
 
-This integration is based on [davidramosweb/home-assistant-custom-components-cover-time-based](https://github.com/davidramosweb/home-assistant-custom-components-cover-time-based/).
+Many covers have no way of reporting where they are: a roller shutter on a plain
+relay knows only "open" and "closed", if that. This integration works out the
+position from how long the motor has been running, so a cover with no position
+sensor of its own can still report where it is and be sent to any point in
+between. It adds tilt control on top, and a visual card for setting everything
+up and calibrating the timings.
 
-It improves the original integration by adding tilt control, synchronized travel/tilt movements, and a visual configuration card.
+It is maintained by [@Sese-Schneider](https://www.github.com/Sese-Schneider) and
+builds on the original
+[cover-time-based](https://github.com/davidramosweb/home-assistant-custom-components-cover-time-based/)
+component by davidramosweb.
 
-### Features:
+## Contents
 
-- **Control the position of your cover based on time**.
-- **External state monitoring:** Detects physical switch presses and keeps the position tracker in sync.
-- **Up/down interlock (Switch mode):** Never energizes both direction relays at once — when one direction relay turns on, even from outside Home Assistant (a wall switch wired straight to the relays), the opposite relay is switched off — protecting motors with no hardware interlock.
-- **Multiple input modes:** Latching switches, momentary pulse buttons, or toggle-style relays.
-- **Wrap an existing cover:** Add time-based position tracking to any cover entity.
-- **Control the tilt of your cover based on time** with four tilt modes: inline, sequential closes-then-tilts-closed, sequential closes-then-tilts-open, or separate tilt motor.
-- **Built-in configuration and calibration:** Calibrate travel times directly from the UI, including finer parameters to compensate for the time it takes the motor to startup.
-- **Resyncs position at endpoints:** Motors with internal limit switches self-stop at the 0%/100% endpoints, which resyncs the position tracker with the physical cover. For latching (Switch-mode) relays a configurable run-on keeps the relay energized until the motor reaches the endpoint.
+- [Features](#features)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [The configuration card](#the-configuration-card)
+- [Configuration](#configuration)
+  - [Control Mode](#control-mode)
+  - [Wrapping an existing cover](#wrapping-an-existing-cover)
+  - [Controlling a cover with switches](#controlling-a-cover-with-switches)
+  - [Tilt](#tilt)
+  - [Options for every cover](#options-for-every-cover)
+- [Calibration](#calibration)
+- [Services](#services)
+- [Troubleshooting](#troubleshooting)
+- [Advanced hardware notes](#advanced-hardware-notes)
+- [YAML configuration (deprecated)](#yaml-configuration-deprecated)
 
-## Install
+## Features
 
-### HACS
+- **Time-based position tracking.** Estimates the position from how long the
+  cover has been moving, so covers with no position feedback can still be sent
+  to any position.
+- **Follows physical operation.** Notices when a wall switch, remote, or another
+  integration moves the cover, and keeps its own estimate in step.
+- **Motor-safe interlock.** In Switch mode it never energises both direction
+  relays at once. Turning one direction on, even from a wall switch wired
+  straight to the relays, switches the other off, which protects motors that
+  have no hardware interlock of their own.
+- **Works with many kinds of hardware.** Latching switches, momentary pulse
+  buttons, and toggle-style relays are all supported.
+- **Wraps an existing cover.** Adds time-based position, and optional tilt, to
+  any cover entity that lacks it.
+- **Tilt control.** Drives venetian-style slats using either the main travel
+  motor or a separate tilt motor.
+- **Built-in calibration.** Measures travel and tilt times from the card,
+  including a fine startup adjustment that keeps short movements accurate.
+- **Self-correcting at the endpoints.** Every time the cover is sent fully open
+  or closed it reaches a known position, which resyncs the estimate.
 
-_This repo is available for install through HACS._
+## Installation
 
-- Go to HACS
-- Search for "Cover time based"
+This integration is available through [HACS](https://hacs.xyz/). In HACS, search
+for **Cover time based** and install it, then restart Home Assistant.
 
-_or_
+Alternatively, click the button below:
 
-Click here:
+[![Open the Cover Time Based repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Sese-Schneider&repository=ha-cover-time-based&category=integration)
 
-[![](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Sese-Schneider&repository=ha-cover-time-based&category=integration)
+## Quick start
 
-## Setup
+1. **Create a cover.** In Home Assistant, open **Settings → Devices & Services →
+   Helpers**, click **Create Helper**, pick **Cover Time Based**, and give it a
+   name.
+2. **Add the configuration card** to a dashboard (see
+   [The configuration card](#the-configuration-card) for the steps).
+3. **Describe your hardware.** On the card's **Device** tab, choose a
+   [Control Mode](#control-mode) and select the switches or cover entity it uses.
+4. **Calibrate.** On the **Calibration** tab, set the current position and
+   [measure the travel times](#calibration).
 
-### Creating a cover via the UI
+That is enough to get a working cover. The sections below cover every option in
+detail.
 
-1. Go to **Settings → Devices & Services → Helpers**
-2. Click **Create Helper → Cover Time Based**
-3. Enter a name for your cover
+## The configuration card
 
-### Setup the configuration card
+The configuration card is a visual interface for every setting, and it can
+measure your cover's timings for you. It has two tabs, **Device** and
+**Calibration**; fill in the Device tab first, as the Calibration tab depends on
+it. The card remembers the last cover you were working on and reselects it next
+time the dashboard loads. (That memory is kept per browser rather than per Home
+Assistant user, and a cover you have since deleted is simply not restored.)
 
-The configuration card provides a visual interface for all settings and supports built-in calibration to measure timing parameters automatically.
+To add the card to a dashboard:
 
-> **Create at least one cover first.** The configuration card is delivered as a frontend asset of this integration, and Home Assistant only loads an integration's frontend assets once the integration is loaded — which requires at least one config entry to exist. If you add the card to a dashboard before creating any cover, Lovelace will show a red **Configuration error** ("custom element doesn't exist: cover-time-based-card"). Create a cover via the steps above, then add the card.
->
-> **Hard-refresh your browser after the first install.** Home Assistant loads dashboard resources only when the page first loads, so the card is missing from any browser session that was already open when you installed the integration — and because Home Assistant's service worker caches the app, often only a _hard_ refresh brings it in (`Ctrl`/`Cmd`+`Shift`+`R`). A dismissible notice in **Settings → Repairs** prompts you to do this after a first install; it does not appear on version updates or ordinary restarts.
+1. Open **Settings → Dashboards** and either open an existing dashboard or create
+   a new one.
+2. Click the **Edit dashboard** (pencil) icon in the top right, then add a new
+   card.
+3. In the card picker, switch to the **By card** tab. (In Home Assistant 2026.6
+   and later the picker opens on **By entity**, where this card does not appear.)
+4. Search for **Cover time based configuration**, select it, and click **Save**.
+5. Click **Done** to stop editing.
 
-1. Go to **Settings → Dashboards**.
-2. Click **Add dashboard → New dashboard from scratch**.
-3. Fill in a name and make sure **Add to sidebar** is selected.
-4. Click **Create**.
-5. Click the new dashboard icon in the Home Assistant side bar.
-6. Click the **Edit dashboard** icon in the top right corner.
-7. Under **New section** click the **+** icon to add a new card.
-8. Select the **By card** tab (in Home Assistant 2026.6+ the card picker
-   opens on the **By entity** tab, where this configuration card does not
-   appear), then search for and select the **Cover time based
-   configuration** card and click **Save**.
-9. Click **Done** to stop editing the dashboard.
+> [!IMPORTANT]
+> **Create a cover before you add the card.** The card ships as a frontend asset
+> of the integration, and Home Assistant only loads that asset once at least one
+> cover exists. If you add the card first, the dashboard shows a red
+> **Configuration error** instead. See
+> [the card does not appear](#the-card-does-not-appear) if you hit this.
 
-### Configuration and Calibration Card
+## Configuration
 
-The configuration card provides a visual interface for all settings and supports built-in calibration to measure timing parameters automatically.
+Every setting lives on the configuration card's **Device** tab. The first
+choice, **Control Mode**, tells the integration how it drives your cover, and
+the rest of the options on the tab change to match it.
 
-The configuration card has two tabs: **Device** and **Calibration**. The Device tab must be fully configured before accessing the Calibration tab.
+### Control Mode
 
-The card remembers the device you last selected and restores it the next time the dashboard loads, so you don't have to re-pick the cover you were configuring. The selection is remembered per browser rather than per Home Assistant user, and a cover that has since been deleted is simply not restored.
+| Control Mode | Choose it when |
+| --- | --- |
+| **Wrap an existing cover entity** | You already have a working cover entity and want to add time-based position, and optionally tilt, on top of it. |
+| **Switch (latching)** | Two relays, one to open and one to close, that stay on for the whole movement and stop when switched off. |
+| **Pulse (momentary)** | Push-button relays, where a brief on/off pulse starts the motor. Needs a separate stop button. |
+| **Toggle (same button)** | A brief pulse starts the motor, and a second pulse on the same button stops it. |
+| **Toggle (opposite button)** | A brief pulse starts the motor, and pressing the opposite direction stops it. There is no separate stop button. |
 
-The main items on the **Device** configure how to interface with the
-physical cover:
+The card only ever shows the options that apply to the mode you pick, so this
+table is the quickest way to see what each mode offers. Follow a link for the
+detail. A blank cell means the option is not shown for that mode.
 
-- **Device type**: whether this helper talks to the cover via open/close switches or via an existing cover entity
-- **Switch type**: whether the switches are latching, pulsed, or toggled.
-- **Tilting**: what type of tilt, if any, is supported.
+| Option | Wrapped | Switch | Pulse | Toggle | Toggle (opp.) |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| [Cover entity](#wrapping-an-existing-cover) | ✓ | | | | |
+| [Open and Close switch](#controlling-a-cover-with-switches) | | ✓ | ✓ | ✓ | ✓ |
+| [Stop switch](#controlling-a-cover-with-switches) | | | ✓ | | |
+| [Position reporting](#position-reporting) | ✓ | | | | |
+| [Force time-based positioning](#force-time-based-positioning) | ✓ | | | | |
+| [Invert position](#invert-position) | ✓ | | | | |
+| [Pulse time](#pulse-time) | | | ✓ | | |
+| [Relay reports its own OFF](#relay-reports-its-own-off) | | | | ✓ | ✓ |
+| [Send stop signal at endpoints](#send-stop-signal-at-endpoints) | | | ✓ | | |
+| [Wait for relay confirmation](#wait-for-relay-confirmation-before-tracking) | | ✓ | ✓ | ✓ | ✓ |
+| [Assumed state](#assumed-state) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Always re-send at the endpoints](#always-re-send-openclose-at-the-endpoints) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Fully open before position (Beta)](#fully-open-before-moving-to-a-position-beta) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Tilt](#tilt) | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-The **Calibration** tab is used to configure:
+The switch-based modes (Switch, Pulse, and the two Toggle modes) are described
+together under
+[Controlling a cover with switches](#controlling-a-cover-with-switches).
 
-- **Position**: sync the position tracker with the physical cover and slat position.
-- **Travel**: how long it takes to open and close the cover, and how much time it takes to start the motor.
-- **Tilt**: how long it takes to open and close the slats, and how much time it takes to start the motor.
+### Wrapping an existing cover
 
-## Device
-
-First configure the **Device type**. A cover-time-based helper can either:
-
-- wrap an existing cover entity to add time-based position tracking, or
-- use relay switches to control cover movement, and optionally to
-  control tilt movement.
-
-### Wrapped covers
-
-Wrap an existing cover entity to add time-based position tracking. Useful for covers that already have basic open/close/stop functionality but lack position tracking.
-
-Specify the **Cover entity**.
-
-**Reacting to physical wall switches.** When the wrapped cover is operated externally (physical wall switch, remote, or another integration), the time-based tracker can only follow the movement if the wrapped entity emits an `opening` / `closing` state during travel. Some wrapped entities — notably certain Tuya / ZHA cover modules — stay in their current `open` or `closed` state the entire time the motor runs, only reporting the final settled state once the movement completes. In that case the time-based position cannot be tracked *during* the physical movement, but it will snap to the wrapped entity's reported position once it settles (or once you click the wrapped cover's stop button, if the wrapped entity reports its current position at that point). If your device instead reports `closed` (or `unknown`) the *moment* a command is issued — so a manual stop mid-travel is wrongly reported as fully closed — set [Position reporting](#position-reporting) to **State mirrors the last command** (below) to track it purely by time.
+Choose **Wrap an existing cover entity** and select the **Cover Entity** you
+want to extend. This suits covers that can already open, close, and stop but do
+not report their position.
 
 #### Position reporting
 
-How much to trust the position the wrapped entity reports is chosen with a single **Position reporting** dropdown. Pick the profile that matches your underlying cover:
+A wrapped cover may report a position you can trust, a position you cannot, or
+nothing useful at all. The **Position reporting** setting tells the integration
+how much to believe it. Pick the profile that matches your hardware.
 
-| Profile                                                | Use when                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Reliable position feedback** _(default)_             | The wrapped cover reports a trustworthy `current_position` and reaches its real open / closed endpoints. The right choice unless the tracked position drifts from where the cover actually is.                                                                                                                                                                                                                                                                      |
-| **Position unreliable — track by time**                | The wrapped cover reports a position, but it can't be trusted. The integration ignores the reported `current_position` and tracks purely by time; a reported `closed` state is still trusted as the 0% endpoint. This is also what lets time-based tilt work cleanly on a wrapped cover whose reported position would otherwise interfere.                                                                                                                            |
-| **No real endpoints — reports open/closed when stopped** | The cover has no position feedback and reports `open` / `closed` whenever the motor stops _mid-travel_, not only at the physical endpoints — so a reported `closed` proves nothing about position. It is ignored instead of snapping to 0%, and position is tracked purely by time. Choose this for modules that periodically re-send a stale or false `open` / `closed` while sitting idle: the spurious report is dropped rather than triggering a phantom move.       |
-| **State mirrors the last command**                     | The cover has no position feedback and never emits an `opening` / `closing` transition — its state simply echoes the last command: `open` when opening was commanded, `closed` when closing was commanded, and `unknown` when stopped (e.g. some single-DP Tuya shutters). Each reported state is treated as an open / close / stop **command** and tracked by time, so pressing **stop** halfway freezes the cover where it is instead of snapping to 0%.             |
+| Profile | Choose it when |
+| --- | --- |
+| **Reliable position feedback** _(default)_ | The cover reports a trustworthy position and reaches its real open and closed endpoints. Leave it here unless the tracked position drifts from where the cover actually is. |
+| **Position unreliable — track by time** | The cover reports a position, but you cannot trust it. The reported position is ignored and everything is tracked by time, although a reported "closed" is still trusted as the fully-closed point. |
+| **No real endpoints — reports open/closed when stopped** | The cover has no real position feedback and reports "open" or "closed" whenever the motor stops anywhere, not only at the ends. Those reports are ignored, so stopping mid-travel does not snap the position to 0%. |
+| **State mirrors the last command** | The cover has no position feedback and simply echoes the last command: "open" while opening, "closed" while closing, and "unknown" when stopped, as some single-channel Tuya shutters do. Each state is read as an open, close, or stop command and tracked by time. |
 
-> **Command echo vs. spurious reports.** Because **State mirrors the last command** reads _every_ reported state as a command, it will act on an unsolicited `open` / `closed` a device emits while idle — starting a phantom timed move in the wrong direction. If your module sends periodic or false state updates when nothing is moving, use **No real endpoints** instead, which ignores those reports and relies entirely on the internal timers.
+<details>
+<summary><strong>Choosing between no-real-endpoints and state-mirrors-last-command</strong></summary>
 
-Because a **State mirrors the last command** cover has no endpoint feedback — and in practice drives an endstop-less motor that only stalls against its mechanical stop while powered — the integration also sends an explicit **stop** when the cover reaches the 0% / 100% endpoints (rather than assuming the motor self-stops there, as it does for other wrapped covers), and treats an `open` / `close` command issued while already parked at that endpoint as a no-op. Set **Endpoint Run-on Time** to 0 for such a motor so it is de-energized the instant it reaches the endpoint. If the cover can also be moved by an external remote — so "already parked there" may not be true — enable [Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints) to drive the command through anyway.
+The last two profiles both suit covers with no position feedback, but they treat
+the device's reports very differently.
 
-**Setting a position.** If the wrapped cover natively supports `set_cover_position`, the integration forwards the set-position command straight to it, so the cover stops at the requested position even if the underlying device has no `stop` service. The time-based tracker still animates the position live during the move (handy for covers that only report their position once they finish moving). On such a cover, the integration's **Stop** is implemented by setting the wrapped cover to the current calculated position. If the wrapped cover doesn't support `set_cover_position`, the integration falls back to driving it with timed open / close / stop. The **Force time-based positioning** option forces that timed behaviour even when native set-position is available — use it if the wrapped cover's own set-position is unreliable.
+**No real endpoints** _ignores_ the device's open/closed reports and relies
+entirely on its own timers. Choose it for modules that periodically re-send a
+stale or false "open" or "closed" while sitting idle: the spurious report is
+dropped rather than triggering a phantom move.
 
-**Invert position.** Some covers run backwards relative to a standard cover — an overhanging awning, say, whose underlying entity reports *open* when the awning is fully extended (shading) and *closed* when it is rolled away. Enable this option to flip the position axis: the time-based cover reports `100 −` the wrapped entity's position and swaps the open / close commands (and `set_cover_position(p)` is forwarded as `100 − p`), so *open* means retracted and *closed* means extended, the right way round. This flips the position axis only; the tilt logic itself is unchanged. Invert is intended for position-only covers such as awnings and shutters — not tilting venetians, where a timed tilt mode simulates the slats by driving the same (now-inverted) motor. Leave it **off** for a normally-oriented cover.
+**State mirrors the last command** does the opposite: it reads _every_ reported
+state as a command. That is exactly right for a device whose state is only ever a
+command echo, but it means an unsolicited "open" or "closed" sent while the cover
+is idle would start a phantom move in that direction. If your module sends
+periodic or false updates when nothing is moving, use **No real endpoints**
+instead.
 
-**Tilt on a wrapped cover.** The **Inline** and **Sequential** tilt modes drive the wrapped cover's normal open / close commands, so they work on any wrapped cover regardless of whether it reports tilt support. Only the **Separate tilt motor** mode requires the wrapped cover to expose its own tilt commands, so it is offered only when the wrapped entity reports native tilt support.
+Because a **State mirrors the last command** cover has no endpoint feedback, and
+in practice drives a motor with no internal limit switch, the integration also
+sends an explicit **stop** when the cover reaches 0% or 100% rather than assuming
+the motor stops itself there. It treats an open or close command issued while the
+cover is already parked at that endpoint as doing nothing. Set
+[Endpoint run-on time](#endpoint-run-on-time) to 0 for such a motor, so it is
+de-energised the instant it reaches the endpoint. If the cover can also be moved
+by an external remote, so "already parked there" may not be true, turn on
+[Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints)
+to drive the command through anyway.
 
-**Native tilt forwarding.** If the wrapped cover natively supports `set_cover_tilt_position` — for example a Z-Wave venetian shutter whose firmware positions its own slats — and you use the **Inline** tilt mode, the integration forwards the tilt commands (set-tilt, open-tilt, close-tilt) straight to the wrapped cover instead of simulating them by pulsing the main motor. The device positions its slats itself, precisely and at any travel position, and the integration snaps its tilt tracker to the angle the cover reports once it settles. On such a cover the integration also drives **position** natively (forwarding `set_cover_position`) even though tilt is configured, and animates the tilt display sweeping toward the direction endpoint during travel — venetian slats close on the way down, open on the way up — before syncing to the reported angle. This is auto-detected from the wrapped entity's supported features; no extra configuration is needed. A cover that does not advertise native tilt keeps the timed simulation described above, and the Sequential / Separate-tilt-motor modes always use their existing behaviour.
+</details>
 
-### Switch-based covers
+#### Force time-based positioning
 
-Control a cover using two relay switches (one for open, one for close), with an optional third stop switch (required in **Pulse** mode).
+If the wrapped cover supports setting a position of its own, the integration
+normally passes a set-position command straight through to it, so the cover
+stops exactly where you asked even if it has no stop service. Turn **Force
+time-based positioning** on to ignore that native support and drive the cover
+with timed open, close, and stop movements instead. Use it when the cover's own
+set-position is unreliable.
 
-Specify the **Open switch**, **Close switch**, and optionally the **Stop switch** entities (required in **Pulse** mode).
+#### Invert position
 
-### Input Mode for switch-based covers
+Some covers run backwards compared with a normal cover. An awning is the classic
+example: its underlying entity reports "open" when the awning is fully extended
+and shading, and "closed" when it is rolled away. Turn **Invert position** on to
+flip the axis, so the time-based cover reports the opposite position and swaps
+its open and close commands. This affects position only, not tilt, and is meant
+for position-only covers such as awnings and shutters. Leave it off for a
+normally-oriented cover.
 
-Four input modes are available to describe how the switch entities for switch-based covers function:
+Wrapped covers have a few more behaviours worth knowing about, such as how they
+follow physical wall switches and when a cover positions itself natively. Those
+are covered under [Advanced hardware notes](#advanced-hardware-notes).
 
-| Mode                         | Description                                                                                                                                                                                                                                                                                                                                                                                |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Switch**                   | Latching relays. The direction switch stays ON for the entire movement. Movement stops when the switch is turned OFF                                                                                                                                                                                                                                                                       |
-| **Pulse**                    | Momentary pulse buttons. A brief ON-OFF pulse latches the motor on. **Requires a dedicated stop button** (or script) to stop movement mid-travel. If your hardware has no stop signal and instead stops when the opposite button is pressed, use **Toggle (opposite button)** instead.                                                                                                     |
-| **Toggle (same button)**     | Toggle-style relays. A brief ON-OFF pulse latches the motor on. A second pulse on the same direction button stops the motor.                                                                                                                                                                                                                                                               |
-| **Toggle (opposite button)** | Momentary toggle relays with no dedicated stop button, where pressing the _opposite_ direction while moving stops the motor (a same-direction press keeps it moving). Reversing takes two presses: opposite (stop), then press again to move. Choose this over **Toggle (same button)** when your controller stops on the opposite button, and over **Pulse** when you have no stop relay. |
+### Controlling a cover with switches
 
-> **Scripts in Pulse mode.** In **Pulse** mode the Open / Close / Stop entities (and the dual-motor tilt entities) may be `script` entities as well as `switch` entities — for example, IR-remote-controlled covers where each script fires an open / close / stop IR command. **Switch** and both **Toggle** modes require `switch` entities: they rely on the entity reporting a held/latched on-state, which a script (which auto-returns to `off`) cannot provide. Keep the scripts short: after **Pulse time** elapses the integration turns the entity off again, which cancels any script still running — so a script whose own internal `delay` is longer than the pulse time would be cut short.
+Choose one of the four switch modes, then select the relays that drive the
+motor: an **Open switch** and a **Close switch**, plus a **Stop switch** in Pulse
+mode.
+
+In Pulse mode these entities may be `script` entities as well as switches, which
+suits IR-controlled covers where each script fires an open, close, or stop
+command. The other modes need real `switch` entities, because they rely on the
+switch reporting a held, latched on-state that a script (which returns to `off`
+by itself) cannot provide.
 
 #### Pulse time
 
-With the **Pulse** input mode, the **Pulse time** configures how long the switch should send the ON signal before it turns OFF. Defaults to **1s**. Neither **Toggle** mode uses it — toggle relays are momentary, so the integration sends a single ON pulse and lets the relay release itself.
+In **Pulse** mode, **Pulse time** is how long the switch is held on before it is
+turned off again. It defaults to **1 second**. The Toggle modes do not use it,
+since a toggle relay releases itself after its own brief pulse.
 
-#### Relay reports its own OFF (Toggle modes)
+> [!NOTE]
+> Keep any Pulse-mode scripts short. When the pulse time elapses the integration
+> turns the entity off, which cancels a script still running, so a script whose
+> own internal delay is longer than the pulse time would be cut off partway.
 
-Applies to both Toggle modes (same-button and opposite-button). Leave it **on** (the default) for normal toggle relays — they switch themselves off after the pulse and report that OFF back to Home Assistant, so the integration can drive a still-ON relay OFF first to guarantee a clean ON edge.
+#### Relay reports its own OFF
 
-Turn it **off** for hardware-managed pulse modules — for example an **Aqara T2** in its 200 ms internal-pulse mode — that pulse the contact themselves but **never report the OFF** to Home Assistant, leaving the switch entity stuck `on`. On such hardware a `turn_off` is not an idempotent "off" but another activation pulse, so the integration's attempt to force a clean edge (`turn_off` then `turn_on`) lands as a doubled command and the motor's toggle counter drifts — the symptom is Stop reversing the cover and Up driving it down. With the option off, toggle mode only ever sends a **single `turn_on` per command and never a `turn_off`**, giving exactly one clean activation per press. A repeated `turn_on` still pulses the motor even while the entity reads `on`.
+Applies to both Toggle modes. Leave it **on** for normal toggle relays, which
+switch themselves off after a pulse and report that off back to Home Assistant.
+Turn it **off** for hardware-managed pulse modules, such as an **Aqara T2** in
+its internal-pulse mode, that pulse the contact themselves but never report the
+off, leaving the switch entity stuck on. On that hardware a "turn off" is really
+another activation pulse, so with the option off the integration only ever sends
+a single on command per press, giving exactly one clean activation each time.
 
-#### Send stop signal at endpoints (Pulse mode)
+#### Wait for relay confirmation before tracking
 
-Pulse mode only. Leave it **on** (the default) for controllers that **latch** the direction command and keep running until they receive a separate stop pulse. Without the endpoint stop they stay stuck "moving" — the cover only responds after several clicks and the physical wall/PLC buttons appear blocked. With the option on, the integration pulses the dedicated stop relay when the cover reaches an endpoint (deferred by the **Endpoint run-on time**, see below); because the stop is a separate relay it can never restart the motor.
+Available in every switch mode. Normally the position timer starts the moment a
+command is sent. On a slow or cold Zigbee or Z-Wave mesh the command can take a
+second or two to actually reach the relay, and that delay is then wrongly counted
+as travel, so the tracked position runs ahead of the cover. Turn this **on** to
+start the timer only when the relay reports that it has switched on. Leave it
+**off** unless the position drifts on a cover whose relay responds slowly.
 
-Turn it **off** for controllers with **automatic end-stop detection**: the motor halts itself at its 0%/100% limit switches, and a stop pulse received _while it is already stopped_ is read as "go to favourite/preset position" (the classic Somfy _my_ behaviour), repositioning the cover on every limit hit. With the option off, no stop is sent at the endpoints. The same flag governs a **separate tilt motor**'s tilt-stop relay at the tilt endpoints. **Switch**, **Toggle**, **Toggle (opposite button)** and wrapped-cover modes are unaffected.
+> [!NOTE]
+> On the two **Toggle** modes this option has a narrow trade-off. If you press
+> stop very early in a movement, before the relay has confirmed that it switched
+> on, that stop can be missed on a slow mesh and the motor keeps running, which
+> leaves the tracked position out of sync. This is inherent to the way a toggle
+> stop works, since it is a tap rather than a guaranteed off, and it does not
+> affect Switch or Pulse mode, whose stops always take effect.
 
-### Assumed state
+#### Send stop signal at endpoints
 
-Available for every device type. A time-based cover calculates its position from travel time without feedback, so by default it reports an _assumed_ state and Home Assistant keeps both the open and close buttons active at all times. Turn **Assumed state** off if you trust the time-based calculation and want the UI to behave like a position-aware cover — greying out actions that can't apply (for example the close button once the cover is already fully closed). Leave it on if the calculation can drift (motor slip, manual operation, power loss mid-travel), since the always-active buttons let you re-issue a command to re-converge.
+Applies to **Pulse** mode. Leave it **on** for controllers that keep the motor
+running until they receive a separate stop pulse; without a stop at the endpoint
+they stay stuck "moving", and the cover only responds after several clicks while
+the physical buttons appear blocked. Turn it **off** for controllers that stop
+themselves at their own limit switches, where a stop pulse arriving after the
+motor has already stopped is instead read as "go to the favourite position" (the
+classic Somfy _my_ behaviour) and repositions the cover on every limit hit. The
+same setting governs a [separate tilt motor's](#tilt) stop relay at its tilt
+endpoints.
 
-### Always re-send open/close at the endpoints
+### Tilt
 
-Available for every device type. Normally, an open (or close) command issued while the tracker already believes the cover is settled at that endpoint is treated as redundant — the movement is skipped, or reduced to a short resync pulse — since the motor is thought to already be there.
+The **Tilt Mode** setting controls whether the cover has tilting slats and how
+tilt and travel interact.
 
-Turn this option **on** for a cover that has **no position feedback** and can _also_ be moved by an external remote or wall button. Such a remote moves the cover without telling Home Assistant, so the tracker can believe the cover is closed while it is physically open — and the close command that would fix that is exactly the one skipped as redundant, making the cover appear unresponsive until you nudge it off the endpoint by hand. With the option on, an endpoint command is always driven for the **full travel time** (modelled as starting from the opposite endpoint, so each mode's tilt phases run too), guaranteeing it reaches the motor.
+| Tilt Mode | Behaviour |
+| --- | --- |
+| **Not supported** _(default)_ | Tilt is disabled. Only position is tracked. |
+| **Closes then tilts closed** | The slats can only tilt at the fully closed position. Closing first travels the cover down, then drives the motor further to tilt the slats closed; opening tilts the slats back first, then travels up. |
+| **Closes then tilts open** | The mirror image, for covers whose slats tilt _open_ when the motor drives past the closed point. Closing travels down, then drives further to tilt the slats open; opening tilts them closed first, then travels up. |
+| **Separate tilt motor** | A dedicated motor drives the tilt, using its own switches. Tilt is allowed only when the cover is in a safe position that you set. |
+| **Tilts inline with travel** | Tilt and travel share one motor and tilt can happen at any position. Closing tilts the slats closed before the cover starts moving; opening tilts them open first. |
 
-Leave it **off** (the default) for covers that report their own position: there the skip is correct, and forcing a re-drive would run the motor into its limit on every redundant press.
+#### Close cover also closes slats
 
-Note that a forced re-drive deliberately models the move as starting from the opposite endpoint, so if you **stop it part-way** the reported position is derived from that assumed start and can be well off — stopping a forced close halfway reports roughly 50% even if the cover started at the bottom. Let a re-drive run to the endpoint, where the position resyncs, rather than stopping it mid-travel.
+Shown for the **Closes then tilts closed** and **Separate tilt motor** modes,
+and **on** by default. With it on, pressing close in the Home Assistant UI closes
+the cover and then closes the slats, leaving both fully shut. Turn it **off** if
+you would rather have a close move the cover only and leave the slats where they
+are, so you can articulate them separately with the tilt-close button.
 
-This covers `open` and `close` only. For **Set position** commands on the same
-hardware, see [Fully open before moving to a position](#fully-open-before-moving-to-a-position-beta).
+#### Tilt motor
 
-### Fully open before moving to a position (Beta)
+For the **Separate tilt motor** mode, configure the relays and limits for the
+tilt motor. (A wrapped cover with its own tilt does not need these switches.)
 
-New in this release, and its behaviour may still change.
+- **Tilt open switch**, **Tilt close switch**, **Tilt stop switch**: the relays
+  that drive the tilt motor.
+- **Safe tilt position**: the tilt moves here before the cover travels. Defaults
+  to **100**, fully open.
+- **Max tilt allowed position** _(optional)_: tilt is only allowed when the cover
+  is at or below this position, where 0 is closed and 100 is open.
 
-The companion to [Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints), for the same hardware: a cover with no position feedback that a remote or wall switch can also move, so Home Assistant's idea of where it is drifts out of sync. That option fixes `open` and `close`; this one fixes **Set position**.
+How a physical switch or automation firing the tilt relay is interpreted under
+the sequential modes is described under
+[Advanced hardware notes](#advanced-hardware-notes).
 
-With it on, a position command drives the cover fully open first — the one position it can be sure of, since the motor stops at its own limit — and only then moves to the position you asked for. So a stale guess can no longer send the cover somewhere you didn't intend, like closing it onto an obstruction below. Physical buttons and remotes are unaffected.
+### Options for every cover
 
-Off by default, because it is expensive: every move costs a full open plus the run back down, up to about twice the full travel time however small the change. And on **inline** and **sequential** tilt, where the slats share the travel motor, adjusting the slats moves the whole cover and leaves it moved.
+These three options are available whatever the Control Mode.
 
-## Tilt Mode
+#### Assumed state
 
-The **Tilt Mode** setting controls how tilt and travel interact:
+A time-based cover works out its position without feedback, so by default it
+reports an _assumed_ state and Home Assistant keeps both the open and close
+buttons active at all times. Turn **Assumed state** off if you trust the
+calculation and want the UI to behave like a position-aware cover, greying out
+actions that cannot apply, such as close when the cover is already closed. Leave
+it **on** if the calculation can drift, for example through motor slip, manual
+operation, or a power cut mid-travel, because the always-active buttons let you
+re-issue a command to bring things back into line.
 
-- **None:** Tilt is disabled. Only position tracking is used.
-- **Inline:** Tilt and travel use the same motor. Tilting can happen with the cover in any position. When closing the cover, the closing movement first causes the slats to tilt closed before the cover starts closing. When opening the cover, the opening movement first causes the slats to tilt open before the cover starts opening.
-- **Sequential (closes then tilts closed):** Tilting can only happen in the fully closed position. First the cover closes then the slats tilt closed (motor drives further down past cover-closed to close the slats). When opening, the slats first tilt open (motor up) then the cover opens.
-- **Sequential (closes then tilts open):** Mirror image of the above — for covers where slats articulate *open* when the motor drives further down past cover-closed, not closed. First the cover closes then the slats tilt open (motor continues down). When opening, the slats first tilt closed (motor up) then the cover opens.
-- **Separate tilt motor (dual_motor):** A separate motor controls the tilt. Requires dedicated tilt open/close/stop switches. Tilt is only allowed when the cover is in a safe position (configurable).
+#### Always re-send open/close at the endpoints
 
-### How close/open behaves under sequential tilt modes
+Normally an open or close command is skipped when the tracker already believes
+the cover is settled at that endpoint, since there is nothing to do. Turn this
+**on** for a cover that has **no position feedback and can also be moved by an
+external remote or wall button**. Such a remote moves the cover without telling
+Home Assistant, so the tracker can believe the cover is closed while it is
+physically open, and the very command that would fix it is the one being skipped.
+With the option on, an endpoint command is always driven for the full travel
+time, which guarantees it reaches the motor. Leave it **off** for covers that
+report their own position, where the skip is correct.
 
-HA's cover entity exposes close/open for travel and close-tilt/open-tilt for articulation. The integration handles each slightly differently depending on who invoked it:
+> [!NOTE]
+> A forced re-drive is modelled as starting from the opposite endpoint, so if you
+> stop it partway the reported position is derived from that assumed start and can
+> be well off. Let a re-drive run all the way to the endpoint, where the position
+> resyncs, rather than stopping it mid-travel.
 
-- **HA UI close** (`cover.close_cover`): drives travel only — the cover closes and slats remain at the resting position. Use the tilt-close button separately to articulate.
-- **HA UI open** (`cover.open_cover`): restores slats to the resting position if needed, then travels to fully open. This is a single motor motion.
-- **HA UI close-tilt / open-tilt**: drives tilt only (with a travel pre-step if tilt is only allowed at travel=0).
-- **External close** (physical switch or automation firing the close relay): the integration assumes the motor runs the **full journey** — it closes the cover and then continues to articulate the slats past cover-closed to the opposite extreme. Tracking follows both phases.
-- **External open**: the integration restores slats to the resting position and then travels to fully open (same as the HA UI open path).
+#### Fully open before moving to a position (Beta)
 
-**External-switch assumption.** External close on sequential modes assumes a motor controller that latches on a pulse and runs to a mechanical end without stopping at the cover-closed position (common with pulse-mode relays and many off-the-shelf blind motors). If your external switch stops the motor at cover-closed instead — for example a latching switch that you release partway, or a motor that naturally halts at travel=0 — the reported tilt position will drift until the next sync. Please [open an issue](https://github.com/Sese-Schneider/ha-cover-time-based/issues) describing your hardware so we can support it.
+The companion to the option above, for the same hardware, but for **set
+position** rather than open and close. A cover with no feedback that a remote can
+also move drifts out of sync, so a "go to 40%" command based on a stale guess can
+send it somewhere you did not intend, such as onto an obstruction below. With
+this **on**, every set-position command first drives the cover fully open, the
+one position it can be sure of because the motor stalls against its limit, and
+only then moves to the position you asked for.
 
-### Tilt Motor
-
-For covers with a dedicated tilt motor, configure:
-
-- **Tilt open/close/stop switches:** The relay switches controlling the tilt motor (unless this is a wrapped cover entity which doesn't require extra switches).
-- **Safe tilt position:** The tilt moves to this position before travel starts (default: 100 = fully open).
-- **Max tilt allowed position:** Tilt is only allowed when the cover position is at or below this value (e.g., 0 = only when fully closed).
+It is **off** by default because it is expensive: each move costs a full open
+plus the run back down, up to roughly twice the full travel time however small
+the change. On the inline and sequential tilt modes, where the slats share the
+travel motor, it also means adjusting the slats moves the whole cover. This
+feature is new and its behaviour may still change.
 
 ## Calibration
 
-The **Calibration** tab is used to synchronise the position tracker with the position of the physical cover and slats, and to configure the timings that allow this integration to track the physical hardware.
+The **Calibration** tab is where you tell the integration where the cover is now
+and how long its movements take. Fill in the Device tab first.
 
-### Current Position
+### Set the current position
 
-Use the open/stop/close buttons to move the cover (and slats, if tilting is enabled) into a known position and then change the **Current Position** dropdown from `Unknown` to that position. The position must be specified in order to access the calibration tests further down the page.
+Use the open, stop, and close buttons on the card to move the cover, and the
+slats if tilt is enabled, to a known position. Then set **Current Position** to
+match: fully open, fully closed, or one of the tilt positions. You must set this
+before you can measure any timing.
 
-### Timing Calibration
+### Measure a timing
 
-Select the attribute that you wish to calibrate. The available attributes depend on the current position of the cover and slats, and which other attributes have already been configured. For instance, in position **Fully open** you can only calibrate **Travel time (close)** and **Minimum movement time**. **Travel startup delay** becomes configurable once **Travel time (open)** or **Travel time (close)** has been configured.
+Most timings can be measured for you:
 
-1. Set the **Current position** of the cover and slats.
-2. Select the attribute you wish to configure.
-3. Read the description of what needs to be measured.
-4. Click **Start**.
-5. Once the cover or slats reach the position described in the description, click **Finish**. Alternatively, click **Cancel** to abort the calibration.
+1. Set the current position.
+2. Choose the value to measure. The list offers only the values that make sense
+   from where the cover currently is. For example, when fully open you can
+   measure the close time but not the open time.
+3. Read the on-screen description of what to watch for.
+4. Click **Start**, and click **Finish** the moment the cover reaches the
+   position the description asks for. Click **Cancel** to abort instead.
 
-### Calibration Attributes for Travel
+### Travel timings
 
-| Option               | Description                                                           | Default |
-| -------------------- | --------------------------------------------------------------------- | ------- |
-| Travel time (close)  | Time in seconds for the cover to fully close                          |         |
-| Travel time (open)   | Time in seconds for the cover to fully open                           |         |
-| Travel startup delay | Motor startup compensation for travel (see below)                     | None    |
-| Endpoint run-on time | Extra relay time at endpoints to reset position (Switch mode; Pulse when it sends the stop) | 2.0     |
-| Min movement time    | Minimum movement duration - blocks shorter movements to prevent drift | None    |
+| Timing | What it is | Default |
+| --- | --- | --- |
+| **Travel time (close)** | Seconds for the cover to close fully. | — |
+| **Travel time (open)** | Seconds for the cover to open fully. | — |
+| **Travel startup delay** | Compensates for the motor's start-up lag. See [Startup delay](#startup-delay). | not set |
+| **Minimum movement time** | Blocks movements too short to physically move the cover. See [Minimum movement time](#minimum-movement-time). | not set |
+| **Endpoint run-on time** | Extra relay time at the endpoints so the motor reaches its limit. Typed in rather than measured. See [Endpoint run-on time](#endpoint-run-on-time). | 2.0 |
 
-### Calibration Attributes for Tilt
+### Tilt timings
 
-| Option             | Description                                    | Default |
-| ------------------ | ---------------------------------------------- | ------- |
-| Tilt time (close)  | Time in seconds to tilt the cover fully closed | None    |
-| Tilt time (open)   | Time in seconds to tilt the cover fully open   | None    |
-| Tilt startup delay | Motor startup compensation for tilt            | None    |
+| Timing | What it is | Default |
+| --- | --- | --- |
+| **Tilt time (close)** | Seconds to tilt the slats fully closed. | not set |
+| **Tilt time (open)** | Seconds to tilt the slats fully open. | not set |
+| **Tilt startup delay** | Start-up compensation for the tilt motor. | not set |
 
-#### Travel/Tilt startup delay
+### Startup delay
 
-Compensates for motor inertia by delaying position tracking after relay activation. This improves position accuracy, especially for short movements.
+A motor does not start moving the instant its relay switches on; there is a brief
+delay while it gets going. Over a long movement this is negligible, but over a
+short one (say half a second) it can cause a large position error that builds up
+over time. The startup delay tells the integration to wait that long after
+switching the relay on before it starts counting position, which keeps short
+movements accurate. Values between **0.05 and 0.15 seconds** are typical, and
+travel and tilt can be set separately.
 
-**The problem:** Motors have startup inertia. After the relay turns ON, there's a brief delay before the cover starts moving. For long movements (e.g., 30s) this is negligible, but for short movements (e.g. 0.5s) it can cause 20-30% position error that accumulates over time.
+### Endpoint run-on time
 
-**How it works:**
+Time-based tracking is never exact and can drift, so the tracker resyncs itself
+whenever the cover is sent fully to an endpoint. Most motors have internal limit
+switches and stop themselves there, so most modes send no stop at an endpoint and
+simply let the motor run into its own limit, which resyncs the position for free.
 
-1. Relay turns ON immediately
-2. Waits for the configured startup delay (motor is starting up)
-3. Only then starts counting position change
-4. Can be cancelled at any time (stop or direction change)
+In **Switch** mode, though, the direction relay is latched on for the whole
+movement and has to be switched off at the endpoint. Because tracking is
+approximate, the relay is held on for an extra **Endpoint run-on time** (default
+**2 seconds**) so the motor reaches the limit before power is cut. This value
+applies in Switch mode, and in Pulse mode when
+[Send stop signal at endpoints](#send-stop-signal-at-endpoints) is on, where it
+delays the stop pulse by the same amount. You type it in on the Calibration tab;
+it is not one of the measured timings.
 
-Recommended values: 0.05 - 0.15 seconds. Can be configured separately for travel and tilt.
+### Minimum movement time
 
-#### Endpoint Run-on Time
-
-Position tracking is not exact and can drift over time, so the tracker resyncs itself whenever the cover is sent fully to the 0% or 100% endpoint.
-
-Most cover motors have internal limit switches and stop themselves at the endpoints. In **Toggle**, **Toggle (opposite button)** and (most) wrapped-cover modes the integration therefore sends **no stop command at an endpoint** — it lets the motor run into its own limit. This avoids an unwanted extra movement (in Toggle mode a stop pulse on an already-stopped motor would restart it) and resyncs the tracker for free, as the motor always reaches its true endpoint. The exception is a wrapped cover with Position reporting set to **[State mirrors the last command](#position-reporting)**: it has no endpoint feedback and typically an endstop-less motor, so it *is* sent an explicit stop at the endpoint (and re-commanding it to an endpoint it already sits at is a no-op rather than a re-drive, unless [Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints) is on). **Pulse** mode is configurable (see [Send stop signal at endpoints](#send-stop-signal-at-endpoints-pulse-mode) above): by default it pulses its dedicated stop relay at the endpoint, which a latching controller needs, but that can be turned off for controllers that self-stop at their own limits.
-
-In **Switch** mode the direction relay is latched ON for the whole movement, so it must be actively switched off at the endpoint. Because tracking is approximate, the relay is held on for an extra **Endpoint Run-on Time** (default 2s) so the motor reaches the physical endpoint before power is cut. **This setting applies to Switch mode, and to Pulse mode when it sends the endpoint stop** (it defers that stop pulse by the run-on so the motor seats against its limit first).
-
-The same self-stop handling applies to a **separate tilt motor** (separate-tilt-motor mode): no stop is sent when tilt reaches its 0%/100% endpoints — the tilt motor self-stops on its own limit — except in **Switch** mode (which de-energizes the latched tilt relay) and in **Pulse** mode when _Send stop signal at endpoints_ is on (which pulses the tilt-stop relay). Mid-tilt positions are always stopped (nothing self-stops there).
-
-The self-stop skip is about **travel** reaching an endpoint. Where the slats share the travel motor — **inline** tilt — a tilt move made while the cover is parked at a travel endpoint drives that motor _off_ its limit switch, so it will not self-stop there; the stop is sent in that case even in the modes that normally skip it. The two cases that settle themselves are unaffected: a dedicated **tilt motor** skips the stop at its own tilt endpoints (as described above), and a wrapped cover tilting **natively** holds itself at the target, so neither is sent an extra stop.
-
-Under the **sequential closes-then-tilts-closed** and **sequential closes-then-tilts-open** tilt modes, run-on is skipped at the closed (0%) endpoint, because the motor is already driven past cover-closed for the tilt phase. Run-on still applies at the open (100%) endpoint.
-
-#### Min movement time
-
-Prevents position drift by blocking relay activations too brief to physically move the cover. Movements to 0% or 100% are always allowed. Recommended values: 0.5 - 1.5 seconds.
-
-#### Reversing a moving cover
-
-Reversing is never a single step: the motor is stopped, given a moment to come
-to rest, and only then driven the other way. That pause is a fixed **1.0
-second** — the value every release has used — and is not configurable.
-
-It was briefly a per-cover setting during the 4.9.0 release candidates. That
-was a mistake: the hardware it was added for reverses correctly at 1.0s, and
-the only thing the setting demonstrably enabled was choosing a *shorter* gap,
-which breaks covers. A gap that is too short means the reverse command arrives
-before the motor has stopped — or, on momentary-relay hardware, before the
-relay has released — so it is ignored while the position tracker runs on,
-leaving the entity out of sync with the cover. Configs that still carry
-`direction_change_delay` keep loading; the value is ignored.
-
-> [!WARNING]
-> In **Toggle (opposite button)** mode this desync does more than park the
-> cover. "Stop" in that mode is a pulse of the *opposite* relay, which stops a
-> moving motor — but on a motor that is already stopped it is simply a movement
-> command. So once the tracker and the cover disagree, the next stop can drive
-> the cover to its endpoint. This is inherent to the mode on hardware with no
-> position feedback.
-
-**If reversals do not take on your hardware,** the setting to change is on the
-device, not here: a momentary relay's own pulse length must be comfortably
-under a second (a few hundred milliseconds is typical — for example
-`pulse_length` on a Zigbee2MQTT relay). Motor manuals generally require this
-anyway. A device pulse approaching or exceeding one second leaves the relay
-still closed when the reverse command is sent, and no integration-side setting
-can compensate for that.
-
-Note this pause also applies to the tilt-restore reversal on covers whose slats
-share the travel motor.
+This blocks relay activations too brief to physically move the cover, which
+prevents them nudging the tracked position out of true. Movements all the way to
+0% or 100% are always allowed. Values between **0.5 and 1.5 seconds** work well.
 
 ## Services
 
 ### `cover_time_based.set_known_position`
 
-Manually set the internal position of a cover. Useful for correcting drift.
+Manually set a cover's tracked position, which is useful for correcting drift.
 
-| Field    | Description                 |
-| -------- | --------------------------- |
-| position | The position to set (0-100) |
+| Field | Description |
+| --- | --- |
+| `position` | The position to set (0–100). |
 
 ### `cover_time_based.set_known_tilt_position`
 
-Manually set the internal tilt position of a cover.
+Manually set a cover's tracked tilt position.
 
-| Field         | Description                      |
-| ------------- | -------------------------------- |
-| tilt_position | The tilt position to set (0-100) |
+| Field | Description |
+| --- | --- |
+| `tilt_position` | The tilt position to set (0–100). |
 
 ### `cover_time_based.start_calibration`
 
-Start a calibration test to measure a timing parameter.
+Start a calibration test to measure a timing.
 
-| Field     | Description                                                                    |
-| --------- | ------------------------------------------------------------------------------ |
-| entity_id | The cover entity                                                               |
-| attribute | The timing parameter to calibrate                                              |
-| timeout   | Safety timeout in seconds - motor auto-stops if stop_calibration is not called |
-| direction | Direction to move (`open` or `close`). Auto-detects if not set                 |
+| Field | Description |
+| --- | --- |
+| `entity_id` | The cover entity. |
+| `attribute` | The timing to calibrate. |
+| `timeout` | Safety timeout in seconds; the motor auto-stops if `stop_calibration` is not called. |
+| `direction` | Direction to move, `open` or `close`. Auto-detected if not set. |
 
 ### `cover_time_based.stop_calibration`
 
-Stop an active calibration test and save the result.
+Stop a running calibration test and save the result.
 
-| Field     | Description                                   |
-| --------- | --------------------------------------------- |
-| entity_id | The cover entity                              |
-| cancel    | If `true`, discard the results without saving |
+| Field | Description |
+| --- | --- |
+| `entity_id` | The cover entity. |
+| `cancel` | If `true`, discard the result instead of saving it. |
 
-## Debugging
+## Troubleshooting
 
-If something isn't working as expected, you can enable debug logging to see detailed information about what the integration is doing.
+### The card does not appear
 
-### Via Tools
+If a dashboard shows a red **Configuration error** ("custom element doesn't
+exist: cover-time-based-card"), the card's code has not loaded. Two things cause
+this:
 
-1. Go to **Tools → Actions**.
-2. Search for **Logger: Set logger level** and select it.
-3. Switch to YAML mode and enter:
+- **No cover exists yet.** Home Assistant only loads the card once at least one
+  Cover Time Based cover has been created. Create one (see
+  [Quick start](#quick-start)), then add the card.
+- **The browser has a stale copy.** After the first install, a browser tab that
+  was already open will not have the card's code. A **hard refresh**
+  (`Ctrl`/`Cmd`+`Shift`+`R`) loads it. Home Assistant shows a dismissible
+  reminder in **Settings → Repairs** after a first install; it does not appear on
+  ordinary updates or restarts.
 
-```yaml
-action: logger.set_level
-data:
-  custom_components.cover_time_based: debug
-```
+### Enable debug logging
 
-4. Click **Perform action**.
-5. Reproduce the issue — debug messages will appear in the Home Assistant log.
+Detailed logs make problems much easier to diagnose. The quickest way is from the
+UI:
 
-To turn off debug logging, repeat the steps above but change `debug` to `info`.
+1. Open **Developer Tools → Actions**.
+2. Find **Logger: Set logger level** and switch to YAML mode.
+3. Enter the following and run it:
 
-### Via YAML
+   ```yaml
+   action: logger.set_level
+   data:
+     custom_components.cover_time_based: debug
+   ```
 
-Add the following to your `configuration.yaml`:
+4. Reproduce the problem. Debug messages appear in the Home Assistant log.
+
+To turn logging off again, repeat the steps with `info` in place of `debug`.
+
+You can also set the level permanently in `configuration.yaml`, which takes
+effect after a restart:
 
 ```yaml
 logger:
@@ -394,20 +533,153 @@ logger:
     custom_components.cover_time_based: debug
 ```
 
-Restart Home Assistant to apply.
+### Report an issue
 
-## Reporting Issues
+Please open bugs and feature requests on
+[GitHub](https://github.com/Sese-Schneider/ha-cover-time-based/issues). Including
+debug logs helps a great deal.
 
-If you encounter a bug or have a feature request, please open an issue on [GitHub](https://github.com/Sese-Schneider/ha-cover-time-based/issues). Include debug logs if possible — they help diagnose problems much faster.
+## Advanced hardware notes
+
+Most people can skip this section. It covers behaviour that only matters for
+particular hardware.
+
+<details>
+<summary><strong>Wrapped covers and external control</strong></summary>
+
+**Following physical wall switches.** When a wrapped cover is operated from
+outside Home Assistant (a wall switch, a
+remote, or another integration), the tracker can only follow the movement live if
+the wrapped entity reports an `opening` or `closing` state while it runs. Some
+wrapped entities, notably certain Tuya and ZHA cover modules, stay in their
+current `open` or `closed` state the whole time the motor runs and only report
+the final state once it settles. In that case the position cannot be tracked
+during the movement, but it snaps to the wrapped entity's reported position once
+it settles.
+
+If instead your device reports `closed` or `unknown` the moment a command is
+issued, so that a manual stop mid-travel is wrongly reported as fully closed, set
+[Position reporting](#position-reporting) to **State mirrors the last command** to
+track it purely by time.
+
+**Native position and tilt.** If the wrapped cover supports `set_cover_position`,
+the integration forwards the
+set-position command straight to it, so the cover stops at the requested position
+even when the underlying device has no stop service. The tracker still animates
+the position live during the move, which is handy for covers that only report
+their position once they finish. On such a cover, the integration's **Stop** sets
+the wrapped cover to its current calculated position. To override this and always
+use timed movements, turn on
+[Force time-based positioning](#force-time-based-positioning).
+
+Tilt works similarly. The **Tilts inline with travel** and sequential modes drive
+the wrapped cover's normal open and close commands, so they work on any wrapped
+cover. The **Separate tilt motor** mode needs the wrapped cover to expose its own
+tilt commands, so it is only offered when the wrapped entity reports native tilt
+support. If the wrapped cover supports `set_cover_tilt_position` and you use the
+inline mode, the integration forwards the tilt commands straight through, letting
+the device position its own slats and snapping the tilt tracker to the reported
+angle once it settles. This is auto-detected; no extra configuration is needed.
+
+</details>
+
+<details>
+<summary><strong>How endpoints stop in each mode</strong></summary>
+
+The tracker resyncs whenever the cover reaches an endpoint, but how the motor is
+stopped there depends on the mode:
+
+- **Switch** mode holds the latched relay on for the
+  [Endpoint run-on time](#endpoint-run-on-time), then switches it off.
+- **Pulse** mode sends its dedicated stop pulse (deferred by the run-on time) when
+  [Send stop signal at endpoints](#send-stop-signal-at-endpoints) is on, and sends
+  nothing when it is off.
+- **Toggle**, **Toggle (opposite button)**, and most wrapped covers send **no
+  stop**. The motor runs into its own limit switch, which both avoids an unwanted
+  extra movement and resyncs the tracker for free. (In Toggle mode a stop pulse on
+  an already-stopped motor would restart it.)
+- A wrapped cover set to **State mirrors the last command** is the exception among
+  wrapped covers: it _is_ sent an explicit stop, as described above.
+
+A **separate tilt motor** is handled the same way at its own tilt endpoints: no
+stop except in Switch mode, and in Pulse mode when the send-stop option is on.
+Mid-tilt positions are always stopped, since nothing self-stops there.
+
+One subtlety with shared-motor tilt: a tilt move made while the cover is parked at
+a travel endpoint drives the motor _off_ its limit switch, so it will not
+self-stop, and the stop is sent in that case even in the modes that normally skip
+it. Under the two sequential modes, the endpoint run-on is skipped at the closed
+(0%) endpoint, because the motor is already driven past cover-closed for the tilt
+phase; it still applies at the open (100%) endpoint.
+
+</details>
+
+<details>
+<summary><strong>Reversing a moving cover</strong></summary>
+
+Reversing is never a single step. The motor is stopped, given a moment to come to
+rest, and only then driven the other way. That pause is a fixed **1 second** and
+is not configurable.
+
+If reversals do not take on your hardware, the setting to change is on the device,
+not here: a momentary relay's own pulse length must be comfortably under a
+second, and a few hundred milliseconds is typical (for example `pulse_length` on
+a Zigbee2MQTT relay). A device pulse approaching or exceeding one second leaves
+the relay still closed when the reverse command arrives, and no integration
+setting can compensate for that.
+
+> [!WARNING]
+> In **Toggle (opposite button)** mode, "stop" is a pulse of the opposite relay.
+> That stops a moving motor, but on a motor that has already stopped it is simply
+> a movement command. So if the tracker and the cover ever disagree, the next
+> stop can drive the cover to its endpoint. This is inherent to the mode on
+> hardware with no position feedback.
+
+</details>
+
+<details>
+<summary><strong>Tilt under sequential modes and external switches</strong></summary>
+
+Home Assistant's cover entity exposes close and open for travel, and close-tilt
+and open-tilt for the slats. Under the sequential tilt modes the integration
+handles each depending on who invoked it:
+
+- **Close from the UI** (`cover.close_cover`): closes the cover, and then
+  articulates the slats closed when
+  [Close cover also closes slats](#close-cover-also-closes-slats) is on (the
+  default for the modes that offer it). Turn that option off for a travel-only
+  close.
+- **Open from the UI** (`cover.open_cover`): restores the slats to their resting
+  position if needed, then travels fully open, as one motion.
+- **Close-tilt or open-tilt from the UI**: drives the slats only, with a short
+  travel pre-step first if tilt is only allowed at the closed position.
+- **Close from an external switch or automation**: the integration assumes the
+  motor runs the full journey, closing the cover and then continuing to
+  articulate the slats past cover-closed. Tracking follows both phases.
+- **Open from an external switch**: restores the slats to the resting position,
+  then travels fully open.
+
+The external-close behaviour assumes a controller that latches on a pulse and runs
+to a mechanical end without stopping at cover-closed, which is common with
+pulse-mode relays and many off-the-shelf blind motors. If your external switch
+stops the motor at cover-closed instead, the reported tilt position will drift
+until the next sync. If that describes your hardware, please
+[open an issue](https://github.com/Sese-Schneider/ha-cover-time-based/issues) with
+the details.
+
+</details>
 
 ## YAML configuration (deprecated)
 
-> **Note:** YAML configuration is deprecated and will be removed in a future version. Please use the UI method described above instead. Existing YAML configurations will continue to work, and a deprecation notice will appear in your Home Assistant repairs panel.
+> [!NOTE]
+> YAML configuration is deprecated and will be removed in a future version.
+> Please use the card instead. Existing YAML keeps working, and a deprecation
+> notice appears in the Home Assistant repairs panel.
 
 <details>
-<summary>Show YAML configuration (deprecated)</summary>
+<summary>Show YAML configuration</summary>
 
-### Basic configuration with individual device settings:
+### Example
 
 ```yaml
 cover:
@@ -417,40 +689,42 @@ cover:
         name: Room Rolling Shutter
         open_switch_entity_id: switch.wall_switch_right
         close_switch_entity_id: switch.wall_switch_left
-        travel_moves_with_tilt: false
         travelling_time_down: 23
         travelling_time_up: 25
         tilting_time_down: 2.3
         tilting_time_up: 2.7
-        travel_delay_at_end: 2.0
+        endpoint_runon_time: 2.0
         min_movement_time: 0.5
         travel_startup_delay: 0.1
         tilt_startup_delay: 0.08
 ```
 
-### YAML options
+### Options
 
-| Name                   | Type    | Requirement                                     | Description                                                             | Default |
-| ---------------------- | ------- | ----------------------------------------------- | ----------------------------------------------------------------------- | ------- |
-| name                   | string  | **Required**                                    | Name of the created entity                                              |         |
-| open_switch_entity_id  | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for opening the cover. Accepts a `script` entity when `is_button: true` |         |
-| close_switch_entity_id | entity  | **Required** or `cover_entity_id`               | Entity ID of the switch for closing the cover. Accepts a `script` entity when `is_button: true` |         |
-| stop_switch_entity_id  | entity  | Required when `is_button: true`; not used by other modes | Entity ID of the switch for stopping the cover. Accepts a `script` entity when `is_button: true` | None    |
-| cover_entity_id        | entity  | **Required** or `open_\|close_switch_entity_id` | Entity ID of an existing cover entity                                   |         |
-| is_button              | boolean | _Optional_                                      | Set to `true` for momentary pulse buttons (the only control mode selectable from YAML; the rest are card-only) | false   |
-| travelling_time_down   | float   | _Optional_                                      | Time in seconds to close the cover                                      | 30      |
-| travelling_time_up     | float   | _Optional_                                      | Time in seconds to open the cover                                       | 30      |
-| tilting_time_down      | float   | _Optional_                                      | Time in seconds to tilt the cover fully closed                          | None    |
-| tilting_time_up        | float   | _Optional_                                      | Time in seconds to tilt the cover fully open                            | None    |
-| travel_moves_with_tilt | boolean | _Optional_                                      | Whether tilt movements also cause proportional travel changes           | false   |
-| travel_delay_at_end    | float   | _Optional_                                      | Additional relay time (seconds) at endpoints for position reset         | None    |
-| min_movement_time      | float   | _Optional_                                      | Minimum movement duration (seconds) - blocks shorter movements          | None    |
-| travel_startup_delay   | float   | _Optional_                                      | Motor startup time compensation (seconds) for travel movements          | None    |
-| tilt_startup_delay     | float   | _Optional_                                      | Motor startup time compensation (seconds) for tilt movements            | None    |
-| direction_change_delay | float   | _Deprecated_                                    | No longer configurable — accepted and ignored. The settle gap is fixed at 1.0s | —       |
-| pulse_time             | float   | _Optional_                                      | Duration in seconds for button press in pulse mode                      | 1.0     |
-| relay_reports_off      | boolean | _Optional_                                      | Toggle mode: set false for pulse modules that never report their OFF    | true    |
-| send_endpoint_stop     | boolean | _Optional_                                      | Pulse mode: set false for auto-stop controllers that reposition on a stop received while stopped | true    |
+Only a subset of the card's settings are available from YAML. For anything not
+listed here, use the card.
+
+| Name | Type | Requirement | Description | Default |
+| --- | --- | --- | --- | --- |
+| `name` | string | **Required** | Name of the created entity. | |
+| `open_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that opens the cover. May be a `script` entity in pulse mode. | |
+| `close_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that closes the cover. May be a `script` entity in pulse mode. | |
+| `stop_switch_entity_id` | entity | Required in pulse mode | Switch that stops the cover. May be a `script` entity in pulse mode. | None |
+| `cover_entity_id` | entity | **Required**, or the open/close switches | Existing cover entity to wrap. | |
+| `input_mode` | string | _Optional_ | Control mode for switch-based covers: `switch`, `pulse`, `toggle`, or `toggle_opposite`. | `switch` |
+| `travelling_time_down` | float | _Optional_ | Seconds to close the cover. | unset |
+| `travelling_time_up` | float | _Optional_ | Seconds to open the cover. | unset |
+| `tilting_time_down` | float | _Optional_ | Seconds to tilt the cover fully closed. | None |
+| `tilting_time_up` | float | _Optional_ | Seconds to tilt the cover fully open. | None |
+| `travel_moves_with_tilt` | boolean | _Optional_ | Whether tilt movements also change travel proportionally. | false |
+| `endpoint_runon_time` | float | _Optional_ | Extra relay time at the endpoints. Also accepted under its old name `travel_delay_at_end`. | 2.0 |
+| `min_movement_time` | float | _Optional_ | Minimum movement duration; blocks shorter movements. | None |
+| `travel_startup_delay` | float | _Optional_ | Startup compensation for travel movements. | None |
+| `tilt_startup_delay` | float | _Optional_ | Startup compensation for tilt movements. | None |
+| `pulse_time` | float | _Optional_ | Pulse duration in pulse mode. | 1.0 |
+| `relay_reports_off` | boolean | _Optional_ | Toggle mode: set `false` for pulse modules that never report their off. | true |
+| `send_endpoint_stop` | boolean | _Optional_ | Pulse mode: set `false` for auto-stop controllers that reposition on a stop received while stopped. | true |
+| `direction_change_delay` | float | _Deprecated_ | No longer configurable. Accepted and ignored; the reversing pause is fixed at 1.0s. | — |
 
 </details>
 
