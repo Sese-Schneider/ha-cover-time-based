@@ -357,10 +357,10 @@ Stop an active calibration test and save the result.
 
 If something isn't working as expected, you can enable debug logging to see detailed information about what the integration is doing.
 
-### Via Developer Tools
+### Via Tools
 
-1. Go to **Developer Tools → Actions**.
-2. Search for **Logger: Set level** and select it.
+1. Go to **Tools → Actions**.
+2. Search for **Logger: Set logger level** and select it.
 3. Switch to YAML mode and enter:
 
 ```yaml
