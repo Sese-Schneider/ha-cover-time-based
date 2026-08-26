@@ -1430,6 +1430,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         current = self.travel_calc.current_position()
         if current is not None and current == self._my_position:
             return
+        if current is None:
+            # Position unknown — travel_calc.start_travel would just snap
+            # (there is no known start to animate from), so snap directly
+            # here instead and skip arming the my-move lifecycle: no flag,
+            # no auto-updater, nothing left for auto_stop_if_necessary to
+            # settle later.
+            self._log(
+                "_maybe_start_my_move :: position unknown, snapping to %d",
+                self._my_position,
+            )
+            self.travel_calc.set_position(self._my_position)
+            return
         self._log(
             "_maybe_start_my_move :: tracking hardware 'my' reposition to %d",
             self._my_position,

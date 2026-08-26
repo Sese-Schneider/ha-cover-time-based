@@ -266,8 +266,11 @@ async def test_g_unknown_position_snaps_to_my(make_cover):
     await cover.async_stop_cover()
 
     # With no known start position the tracker has nothing to animate, so it
-    # snaps straight to my — still no open/close driven.
+    # snaps straight to my — still no open/close driven, and the my-move
+    # lifecycle is never armed (no animation happens, so nothing should be
+    # left waiting for the auto-updater to settle it).
     assert cover.current_cover_position == 90
+    assert cover._my_move_active is False
     assert _cover_calls(cover, "open_cover") == []
     assert _cover_calls(cover, "close_cover") == []
 
