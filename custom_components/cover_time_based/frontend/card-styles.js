@@ -108,14 +108,15 @@ export const cardStyles = css`
       }
 
       .info-popover-link {
-        display: inline-block;
+        display: block;
         margin-top: 8px;
         color: var(--primary-color);
         text-decoration: none;
         font-weight: 500;
       }
 
-      .info-popover-link:hover {
+      .info-popover-link:hover,
+      .info-popover-link:focus-visible {
         text-decoration: underline;
       }
 

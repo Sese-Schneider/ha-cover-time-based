@@ -306,7 +306,11 @@ export function renderPositionReporting(card, c) {
           ></ha-icon>
           ${
             open
-              ? html`<div class="info-popover" role="tooltip">
+              ? html`<div
+                  class="info-popover"
+                  role="note"
+                  aria-label=${card._t("position_reporting.label")}
+                >
                 ${card._t(`position_reporting.${profile}_helper`)}
                 <a
                   class="info-popover-link"

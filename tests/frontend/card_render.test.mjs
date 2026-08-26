@@ -510,6 +510,22 @@ test("wrapped mode: position-reporting popover links to the docs section", async
   expect(link.getAttribute("rel")).toBe("noopener noreferrer");
 });
 
+test("position-reporting popover uses a non-tooltip role for its interactive link", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg(),
+    activeTab: "device",
+  });
+  card._openHelp = "position_reporting.help";
+  card.requestUpdate();
+  await card.updateComplete;
+  const popover = card.shadowRoot.querySelector(".info-popover");
+  // A `tooltip` role must not contain focusable content, and this popover now
+  // holds the "Learn more" link. Use a role that can, with a label.
+  expect(popover.getAttribute("role")).not.toBe("tooltip");
+  expect(popover.getAttribute("aria-label")).toBeTruthy();
+});
+
 // ---------------------------------------------------------------------------
 // _renderInputEntities — mode-specific pickers
 // ---------------------------------------------------------------------------
