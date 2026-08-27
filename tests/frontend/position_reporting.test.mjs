@@ -89,6 +89,15 @@ test("derives command_echo from reports_command_not_endpoint", async () => {
   expect(selectedValue(select(card))).toBe("command_echo");
 });
 
+test("derives ignore_all from ignore_all_reports", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg({ ignore_all_reports: true }),
+    activeTab: "device",
+  });
+  expect(selectedValue(select(card))).toBe("ignore_all");
+});
+
 test("selecting no_endpoints writes ignore_endpoint_states only (strict inverse of the read)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
@@ -104,6 +113,7 @@ test("selecting no_endpoints writes ignore_endpoint_states only (strict inverse 
     ignore_reported_position: false,
     ignore_endpoint_states: true,
     reports_command_not_endpoint: false,
+    ignore_all_reports: false,
   });
 });
 
@@ -122,6 +132,26 @@ test("selecting command_echo writes only reports_command_not_endpoint", async ()
     ignore_reported_position: false,
     ignore_endpoint_states: false,
     reports_command_not_endpoint: true,
+    ignore_all_reports: false,
+  });
+});
+
+test("selecting ignore_all writes only ignore_all_reports", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg({ ignore_endpoint_states: true }),
+    activeTab: "device",
+  });
+  const captured = [];
+  card._updateLocal = (u) => captured.push(u);
+  const sel = select(card);
+  sel.value = "ignore_all";
+  sel.dispatchEvent(new Event("change"));
+  expect(captured).toContainEqual({
+    ignore_reported_position: false,
+    ignore_endpoint_states: false,
+    reports_command_not_endpoint: false,
+    ignore_all_reports: true,
   });
 });
 
@@ -140,5 +170,6 @@ test("selecting reliable clears every report-interpretation flag", async () => {
     ignore_reported_position: false,
     ignore_endpoint_states: false,
     reports_command_not_endpoint: false,
+    ignore_all_reports: false,
   });
 });

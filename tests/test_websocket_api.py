@@ -10,6 +10,7 @@ from custom_components.cover_time_based.cover import (
     CONF_COVER_ENTITY_ID,
     CONF_DIRECTION_CHANGE_DELAY,
     CONF_FORCE_ENDPOINT_REDRIVE,
+    CONF_IGNORE_ALL_REPORTS,
     CONF_IGNORE_ENDPOINT_STATES,
     CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
@@ -456,6 +457,99 @@ class TestIgnoreEndpointStatesRoundTrip:
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_options[CONF_IGNORE_ENDPOINT_STATES] is True
+
+
+class TestIgnoreAllReportsRoundTrip:
+    """ignore_all_reports is returned in get_config and saved in update_config."""
+
+    @pytest.mark.asyncio
+    async def test_get_config_defaults_to_false(self):
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["ignore_all_reports"] is False
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_stored_true(self):
+        hass, _, entity_reg = _make_hass(
+            options={
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+                CONF_COVER_ENTITY_ID: "cover.inner",
+                CONF_IGNORE_ALL_REPORTS: True,
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["ignore_all_reports"] is True
+
+    @pytest.mark.asyncio
+    async def test_update_config_saves_true(self):
+        hass, _, entity_reg = _make_hass(
+            options={CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED}
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "ignore_all_reports": True,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_options[CONF_IGNORE_ALL_REPORTS] is True
+
+
+def test_every_field_map_key_is_accepted_by_the_update_schema():
+    """The update_config voluptuous schema is strict, and the round-trip tests
+    call the handler directly (bypassing it). So a new key wired into _FIELD_MAP
+    but forgotten in the schema would be silently accepted by unit tests yet
+    rejected by real Home Assistant. Guard that here: every field a client may
+    send must be a declared schema key."""
+    from custom_components.cover_time_based import websocket_api
+
+    schema = websocket_api.ws_update_config._ws_schema
+    schema_keys = {getattr(marker, "schema", marker) for marker in schema.schema}
+    missing = set(websocket_api._FIELD_MAP) - schema_keys
+    assert missing == set(), f"keys wired but not in the update schema: {missing}"
 
 
 class TestForceTimeBasedPositionRoundTrip:

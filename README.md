@@ -172,6 +172,7 @@ how much to believe it. Pick the profile that matches your hardware.
 | **Position unreliable — track by time** | The cover reports a position, but you cannot trust it. The reported position is ignored and everything is tracked by time, although a reported "closed" is still trusted as the fully-closed point. |
 | **No real endpoints — reports open/closed when stopped** | The cover has no real position feedback and reports "open" or "closed" whenever the motor stops anywhere, not only at the ends. Those reports are ignored, so stopping mid-travel does not snap the position to 0%. |
 | **State mirrors the last command** | The cover has no position feedback and simply echoes the last command: "open" while opening, "closed" while closing, and "unknown" when stopped, as some single-channel Tuya shutters do. Each state is read as an open, close, or stop command and tracked by time. |
+| **Ignore all device reports** | The cover reports nothing you can trust. It sends a false position as well as spurious open, closed, opening, or closing states while sitting idle, so that even _No real endpoints_ still snaps to the bogus position it believes. Every report from the device is ignored and the position is tracked purely by the timers. Home Assistant becomes the only way to move the cover, and operating it from a wall switch or remote is not tracked. |
 
 <details>
 <summary><strong>Choosing between no-real-endpoints and state-mirrors-last-command</strong></summary>
@@ -190,6 +191,12 @@ command echo, but it means an unsolicited "open" or "closed" sent while the cove
 is idle would start a phantom move in that direction. If your module sends
 periodic or false updates when nothing is moving, use **No real endpoints**
 instead.
+
+If even **No real endpoints** still snaps the position, the device is also
+reporting a false position number alongside its state. **Ignore all device
+reports** is the strictest profile for that case: it ignores everything the
+device sends, the reported position included, and drives the cover purely from
+the timers.
 
 Because a **State mirrors the last command** cover has no endpoint feedback, and
 in practice drives a motor with no internal limit switch, the integration also

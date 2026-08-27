@@ -58,6 +58,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         force_time_based_position=False,
         reports_command_not_endpoint=False,
         ignore_endpoint_states=False,
+        ignore_all_reports=False,
         invert=False,
         **kwargs,
     ):
@@ -67,6 +68,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._force_time_based_position = force_time_based_position
         self._reports_command_not_endpoint = reports_command_not_endpoint
         self._ignore_endpoint_states = ignore_endpoint_states
+        self._ignore_all_reports = ignore_all_reports
         self._invert = invert
         self._last_self_command_time: float | None = None
         # Set while a command-echo cover is mid-reconnect, so the retained
@@ -309,6 +311,19 @@ class WrappedCoverTimeBased(CoverTimeBased):
         When self._invert is set, the underlying's opening/closing are
         interpreted as our close/open (swapped).
         """
+        # The underlying is a dumb relay whose every report is untrustworthy
+        # (issue #248): ignore state, transitions and position alike and track
+        # purely by time. Availability still updates — it is handled upstream
+        # in _async_switch_state_changed before this dispatch.
+        if self._ignore_all_reports:
+            self._log(
+                "_handle_external_state_change :: ignoring %s -> %s"
+                " (all reports ignored)",
+                old_val,
+                new_val,
+            )
+            return
+
         if self._in_bounce_grace_window():
             self._log(
                 "_handle_external_state_change :: ignoring %s -> %s"
@@ -515,6 +530,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """
         if event.data.get("entity_id") != self._cover_entity_id:
             return
+        # The underlying's reported position is untrustworthy too (issue #248):
+        # ignore attribute-only updates, mirroring the state-channel guard above.
+        if self._ignore_all_reports:
+            return
         if self._reports_command_not_endpoint:
             return
         if self._in_bounce_grace_window():
@@ -620,6 +639,11 @@ class WrappedCoverTimeBased(CoverTimeBased):
         merely stops mid-travel rather than only at the physical endpoints
         (issue #238) — there a `closed` proves nothing about position.
         """
+        # A device whose every report is ignored (issue #248) reports no usable
+        # position, so the startup live-sync and any other consumer fall back to
+        # the time-based tracker rather than a value we do not trust.
+        if self._ignore_all_reports:
+            return None
         state = self.hass.states.get(self._cover_entity_id)
         if state is None:
             return None
