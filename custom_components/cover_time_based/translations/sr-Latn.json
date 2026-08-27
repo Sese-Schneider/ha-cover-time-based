@@ -1,0 +1,81 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Dodavanje vremenski upravljane roletne",
+        "description": "Izaberite naziv za svoju roletnu. Nakon što je kreirate, dodajte karticu **Cover Time Based** na kontrolnu tablu da biste podesili sve opcije.",
+        "data": {
+          "name": "Naziv"
+        }
+      }
+    }
+  },
+  "issues": {
+    "card_installed": {
+      "title": "Osvežite pregledač da bi se prikazala kartica Cover Time Based",
+      "description": "Kartica kontrolne table Cover Time Based je instalirana. Home Assistant učitava resurse kontrolne table samo pri učitavanju stranice, pa u već otvorenim sesijama pregledača kartica ostaje nedostupna dok ponovo ne učitate stranicu — a često pomaže samo **potpuno osvežavanje**. Uradite potpuno osvežavanje (**Ctrl+Shift+R**, ili **⌘+Shift+R** na macOS-u) da biste učitali karticu; ako i dalje prikazuje grešku u konfiguraciji, obrišite keš pregledača i ponovo učitajte stranicu. Kada se kartica pojavi, možete zanemariti ovo upozorenje."
+    },
+    "deprecated_yaml": {
+      "title": "YAML konfiguracija je zastarela",
+      "description": "Podešavanje integracije Cover Time Based pomoću YAML-a je zastarelo i biće uklonjeno u budućoj verziji.\n\nUklonite YAML konfiguraciju i ponovo kreirajte svoje roletne kroz korisnički interfejs: **Podešavanja > Uređaji i usluge > Pomoćnici > Kreirajte pomoćnika > Cover Time Based**."
+    }
+  },
+  "services": {
+    "set_known_position": {
+      "name": "Podesi poziciju roletne",
+      "description": "Interno postavlja poznatu poziciju roletne.",
+      "fields": {
+        "position": {
+          "name": "Pozicija",
+          "description": "Pozicija roletne, između 0 i 100."
+        }
+      }
+    },
+    "set_known_tilt_position": {
+      "name": "Podesi poziciju nagiba roletne",
+      "description": "Interno postavlja poznatu poziciju nagiba roletne.",
+      "fields": {
+        "tilt_position": {
+          "name": "Pozicija",
+          "description": "Pozicija nagiba roletne, između 0 i 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Pokreni kalibraciju",
+      "description": "Pokreće test kalibracije radi merenja vremenskog parametra. Roletna će početi da se kreće — pozovite stop_calibration kada se dostigne željeni krajnji položaj.",
+      "fields": {
+        "entity_id": {
+          "name": "ID entiteta",
+          "description": "Roletna koju treba kalibrisati"
+        },
+        "attribute": {
+          "name": "Atribut",
+          "description": "Vremenski parametar koji treba kalibrisati"
+        },
+        "timeout": {
+          "name": "Vremensko ograničenje",
+          "description": "Bezbednosno vremensko ograničenje u sekundama — motor će se automatski zaustaviti ako se stop_calibration ne pozove"
+        },
+        "direction": {
+          "name": "Smer",
+          "description": "Smer kretanja tokom testa. Ako nije postavljen, automatski se određuje na osnovu trenutne pozicije"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Zaustavi kalibraciju",
+      "description": "Zaustavlja aktivan test kalibracije. Izračunava rezultat i čuva ga u konfiguraciji, osim ako se ne otkaže.",
+      "fields": {
+        "entity_id": {
+          "name": "ID entiteta",
+          "description": "Roletna koja se kalibriše"
+        },
+        "cancel": {
+          "name": "Otkaži",
+          "description": "Ako je tačno, odbacuje rezultate testa bez čuvanja"
+        }
+      }
+    }
+  }
+}
