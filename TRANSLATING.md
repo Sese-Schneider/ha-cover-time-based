@@ -11,7 +11,7 @@ Cover Time Based has strings in two places, each with its own file layout. Both 
 | Home Assistant backend | [`strings.json`](custom_components/cover_time_based/strings.json) and [`translations/<lang>.json`](custom_components/cover_time_based/translations/) | Config-flow titles and fields, Repairs issues, service descriptions — anything Home Assistant's own UI renders for us. |
 | Lovelace configuration card | [`frontend/translations.js`](custom_components/cover_time_based/frontend/translations.js) — the `EN` object at the top, and the `TRANSLATIONS` block below it | Every string the card itself draws. |
 
-Currently supported languages: English (`en`), Portuguese (`pt`), Polish (`pl`), German (`de`), Italian (`it`), Dutch (`nl`), French (`fr`), Spanish (`es`), Catalan (`ca`), Czech (`cs`). This line is the canonical list — everything else derives from the catalogues themselves, so adding a language only touches it here.
+Currently supported languages: English (`en`), Portuguese (`pt`), Polish (`pl`), German (`de`), Italian (`it`), Dutch (`nl`), French (`fr`), Spanish (`es`), Catalan (`ca`), Czech (`cs`), Serbian — Latin (`sr-Latn`). This line is the canonical list — everything else derives from the catalogues themselves, so adding a language only touches it here.
 
 ## Adding a new language
 
@@ -107,13 +107,13 @@ def block(text, start):
             depth -= 1
             if depth == 0: return text[s:i+1]
     return ""
-def keys_of(t): return set(re.findall(r'"([^"]+)":\s*"', t))
+def keys_of(t): return set(q or b for q, b in re.findall(r'^\s*(?:"([^"]+)"|([A-Za-z_]\w*))\s*:', t, re.M))
 
 en_card = keys_of(block(card, r"const EN\s*=\s*\{"))
 trans   = block(card, r"const TRANSLATIONS\s*=\s*\{")
-for lang in re.findall(r"^\s{2}(\w+):\s*\{", trans, re.M):
+for lang in re.findall(r'^\s{2}"?([\w-]+)"?:\s*\{', trans, re.M):
     if lang == "en": continue
-    other = keys_of(block(trans, rf"{lang}:\s*\{{"))
+    other = keys_of(block(trans, rf'"?{lang}"?:\s*\{{'))
     print(f"card    {lang}: missing={sorted(en_card - other) or 'none'}  extra={sorted(other - en_card) or 'none'}")
 PY
 ```

@@ -1636,6 +1636,168 @@ export const TRANSLATIONS = {
     "hints.none.travel_time_open": "Klikněte na Dokončit, když je roleta plně otevřená.",
     "hints.min_movement_time": "Klikněte na Dokončit, jakmile zaznamenáte, že se roleta pohybuje.",
   },
+  "sr-Latn": {
+    header: "Konfiguracija Cover Time Based",
+    loading: "Učitavanje...",
+    saving: "Čuvanje...",
+    save_failed: "Čuvanje nije uspelo — vrednost je vraćena",
+    confirm_cancel_calibration: "Kalibracija je u toku. Otkazati je i nastaviti?",
+    create_new: "+ Kreiraj novi entitet roletne",
+    yaml_warning:
+      "Ovaj entitet koristi YAML konfiguraciju i ne može se podesiti sa ove kartice. Pređite na korisnički interfejs: Podešavanja → Uređaji i usluge → Pomoćnici → Kreirajte pomoćnika → Cover Time Based.",
+    load_failed: "Učitavanje konfiguracije nije uspelo. Pokušajte ponovo.",
+    "tabs.device": "Uređaj",
+    "tabs.calibration": "Kalibracija",
+    "control_mode.label": "Režim upravljanja",
+    "control_mode.wrapped": "Omotaj postojeći entitet roletne",
+    "control_mode.switch": "Prekidač (zadržava stanje)",
+    "control_mode.pulse": "Impuls (trenutni)",
+    "control_mode.toggle": "Naizmenično (isto dugme)",
+    "control_mode.toggle_opposite": "Naizmenično (suprotno dugme)",
+    "control_mode.pulse_time": "Trajanje impulsa",
+    "entities.cover_entity": "Entitet roletne",
+    "position_reporting.label": "Prijavljivanje pozicije",
+    "position_reporting.reliable": "Pouzdana povratna informacija o poziciji",
+    "position_reporting.reliable_helper":
+      "Omotana roletna prijavljuje pouzdanu poziciju i dostiže svoje stvarne krajnje položaje otvoreno/zatvoreno. Podrazumevana opcija — pravi izbor osim ako praćena pozicija ne odstupa od stvarnog položaja roletne.",
+    "position_reporting.unreliable": "Pozicija nepouzdana — prati po vremenu",
+    "position_reporting.unreliable_helper":
+      "Prati poziciju samo po vremenu i zanemari poziciju koju prijavljuje omotana roletna. Omogućite ovo ako osnovna roletna prijavljuje nepouzdanu poziciju.",
+    "position_reporting.no_endpoints":
+      "Bez stvarnih krajnjih položaja — prijavljuje otvoreno/zatvoreno pri zaustavljanju",
+    "position_reporting.no_endpoints_helper":
+      "Za roletne bez povratne informacije o poziciji koje prijavljuju otvoreno/zatvoreno kada se motor zaustavi usred kretanja, a ne samo na fizičkim krajnjim položajima. Prijavljeno stanje „zatvoreno“ zaustavlja praćenje na izračunatoj poziciji umesto da skoči na 0%.",
+    "position_reporting.command_echo": "Stanje odražava poslednju komandu",
+    "position_reporting.command_echo_helper":
+      "Omogućite za roletne (npr. neke Tuya roletne) čije stanje otvoreno/zatvoreno/nepoznato predstavlja odjek komande, a ne stvaran krajnji položaj — ne prijavljuju prelaz otvaranja/zatvaranja niti poziciju. Stanje se tretira kao komanda otvori/zatvori/zaustavi, a pozicija se prati po vremenu.",
+    "position_reporting.docs_link": "Saznajte više",
+    "entities.force_time_based_position": "Prinudno pozicioniranje po vremenu",
+    "entities.force_time_based_position_helper":
+      "Podrazumevano, ako omotana roletna podržava postavljanje pozicije, komanda za postavljanje pozicije joj se šalje direktno. Omogućite ovo da biste je umesto toga pokretali vremenski određenim komandama otvori/zatvori/zaustavi, zanemarujući njenu ugrađenu podršku za postavljanje pozicije.",
+    "entities.invert": "Obrni poziciju",
+    "entities.invert_helper":
+      "Obrće osu pozicije: prijavljuje 100 − poziciju omotane roletne i zamenjuje otvori/zatvori. Koristite za roletne koje rade obrnuto, npr. tendu kod koje osnovni entitet prijavljuje otvoreno = razvučeno. Samo osa pozicije; logika nagiba je nepromenjena — namenjeno roletnama samo sa pozicijom (tende/roletne), ne venecijanerima koji se naginju.",
+    "entities.switch_entities": "Entiteti prekidača",
+    "entities.open_switch": "Prekidač za otvaranje",
+    "entities.close_switch": "Prekidač za zatvaranje",
+    "entities.stop_switch": "Prekidač za zaustavljanje",
+    "entities.switch_entities_pulse": "Entiteti prekidača / skripti",
+    "entities.open_switch_pulse": "Prekidač ili skripta za otvaranje",
+    "entities.close_switch_pulse": "Prekidač ili skripta za zatvaranje",
+    "entities.stop_switch_pulse": "Prekidač ili skripta za zaustavljanje",
+    "tilt.label": "Režim nagiba",
+    "tilt.none": "Nije podržano",
+    "tilt.sequential_close": "Zatvara pa naginje u zatvoreno",
+    "tilt.sequential_open": "Zatvara pa naginje u otvoreno",
+    "tilt.dual_motor": "Zaseban motor za nagib",
+    "tilt.inline": "Naginje istovremeno sa kretanjem",
+    "tilt_motor.label": "Motor za nagib",
+    "tilt_motor.open_switch": "Prekidač za otvaranje nagiba",
+    "tilt_motor.close_switch": "Prekidač za zatvaranje nagiba",
+    "tilt_motor.stop_switch": "Prekidač za zaustavljanje nagiba",
+    "tilt_motor.label_pulse": "Motor za nagib (prekidač ili skripta)",
+    "tilt_motor.open_switch_pulse": "Prekidač ili skripta za otvaranje nagiba",
+    "tilt_motor.close_switch_pulse": "Prekidač ili skripta za zatvaranje nagiba",
+    "tilt_motor.stop_switch_pulse": "Prekidač ili skripta za zaustavljanje nagiba",
+    "tilt_motor.safe_position": "Bezbedna pozicija nagiba",
+    "tilt_motor.safe_position_helper": "Nagib se pomera ovde pre kretanja (100 = potpuno otvoreno)",
+    "tilt_motor.max_allowed_position": "Najveća dozvoljena pozicija nagiba (opciono)",
+    "tilt_motor.max_allowed_helper":
+      "Nagib je dozvoljen samo kada je pozicija roletne na ovoj vrednosti ili ispod nje (0 = zatvoreno, 100 = otvoreno)",
+    "tilt.close_includes_tilt": "Zatvaranje roletne zatvara i lamele",
+    "tilt.close_includes_tilt_helper":
+      "Pri zatvaranju, lamele se naginju u zatvoreno na kraju kretanja",
+    "assumed_state.label": "Pretpostavljeno stanje",
+    "assumed_state.helper":
+      "Kada je uključeno, Home Assistant tretira poziciju kao procenjenu i drži i kontrolu za otvaranje i za zatvaranje aktivnima. Isključite ako verujete proračunu na osnovu vremena i želite da interfejs zasivi nedostupne radnje (npr. zatvaranje kada je već zatvoreno).",
+    "relay_reports_off.label": "Relej prijavljuje sopstveno isključenje",
+    "relay_reports_off.helper":
+      "Ostavite uključeno za uobičajene naizmenične releje, koji se sami isključe nakon impulsa i to prijave. Isključite za hardverski upravljane impulsne module (npr. Aqara T2) koji impuls generišu interno, ali nikada ne prijave kada se isključe, ostavljajući entitet prekidača zaglavljen u uključenom stanju. Kada je isključeno, integracija po svakom pritisku šalje samo jednu komandu UKLJUČI i nikada ISKLJUČI — pa je svaki pritisak tačno jedna čista aktivacija, bez udvostručenih komandi.",
+    "send_endpoint_stop.label": "Pošalji signal zaustavljanja na krajnjim položajima",
+    "send_endpoint_stop.helper":
+      "Kada vaša roletna dostigne potpuno otvoreno ili zatvoreno, pošaljite impuls zaustavljanja. Ostavite uključeno za kontrolere koji nastavljaju da rade dok ne prime zaustavljanje (roletna se u suprotnom zaglavi i fizička dugmad prestanu da reaguju). Isključite ako se vaš motor sam zaustavlja na svojim granicama i dodatno zaustavljanje ga pomera na unapred podešenu/omiljenu poziciju.",
+    "force_endpoint_redrive.label": "Uvek ponovo pošalji otvori/zatvori na krajnjim položajima",
+    "force_endpoint_redrive.helper":
+      "Za roletne bez povratne informacije o poziciji koje se mogu pomerati i spoljnim daljinskim upravljačem, pa Home Assistant može pogrešno smatrati da su već potpuno otvorene ili zatvorene. Kada je uključeno, komanda otvaranja ili zatvaranja se uvek izvršava tokom celog vremena kretanja, čak i ako Home Assistant misli da je roletna već tamo — čime se garantuje da komanda stigne do motora. Ostavite isključeno za roletne koje prijavljuju sopstvenu poziciju.",
+    "wait_for_relay_feedback.label": "Sačekaj potvrdu releja pre praćenja",
+    "wait_for_relay_feedback.helper":
+      "Pokreće tajmer pozicije kada relej prijavi da se uključio, umesto u trenutku slanja komande. Na sporoj ili hladnoj Zigbee/Z-Wave mreži komandi može trebati nekoliko sekundi da stigne do releja; bez ovoga se to kašnjenje računa kao kretanje i praćena pozicija izmiče ispred roletne. Ostavite isključeno osim ako pozicija ne odstupa kod roletni čiji relej sporo reaguje.",
+    "recalibrate_before_position.label": "Potpuno otvori pre pomeranja na poziciju (Beta)",
+    "recalibrate_before_position.helper":
+      "Za roletne bez povratne informacije o poziciji koje daljinski upravljač takođe može da pomera. Pre svake komande za poziciju roletnu potpuno otvara, pa kretanje počinje od poznate pozicije umesto od izmaknute procene. Otprilike udvostručuje kretanje pri svakom pomeranju, a kod istovremenog ili sekvencijalnog nagiba pomera roletnu kada podešavate lamele.",
+    more_info: "Više informacija",
+    "timing.travel_attribute_header": "Atribut kretanja",
+    "timing.tilt_attribute_header": "Atribut nagiba",
+    "timing.value_header": "Vrednost",
+    "timing.not_set": "Nije postavljeno",
+    "timing.travel_time_close": "Vreme kretanja (zatvaranje)",
+    "timing.travel_time_open": "Vreme kretanja (otvaranje)",
+    "timing.travel_startup_delay": "Kašnjenje pokretanja kretanja",
+    "timing.tilt_time_close": "Vreme nagiba (zatvaranje)",
+    "timing.tilt_time_open": "Vreme nagiba (otvaranje)",
+    "timing.tilt_startup_delay": "Kašnjenje pokretanja nagiba",
+    "timing.min_movement_time": "Minimalno vreme kretanja",
+    "timing.endpoint_runon_time": "Vreme prekoračenja na krajnjem položaju",
+    "position.label": "Trenutna pozicija",
+    "position.helper": "Pomerite roletnu na poznati krajnji položaj, pa postavite poziciju.",
+    "position.unknown": "Nepoznato",
+    "position.open": "Potpuno otvoreno",
+    "position.closed": "Potpuno zatvoreno",
+    "position.closed_tilt_open": "Potpuno zatvoreno, nagib otvoren",
+    "position.closed_tilt_closed": "Potpuno zatvoreno, nagib zatvoren",
+    "calibration.label": "Kalibracija vremena",
+    "calibration.attribute_label": "Atribut",
+    "calibration.start": "Pokreni",
+    "calibration.active": "Kalibracija je aktivna",
+    "calibration.step": "Korak {step}",
+    "calibration.final_step": "Poslednji korak",
+    "calibration.cancel": "Otkaži",
+    "calibration.finish": "Završi",
+    "calibration.set_position_first": "Postavite poziciju da biste pokrenuli kalibraciju.",
+    "controls.cover_label": "Roletna",
+    "controls.tilt_label": "Nagib",
+    "controls.open": "Otvori",
+    "controls.stop": "Zaustavi",
+    "controls.close": "Zatvori",
+    "controls.tilt_open": "Otvori nagib",
+    "controls.tilt_stop": "Zaustavi nagib",
+    "controls.tilt_close": "Zatvori nagib",
+    "hints.sequential_close.travel_time_close":
+      "Počnite sa potpuno otvorenom roletnom. Kliknite na Završi kada je roletna potpuno zatvorena, pre nego što lamele počnu da se naginju.",
+    "hints.sequential_close.travel_time_open":
+      "Počnite sa zatvorenom roletnom i otvorenim lamelama. Kliknite na Završi kada je roletna potpuno otvorena.",
+    "hints.sequential_close.tilt_time_close":
+      "Počnite sa zatvorenom roletnom ali otvorenim lamelama. Kliknite na Završi kada su lamele potpuno zatvorene.",
+    "hints.sequential_close.tilt_time_open":
+      "Počnite sa zatvorenom roletnom i lamelama. Kliknite na Završi kada su lamele otvorene.",
+    "hints.sequential_open.travel_time_close":
+      "Počnite sa potpuno otvorenom roletnom i zatvorenim lamelama. Kliknite na Završi kada je roletna potpuno zatvorena, pre nego što lamele počnu da se naginju u otvoreno.",
+    "hints.sequential_open.travel_time_open":
+      "Počnite sa zatvorenom roletnom i zatvorenim lamelama. Kliknite na Završi kada je roletna potpuno otvorena.",
+    "hints.sequential_open.tilt_time_close":
+      "Počnite sa zatvorenom roletnom ali otvorenim lamelama. Kliknite na Završi kada su lamele potpuno zatvorene.",
+    "hints.sequential_open.tilt_time_open":
+      "Počnite sa zatvorenom roletnom i lamelama. Kliknite na Završi kada su lamele potpuno otvorene.",
+    "hints.dual_motor.travel_time_close":
+      "Počnite sa otvorenom roletnom i lamelama u bezbednom položaju. Kliknite na Završi kada je roletna potpuno zatvorena.",
+    "hints.dual_motor.travel_time_open":
+      "Počnite sa zatvorenom roletnom i lamelama u bezbednom položaju. Kliknite na Završi kada je roletna potpuno otvorena.",
+    "hints.dual_motor.tilt_time_close":
+      "Počnite sa zatvorenom roletnom i otvorenim lamelama. Kliknite na Završi kada su lamele potpuno zatvorene.",
+    "hints.dual_motor.tilt_time_open":
+      "Počnite sa zatvorenom roletnom i lamelama. Kliknite na Završi kada su lamele potpuno otvorene.",
+    "hints.inline.travel_time_close":
+      "Počnite sa potpuno otvorenom roletnom i lamelama. Kliknite na Završi kada su i roletna i lamele potpuno zatvorene.",
+    "hints.inline.travel_time_open":
+      "Počnite sa potpuno zatvorenom roletnom i lamelama. Kliknite na Završi kada su i roletna i lamele potpuno otvorene.",
+    "hints.inline.tilt_time_close":
+      "Počnite sa potpuno otvorenim lamelama. Kliknite na Završi kada su lamele potpuno zatvorene.",
+    "hints.inline.tilt_time_open":
+      "Počnite sa potpuno zatvorenim lamelama. Kliknite na Završi kada su lamele potpuno otvorene.",
+    "hints.none.travel_time_close": "Kliknite na Završi kada je roletna potpuno zatvorena.",
+    "hints.none.travel_time_open": "Kliknite na Završi kada je roletna potpuno otvorena.",
+    "hints.min_movement_time": "Kliknite na Završi čim primetite da se roletna kreće.",
+  },
 };
 
 /**
