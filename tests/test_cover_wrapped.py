@@ -29,6 +29,7 @@ def _make_wrapped_cover(
     force_time_based_position=False,
     reports_command_not_endpoint=False,
     ignore_endpoint_states=False,
+    ignore_all_reports=False,
     invert=False,
     tilt_time_close=None,
     tilt_time_open=None,
@@ -65,6 +66,7 @@ def _make_wrapped_cover(
         force_time_based_position=force_time_based_position,
         reports_command_not_endpoint=reports_command_not_endpoint,
         ignore_endpoint_states=ignore_endpoint_states,
+        ignore_all_reports=ignore_all_reports,
         invert=invert,
     )
     hass = MagicMock()
@@ -574,6 +576,91 @@ class TestInvertCommandEcho:
             await cover._handle_external_state_change("cover.inner", "open", "closed")
         open_mock.assert_awaited_once()
         close_mock.assert_not_awaited()
+
+
+class TestIgnoreAllReports:
+    """ignore_all_reports (issue #248): the underlying is a dumb relay — its
+    every state/position/transition report is ignored and position is tracked
+    purely by time. Reproduces the DiO ZB-ERSM-01 ghost paths from the log."""
+
+    @pytest.mark.asyncio
+    async def test_closed_with_position_attr_does_not_snap(self):
+        # The exact debug-log event: idle at 100%, the device reports
+        # opening -> closed carrying current_position=0. No real endpoints
+        # snaps here (trusts the attr); ignore_all_reports must not.
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        cover.travel_calc.set_position(100)
+        cover._last_self_command_time = None
+        _set_wrapped_features(cover, 0, state="closed", current_position=0)
+        with (
+            patch.object(cover, "set_known_position", new=AsyncMock()) as snap,
+            patch.object(cover, "async_stop_cover", new=AsyncMock()) as stop,
+        ):
+            await cover._handle_external_state_change(
+                "cover.inner", "opening", "closed"
+            )
+        snap.assert_not_awaited()
+        stop.assert_not_awaited()
+        assert cover.travel_calc.current_position() == 100
+
+    @pytest.mark.asyncio
+    async def test_spurious_opening_does_not_start_travel(self):
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        cover.travel_calc.set_position(0)
+        cover._last_self_command_time = None
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._handle_external_state_change(
+                "cover.inner", "closed", "opening"
+            )
+        open_mock.assert_not_awaited()
+        close_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_spurious_closing_does_not_start_travel(self):
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        cover.travel_calc.set_position(100)
+        cover._last_self_command_time = None
+        with (
+            patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock,
+            patch.object(cover, "async_close_cover", new=AsyncMock()) as close_mock,
+        ):
+            await cover._handle_external_state_change("cover.inner", "open", "closing")
+        open_mock.assert_not_awaited()
+        close_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_attribute_only_position_report_is_ignored(self):
+        # A bare current_position attribute update (state unchanged) must not
+        # snap either — the other channel the device desyncs through.
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        cover.travel_calc.set_position(100)
+        cover._last_self_command_time = None
+        st = _set_wrapped_features(cover, 0, state="closed", current_position=0)
+        event = MagicMock()
+        event.data = {"entity_id": "cover.inner", "new_state": st}
+        with patch.object(cover, "set_known_position", new=AsyncMock()) as snap:
+            await cover._handle_external_attribute_change(event)
+        snap.assert_not_awaited()
+        assert cover.travel_calc.current_position() == 100
+
+    @pytest.mark.asyncio
+    async def test_commands_still_forward_to_the_underlying(self):
+        # Ignoring the device's reports must not stop us driving it.
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        await cover._send_close()
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("close_cover", "cover.inner"),
+        ]
+
+    def test_reported_position_is_none_even_with_attribute(self):
+        # Source of truth for the startup live-sync and every other consumer:
+        # a device we never trust reports no usable position.
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        _set_wrapped_features(cover, 0, state="closed", current_position=0)
+        assert cover._wrapped_reported_position() is None
 
     @pytest.mark.asyncio
     async def test_unknown_is_still_stop_when_inverted(self):

@@ -31,6 +31,9 @@ export const EN = {
   "position_reporting.command_echo": "State mirrors the last command",
   "position_reporting.command_echo_helper":
     "Enable for covers (e.g. some Tuya shutters) whose open/closed/unknown state is a command echo rather than a real endpoint — they report no opening/closing transition and no position. The state is treated as an open/close/stop command and the position is tracked by time.",
+  "position_reporting.ignore_all": "Ignore all device reports",
+  "position_reporting.ignore_all_helper":
+    "The device's state and position are all untrustworthy. Ignore everything it reports and track the position purely from the open/close timers. Home Assistant becomes the only way to move the cover — operating it by a wall switch or remote is not tracked.",
   "position_reporting.docs_link": "Learn more",
   "entities.force_time_based_position": "Force time-based positioning",
   "entities.force_time_based_position_helper":
@@ -194,6 +197,9 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "O estado espelha o último comando",
     "position_reporting.command_echo_helper":
       "Ative para estores (por exemplo, alguns estores Tuya) cujo estado aberto/fechado/desconhecido é um eco do comando em vez de uma posição final real — não reportam transição de abertura/fecho nem posição. O estado é tratado como um comando abrir/fechar/parar e a posição é rastreada pelo tempo.",
+    "position_reporting.ignore_all": "Ignorar todos os relatórios do dispositivo",
+    "position_reporting.ignore_all_helper":
+      "O estado e a posição do dispositivo não são fiáveis. Ignore tudo o que ele reporta e rastreie a posição apenas pelos temporizadores de abertura/fecho. O Home Assistant passa a ser a única forma de mover o estore — operá-lo por um interruptor de parede ou comando não é rastreado.",
     "position_reporting.docs_link": "Saber mais",
     "entities.force_time_based_position": "Forçar posicionamento por tempo",
     "entities.force_time_based_position_helper":
@@ -358,6 +364,9 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Stan odzwierciedla ostatnie polecenie",
     "position_reporting.command_echo_helper":
       "Włącz dla rolet (np. niektórych rolet Tuya), których stan otwarta/zamknięta/nieznana jest echem polecenia, a nie rzeczywistą pozycją końcową — nie zgłaszają przejścia otwierania/zamykania ani pozycji. Stan jest traktowany jako polecenie otwórz/zamknij/zatrzymaj, a pozycja jest śledzona na podstawie czasu.",
+    "position_reporting.ignore_all": "Ignoruj wszystkie raporty urządzenia",
+    "position_reporting.ignore_all_helper":
+      "Stan i pozycja urządzenia są niewiarygodne. Ignoruj wszystko, co zgłasza, i śledź pozycję wyłącznie na podstawie czasów otwierania/zamykania. Home Assistant staje się jedynym sposobem poruszania roletą — obsługa za pomocą przełącznika ściennego lub pilota nie jest śledzona.",
     "position_reporting.docs_link": "Dowiedz się więcej",
     "entities.force_time_based_position": "Wymuś pozycjonowanie czasowe",
     "entities.force_time_based_position_helper":
@@ -521,6 +530,9 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Zustand spiegelt den letzten Befehl",
     "position_reporting.command_echo_helper":
       "Aktiviere dies für Rollläden (z. B. manche Tuya-Rollläden), deren Zustand offen/geschlossen/unbekannt nur ein Echo des Befehls statt einer echten Endlage ist — sie melden weder einen Öffnungs-/Schließvorgang noch eine Position. Der Zustand wird als Öffnen-/Schließen-/Stopp-Befehl behandelt und die Position über die Zeit verfolgt.",
+    "position_reporting.ignore_all": "Alle Gerätemeldungen ignorieren",
+    "position_reporting.ignore_all_helper":
+      "Zustand und Position des Geräts sind allesamt unzuverlässig. Ignoriere alles, was es meldet, und verfolge die Position ausschließlich über die Öffnungs-/Schließzeiten. Home Assistant wird die einzige Möglichkeit, den Rollladen zu bewegen — eine Bedienung über Wandschalter oder Fernbedienung wird nicht verfolgt.",
     "position_reporting.docs_link": "Mehr erfahren",
     "entities.force_time_based_position": "Zeitbasierte Positionierung erzwingen",
     "entities.force_time_based_position_helper":
@@ -688,6 +700,9 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Lo stato rispecchia l'ultimo comando",
     "position_reporting.command_echo_helper":
       "Attiva questa opzione per le tapparelle (ad esempio alcune tapparelle Tuya) il cui stato aperto/chiuso/sconosciuto è l'eco di un comando anziché un vero finecorsa — non riportano alcuna transizione di apertura/chiusura né alcuna posizione. Lo stato viene trattato come un comando di apertura/chiusura/arresto e la posizione viene tracciata in base al tempo.",
+    "position_reporting.ignore_all": "Ignora tutte le segnalazioni del dispositivo",
+    "position_reporting.ignore_all_helper":
+      "Lo stato e la posizione del dispositivo sono tutti inaffidabili. Ignora tutto ciò che segnala e traccia la posizione solo in base ai tempi di apertura/chiusura. Home Assistant diventa l'unico modo per muovere la tapparella — l'azionamento tramite interruttore a parete o telecomando non viene tracciato.",
     "position_reporting.docs_link": "Scopri di più",
     "entities.force_time_based_position": "Forza il posizionamento basato sul tempo",
     "entities.force_time_based_position_helper":
@@ -850,6 +865,9 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Status weerspiegelt het laatste commando",
     "position_reporting.command_echo_helper":
       "Schakel dit in voor rolluiken (bijvoorbeeld sommige Tuya-rolluiken) waarvan de status open/gesloten/onbekend een echo van het commando is in plaats van een echte eindstand — ze rapporteren geen openings- of sluitingsovergang en geen positie. De status wordt behandeld als een commando openen/sluiten/stoppen en de positie wordt op tijd gevolgd.",
+    "position_reporting.ignore_all": "Alle apparaatmeldingen negeren",
+    "position_reporting.ignore_all_helper":
+      "De status en positie van het apparaat zijn allemaal onbetrouwbaar. Negeer alles wat het meldt en volg de positie uitsluitend op basis van de open-/sluittijden. Home Assistant wordt de enige manier om het rolluik te bewegen — bediening via een wandschakelaar of afstandsbediening wordt niet gevolgd.",
     "position_reporting.docs_link": "Meer informatie",
     "entities.force_time_based_position": "Tijdgebaseerde positionering forceren",
     "entities.force_time_based_position_helper":
@@ -1014,6 +1032,9 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "L'état reflète la dernière commande",
     "position_reporting.command_echo_helper":
       "Activez cette option pour les volets (par exemple certains volets Tuya) dont l'état ouvert/fermé/inconnu est un écho de la commande plutôt qu'une véritable fin de course — ils ne rapportent ni transition d'ouverture/fermeture, ni position. L'état est traité comme une commande d'ouverture/fermeture/arrêt et la position est suivie d'après le temps.",
+    "position_reporting.ignore_all": "Ignorer tous les rapports de l'appareil",
+    "position_reporting.ignore_all_helper":
+      "L'état et la position de l'appareil ne sont pas fiables. Ignorez tout ce qu'il rapporte et suivez la position uniquement d'après les durées d'ouverture/fermeture. Home Assistant devient le seul moyen de bouger le volet — une commande par interrupteur mural ou télécommande n'est pas suivie.",
     "position_reporting.docs_link": "En savoir plus",
     "entities.force_time_based_position": "Forcer le positionnement temporisé",
     "entities.force_time_based_position_helper":
@@ -1177,6 +1198,9 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "El estado refleja el último comando",
     "position_reporting.command_echo_helper":
       "Actívalo para persianas (por ejemplo, algunas persianas Tuya) cuyo estado abierto/cerrado/desconocido es un eco del comando en lugar de una posición final real: no informan ninguna transición de apertura o cierre ni ninguna posición. El estado se trata como un comando de abrir/cerrar/detener y la posición se sigue por tiempo.",
+    "position_reporting.ignore_all": "Ignorar todos los informes del dispositivo",
+    "position_reporting.ignore_all_helper":
+      "El estado y la posición del dispositivo no son fiables. Ignora todo lo que informa y sigue la posición únicamente por los tiempos de apertura/cierre. Home Assistant se convierte en la única forma de mover la persiana; su manejo mediante un interruptor de pared o mando a distancia no se rastrea.",
     "position_reporting.docs_link": "Más información",
     "entities.force_time_based_position": "Forzar el posicionamiento por tiempo",
     "entities.force_time_based_position_helper":
@@ -1343,6 +1367,9 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "L'estat reflecteix l'última ordre",
     "position_reporting.command_echo_helper":
       "Activa-ho per a persianes (per exemple, algunes persianes Tuya) l'estat obert/tancat/desconegut de les quals és un eco de l'ordre en lloc d'un final de cursa real: no informen cap transició d'obertura o tancament ni cap posició. L'estat es tracta com una ordre d'obrir/tancar/aturar i el seguiment de la posició es fa per temps.",
+    "position_reporting.ignore_all": "Ignora tots els informes del dispositiu",
+    "position_reporting.ignore_all_helper":
+      "L'estat i la posició del dispositiu no són fiables. Ignora tot el que informa i fes el seguiment de la posició només pels temps d'obertura/tancament. El Home Assistant esdevé l'única manera de moure la persiana; el maneig mitjançant un interruptor de paret o comandament a distància no es fa el seguiment.",
     "position_reporting.docs_link": "Més informació",
     "entities.force_time_based_position": "Força el posicionament per temps",
     "entities.force_time_based_position_helper":
@@ -1509,6 +1536,9 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Stav zrcadlí poslední příkaz",
     "position_reporting.command_echo_helper":
       "Zapněte pro rolety (např. některé rolety Tuya), jejichž stav otevřeno/zavřeno/neznámý je ozvěnou příkazu, nikoli skutečnou koncovou polohou — nehlásí žádný přechod otevírání/zavírání ani pozici. Stav je považován za příkaz otevřít/zavřít/zastavit a pozice se sleduje podle času.",
+    "position_reporting.ignore_all": "Ignorovat všechna hlášení zařízení",
+    "position_reporting.ignore_all_helper":
+      "Stav i poloha zařízení jsou nespolehlivé. Ignorujte vše, co hlásí, a sledujte polohu výhradně podle časů otevírání/zavírání. Home Assistant se stává jediným způsobem, jak roletu ovládat — ovládání nástěnným vypínačem nebo dálkovým ovladačem se nesleduje.",
     "position_reporting.docs_link": "Zjistit více",
     "entities.force_time_based_position": "Vynutit polohování podle času",
     "entities.force_time_based_position_helper":
@@ -1670,6 +1700,9 @@ export const TRANSLATIONS = {
     "position_reporting.command_echo": "Stanje odražava poslednju komandu",
     "position_reporting.command_echo_helper":
       "Omogućite za roletne (npr. neke Tuya roletne) čije stanje otvoreno/zatvoreno/nepoznato predstavlja odjek komande, a ne stvaran krajnji položaj — ne prijavljuju prelaz otvaranja/zatvaranja niti poziciju. Stanje se tretira kao komanda otvori/zatvori/zaustavi, a pozicija se prati po vremenu.",
+    "position_reporting.ignore_all": "Zanemari sve izveštaje uređaja",
+    "position_reporting.ignore_all_helper":
+      "Stanje i pozicija uređaja su nepouzdani. Zanemarite sve što uređaj prijavljuje i pratite poziciju isključivo po tajmerima otvaranja/zatvaranja. Home Assistant postaje jedini način da se roletna pomeri — rukovanje zidnim prekidačem ili daljinskim upravljačem se ne prati.",
     "position_reporting.docs_link": "Saznajte više",
     "entities.force_time_based_position": "Prinudno pozicioniranje po vremenu",
     "entities.force_time_based_position_helper":

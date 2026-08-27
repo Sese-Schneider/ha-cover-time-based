@@ -261,10 +261,11 @@ export function renderToggleWithHelp(card, labelKey, helperKey, checked, onChang
 }
 
 // The report-interpretation profile a wrapped cover is configured for. The
-// three underlying booleans are mutually exclusive in practice, so they read
-// back as one of these four profiles (all false = the reliable default). Kept
+// four underlying booleans are mutually exclusive in practice, so they read
+// back as one of these five profiles (all false = the reliable default). Kept
 // in sync with _onPositionReportingChange, which writes the inverse mapping.
 export function positionReportingProfile(c) {
+  if (c.ignore_all_reports) return "ignore_all";
   if (c.reports_command_not_endpoint) return "command_echo";
   if (c.ignore_endpoint_states) return "no_endpoints";
   if (c.ignore_reported_position) return "unreliable";
@@ -331,7 +332,7 @@ export function renderPositionReporting(card, c) {
         @change=${card._onPositionReportingChange}
       >
         ${opt("reliable")} ${opt("unreliable")} ${opt("no_endpoints")}
-        ${opt("command_echo")}
+        ${opt("command_echo")} ${opt("ignore_all")}
       </select>
     </div>
   `;
