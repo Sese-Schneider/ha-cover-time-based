@@ -76,6 +76,16 @@
           "description": "Pokud je true, zahodí výsledky testu bez uložení"
         }
       }
+    },
+    "resync": {
+      "name": "Resynchronizace",
+      "description": "Znovu ukotví sledovanou pozici rolety s jedním tlačítkem poté, co bylo použito fyzické tlačítko nebo RF dálkové ovládání. Sdělí integraci skutečný stav rolety.",
+      "fields": {
+        "state": {
+          "name": "Stav",
+          "description": "Skutečný aktuální stav rolety."
+        }
+      }
     }
   }
 }

@@ -76,6 +76,16 @@
           "description": "Si es verdadero, descarta los resultados de la prueba sin guardarlos"
         }
       }
+    },
+    "resync": {
+      "name": "Resincronizar",
+      "description": "Vuelve a anclar la posición rastreada de una persiana de un solo botón después de que se haya usado el botón físico o el mando RF. Indica a la integración el estado real de la persiana.",
+      "fields": {
+        "state": {
+          "name": "Estado",
+          "description": "El estado real actual de la persiana."
+        }
+      }
     }
   }
 }

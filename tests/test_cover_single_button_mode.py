@@ -228,3 +228,32 @@ class TestEndpointReanchor:
             assert cover._phase is Phase.MOVING_UP
             await _drain(cover)
         assert cover._phase is Phase.AT_OPEN
+
+
+class TestResync:
+    @pytest.mark.asyncio
+    async def test_resync_closed(self):
+        cover = _make_sb_cover()
+        cover._phase = Phase.MOVING_UP
+        cover.async_write_ha_state = MagicMock()
+        cover._async_persist_position = AsyncMock()
+        cover.travel_calc.set_position(70)
+        await cover.async_resync("closed")
+        assert cover._phase is Phase.AT_CLOSED
+        assert cover.travel_calc.current_position() == 0
+        cover._async_persist_position.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_resync_open(self):
+        cover = _make_sb_cover()
+        cover.async_write_ha_state = MagicMock()
+        cover._async_persist_position = AsyncMock()
+        await cover.async_resync("open")
+        assert cover._phase is Phase.AT_OPEN
+        assert cover.travel_calc.current_position() == 100
+
+    @pytest.mark.asyncio
+    async def test_resync_rejects_unknown(self):
+        cover = _make_sb_cover()
+        with pytest.raises(ValueError):
+            await cover.async_resync("halfway")

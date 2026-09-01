@@ -76,6 +76,16 @@
           "description": "Si vrai, abandonne les résultats du test sans les enregistrer"
         }
       }
+    },
+    "resync": {
+      "name": "Resynchroniser",
+      "description": "Réancre la position suivie d'un volet à bouton unique après l'utilisation du bouton physique ou de la télécommande RF. Indique à l'intégration l'état réel du volet.",
+      "fields": {
+        "state": {
+          "name": "État",
+          "description": "L'état réel actuel du volet."
+        }
+      }
     }
   }
 }

@@ -91,3 +91,19 @@ stop_calibration:
       default: false
       selector:
         boolean:
+
+resync:
+  target:
+    entity:
+      domain: cover
+      integration: cover_time_based
+  fields:
+    state:
+      required: true
+      selector:
+        select:
+          options:
+            - label: "Closed"
+              value: closed
+            - label: "Open"
+              value: open

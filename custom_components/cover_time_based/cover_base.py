@@ -1479,6 +1479,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self.async_write_ha_state()
         await self._async_persist_position()
 
+    async def async_resync(self, state: str) -> None:
+        """Re-anchor phase and position after off-system control.
+
+        Only meaningful for single-button control mode, which has no
+        feedback and tracks phase by dead reckoning; see
+        SingleButtonModeCover.async_resync for the real implementation.
+        """
+        raise NotImplementedError(
+            "resync is only supported in single_button control mode"
+        )
+
     # -----------------------------------------------------------------------
     # Movement orchestration
     # -----------------------------------------------------------------------

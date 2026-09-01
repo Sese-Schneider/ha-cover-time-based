@@ -140,6 +140,20 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             if self._settle_task is asyncio.current_task():
                 self._settle_task = None
 
+    # --- resync ----------------------------------------------------------
+    async def async_resync(self, state: str) -> None:
+        """Re-anchor phase and position after off-system control."""
+        if state == "closed":
+            self._phase = Phase.AT_CLOSED
+            self.travel_calc.set_position(0)
+        elif state == "open":
+            self._phase = Phase.AT_OPEN
+            self.travel_calc.set_position(100)
+        else:
+            raise ValueError(f"unknown resync state: {state}")
+        self.async_write_ha_state()
+        await self._async_persist_position()
+
     # --- persistence -----------------------------------------------------
     def _extra_persist_data(self) -> dict:
         return {"phase": self._phase.value}

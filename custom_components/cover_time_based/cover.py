@@ -123,6 +123,7 @@ DEFAULT_PULSE_TIME = 1.0
 
 SERVICE_SET_KNOWN_POSITION = "set_known_position"
 SERVICE_SET_KNOWN_TILT_POSITION = "set_known_tilt_position"
+SERVICE_RESYNC = "resync"
 
 # ---------------------------------------------------------------------------
 # Schema definitions
@@ -227,6 +228,7 @@ TILT_POSITION_SCHEMA = cv.make_entity_service_schema(
         vol.Required(ATTR_TILT_POSITION): cv.positive_int,
     }
 )
+RESYNC_SCHEMA = {vol.Required("state"): vol.In(["closed", "open"])}
 
 # ---------------------------------------------------------------------------
 # YAML migration helpers
@@ -552,6 +554,9 @@ def _register_services(platform):
     )
     platform.async_register_entity_service(
         SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
+    )
+    platform.async_register_entity_service(
+        SERVICE_RESYNC, RESYNC_SCHEMA, "async_resync"
     )
 
     hass = platform.hass

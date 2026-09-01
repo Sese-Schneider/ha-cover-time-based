@@ -76,6 +76,16 @@
           "description": "Indien waar, worden de testresultaten weggegooid zonder op te slaan"
         }
       }
+    },
+    "resync": {
+      "name": "Hersynchroniseren",
+      "description": "Verankert de bijgehouden positie van een rolluik met één knop opnieuw nadat de fysieke knop of RF-afstandsbediening is gebruikt. Vertelt de integratie de werkelijke status van het rolluik.",
+      "fields": {
+        "state": {
+          "name": "Status",
+          "description": "De werkelijke huidige status van het rolluik."
+        }
+      }
     }
   }
 }
