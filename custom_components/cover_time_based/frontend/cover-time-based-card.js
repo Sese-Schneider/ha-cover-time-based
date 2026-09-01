@@ -490,11 +490,7 @@ class CoverTimeBasedCard extends LitElement {
     // suitable cover). Mirrors the "none" reset in _onTiltModeChange.
     if (mode === "wrapped" && this._config?.tilt_mode === "dual_motor") {
       Object.assign(updates, clearedTiltConfig());
-    } else if (
-      mode === "single_button" &&
-      this._config?.tilt_mode &&
-      this._config.tilt_mode !== "none"
-    ) {
+    } else if (mode === "single_button") {
       // Single-button mode has no tilt support at all (supports_tilt=False on
       // the backend), unlike wrapped which only loses dual_motor — so every
       // tilt mode inherited from the previous selection must go, not just

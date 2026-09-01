@@ -28,7 +28,6 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         self._phase = Phase.AT_CLOSED
         self._press_task: asyncio.Task | None = None
         self._settle_task: asyncio.Task | None = None
-        self._pulse_tasks: dict[str, asyncio.Task] = {}
 
     # --- configuration -------------------------------------------------
     def _are_entities_configured(self) -> bool:
@@ -52,29 +51,6 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         # echoes, and this mode has no feedback to read. Ignore them.
         self._log("single_button :: ignoring external state change on %s", entity_id)
 
-    # --- pressing the button ------------------------------------------
-    async def _pulse_button(self) -> None:
-        """Momentarily energise the button line (ON now, OFF in background)."""
-        entity_id = self._open_switch_entity_id
-        await self.hass.services.async_call(
-            "homeassistant", "turn_on", {"entity_id": entity_id}, False
-        )
-        self._pulse_tasks[entity_id] = self.hass.async_create_task(
-            self._complete_pulse(entity_id)
-        )
-
-    async def _complete_pulse(self, entity_id) -> None:
-        try:
-            await sleep(self._pulse_time)
-            await self.hass.services.async_call(
-                "homeassistant", "turn_off", {"entity_id": entity_id}, False
-            )
-        except asyncio.CancelledError:
-            pass
-        finally:
-            if self._pulse_tasks.get(entity_id) is asyncio.current_task():
-                self._pulse_tasks.pop(entity_id, None)
-
     # --- press sequencing ---------------------------------------------
     def _start_press_sequence(self, action: Action) -> None:
         phases = plan(self._phase, action)
@@ -85,12 +61,30 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         self._press_task = self.hass.async_create_task(self._run_press_sequence(phases))
 
     async def _run_press_sequence(self, phases: list[Phase]) -> None:
-        """Pulse once per planned phase, gap-spaced, updating phase each time."""
+        """Press once per planned phase, gap-spaced, updating phase each time.
+
+        Each press is a discrete, self-contained pulse performed inline: ON,
+        wait pulse_time, OFF -- fully resolved before the next press's gap
+        even starts. This guarantees the button is OFF between consecutive
+        presses regardless of how pulse_time compares to
+        DIRECTION_CHANGE_DELAY (the previous behaviour scheduled each press's
+        OFF as a background task, so with the default pulse_time equal to
+        DIRECTION_CHANGE_DELAY a re-press could race and cancel the prior
+        press's pending OFF -- the motor would then register fewer presses
+        than intended, desyncing the tracked phase).
+        """
+        entity_id = self._open_switch_entity_id
         try:
             for index, phase in enumerate(phases):
                 if index:
                     await sleep(DIRECTION_CHANGE_DELAY)
-                await self._pulse_button()
+                await self.hass.services.async_call(
+                    "homeassistant", "turn_on", {"entity_id": entity_id}, False
+                )
+                await sleep(self._pulse_time)
+                await self.hass.services.async_call(
+                    "homeassistant", "turn_off", {"entity_id": entity_id}, False
+                )
                 self._phase = phase
         except asyncio.CancelledError:
             pass
@@ -108,24 +102,19 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         """On removal, stop pressing and leave the button relay OFF.
 
         A config-entry reload (every card save) can land mid-sequence: the
-        press sequence's inter-press gap, the settle margin after an
-        endpoint, or a single pulse's own completion may all be in flight.
-        Left alone, the OLD entity would keep issuing presses against the
+        press sequence's inter-press gap, a single press's own inline pulse,
+        or the settle margin after an endpoint may all be in flight. Left
+        alone, the OLD entity would keep issuing presses against the
         physical button after the new entity takes over -- real motor
         desync. Mirrors PulseModeCover._cancel_background_pulses
-        (cover_pulse_mode.py): cancel every in-flight task, then
-        unconditionally turn the button off so a pulse caught mid-flight is
+        (cover_pulse_mode.py): cancel the in-flight task, then
+        unconditionally turn the button off so a press caught mid-pulse is
         not left latched ON.
         """
         if self._press_task is not None and not self._press_task.done():
             self._press_task.cancel()
         self._press_task = None
         self._cancel_settle()
-        pending = list(self._pulse_tasks.values())
-        self._pulse_tasks.clear()
-        for task in pending:
-            if not task.done():
-                task.cancel()
         if self._open_switch_entity_id:
             await self.hass.services.async_call(
                 "homeassistant",

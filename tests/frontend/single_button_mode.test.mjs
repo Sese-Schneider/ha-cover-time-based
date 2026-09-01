@@ -249,13 +249,18 @@ test("_onControlModeChange to single_button resets dual_motor tilt too (not just
   expect(updates[0].tilt_mode).toBe("none");
 });
 
-test("_onControlModeChange to single_button with tilt_mode already 'none' does not add spurious tilt keys", async () => {
+test("_onControlModeChange to single_button with tilt_mode already 'none' is an idempotent no-op on the effective config", async () => {
+  // clearedTiltConfig() is unconditional now (no guard), so the update
+  // re-asserts tilt_mode: "none" and re-nulls the already-null tilt fields
+  // rather than omitting them — but the resulting config is unchanged.
   card = await mountCard(makeHass(), {
     config: { control_mode: "switch", tilt_mode: "none" },
   });
   const updates = captureUpdates(card);
   card._onControlModeChange({ target: { value: "single_button" } });
-  expect(updates[0].tilt_mode).toBeUndefined();
+  expect(updates[0].tilt_mode).toBe("none");
+  expect(card._config.tilt_mode).toBe("none");
+  expect(card._config.tilt_time_close).toBeNull();
 });
 
 // ---------------------------------------------------------------------------

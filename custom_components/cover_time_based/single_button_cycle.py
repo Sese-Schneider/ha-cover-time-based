@@ -64,17 +64,10 @@ _GOAL: dict[Action, Phase] = {
     Action.CLOSE: Phase.MOVING_DOWN,
 }
 
-_MOVING: set[Phase] = {Phase.MOVING_UP, Phase.MOVING_DOWN}
-
 
 def next_phase(phase: Phase) -> Phase:
     """Return the phase after a single press."""
     return PRESS_TRANSITION[phase]
-
-
-def is_moving(phase: Phase) -> bool:
-    """Return True if the motor is travelling in ``phase``."""
-    return phase in _MOVING
 
 
 def plan(phase: Phase, action: Action) -> list[Phase]:

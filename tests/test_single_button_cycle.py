@@ -3,7 +3,6 @@ import pytest
 from custom_components.cover_time_based.single_button_cycle import (
     Action,
     Phase,
-    is_moving,
     next_phase,
     plan,
 )
@@ -22,21 +21,6 @@ from custom_components.cover_time_based.single_button_cycle import (
 )
 def test_next_phase(phase, expected):
     assert next_phase(phase) == expected
-
-
-@pytest.mark.parametrize(
-    "phase, moving",
-    [
-        (Phase.MOVING_UP, True),
-        (Phase.MOVING_DOWN, True),
-        (Phase.AT_CLOSED, False),
-        (Phase.AT_OPEN, False),
-        (Phase.STOPPED_AFTER_UP, False),
-        (Phase.STOPPED_AFTER_DOWN, False),
-    ],
-)
-def test_is_moving(phase, moving):
-    assert is_moving(phase) is moving
 
 
 @pytest.mark.parametrize(

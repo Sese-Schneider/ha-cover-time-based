@@ -99,15 +99,39 @@ async def test_external_state_change_ignored():
 
 
 @pytest.mark.asyncio
-async def test_pulse_button_turns_on_then_off():
+async def test_single_press_turns_button_on_then_off():
     cover = _make_sb_cover(pulse_time=1.0)
+    cover._phase = Phase.AT_CLOSED
     with patch(
         "custom_components.cover_time_based.cover_single_button_mode.sleep",
         new_callable=AsyncMock,
     ):
-        await cover._pulse_button()
+        await cover._send_open()
         await _drain(cover)
     assert cover.hass.services.async_call.call_args_list == [
+        call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False),
+        call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_multi_press_sequence_is_discrete_on_off_pulses():
+    """A multi-press plan (the 3-press nudge) must show the button OFF
+    between consecutive presses, not a re-press racing the previous press's
+    pending OFF. Asserts the exact ordered on/off pairs."""
+    cover = _make_sb_cover(pulse_time=1.0)
+    cover._phase = Phase.STOPPED_AFTER_UP  # 3-press nudge
+    with patch(
+        "custom_components.cover_time_based.cover_single_button_mode.sleep",
+        new_callable=AsyncMock,
+    ):
+        await cover._send_open()
+        await _drain(cover)
+    assert cover.hass.services.async_call.call_args_list == [
+        call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False),
+        call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False),
+        call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False),
+        call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False),
         call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False),
         call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False),
     ]
@@ -201,8 +225,9 @@ class TestSendCommands:
         ):
             await cover._send_open()
             await _drain(cover)
-        # Two inter-press gaps of DIRECTION_CHANGE_DELAY; three pulse-off
-        # sleeps of pulse_time (0.3).
+        # Two inter-press gaps of DIRECTION_CHANGE_DELAY (before the 2nd and
+        # 3rd presses); three inline pulse-width sleeps of pulse_time (0.3),
+        # one per discrete press.
         from custom_components.cover_time_based.const import DIRECTION_CHANGE_DELAY
 
         assert gaps.count(DIRECTION_CHANGE_DELAY) == 2
@@ -297,23 +322,21 @@ class TestRemovalCancelsBackgroundWork:
         cover = _make_sb_cover()
         cover._phase = Phase.STOPPED_AFTER_UP  # 3-press nudge: a multi-step sequence
 
-        # Deliberately do NOT patch `sleep`: the real DIRECTION_CHANGE_DELAY
-        # wait between presses gives the task a genuine suspend point, so we
-        # can observe it paused mid-sequence (one press issued, the next
-        # still pending) without waiting out the real delay.
+        # Deliberately do NOT patch `sleep`: the real pulse-width sleep inside
+        # the first discrete press gives the task a genuine suspend point, so
+        # we can observe it paused mid-sequence (one press issued, still ON,
+        # the next still pending) without waiting out the real delay.
         await cover._send_open()
         await asyncio.sleep(0)
 
         assert len(_presses(cover)) == 1
         assert cover._press_task is not None
         assert not cover._press_task.done()
-        assert cover._pulse_tasks  # first pulse's completion still in flight
 
         await cover.async_will_remove_from_hass()
 
         assert cover._press_task is None
         assert cover._settle_task is None
-        assert cover._pulse_tasks == {}
         # No further presses were issued once removal started.
         assert len(_presses(cover)) == 1
         # The button relay ends OFF, not left latched from the in-flight pulse.
