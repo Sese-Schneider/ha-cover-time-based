@@ -36,7 +36,7 @@ class PositionStore:
         """Return stored data for an entry, or None."""
         return (await self._ensure_loaded()).get(entry_id)
 
-    async def async_save(self, entry_id: str, data: dict[str, int]) -> None:
+    async def async_save(self, entry_id: str, data: dict[str, int | str]) -> None:
         """Save entry data, debounced. Skips if nothing would change."""
         if not data:
             return

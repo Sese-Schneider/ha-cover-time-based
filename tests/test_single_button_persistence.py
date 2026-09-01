@@ -20,3 +20,13 @@ def test_apply_restored_extra_ignores_missing_phase():
     cover._phase = Phase.AT_OPEN
     cover._apply_restored_extra({"position": 50})
     assert cover._phase is Phase.AT_OPEN
+
+
+def test_apply_restored_extra_ignores_invalid_phase():
+    # A corrupted store or a renamed/removed Phase value must not raise --
+    # it should leave the current/default phase untouched instead of
+    # breaking entity restore.
+    cover = _make_sb_cover()
+    cover._phase = Phase.AT_OPEN
+    cover._apply_restored_extra({"position": 50, "phase": "not_a_real_phase"})
+    assert cover._phase is Phase.AT_OPEN

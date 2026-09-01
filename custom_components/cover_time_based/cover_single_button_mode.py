@@ -90,22 +90,30 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         A no-op when nothing is in flight, so a command from rest (the
         common case) stays latency-free -- only an actual interruption pays
         for the cleanup turn_off and gap.
+
+        `_press_active` is checked unconditionally after the cancel step,
+        not only when a live task was found: an unexpected mid-pulse error
+        in `_run_press_sequence` (a service call raising) also resets the
+        flag and turns the button off itself before the task exits, but as
+        defence in depth against any other way `_press_task` could end up
+        done/None while `_press_active` is still True, this still performs
+        the same cleanup rather than trusting the task's own exit path.
         """
         task = self._press_task
-        if task is None or task.done():
+        if task is not None and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        if not self._press_active:
             return
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-        if self._press_active:
-            self._press_active = False
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._open_switch_entity_id},
-                False,
-            )
-            await sleep(DIRECTION_CHANGE_DELAY)
+        self._press_active = False
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._open_switch_entity_id},
+            False,
+        )
+        await sleep(DIRECTION_CHANGE_DELAY)
 
     async def _run_press_sequence(self, phases: list[Phase]) -> None:
         """Press once per planned phase, gap-spaced, updating phase each time.
@@ -146,7 +154,24 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
                 )
                 self._press_active = False
         except asyncio.CancelledError:
+            # Cleanup (compensating turn_off + gap, if the pulse was actually
+            # in flight) is owned by _supersede_active_press, which reads
+            # _press_active AFTER awaiting this task -- do not touch it here.
             pass
+        except Exception:
+            # An unexpected error mid-pulse (e.g. the turn_on/turn_off
+            # service call itself raising) must not leave the relay latched
+            # ON or _press_active stuck True -- either would let the next
+            # press merge onto an already-ON relay. Best-effort turn the
+            # button off (suppressed: cleanup must not raise a second error
+            # over the original one) and clear the flag, then re-raise so
+            # the error is still surfaced/logged by asyncio.
+            with contextlib.suppress(Exception):
+                await self.hass.services.async_call(
+                    "homeassistant", "turn_off", {"entity_id": entity_id}, False
+                )
+            self._press_active = False
+            raise
         finally:
             if self._press_task is asyncio.current_task():
                 self._press_task = None
@@ -242,5 +267,11 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
     def _apply_restored_extra(self, stored: dict) -> None:
         value = stored.get("phase")
-        if value is not None:
+        if value is None:
+            return
+        try:
             self._phase = Phase(value)
+        except ValueError:
+            # Corrupted store or a renamed/removed Phase value -- keep the
+            # current/default phase rather than breaking entity restore.
+            self._log("single_button :: ignoring unknown stored phase %r", value)

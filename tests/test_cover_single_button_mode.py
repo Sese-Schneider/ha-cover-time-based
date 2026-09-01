@@ -332,6 +332,118 @@ class TestMidPressInterruption:
         assert _no_adjacent_turn_on(cover)
 
 
+class TestMidPulseErrorHandling:
+    """A service call (turn_on/turn_off) can raise mid-pulse -- e.g. a relay
+    comms failure -- while `_press_active` is True. Left unhandled (the
+    original bare `except asyncio.CancelledError: pass` doesn't catch it),
+    the task exits with `_press_active` stuck True and the relay possibly
+    still latched ON; a later `_supersede_active_press` then sees a
+    done/None task and returns early WITHOUT the compensating turn_off, so
+    the next command's press merges onto an already-ON relay."""
+
+    @pytest.mark.asyncio
+    async def test_mid_pulse_turn_off_error_clears_relay_and_press_active(self):
+        cover = _make_sb_cover(pulse_time=0.01)
+        cover._phase = Phase.AT_CLOSED  # open is a 1-press plan
+
+        raised = False
+
+        async def flaky_call(domain, service, data, blocking):
+            nonlocal raised
+            if service == "turn_off" and not raised:
+                raised = True
+                raise RuntimeError("simulated relay comms failure")
+
+        cover.hass.services.async_call = AsyncMock(side_effect=flaky_call)
+
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode."
+            "DIRECTION_CHANGE_DELAY",
+            0.01,
+        ):
+            await cover._send_open()
+            with pytest.raises(RuntimeError):
+                await _drain(cover)
+
+            # The unexpected error must not leave the relay latched ON or the
+            # in-flight flag stuck -- either would let a later command merge
+            # its press onto an already-ON relay.
+            assert cover._press_active is False
+
+            # Mock still records a call even when its side_effect raises, so
+            # "a turn_off appears in the log" is not on its own proof of a
+            # cleanup attempt -- the real differentiator is a SECOND turn_off
+            # (the best-effort cleanup) beyond the one that raised.
+            off_calls = [
+                c
+                for c in cover.hass.services.async_call.call_args_list
+                if c.args[1] == "turn_off"
+            ]
+            assert len(off_calls) == 2
+
+            # A subsequent command must not merge: from the settled state
+            # (_press_active False, task cleared) _supersede_active_press is
+            # a no-op and the new sequence presses cleanly.
+            await cover._send_stop()
+            await _drain(cover)
+
+        assert cover.hass.services.async_call.call_args_list == [
+            call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False),
+            call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False),
+            call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False),
+            call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False),
+            call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False),
+        ]
+        assert cover._phase is Phase.STOPPED_AFTER_UP
+
+
+class TestSupersedeHardensDoneTaskCase:
+    """Defence in depth for `_supersede_active_press`: even when
+    `_press_task` is already done/None, if `_press_active` is somehow still
+    True the compensating turn_off + gap must still run before a new
+    sequence starts. The normal, clean path (nothing in flight,
+    `_press_active` already False) must stay penalty-free -- no service
+    calls, no sleep."""
+
+    @pytest.mark.asyncio
+    async def test_cleans_up_when_task_already_done_but_press_active_stuck(self):
+        cover = _make_sb_cover()
+        cover._press_task = None
+        cover._press_active = True
+
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ) as mock_sleep:
+            await cover._supersede_active_press()
+
+        cover.hass.services.async_call.assert_awaited_once_with(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": "switch.button"},
+            False,
+        )
+        from custom_components.cover_time_based.const import DIRECTION_CHANGE_DELAY
+
+        mock_sleep.assert_awaited_once_with(DIRECTION_CHANGE_DELAY)
+        assert cover._press_active is False
+
+    @pytest.mark.asyncio
+    async def test_penalty_free_when_nothing_in_flight(self):
+        cover = _make_sb_cover()
+        cover._press_task = None
+        cover._press_active = False
+
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ) as mock_sleep:
+            await cover._supersede_active_press()
+
+        cover.hass.services.async_call.assert_not_awaited()
+        mock_sleep.assert_not_awaited()
+
+
 class TestEndpointReanchor:
     def test_immediate_anchor_when_no_runon(self):
         cover = _make_sb_cover()
