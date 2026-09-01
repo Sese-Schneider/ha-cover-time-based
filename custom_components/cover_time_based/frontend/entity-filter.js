@@ -97,6 +97,8 @@ export function clearedTiltConfig() {
  * survive and trip the backend script guard. Switch and the toggle modes
  * (same- and opposite-button) keep the direction switches but drop the wrapped
  * cover and the pulse-only stop slots. Pulse only drops the wrapped cover.
+ * Single-button mode reuses open_switch_entity_id as "the button" (kept), but
+ * has no close switch and no tilt motor at all, so both are cleared too.
  */
 export function clearedEntitiesForMode(mode) {
   const updates = {};
@@ -113,6 +115,11 @@ export function clearedEntitiesForMode(mode) {
   if (mode !== "pulse") {
     updates.stop_switch_entity_id = null;
     updates.tilt_stop_switch = null;
+  }
+  if (mode === "single_button") {
+    updates.close_switch_entity_id = null;
+    updates.tilt_open_switch = null;
+    updates.tilt_close_switch = null;
   }
   return updates;
 }

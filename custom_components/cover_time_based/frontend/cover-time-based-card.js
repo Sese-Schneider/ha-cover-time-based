@@ -447,6 +447,9 @@ class CoverTimeBasedCard extends LitElement {
     } else if (c.control_mode === "pulse") {
       if (!c.open_switch_entity_id || !c.close_switch_entity_id || !c.stop_switch_entity_id)
         return false;
+    } else if (c.control_mode === "single_button") {
+      // One button is enough (see SingleButtonModeCover._are_entities_configured).
+      if (!c.open_switch_entity_id) return false;
     } else {
       if (!c.open_switch_entity_id || !c.close_switch_entity_id) return false;
     }
@@ -478,6 +481,16 @@ class CoverTimeBasedCard extends LitElement {
     // from another mode, so reset it (the user can re-select it after picking a
     // suitable cover). Mirrors the "none" reset in _onTiltModeChange.
     if (mode === "wrapped" && this._config?.tilt_mode === "dual_motor") {
+      Object.assign(updates, clearedTiltConfig());
+    } else if (
+      mode === "single_button" &&
+      this._config?.tilt_mode &&
+      this._config.tilt_mode !== "none"
+    ) {
+      // Single-button mode has no tilt support at all (supports_tilt=False on
+      // the backend), unlike wrapped which only loses dual_motor — so every
+      // tilt mode inherited from the previous selection must go, not just
+      // dual_motor.
       Object.assign(updates, clearedTiltConfig());
     }
     this._updateLocal(updates);
@@ -747,6 +760,25 @@ class CoverTimeBasedCard extends LitElement {
       });
     } catch (err) {
       console.error("Reset position failed:", err);
+    }
+  }
+
+  /**
+   * Single-button mode has no feedback, so a wrong tracked phase never
+   * self-heals (see the design spec) — this re-anchors phase and position to
+   * a known endpoint after the physical button or an RF remote was used
+   * outside Home Assistant. Mirrors _onPositionPresetChange's callService
+   * pattern.
+   */
+  async _onResync(state) {
+    if (!this._selectedEntity || !this.hass) return;
+    try {
+      await this.hass.callService(DOMAIN, "resync", {
+        entity_id: this._selectedEntity,
+        state,
+      });
+    } catch (err) {
+      console.error("Resync failed:", err);
     }
   }
 
