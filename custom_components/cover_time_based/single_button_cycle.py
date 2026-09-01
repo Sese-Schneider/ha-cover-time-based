@@ -88,8 +88,9 @@ def plan(phase: Phase, action: Action) -> list[Phase]:
     goal = _GOAL[action]
     steps: list[Phase] = []
     current = phase
-    # Advance the cycle a press at a time until heading the right way. Max 3
-    # presses (the nudge case); the bound guards a corrupt state.
+    # Advance the cycle a press at a time until heading the right way. For any
+    # valid phase this needs at most 3 presses (the nudge case); the loop is
+    # bounded by the full cycle length only as a guard against a corrupt state.
     for _ in range(len(PRESS_TRANSITION)):
         current = next_phase(current)
         steps.append(current)
