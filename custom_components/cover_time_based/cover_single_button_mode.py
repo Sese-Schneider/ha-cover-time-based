@@ -10,6 +10,7 @@ not self-healing (see the design spec) -- the resync service corrects it.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from asyncio import sleep
 
 from .const import DIRECTION_CHANGE_DELAY
@@ -28,6 +29,12 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         self._phase = Phase.AT_CLOSED
         self._press_task: asyncio.Task | None = None
         self._settle_task: asyncio.Task | None = None
+        # True only while a press's ON pulse is actually in flight (between
+        # turn_on and turn_off). Lets _supersede_active_press tell a press
+        # that was genuinely interrupted mid-pulse (button left latched ON,
+        # needs a cleanup turn_off) from one cancelled between presses (the
+        # button is already OFF there -- no cleanup needed).
+        self._press_active = False
 
     # --- configuration -------------------------------------------------
     def _are_entities_configured(self) -> bool:
@@ -53,12 +60,52 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
     # --- press sequencing ---------------------------------------------
     def _start_press_sequence(self, action: Action) -> None:
+        """Plan from the current phase and schedule the press sequence.
+
+        Callers must already have awaited _supersede_active_press() before
+        calling this, so there is nothing live left to cancel here -- we
+        only need to plan (from the now-settled phase) and schedule.
+        """
         phases = plan(self._phase, action)
         if not phases:
             return
-        if self._press_task is not None and not self._press_task.done():
-            self._press_task.cancel()
         self._press_task = self.hass.async_create_task(self._run_press_sequence(phases))
+
+    async def _supersede_active_press(self) -> None:
+        """Cleanly end any in-flight press sequence before a new command.
+
+        Cancels the live press task and awaits it so its `finally` (which
+        self-clears _press_task) runs to completion BEFORE anything else --
+        deterministic ordering, with no race against the replacement
+        sequence we are about to schedule.
+
+        If a press was actually interrupted mid-pulse -- the cancelled task
+        never reached its own turn_off, so the button is left latched ON --
+        we turn it off ourselves and wait out DIRECTION_CHANGE_DELAY so the
+        replacement sequence starts from a clean, distinct OFF window.
+        Without this, the replacement's first press (which skips its own
+        leading gap) would fire turn_on on an already-ON relay and merge
+        with the interrupted press instead of registering as a second one.
+
+        A no-op when nothing is in flight, so a command from rest (the
+        common case) stays latency-free -- only an actual interruption pays
+        for the cleanup turn_off and gap.
+        """
+        task = self._press_task
+        if task is None or task.done():
+            return
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        if self._press_active:
+            self._press_active = False
+            await self.hass.services.async_call(
+                "homeassistant",
+                "turn_off",
+                {"entity_id": self._open_switch_entity_id},
+                False,
+            )
+            await sleep(DIRECTION_CHANGE_DELAY)
 
     async def _run_press_sequence(self, phases: list[Phase]) -> None:
         """Press once per planned phase, gap-spaced, updating phase each time.
@@ -72,6 +119,16 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         DIRECTION_CHANGE_DELAY a re-press could race and cancel the prior
         press's pending OFF -- the motor would then register fewer presses
         than intended, desyncing the tracked phase).
+
+        `_phase` is updated -- and `_press_active` raised -- immediately
+        after the ON edge, before the pulse-time sleep, not after the OFF: a
+        command arriving mid-pulse must plan from the phase this press is
+        already committing to, not the stale pre-press phase, or it can plan
+        as if the motor hadn't moved yet (e.g. a stop that finds nothing to
+        stop). Cancellation itself is left for _supersede_active_press to
+        clean up -- this method does not issue its own turn_off on
+        cancellation, since that would race the superseding command's
+        cleanup.
         """
         entity_id = self._open_switch_entity_id
         try:
@@ -81,11 +138,13 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
                 await self.hass.services.async_call(
                     "homeassistant", "turn_on", {"entity_id": entity_id}, False
                 )
+                self._phase = phase
+                self._press_active = True
                 await sleep(self._pulse_time)
                 await self.hass.services.async_call(
                     "homeassistant", "turn_off", {"entity_id": entity_id}, False
                 )
-                self._phase = phase
+                self._press_active = False
         except asyncio.CancelledError:
             pass
         finally:
@@ -126,14 +185,17 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
     # --- the mode contract --------------------------------------------
     async def _send_open(self) -> None:
         self._cancel_settle()
+        await self._supersede_active_press()
         self._start_press_sequence(Action.OPEN)
 
     async def _send_close(self) -> None:
         self._cancel_settle()
+        await self._supersede_active_press()
         self._start_press_sequence(Action.CLOSE)
 
     async def _send_stop(self) -> None:
         self._cancel_settle()
+        await self._supersede_active_press()
         self._start_press_sequence(Action.STOP)
 
     # --- endpoint re-anchor -------------------------------------------

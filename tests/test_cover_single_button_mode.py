@@ -1,4 +1,5 @@
 import asyncio
+from itertools import pairwise
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -44,7 +45,9 @@ def _make_sb_cover(button="switch.button", pulse_time=1.0, travel=30):
 
 
 async def _drain(cover):
-    # Drain repeatedly: sequences schedule further pulse tasks.
+    # Drain repeatedly: a settle task and a press-sequence task can both be
+    # pending at once, or (after a mid-press interruption) an already-done
+    # superseded sequence's task plus its replacement.
     while cover._test_tasks:
         task = cover._test_tasks.pop(0)
         await task
@@ -244,6 +247,89 @@ class TestSendCommands:
             await cover._raw_direction_command("open")
             await _drain(cover)
         assert len(_presses(cover)) == 1
+
+
+def _no_adjacent_turn_on(cover):
+    """True if the button's on/off calls never show two turn_on calls back
+    to back with no turn_off between them (i.e. no merged presses)."""
+    on_call = call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False)
+    off_call = call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False)
+    relevant = [
+        c
+        for c in cover.hass.services.async_call.call_args_list
+        if c in (on_call, off_call)
+    ]
+    for previous, current in pairwise(relevant):
+        if previous == on_call and current == on_call:
+            return False
+    return True
+
+
+class TestMidPressInterruption:
+    """A second command can land while the first command's press is still
+    inside its pulse_time sleep (button ON, turn_off not yet issued). These
+    tests deliberately do NOT patch `sleep` with an instant AsyncMock (that
+    fully serializes execution and never lets a second command land
+    mid-press); instead they use the real asyncio.sleep with tiny durations
+    so the press task genuinely suspends and `await asyncio.sleep(0)` can
+    park it mid-pulse, exactly as TestRemovalCancelsBackgroundWork does."""
+
+    @pytest.mark.asyncio
+    async def test_stop_mid_press_issues_a_real_stop_press(self):
+        # AT_CLOSED -> open is a 1-press plan (turn_on issued, then parked
+        # inside the pulse-time sleep with the button still ON). A stop
+        # landing there must not be silently dropped by planning from the
+        # stale pre-press phase (AT_CLOSED, which already satisfies STOP).
+        cover = _make_sb_cover(pulse_time=0.01)
+        cover._phase = Phase.AT_CLOSED
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode."
+            "DIRECTION_CHANGE_DELAY",
+            0.01,
+        ):
+            await cover._send_open()
+            await asyncio.sleep(0)  # let the open press reach its pulse sleep
+            assert len(_presses(cover)) == 1
+            assert cover._press_task is not None
+            assert not cover._press_task.done()
+
+            await cover._send_stop()
+            await _drain(cover)
+
+        # A real stop press was issued: turn_on/turn_off for the open press,
+        # a cleanup turn_off for the interrupted press, then a genuine
+        # turn_on/turn_off pair for the stop press -- never two turn_on
+        # calls back to back.
+        assert cover.hass.services.async_call.call_args_list == [
+            call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False),
+            call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False),
+            call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False),
+            call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False),
+        ]
+        assert cover._phase is Phase.STOPPED_AFTER_UP
+
+    @pytest.mark.asyncio
+    async def test_close_mid_press_does_not_merge_with_the_open_nudge(self):
+        # STOPPED_AFTER_UP -> open is the 3-press nudge; interrupt while the
+        # first press is still mid-pulse (button ON) with a close. The
+        # replacement must never turn_on onto an already-ON relay.
+        cover = _make_sb_cover(pulse_time=0.01)
+        cover._phase = Phase.STOPPED_AFTER_UP
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode."
+            "DIRECTION_CHANGE_DELAY",
+            0.01,
+        ):
+            await cover._send_open()
+            await asyncio.sleep(0)  # let the first nudge press reach its pulse sleep
+            assert len(_presses(cover)) == 1
+            assert cover._press_task is not None
+            assert not cover._press_task.done()
+
+            await cover._send_close()
+            await _drain(cover)
+
+        assert _no_adjacent_turn_on(cover)
 
 
 class TestEndpointReanchor:
