@@ -89,3 +89,111 @@ async def test_pulse_button_turns_on_then_off():
         call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False),
         call("homeassistant", "turn_off", {"entity_id": "switch.button"}, False),
     ]
+
+
+def _presses(cover):
+    """Count turn_on calls on the button (one per press)."""
+    return [
+        c
+        for c in cover.hass.services.async_call.call_args_list
+        if c == call("homeassistant", "turn_on", {"entity_id": "switch.button"}, False)
+    ]
+
+
+class TestSendCommands:
+    @pytest.mark.asyncio
+    async def test_open_from_closed_is_one_press_moving_up(self):
+        cover = _make_sb_cover()
+        cover._phase = Phase.AT_CLOSED
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_open()
+            await _drain(cover)
+        assert len(_presses(cover)) == 1
+        assert cover._phase is Phase.MOVING_UP
+
+    @pytest.mark.asyncio
+    async def test_open_from_stopped_after_up_is_three_press_nudge(self):
+        cover = _make_sb_cover()
+        cover._phase = Phase.STOPPED_AFTER_UP
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_open()
+            await _drain(cover)
+        assert len(_presses(cover)) == 3
+        assert cover._phase is Phase.MOVING_UP
+
+    @pytest.mark.asyncio
+    async def test_open_when_already_moving_up_is_noop(self):
+        cover = _make_sb_cover()
+        cover._phase = Phase.MOVING_UP
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_open()
+            await _drain(cover)
+        assert len(_presses(cover)) == 0
+        assert cover._phase is Phase.MOVING_UP
+
+    @pytest.mark.asyncio
+    async def test_stop_while_moving_up_is_one_press_stopped_after_up(self):
+        cover = _make_sb_cover()
+        cover._phase = Phase.MOVING_UP
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_stop()
+            await _drain(cover)
+        assert len(_presses(cover)) == 1
+        assert cover._phase is Phase.STOPPED_AFTER_UP
+
+    @pytest.mark.asyncio
+    async def test_close_from_open_is_one_press_moving_down(self):
+        cover = _make_sb_cover()
+        cover._phase = Phase.AT_OPEN
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_close()
+            await _drain(cover)
+        assert len(_presses(cover)) == 1
+        assert cover._phase is Phase.MOVING_DOWN
+
+    @pytest.mark.asyncio
+    async def test_uses_direction_change_delay_between_presses(self):
+        # pulse_time deliberately != DIRECTION_CHANGE_DELAY (1.0) so the
+        # inter-press gaps are distinguishable from the pulse-off sleeps.
+        cover = _make_sb_cover(pulse_time=0.3)
+        cover._phase = Phase.STOPPED_AFTER_UP  # 3-press nudge
+        gaps = []
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new=AsyncMock(side_effect=lambda d: gaps.append(d)),
+        ):
+            await cover._send_open()
+            await _drain(cover)
+        # Two inter-press gaps of DIRECTION_CHANGE_DELAY; three pulse-off
+        # sleeps of pulse_time (0.3).
+        from custom_components.cover_time_based.const import DIRECTION_CHANGE_DELAY
+
+        assert gaps.count(DIRECTION_CHANGE_DELAY) == 2
+        assert gaps.count(0.3) == 3
+
+    @pytest.mark.asyncio
+    async def test_raw_open_command_presses_the_button(self):
+        cover = _make_sb_cover()
+        cover._phase = Phase.AT_CLOSED
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._raw_direction_command("open")
+            await _drain(cover)
+        assert len(_presses(cover)) == 1

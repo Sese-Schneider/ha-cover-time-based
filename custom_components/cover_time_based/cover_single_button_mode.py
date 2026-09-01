@@ -75,16 +75,43 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             if self._pulse_tasks.get(entity_id) is asyncio.current_task():
                 self._pulse_tasks.pop(entity_id, None)
 
-    # --- temporary stubs -------------------------------------------------
-    # These satisfy CoverTimeBased's abstract interface so this class is
-    # concrete and instantiable. Task 5 replaces these with the phase-aware
-    # press sequencer that translates open/close/stop requests into the
-    # planned button presses (via single_button_cycle.plan).
+    # --- press sequencing ---------------------------------------------
+    def _start_press_sequence(self, action: Action) -> None:
+        phases = plan(self._phase, action)
+        if not phases:
+            return
+        if self._press_task is not None and not self._press_task.done():
+            self._press_task.cancel()
+        self._press_task = self.hass.async_create_task(self._run_press_sequence(phases))
+
+    async def _run_press_sequence(self, phases: list[Phase]) -> None:
+        """Pulse once per planned phase, gap-spaced, updating phase each time."""
+        try:
+            for index, phase in enumerate(phases):
+                if index:
+                    await sleep(DIRECTION_CHANGE_DELAY)
+                await self._pulse_button()
+                self._phase = phase
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if self._press_task is asyncio.current_task():
+                self._press_task = None
+
+    def _cancel_settle(self) -> None:
+        if self._settle_task is not None and not self._settle_task.done():
+            self._settle_task.cancel()
+        self._settle_task = None
+
+    # --- the mode contract --------------------------------------------
     async def _send_open(self) -> None:
-        raise NotImplementedError
+        self._cancel_settle()
+        self._start_press_sequence(Action.OPEN)
 
     async def _send_close(self) -> None:
-        raise NotImplementedError
+        self._cancel_settle()
+        self._start_press_sequence(Action.CLOSE)
 
     async def _send_stop(self) -> None:
-        raise NotImplementedError
+        self._cancel_settle()
+        self._start_press_sequence(Action.STOP)
