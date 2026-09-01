@@ -311,9 +311,14 @@ script entity that drives it as the **Button**. Each press advances a fixed
 cycle, and the motor remembers where it is in that cycle and stops itself at
 its physical limits:
 
-> at closed limit → **press** → moving up → **press** → stop → **press** →
-> moving down (reversal) → open limit → **press** → moving down → **press** →
-> stop → **press** → moving up (reversal) → …
+| The motor is currently... | The next press... |
+| --- | --- |
+| at the closed limit | starts moving up |
+| moving up | stops it |
+| stopped mid-travel, having last moved up | reverses it, starts moving down |
+| at the open limit | starts moving down |
+| moving down | stops it |
+| stopped mid-travel, having last moved down | reverses it, starts moving up |
 
 This suits motors with an external "impulse" or "button" input rather than
 independent open/close relays — for example a **Jarolift TDEF** shutter driven
