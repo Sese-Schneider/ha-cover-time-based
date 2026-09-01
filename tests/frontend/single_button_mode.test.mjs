@@ -168,6 +168,19 @@ test("_hasRequiredEntities single_button: requires only open_switch_entity_id", 
   ).toBe(true);
 });
 
+test("_hasRequiredEntities single_button ignores a stale dual_motor tilt_mode (hand-edited entry) as long as the button is set", async () => {
+  card = await mountCard(makeHass());
+  expect(
+    card._hasRequiredEntities({
+      control_mode: "single_button",
+      open_switch_entity_id: "switch.button",
+      tilt_mode: "dual_motor",
+      // No tilt_open_switch/tilt_close_switch — would fail the dual_motor
+      // check for every other non-wrapped mode.
+    }),
+  ).toBe(true);
+});
+
 test("calibration tab is enabled for single_button once the button entity is set", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",

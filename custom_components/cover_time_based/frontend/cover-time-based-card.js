@@ -453,8 +453,16 @@ class CoverTimeBasedCard extends LitElement {
     } else {
       if (!c.open_switch_entity_id || !c.close_switch_entity_id) return false;
     }
-    // Dual motor tilt requires tilt entities to be complete
-    if (c.tilt_mode === "dual_motor" && c.control_mode !== "wrapped") {
+    // Dual motor tilt requires tilt entities to be complete. Single-button
+    // mode has no tilt support at all (forced tilt_strategy=None on the
+    // backend regardless of a stored tilt_mode), so a stale/hand-edited
+    // dual_motor tilt_mode there must not gate the calibration tab on tilt
+    // switches the card no longer even shows a way to set.
+    if (
+      c.tilt_mode === "dual_motor" &&
+      c.control_mode !== "wrapped" &&
+      c.control_mode !== "single_button"
+    ) {
       if (!c.tilt_open_switch || !c.tilt_close_switch) return false;
       if (c.control_mode === "pulse" && !c.tilt_stop_switch) return false;
     }
