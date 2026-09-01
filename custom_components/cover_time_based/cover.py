@@ -106,6 +106,7 @@ CONTROL_MODE_SWITCH = "switch"
 CONTROL_MODE_PULSE = "pulse"
 CONTROL_MODE_TOGGLE = "toggle"
 CONTROL_MODE_TOGGLE_OPPOSITE = "toggle_opposite"
+CONTROL_MODE_SINGLE_BUTTON = "single_button"
 
 # Explicit YAML override for control_mode, read by _resolve_control_mode().
 # "wrapped" is excluded: that mode is resolved earlier from cover_entity_id
@@ -116,6 +117,7 @@ INPUT_MODE_VALUES = [
     CONTROL_MODE_PULSE,
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_TOGGLE_OPPOSITE,
+    CONTROL_MODE_SINGLE_BUTTON,
 ]
 
 CONF_PULSE_TIME = "pulse_time"
@@ -334,6 +336,7 @@ def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwa
 def _create_cover_from_options(options, device_id="", name=""):
     """Create the appropriate cover subclass based on options."""
     from .cover_pulse_mode import PulseModeCover
+    from .cover_single_button_mode import SingleButtonModeCover
     from .cover_switch_mode import SwitchModeCover
     from .cover_toggle_mode import ToggleModeCover
     from .cover_toggle_opposite_mode import ToggleOppositeModeCover
@@ -438,6 +441,10 @@ def _create_cover_from_options(options, device_id="", name=""):
             ),
             **switch_args,
         )
+    elif control_mode == CONTROL_MODE_SINGLE_BUTTON:
+        sb_args = dict(switch_args)
+        sb_args["tilt_strategy"] = None  # tilt unsupported in this mode
+        return SingleButtonModeCover(pulse_time=pulse_time, **sb_args)
     else:
         return SwitchModeCover(**switch_args)
 
