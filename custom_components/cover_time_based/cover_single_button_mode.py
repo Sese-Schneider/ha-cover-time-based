@@ -115,3 +115,27 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
     async def _send_stop(self) -> None:
         self._cancel_settle()
         self._start_press_sequence(Action.STOP)
+
+    # --- endpoint re-anchor -------------------------------------------
+    def _on_endpoint_reached(self, endpoint: int) -> None:
+        target = Phase.AT_OPEN if endpoint == 100 else Phase.AT_CLOSED
+        margin = self._endpoint_runon_time
+        if not margin or margin <= 0:
+            self._phase = target
+            return
+        # Keep the moving phase for a settle margin so a re-press during the
+        # motor's final run predicts STOP, not a reversal; then anchor.
+        self._cancel_settle()
+        self._settle_task = self.hass.async_create_task(
+            self._settle_endpoint(margin, target)
+        )
+
+    async def _settle_endpoint(self, margin, target) -> None:
+        try:
+            await sleep(margin)
+            self._phase = target
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if self._settle_task is asyncio.current_task():
+                self._settle_task = None

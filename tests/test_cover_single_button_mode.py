@@ -197,3 +197,34 @@ class TestSendCommands:
             await cover._raw_direction_command("open")
             await _drain(cover)
         assert len(_presses(cover)) == 1
+
+
+class TestEndpointReanchor:
+    def test_immediate_anchor_when_no_runon(self):
+        cover = _make_sb_cover()
+        cover._endpoint_runon_time = None
+        cover._phase = Phase.MOVING_UP
+        cover._on_endpoint_reached(100)
+        assert cover._phase is Phase.AT_OPEN
+
+    def test_immediate_anchor_closed(self):
+        cover = _make_sb_cover()
+        cover._endpoint_runon_time = 0
+        cover._phase = Phase.MOVING_DOWN
+        cover._on_endpoint_reached(0)
+        assert cover._phase is Phase.AT_CLOSED
+
+    @pytest.mark.asyncio
+    async def test_settle_margin_defers_anchor(self):
+        cover = _make_sb_cover()
+        cover._endpoint_runon_time = 2.0
+        cover._phase = Phase.MOVING_UP
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            cover._on_endpoint_reached(100)
+            # Phase still moving until the margin elapses.
+            assert cover._phase is Phase.MOVING_UP
+            await _drain(cover)
+        assert cover._phase is Phase.AT_OPEN
