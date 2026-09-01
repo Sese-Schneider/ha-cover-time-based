@@ -1,0 +1,90 @@
+"""Single-button control mode (down/stop/up/stop).
+
+One button; each press advances the motor's cycle. We track the phase by dead
+reckoning (no feedback) and translate open/close/stop into the press sequence
+the planner returns, spaced by the fixed DIRECTION_CHANGE_DELAY. Full
+open/close run to the physical limit and re-anchor position; a wrong phase is
+not self-healing (see the design spec) -- the resync service corrects it.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from asyncio import sleep
+
+from .const import DIRECTION_CHANGE_DELAY
+from .cover_switch import SwitchCoverTimeBased
+from .single_button_cycle import Action, Phase, plan
+
+
+class SingleButtonModeCover(SwitchCoverTimeBased):
+    """A cover driven by a single cycling button."""
+
+    supports_tilt = False
+
+    def __init__(self, pulse_time, **kwargs):
+        super().__init__(**kwargs)
+        self._pulse_time = pulse_time
+        self._phase = Phase.AT_CLOSED
+        self._press_task: asyncio.Task | None = None
+        self._settle_task: asyncio.Task | None = None
+        self._pulse_tasks: dict[str, asyncio.Task] = {}
+
+    # --- configuration -------------------------------------------------
+    def _are_entities_configured(self) -> bool:
+        """One button is enough for this mode."""
+        return bool(self._open_switch_entity_id)
+
+    def _get_missing_configuration(self) -> list[str]:
+        missing = []
+        if not self._are_entities_configured():
+            missing.append("button entity")
+        if self._travel_time_close is None and self._travel_time_open is None:
+            missing.append("travel times")
+        return missing
+
+    # --- capabilities --------------------------------------------------
+    def _self_stops_at_endpoints(self) -> bool:
+        return True
+
+    async def _handle_external_state_change(self, entity_id, old_state, new_state):
+        # The button is an output we drive; its state changes are our own
+        # echoes, and this mode has no feedback to read. Ignore them.
+        self._log("single_button :: ignoring external state change on %s", entity_id)
+
+    # --- pressing the button ------------------------------------------
+    async def _pulse_button(self) -> None:
+        """Momentarily energise the button line (ON now, OFF in background)."""
+        entity_id = self._open_switch_entity_id
+        await self.hass.services.async_call(
+            "homeassistant", "turn_on", {"entity_id": entity_id}, False
+        )
+        self._pulse_tasks[entity_id] = self.hass.async_create_task(
+            self._complete_pulse(entity_id)
+        )
+
+    async def _complete_pulse(self, entity_id) -> None:
+        try:
+            await sleep(self._pulse_time)
+            await self.hass.services.async_call(
+                "homeassistant", "turn_off", {"entity_id": entity_id}, False
+            )
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if self._pulse_tasks.get(entity_id) is asyncio.current_task():
+                self._pulse_tasks.pop(entity_id, None)
+
+    # --- temporary stubs -------------------------------------------------
+    # These satisfy CoverTimeBased's abstract interface so this class is
+    # concrete and instantiable. Task 5 replaces these with the phase-aware
+    # press sequencer that translates open/close/stop requests into the
+    # planned button presses (via single_button_cycle.plan).
+    async def _send_open(self) -> None:
+        raise NotImplementedError
+
+    async def _send_close(self) -> None:
+        raise NotImplementedError
+
+    async def _send_stop(self) -> None:
+        raise NotImplementedError
