@@ -30,8 +30,13 @@ def test_factory_builds_single_button_cover():
 
 
 def test_factory_forces_tilt_off():
+    # tilt_time_close/open must be present: _resolve_tilt_strategy short-
+    # circuits to None whenever either is missing (cover.py), which would
+    # make _tilt_strategy is None true for any mode and defeat this guard.
     cover = _create_cover_from_options(
-        _base_options(tilt_mode="inline"), device_id="sb", name="SB"
+        _base_options(tilt_mode="inline", tilt_time_close=5, tilt_time_open=5),
+        device_id="sb",
+        name="SB",
     )
     assert cover._tilt_strategy is None
     assert cover._has_tilt_support() is False
