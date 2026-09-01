@@ -280,7 +280,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Write the current travel/tilt position to the position store."""
         if self._config_entry_id is None:
             return
-        data: dict[str, int] = {}
+        data: dict[str, int | str] = {}
         position = self.travel_calc.current_position()
         if position is not None:
             data["position"] = int(position)
@@ -328,11 +328,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
 
     async def _cancel_background_pulses(self) -> None:
-        """Cancel any background relay-pulse completions on removal.
+        """Cancel any background relay-pulse / press-sequence work on removal.
 
         No-op in the base class. Pulse mode overrides this to cancel its
         in-flight ``_complete_pulse`` tasks and turn the affected relays off,
-        so a relay caught mid-pulse is not left latched ON.
+        so a relay caught mid-pulse is not left latched ON. Single-button
+        mode overrides it similarly, additionally cancelling an in-flight
+        press sequence and endpoint settle margin so the OLD entity does not
+        keep pressing the physical button after a reload.
         """
         return
 
@@ -1486,7 +1489,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         feedback and tracks phase by dead reckoning; see
         SingleButtonModeCover.async_resync for the real implementation.
         """
-        raise NotImplementedError(
+        raise HomeAssistantError(
             "resync is only supported in single_button control mode"
         )
 

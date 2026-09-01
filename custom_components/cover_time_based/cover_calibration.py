@@ -29,6 +29,7 @@ class CalibrationMixin:
 
     if TYPE_CHECKING:
         hass: HomeAssistant
+        supports_tilt: bool
         _calibration: CalibrationState | None
         _tilt_strategy: Any
         _tilt_mode_str: str | None
@@ -138,6 +139,12 @@ class CalibrationMixin:
         return SERVICE_CLOSE_COVER
 
     def _calibration_uses_tilt_motor(self, attribute: str) -> bool:
+        if not self.supports_tilt:
+            # A control mode that structurally has no tilt (single_button:
+            # one button, no direction to choose) must never route
+            # calibration to a tilt motor, even under a raw-YAML/API
+            # misconfig (tilt_mode: dual_motor + tilt switches wired up).
+            return False
         if not attribute.startswith("tilt_"):
             return False
         if self._tilt_strategy is not None:

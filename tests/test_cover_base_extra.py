@@ -1308,7 +1308,9 @@ class TestResyncNotSupportedOutsideSingleButton:
     tests/test_cover_single_button_mode.py::TestResync)."""
 
     @pytest.mark.asyncio
-    async def test_switch_mode_resync_raises_not_implemented(self, make_cover):
+    async def test_switch_mode_resync_raises_home_assistant_error(self, make_cover):
+        from homeassistant.exceptions import HomeAssistantError
+
         cover = make_cover()  # CONTROL_MODE_SWITCH by default
-        with pytest.raises(NotImplementedError, match="single_button"):
+        with pytest.raises(HomeAssistantError, match="single_button"):
             await cover.async_resync("closed")

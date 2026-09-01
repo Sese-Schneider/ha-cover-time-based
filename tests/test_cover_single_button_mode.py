@@ -279,3 +279,67 @@ class TestResync:
         cover = _make_sb_cover()
         with pytest.raises(ValueError):
             await cover.async_resync("halfway")
+
+
+class TestRemovalCancelsBackgroundWork:
+    """A config-entry reload (every card save) can land mid-sequence: the
+    press sequence's inter-press gap, the settle margin after an endpoint,
+    or a single pulse's own completion may all be in flight. Left alone the
+    OLD entity keeps pressing the physical button after the new one takes
+    over -- real motor desync. Removal must cancel everything in flight and
+    leave the button relay OFF, mirroring
+    PulseModeCover._cancel_background_pulses (cover_pulse_mode.py)."""
+
+    @pytest.mark.asyncio
+    async def test_removal_cancels_in_flight_press_sequence_and_turns_button_off(
+        self,
+    ):
+        cover = _make_sb_cover()
+        cover._phase = Phase.STOPPED_AFTER_UP  # 3-press nudge: a multi-step sequence
+
+        # Deliberately do NOT patch `sleep`: the real DIRECTION_CHANGE_DELAY
+        # wait between presses gives the task a genuine suspend point, so we
+        # can observe it paused mid-sequence (one press issued, the next
+        # still pending) without waiting out the real delay.
+        await cover._send_open()
+        await asyncio.sleep(0)
+
+        assert len(_presses(cover)) == 1
+        assert cover._press_task is not None
+        assert not cover._press_task.done()
+        assert cover._pulse_tasks  # first pulse's completion still in flight
+
+        await cover.async_will_remove_from_hass()
+
+        assert cover._press_task is None
+        assert cover._settle_task is None
+        assert cover._pulse_tasks == {}
+        # No further presses were issued once removal started.
+        assert len(_presses(cover)) == 1
+        # The button relay ends OFF, not left latched from the in-flight pulse.
+        cover.hass.services.async_call.assert_any_call(
+            "homeassistant", "turn_off", {"entity_id": "switch.button"}, False
+        )
+
+    @pytest.mark.asyncio
+    async def test_removal_cancels_in_flight_settle_task(self):
+        cover = _make_sb_cover()
+        cover._endpoint_runon_time = 2.0
+        cover._phase = Phase.MOVING_UP
+
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            # The settle task is created but not yet drained/awaited here, so
+            # it is still in flight when removal happens.
+            cover._on_endpoint_reached(100)
+            assert cover._settle_task is not None
+            assert not cover._settle_task.done()
+
+            await cover.async_will_remove_from_hass()
+
+            assert cover._settle_task is None
+            # The phase must not have been silently anchored by a settle task
+            # that kept running after removal.
+            assert cover._phase is Phase.MOVING_UP

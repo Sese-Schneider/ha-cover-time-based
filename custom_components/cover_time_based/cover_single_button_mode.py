@@ -103,6 +103,37 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             self._settle_task.cancel()
         self._settle_task = None
 
+    # --- removal / reload -----------------------------------------------
+    async def _cancel_background_pulses(self) -> None:
+        """On removal, stop pressing and leave the button relay OFF.
+
+        A config-entry reload (every card save) can land mid-sequence: the
+        press sequence's inter-press gap, the settle margin after an
+        endpoint, or a single pulse's own completion may all be in flight.
+        Left alone, the OLD entity would keep issuing presses against the
+        physical button after the new entity takes over -- real motor
+        desync. Mirrors PulseModeCover._cancel_background_pulses
+        (cover_pulse_mode.py): cancel every in-flight task, then
+        unconditionally turn the button off so a pulse caught mid-flight is
+        not left latched ON.
+        """
+        if self._press_task is not None and not self._press_task.done():
+            self._press_task.cancel()
+        self._press_task = None
+        self._cancel_settle()
+        pending = list(self._pulse_tasks.values())
+        self._pulse_tasks.clear()
+        for task in pending:
+            if not task.done():
+                task.cancel()
+        if self._open_switch_entity_id:
+            await self.hass.services.async_call(
+                "homeassistant",
+                "turn_off",
+                {"entity_id": self._open_switch_entity_id},
+                False,
+            )
+
     # --- the mode contract --------------------------------------------
     async def _send_open(self) -> None:
         self._cancel_settle()
