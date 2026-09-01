@@ -359,9 +359,12 @@ described next.
 - **A full open or full close re-anchors position, but only when the tracked
   phase already matched reality.** Driving all the way to a limit is the one
   operation that corrects accumulated _timing_ drift, because the tracker
-  snaps position to the endpoint once the motor has had time to reach it. It
-  cannot correct a _wrong phase_, though: it snaps to the endpoint it
-  _believes_ it was driving toward, not the one physically reached.
+  snaps position to the endpoint once the motor has had time to reach it — how
+  long it waits past the estimated arrival before doing so is the
+  [Endpoint run-on time](#endpoint-run-on-time), reused here as a settle
+  margin rather than a relay hold. It cannot correct a _wrong phase_, though:
+  it snaps to the endpoint it _believes_ it was driving toward, not the one
+  physically reached.
 - **A wrong phase inverts positions, and does not self-heal.** If the tracked
   phase is wrong — say the integration believes the cover is closed when it is
   physically open — every following command is mis-planned: an "open" command
@@ -552,6 +555,13 @@ applies in Switch mode, and in Pulse mode when
 [Send stop signal at endpoints](#send-stop-signal-at-endpoints) is on, where it
 delays the stop pulse by the same amount. You type it in on the Calibration tab;
 it is not one of the measured timings.
+
+[Single button](#controlling-a-cover-with-a-single-button) mode reuses the same
+value differently: there is no relay to hold, since the motor self-stops, so
+this becomes the **settle margin** — how long the integration keeps treating
+the motor as still travelling past its estimated arrival time before it locks
+in the endpoint, snapping the tracked position to 0 or 100 and marking the
+phase settled. It is a wait, not a relay hold.
 
 ### Minimum movement time
 
