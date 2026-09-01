@@ -2,11 +2,12 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
+from homeassistant.components.cover import CoverEntityFeature
 
 from custom_components.cover_time_based.cover_single_button_mode import (
     SingleButtonModeCover,
 )
-from custom_components.cover_time_based.single_button_cycle import Action, Phase
+from custom_components.cover_time_based.single_button_cycle import Phase
 
 
 def _make_sb_cover(button="switch.button", pulse_time=1.0, travel=30):
@@ -51,6 +52,27 @@ async def _drain(cover):
 
 def test_supports_tilt_false():
     assert SingleButtonModeCover.supports_tilt is False
+
+
+def test_tilt_absent_from_supported_features_even_if_tilt_strategy_present():
+    # supports_tilt=False alone must gate the tilt bits out of
+    # supported_features. _make_sb_cover() already passes tilt_strategy=None,
+    # which would suppress tilt independently of the flag (via
+    # _has_tilt_support()'s `_tilt_strategy is not None` check) and so isn't a
+    # real test of the flag itself. Force a tilt_strategy + tilt_calc onto
+    # the instance -- as if tilt were somehow configured -- to prove
+    # supports_tilt=False is still what blocks it.
+    cover = _make_sb_cover()
+    cover._tilt_strategy = object()
+    cover.tilt_calc = object()
+    tilt_bits = (
+        CoverEntityFeature.OPEN_TILT
+        | CoverEntityFeature.CLOSE_TILT
+        | CoverEntityFeature.STOP_TILT
+        | CoverEntityFeature.SET_TILT_POSITION
+    )
+    assert cover.supported_features & tilt_bits == 0
+    assert cover.supported_features & CoverEntityFeature.SET_POSITION
 
 
 def test_only_button_required():

@@ -11,10 +11,10 @@ unit-tested in isolation -- that is where the subtle bugs live.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class Phase(str, Enum):
+class Phase(StrEnum):
     """The motor's position in the down/stop/up/stop cycle, as we track it."""
 
     AT_CLOSED = "at_closed"
@@ -25,7 +25,7 @@ class Phase(str, Enum):
     STOPPED_AFTER_DOWN = "stopped_after_down"
 
 
-class Action(str, Enum):
+class Action(StrEnum):
     """A requested cover action to plan presses for."""
 
     OPEN = "open"
