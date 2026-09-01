@@ -2813,6 +2813,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
+            if endpoint_applies:
+                self._on_endpoint_reached(int(current_travel))
             self._last_command = None
             self._moving_tilt_motor = False
             self._moving_tilt = False
@@ -2908,6 +2910,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         so they keep this no-op. Switch mode latches its direction relay ON for
         the whole travel, so it overrides this to turn the relay off (only if
         still on); otherwise the relay stays energized at the endpoint forever.
+        """
+        return
+
+    def _on_endpoint_reached(self, endpoint: int) -> None:
+        """Hook: a self-initiated travel move terminated at 0 or 100.
+
+        Base is a no-op. Overridden by modes that must re-anchor internal
+        state at a physical limit (e.g. single-button phase tracking).
         """
         return
 
