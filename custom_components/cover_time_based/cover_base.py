@@ -111,6 +111,10 @@ class RecalibrationPlan(Enum):
 class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     """Time-based cover with position tracking."""
 
+    # Whether this control mode can drive tilt at all. A single-button cover
+    # cannot choose a direction, so it sets this False (see the design spec).
+    supports_tilt = True
+
     def __init__(
         self,
         device_id,
@@ -2475,7 +2479,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     def _has_tilt_support(self):
         """Return if cover has tilt support."""
-        return self._tilt_strategy is not None and hasattr(self, "tilt_calc")
+        return (
+            self.supports_tilt
+            and self._tilt_strategy is not None
+            and hasattr(self, "tilt_calc")
+        )
 
     # -----------------------------------------------------------------------
     # Movement tracking
