@@ -76,6 +76,16 @@
           "description": "Wenn wahr, werden die Testergebnisse verworfen und nicht gespeichert"
         }
       }
+    },
+    "resync": {
+      "name": "Resynchronisieren",
+      "description": "Verankert die verfolgte Position eines Einzeltasten-Rollladens neu, nachdem der physische Taster oder die Funkfernbedienung verwendet wurde. Teilt der Integration den tatsächlichen Zustand des Rollladens mit.",
+      "fields": {
+        "state": {
+          "name": "Zustand",
+          "description": "Der tatsächliche aktuelle Zustand des Rollladens."
+        }
+      }
     }
   }
 }

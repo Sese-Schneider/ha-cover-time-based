@@ -76,6 +76,16 @@
           "description": "Si és cert, descarta els resultats de la prova sense desar-los"
         }
       }
+    },
+    "resync": {
+      "name": "Resincronitza",
+      "description": "Torna a ancorar la posició rastrejada d'una persiana d'un sol botó després que s'hagi utilitzat el botó físic o el comandament RF. Indica a la integració l'estat real de la persiana.",
+      "fields": {
+        "state": {
+          "name": "Estat",
+          "description": "L'estat real actual de la persiana."
+        }
+      }
     }
   }
 }

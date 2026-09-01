@@ -129,6 +129,7 @@ export function renderConfigSections(card) {
             ${renderControlMode(card, c)} ${renderInputEntities(card, c)}
             ${renderTiltSupport(card, c)}
             ${renderTiltMotorSection(card, c)}
+            ${c.control_mode === "single_button" ? renderResyncControl(card) : ""}
           </fieldset>
         `
         : calibrating
@@ -193,6 +194,9 @@ export function renderControlMode(card, c) {
         </option>
         <option value="toggle_opposite" ?selected=${mode === "toggle_opposite"}>
           ${card._t("control_mode.toggle_opposite")}
+        </option>
+        <option value="single_button" ?selected=${mode === "single_button"}>
+          ${card._t("control_mode.single_button")}
         </option>
       </select>
       ${
@@ -389,17 +393,31 @@ export function renderInputEntities(card, c) {
     `;
   }
 
+  const isSingleButton = c.control_mode === "single_button";
+
   return html`
     <div class="section">
-      <div class="field-label">${card._switchLabel("entities.switch_entities", c.control_mode)}</div>
+      <div class="field-label">${
+        isSingleButton
+          ? card._t("entities.button")
+          : card._switchLabel("entities.switch_entities", c.control_mode)
+      }</div>
       <div class="entity-grid">
         <ha-entity-picker
           .hass=${card.hass}
           .value=${c.open_switch_entity_id || ""}
           .includeDomains=${switchPickerDomains(c.control_mode)}
-          label=${card._switchLabel("entities.open_switch", c.control_mode)}
+          label=${
+            isSingleButton
+              ? card._t("entities.button")
+              : card._switchLabel("entities.open_switch", c.control_mode)
+          }
           @value-changed=${(e) => card._onSwitchEntityChange("open_switch_entity_id", e)}
         ></ha-entity-picker>
+        ${
+          isSingleButton
+            ? ""
+            : html`
         <ha-entity-picker
           .hass=${card.hass}
           .value=${c.close_switch_entity_id || ""}
@@ -407,6 +425,8 @@ export function renderInputEntities(card, c) {
           label=${card._switchLabel("entities.close_switch", c.control_mode)}
           @value-changed=${(e) => card._onSwitchEntityChange("close_switch_entity_id", e)}
         ></ha-entity-picker>
+        `
+        }
         ${
           c.control_mode === "pulse"
             ? html`
@@ -484,7 +504,28 @@ export function renderInputEntities(card, c) {
   `;
 }
 
+// Single-button mode has no feedback and cannot self-heal a wrong tracked
+// phase (see the design spec) — this lets the user declare the cover's true
+// state after the physical button or an RF remote moved it outside HA.
+export function renderResyncControl(card) {
+  return html`
+    <div class="section">
+      <div class="field-label">${card._t("resync.label")}</div>
+      <div class="helper-text">${card._t("resync.helper")}</div>
+      <div class="button-row">
+        <ha-button @click=${() => card._onResync("closed")}>${card._t("position.closed")}</ha-button>
+        <ha-button @click=${() => card._onResync("open")}>${card._t("position.open")}</ha-button>
+      </div>
+    </div>
+  `;
+}
+
 export function renderTiltSupport(card, c) {
+  // Single-button mode drives one cycling button and has no tilt support at
+  // all (backend supports_tilt=False), unlike every other mode where tilt is
+  // merely optional — so the whole section is hidden, not just dual_motor.
+  if (c.control_mode === "single_button") return "";
+
   const tiltMode = c.tilt_mode || "none";
 
   // Dual-motor tilt on a wrapped cover delegates the tilt commands to the
@@ -545,7 +586,9 @@ export function renderTiltSupport(card, c) {
 }
 
 export function renderTiltMotorSection(card, c) {
-  if (c.tilt_mode !== "dual_motor") return "";
+  // Belt-and-braces: single-button mode has no tilt support at all, even if a
+  // stale dual_motor tilt_mode somehow survives (e.g. a hand-edited entry).
+  if (c.control_mode === "single_button" || c.tilt_mode !== "dual_motor") return "";
 
   return html`
     <div class="section">

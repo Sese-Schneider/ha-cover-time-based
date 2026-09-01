@@ -76,6 +76,16 @@
           "description": "Ako je tačno, odbacuje rezultate testa bez čuvanja"
         }
       }
+    },
+    "resync": {
+      "name": "Resinhronizuj",
+      "description": "Ponovo usidruje praćenu poziciju roletne sa jednim dugmetom nakon što je korišćeno fizičko dugme ili RF daljinski upravljač. Obaveštava integraciju o stvarnom stanju roletne.",
+      "fields": {
+        "state": {
+          "name": "Stanje",
+          "description": "Stvarno trenutno stanje roletne."
+        }
+      }
     }
   }
 }

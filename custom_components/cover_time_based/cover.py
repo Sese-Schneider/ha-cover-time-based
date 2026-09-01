@@ -106,6 +106,7 @@ CONTROL_MODE_SWITCH = "switch"
 CONTROL_MODE_PULSE = "pulse"
 CONTROL_MODE_TOGGLE = "toggle"
 CONTROL_MODE_TOGGLE_OPPOSITE = "toggle_opposite"
+CONTROL_MODE_SINGLE_BUTTON = "single_button"
 
 # Explicit YAML override for control_mode, read by _resolve_control_mode().
 # "wrapped" is excluded: that mode is resolved earlier from cover_entity_id
@@ -116,6 +117,7 @@ INPUT_MODE_VALUES = [
     CONTROL_MODE_PULSE,
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_TOGGLE_OPPOSITE,
+    CONTROL_MODE_SINGLE_BUTTON,
 ]
 
 CONF_PULSE_TIME = "pulse_time"
@@ -123,6 +125,7 @@ DEFAULT_PULSE_TIME = 1.0
 
 SERVICE_SET_KNOWN_POSITION = "set_known_position"
 SERVICE_SET_KNOWN_TILT_POSITION = "set_known_tilt_position"
+SERVICE_RESYNC = "resync"
 
 # ---------------------------------------------------------------------------
 # Schema definitions
@@ -227,6 +230,7 @@ TILT_POSITION_SCHEMA = cv.make_entity_service_schema(
         vol.Required(ATTR_TILT_POSITION): cv.positive_int,
     }
 )
+RESYNC_SCHEMA = {vol.Required("state"): vol.In(["closed", "open"])}
 
 # ---------------------------------------------------------------------------
 # YAML migration helpers
@@ -332,6 +336,7 @@ def _resolve_tilt_strategy(tilt_mode_str, tilt_time_close, tilt_time_open, **kwa
 def _create_cover_from_options(options, device_id="", name=""):
     """Create the appropriate cover subclass based on options."""
     from .cover_pulse_mode import PulseModeCover
+    from .cover_single_button_mode import SingleButtonModeCover
     from .cover_switch_mode import SwitchModeCover
     from .cover_toggle_mode import ToggleModeCover
     from .cover_toggle_opposite_mode import ToggleOppositeModeCover
@@ -436,6 +441,10 @@ def _create_cover_from_options(options, device_id="", name=""):
             ),
             **switch_args,
         )
+    elif control_mode == CONTROL_MODE_SINGLE_BUTTON:
+        sb_args = dict(switch_args)
+        sb_args["tilt_strategy"] = None  # tilt unsupported in this mode
+        return SingleButtonModeCover(pulse_time=pulse_time, **sb_args)
     else:
         return SwitchModeCover(**switch_args)
 
@@ -552,6 +561,9 @@ def _register_services(platform):
     )
     platform.async_register_entity_service(
         SERVICE_SET_KNOWN_TILT_POSITION, TILT_POSITION_SCHEMA, "set_known_tilt_position"
+    )
+    platform.async_register_entity_service(
+        SERVICE_RESYNC, RESYNC_SCHEMA, "async_resync"
     )
 
     hass = platform.hass

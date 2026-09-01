@@ -47,6 +47,7 @@ from .cover import (
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
     CONTROL_MODE_PULSE,
+    CONTROL_MODE_SINGLE_BUTTON,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_TOGGLE_OPPOSITE,
@@ -271,6 +272,7 @@ async def ws_get_config(
                 CONTROL_MODE_PULSE,
                 CONTROL_MODE_TOGGLE,
                 CONTROL_MODE_TOGGLE_OPPOSITE,
+                CONTROL_MODE_SINGLE_BUTTON,
             ]
         ),
         vol.Optional("pulse_time"): vol.Any(

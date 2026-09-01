@@ -77,6 +77,19 @@ test("switching to pulse only clears the wrapped cover slot", () => {
   });
 });
 
+// single_button reuses open_switch_entity_id as "the button" (kept), but has
+// no close switch, no stop switch, and no tilt motor at all.
+test("switching to single_button clears the cover, close switch, stop switches and tilt motor switches, keeping open_switch_entity_id", () => {
+  assert.deepEqual(clearedEntitiesForMode("single_button"), {
+    cover_entity_id: null,
+    stop_switch_entity_id: null,
+    tilt_stop_switch: null,
+    close_switch_entity_id: null,
+    tilt_open_switch: null,
+    tilt_close_switch: null,
+  });
+});
+
 test("clearedTiltConfig resets tilt mode and every tilt field", () => {
   // Used when tilt is set to "none", and when a context change (control mode
   // or wrapped cover entity) invalidates a dual_motor selection.

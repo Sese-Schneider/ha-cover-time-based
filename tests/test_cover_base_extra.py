@@ -1295,3 +1295,22 @@ def test_close_includes_tilt_can_be_disabled(make_cover):
     """The option can be set False via the make_cover fixture."""
     cover = make_cover(close_includes_tilt=False)
     assert cover._close_includes_tilt is False
+
+
+# ===================================================================
+# async_resync default (base class) — only single_button mode overrides it
+# ===================================================================
+
+
+class TestResyncNotSupportedOutsideSingleButton:
+    """The base class's async_resync must keep refusing non-single_button
+    covers; SingleButtonModeCover is the only mode that overrides it (see
+    tests/test_cover_single_button_mode.py::TestResync)."""
+
+    @pytest.mark.asyncio
+    async def test_switch_mode_resync_raises_home_assistant_error(self, make_cover):
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = make_cover()  # CONTROL_MODE_SWITCH by default
+        with pytest.raises(HomeAssistantError, match="single_button"):
+            await cover.async_resync("closed")

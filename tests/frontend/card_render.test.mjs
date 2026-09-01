@@ -331,7 +331,7 @@ test("entity info row shows the selectedEntity string", async () => {
 // _renderControlMode — four option values; pulse-time field
 // ---------------------------------------------------------------------------
 
-test("control mode select has five options: wrapped/switch/pulse/toggle/toggle_opposite", async () => {
+test("control mode select has six options: wrapped/switch/pulse/toggle/toggle_opposite/single_button", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: switchCfg(),
@@ -340,7 +340,14 @@ test("control mode select has five options: wrapped/switch/pulse/toggle/toggle_o
   const select = card.shadowRoot.querySelector("select.ha-select");
   expect(select).not.toBeNull();
   const values = [...select.options].map((o) => o.value);
-  expect(values).toEqual(["wrapped", "switch", "pulse", "toggle", "toggle_opposite"]);
+  expect(values).toEqual([
+    "wrapped",
+    "switch",
+    "pulse",
+    "toggle",
+    "toggle_opposite",
+    "single_button",
+  ]);
 });
 
 // Note: happy-dom does not sync the `selected` HTML attribute to the native

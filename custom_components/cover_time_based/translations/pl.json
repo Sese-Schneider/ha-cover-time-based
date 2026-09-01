@@ -76,6 +76,16 @@
           "description": "Jeśli prawda, odrzuć wyniki testu bez zapisywania"
         }
       }
+    },
+    "resync": {
+      "name": "Resynchronizuj",
+      "description": "Ponownie zakotwicza śledzoną pozycję rolety sterowanej jednym przyciskiem po użyciu fizycznego przycisku lub pilota RF. Informuje integrację o rzeczywistym stanie rolety.",
+      "fields": {
+        "state": {
+          "name": "Stan",
+          "description": "Rzeczywisty aktualny stan rolety."
+        }
+      }
     }
   }
 }

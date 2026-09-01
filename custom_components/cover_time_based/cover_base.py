@@ -111,6 +111,10 @@ class RecalibrationPlan(Enum):
 class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     """Time-based cover with position tracking."""
 
+    # Whether this control mode can drive tilt at all. A single-button cover
+    # cannot choose a direction, so it sets this False (see the design spec).
+    supports_tilt = True
+
     def __init__(
         self,
         device_id,
@@ -241,6 +245,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Log a debug message prefixed with the entity ID."""
         _LOGGER.debug("(%s) " + msg, self.entity_id, *args)
 
+    def _extra_persist_data(self) -> dict:
+        """Mode-specific data to merge into the persisted position dict."""
+        return {}
+
+    def _apply_restored_extra(self, stored: dict) -> None:
+        """Apply mode-specific fields from the restored position dict."""
+        return
+
     async def _async_load_restored_positions(self) -> tuple[int | None, int | None]:
         """Return (position, tilt_position) for restore.
 
@@ -252,6 +264,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             store = await async_get_position_store(self.hass)
             stored = await store.async_get(self._config_entry_id)
             if stored is not None:
+                self._apply_restored_extra(stored)
                 return stored.get("position"), stored.get("tilt_position")
 
         old_state = await self.async_get_last_state()
@@ -267,7 +280,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Write the current travel/tilt position to the position store."""
         if self._config_entry_id is None:
             return
-        data: dict[str, int] = {}
+        data: dict[str, int | str] = {}
         position = self.travel_calc.current_position()
         if position is not None:
             data["position"] = int(position)
@@ -275,6 +288,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             tilt_position = self.tilt_calc.current_position()
             if tilt_position is not None:
                 data["tilt_position"] = int(tilt_position)
+        data.update(self._extra_persist_data())
         store = await async_get_position_store(self.hass)
         await store.async_save(self._config_entry_id, data)
 
@@ -314,11 +328,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
 
     async def _cancel_background_pulses(self) -> None:
-        """Cancel any background relay-pulse completions on removal.
+        """Cancel any background relay-pulse / press-sequence work on removal.
 
         No-op in the base class. Pulse mode overrides this to cancel its
         in-flight ``_complete_pulse`` tasks and turn the affected relays off,
-        so a relay caught mid-pulse is not left latched ON.
+        so a relay caught mid-pulse is not left latched ON. Single-button
+        mode overrides it similarly, additionally cancelling an in-flight
+        press sequence and endpoint settle margin so the OLD entity does not
+        keep pressing the physical button after a reload.
         """
         return
 
@@ -1465,6 +1482,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self.async_write_ha_state()
         await self._async_persist_position()
 
+    async def async_resync(self, state: str) -> None:
+        """Re-anchor phase and position after off-system control.
+
+        Only meaningful for single-button control mode, which has no
+        feedback and tracks phase by dead reckoning; see
+        SingleButtonModeCover.async_resync for the real implementation.
+        """
+        raise HomeAssistantError(
+            "resync is only supported in single_button control mode"
+        )
+
     # -----------------------------------------------------------------------
     # Movement orchestration
     # -----------------------------------------------------------------------
@@ -2475,7 +2503,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     def _has_tilt_support(self):
         """Return if cover has tilt support."""
-        return self._tilt_strategy is not None and hasattr(self, "tilt_calc")
+        return (
+            self.supports_tilt
+            and self._tilt_strategy is not None
+            and hasattr(self, "tilt_calc")
+        )
 
     # -----------------------------------------------------------------------
     # Movement tracking
@@ -2805,6 +2837,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
+            if endpoint_applies and not self._moving_tilt_motor:
+                self._on_endpoint_reached(int(current_travel))
             self._last_command = None
             self._moving_tilt_motor = False
             self._moving_tilt = False
@@ -2900,6 +2934,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         so they keep this no-op. Switch mode latches its direction relay ON for
         the whole travel, so it overrides this to turn the relay off (only if
         still on); otherwise the relay stays energized at the endpoint forever.
+        """
+        return
+
+    def _on_endpoint_reached(self, endpoint: int) -> None:
+        """Hook: a self-initiated travel move terminated at 0 or 100.
+
+        Base is a no-op. Overridden by modes that must re-anchor internal
+        state at a physical limit (e.g. single-button phase tracking).
         """
         return
 

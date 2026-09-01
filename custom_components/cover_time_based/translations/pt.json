@@ -76,6 +76,16 @@
           "description": "Se verdadeiro, descarta os resultados do teste sem guardar"
         }
       }
+    },
+    "resync": {
+      "name": "Ressincronizar",
+      "description": "Reancora a posição monitorizada de um estore de botão único depois de o botão físico ou o comando RF terem sido usados. Informa a integração do estado real do estore.",
+      "fields": {
+        "state": {
+          "name": "Estado",
+          "description": "O estado real atual do estore."
+        }
+      }
     }
   }
 }

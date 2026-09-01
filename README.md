@@ -32,6 +32,7 @@ component by davidramosweb.
   - [Control Mode](#control-mode)
   - [Wrapping an existing cover](#wrapping-an-existing-cover)
   - [Controlling a cover with switches](#controlling-a-cover-with-switches)
+  - [Controlling a cover with a single button](#controlling-a-cover-with-a-single-button)
   - [Tilt](#tilt)
   - [Options for every cover](#options-for-every-cover)
 - [Calibration](#calibration)
@@ -128,31 +129,37 @@ the rest of the options on the tab change to match it.
 | **Pulse (momentary)** | Push-button relays, where a brief on/off pulse starts the motor. Needs a separate stop button. |
 | **Toggle (same button)** | A brief pulse starts the motor, and a second pulse on the same button stops it. |
 | **Toggle (opposite button)** | A brief pulse starts the motor, and pressing the opposite direction stops it. There is no separate stop button. |
+| **Single button (cycling)** | One input drives the whole motor: each press advances a fixed down → stop → up → stop cycle, and the motor stops itself at its limits. There is no separate open, close, or stop control. |
 
 The card only ever shows the options that apply to the mode you pick, so this
 table is the quickest way to see what each mode offers. Follow a link for the
 detail. A blank cell means the option is not shown for that mode.
 
-| Option | Wrapped | Switch | Pulse | Toggle | Toggle (opp.) |
-| --- | :---: | :---: | :---: | :---: | :---: |
-| [Cover entity](#wrapping-an-existing-cover) | ✓ | | | | |
-| [Open and Close switch](#controlling-a-cover-with-switches) | | ✓ | ✓ | ✓ | ✓ |
-| [Stop switch](#controlling-a-cover-with-switches) | | | ✓ | | |
-| [Position reporting](#position-reporting) | ✓ | | | | |
-| [Force time-based positioning](#force-time-based-positioning) | ✓ | | | | |
-| [Invert position](#invert-position) | ✓ | | | | |
-| [Pulse time](#pulse-time) | | | ✓ | | |
-| [Relay reports its own OFF](#relay-reports-its-own-off) | | | | ✓ | ✓ |
-| [Send stop signal at endpoints](#send-stop-signal-at-endpoints) | | | ✓ | | |
-| [Wait for relay confirmation](#wait-for-relay-confirmation-before-tracking) | | ✓ | ✓ | ✓ | ✓ |
-| [Assumed state](#assumed-state) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| [Always re-send at the endpoints](#always-re-send-openclose-at-the-endpoints) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| [Fully open before position (Beta)](#fully-open-before-moving-to-a-position-beta) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| [Tilt](#tilt) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Option | Wrapped | Switch | Pulse | Toggle | Toggle (opp.) | Single button |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| [Cover entity](#wrapping-an-existing-cover) | ✓ | | | | | |
+| [Open and Close switch](#controlling-a-cover-with-switches) | | ✓ | ✓ | ✓ | ✓ | |
+| [Stop switch](#controlling-a-cover-with-switches) | | | ✓ | | | |
+| [Button](#controlling-a-cover-with-a-single-button) | | | | | | ✓ |
+| [Position reporting](#position-reporting) | ✓ | | | | | |
+| [Force time-based positioning](#force-time-based-positioning) | ✓ | | | | | |
+| [Invert position](#invert-position) | ✓ | | | | | |
+| [Pulse time](#pulse-time) | | | ✓ | | | |
+| [Relay reports its own OFF](#relay-reports-its-own-off) | | | | ✓ | ✓ | |
+| [Send stop signal at endpoints](#send-stop-signal-at-endpoints) | | | ✓ | | | |
+| [Wait for relay confirmation](#wait-for-relay-confirmation-before-tracking) | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Resync](#cover_time_basedresync) | | | | | | ✓ |
+| [Assumed state](#assumed-state) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Always re-send at the endpoints](#always-re-send-openclose-at-the-endpoints) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Fully open before position (Beta)](#fully-open-before-moving-to-a-position-beta) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Tilt](#tilt) | ✓ | ✓ | ✓ | ✓ | ✓ | |
 
 The switch-based modes (Switch, Pulse, and the two Toggle modes) are described
 together under
 [Controlling a cover with switches](#controlling-a-cover-with-switches).
+The single-button mode is different enough — one input, no independent
+direction — that it gets its own section:
+[Controlling a cover with a single button](#controlling-a-cover-with-a-single-button).
 
 ### Wrapping an existing cover
 
@@ -295,6 +302,105 @@ motor has already stopped is instead read as "go to the favourite position" (the
 classic Somfy _my_ behaviour) and repositions the cover on every limit hit. The
 same setting governs a [separate tilt motor's](#tilt) stop relay at its tilt
 endpoints.
+
+### Controlling a cover with a single button
+
+Choose **Single button (cycling)** for a motor with only one control input —
+no separate open and close relay, just one line to pulse. Select the switch or
+script entity that drives it as the **Button**. Each press advances a fixed
+cycle, and the motor remembers where it is in that cycle and stops itself at
+its physical limits:
+
+| The motor is currently... | The next press... |
+| --- | --- |
+| at the closed limit | starts moving up |
+| moving up | stops it |
+| stopped mid-travel, having last moved up | reverses it, starts moving down |
+| at the open limit | starts moving down |
+| moving down | stops it |
+| stopped mid-travel, having last moved down | reverses it, starts moving up |
+
+This suits motors with an external "impulse" or "button" input rather than
+independent open/close relays — for example a **Jarolift TDEF** shutter driven
+through its optional external button line by a Shelly relay emulating a button
+press, or a **Hörmann** garage door operator's impulse trigger. In this mode
+the integration turns an open, close, or stop command into one or more presses
+of that single button, a second apart, worked out from the motor's current
+place in the cycle. Occasionally that means one brief press in the _wrong_
+direction before the motor stops and reverses — accepted as the cost of a
+clean reversal, rather than driving all the way round to the far endpoint.
+
+> [!WARNING]
+> **This mode has no position or direction feedback of any kind.** The
+> integration tracks where the motor is in its cycle by dead reckoning —
+> remembering what it last told the motor to do — with no way to observe
+> whether the cover actually got there. Read the limits below before relying
+> on it, especially if the cover can also be moved by an RF remote or the
+> physical button itself.
+
+#### Setting up the correct starting phase
+
+Every press is planned from the phase the integration currently believes the
+motor is in, so that belief has to be right from the start. The first time a
+cover is configured in this mode, either:
+
+- **Fully close the cover** before using it (the assumed starting phase is
+  "at closed"), or
+- Immediately call the [`resync`](#cover_time_basedresync) action to declare
+  the cover's true state.
+
+Skipping this step leaves the integration guessing, with the failure mode
+described next.
+
+#### Honest limits
+
+- **No feedback, so every position is a guess, not a measurement.** The
+  points below all follow from that.
+- **A full open or full close re-anchors position, but only when the tracked
+  phase already matched reality.** Driving all the way to a limit is the one
+  operation that corrects accumulated _timing_ drift, because the tracker
+  snaps position to the endpoint once the motor has had time to reach it — how
+  long it waits past the estimated arrival before doing so is the
+  [Endpoint run-on time](#endpoint-run-on-time), reused here as a settle
+  margin rather than a relay hold. It cannot correct a _wrong phase_, though:
+  it snaps to the endpoint it _believes_ it was driving toward, not the one
+  physically reached.
+- **A wrong phase inverts positions, and does not self-heal.** If the tracked
+  phase is wrong — say the integration believes the cover is closed when it is
+  physically open — every following command is mis-planned: an "open" command
+  is sent as the press that follows "at closed", which on a motor already
+  sitting at its open limit actually drives it _down_, and the tracker then
+  reports 100% while the cover sits at 0%. Every position after that is
+  inverted. A full open or close does not fix this — it just re-anchors the
+  wrong endpoint with full confidence. Only the
+  [`resync`](#cover_time_basedresync) action restores the correct phase. This
+  is not limited to a full inversion: any phase-tracking error produces wrong
+  outcomes, and none of them correct themselves with use.
+- **Silent desync is unrecoverable on its own.** If the cover is moved by an
+  RF remote or the physical button itself, Home Assistant cannot see it, and
+  the tracked phase is now wrong per the point above. The integration cannot
+  safely auto-home either, since it has no way to detect the motor reaching a
+  limit by itself. Recovery is manual: call
+  [`resync`](#cover_time_basedresync) after using the remote or button.
+- **Arbitrary set-position is best-effort.** A partial target (anything other
+  than fully open or fully closed) is reached with a timed stop press — the
+  same dead reckoning the rest of the mode relies on — and drifts until the
+  next full open or close re-anchors it.
+- **Tilt is not available.** Tilt needs a short pulse in a _chosen_ direction;
+  a single button cannot choose a direction, so tilt is disabled for this mode
+  rather than merely unconfigured.
+
+#### The `resync` action
+
+Use the [`cover_time_based.resync`](#cover_time_basedresync) action — or the
+**Resync** control on the configuration card, which offers the same two
+choices as buttons — to tell the integration the cover's true state after it
+was moved outside Home Assistant: an RF remote, the physical button, or any
+other way the motor's cycle could have advanced without the integration
+knowing. Pick **Fully closed** or **Fully open** to match what the cover is
+actually doing; the integration re-anchors both the tracked phase and the
+position (0% or 100%) to match. Wire it into an automation triggered by your
+remote if you want the tracker to stay in sync automatically.
 
 ### Tilt
 
@@ -450,6 +556,13 @@ applies in Switch mode, and in Pulse mode when
 delays the stop pulse by the same amount. You type it in on the Calibration tab;
 it is not one of the measured timings.
 
+[Single button](#controlling-a-cover-with-a-single-button) mode reuses the same
+value differently: there is no relay to hold, since the motor self-stops, so
+this becomes the **settle margin** — how long the integration keeps treating
+the motor as still travelling past its estimated arrival time before it locks
+in the endpoint, snapping the tracked position to 0 or 100 and marking the
+phase settled. It is a wait, not a relay hold.
+
 ### Minimum movement time
 
 This blocks relay activations too brief to physically move the cover, which
@@ -493,6 +606,19 @@ Stop a running calibration test and save the result.
 | --- | --- |
 | `entity_id` | The cover entity. |
 | `cancel` | If `true`, discard the result instead of saving it. |
+
+### `cover_time_based.resync`
+
+Only supported by covers in
+[Single button (cycling)](#controlling-a-cover-with-a-single-button) mode.
+Re-anchors the tracked phase and position after the cover was moved outside
+Home Assistant — an RF remote, the physical button, or anything else the
+integration could not observe. Tell it what the cover actually is right now;
+it does not sense anything on its own.
+
+| Field | Description |
+| --- | --- |
+| `state` | The cover's true current state: `closed` or `open`. |
 
 ## Troubleshooting
 
