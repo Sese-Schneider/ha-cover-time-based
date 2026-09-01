@@ -2813,7 +2813,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
-            if endpoint_applies:
+            if endpoint_applies and not self._moving_tilt_motor:
                 self._on_endpoint_reached(int(current_travel))
             self._last_command = None
             self._moving_tilt_motor = False
