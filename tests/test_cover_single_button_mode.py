@@ -68,10 +68,11 @@ def test_initial_phase_is_at_closed():
     assert _make_sb_cover()._phase is Phase.AT_CLOSED
 
 
-def test_external_state_change_ignored():
+@pytest.mark.asyncio
+async def test_external_state_change_ignored():
     cover = _make_sb_cover()
     # Must not raise and must not call any service.
-    cover._handle_external_state_change("switch.button", None, MagicMock())
+    await cover._handle_external_state_change("switch.button", None, MagicMock())
     cover.hass.services.async_call.assert_not_called()
 
 
