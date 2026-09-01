@@ -245,6 +245,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Log a debug message prefixed with the entity ID."""
         _LOGGER.debug("(%s) " + msg, self.entity_id, *args)
 
+    def _extra_persist_data(self) -> dict:
+        """Mode-specific data to merge into the persisted position dict."""
+        return {}
+
+    def _apply_restored_extra(self, stored: dict) -> None:
+        """Apply mode-specific fields from the restored position dict."""
+        return
+
     async def _async_load_restored_positions(self) -> tuple[int | None, int | None]:
         """Return (position, tilt_position) for restore.
 
@@ -256,6 +264,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             store = await async_get_position_store(self.hass)
             stored = await store.async_get(self._config_entry_id)
             if stored is not None:
+                self._apply_restored_extra(stored)
                 return stored.get("position"), stored.get("tilt_position")
 
         old_state = await self.async_get_last_state()
@@ -279,6 +288,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             tilt_position = self.tilt_calc.current_position()
             if tilt_position is not None:
                 data["tilt_position"] = int(tilt_position)
+        data.update(self._extra_persist_data())
         store = await async_get_position_store(self.hass)
         await store.async_save(self._config_entry_id, data)
 

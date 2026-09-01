@@ -139,3 +139,12 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         finally:
             if self._settle_task is asyncio.current_task():
                 self._settle_task = None
+
+    # --- persistence -----------------------------------------------------
+    def _extra_persist_data(self) -> dict:
+        return {"phase": self._phase.value}
+
+    def _apply_restored_extra(self, stored: dict) -> None:
+        value = stored.get("phase")
+        if value is not None:
+            self._phase = Phase(value)
