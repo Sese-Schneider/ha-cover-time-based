@@ -609,16 +609,45 @@ Stop a running calibration test and save the result.
 
 ### `cover_time_based.resync`
 
-Only supported by covers in
-[Single button (cycling)](#controlling-a-cover-with-a-single-button) mode.
-Re-anchors the tracked phase and position after the cover was moved outside
-Home Assistant — an RF remote, the physical button, or anything else the
+Works for every control mode. Re-anchors the reported position to fully
+closed (0%) or fully open (100%) after the cover was moved outside Home
+Assistant — an RF remote, a physical button, or anything else the
 integration could not observe. Tell it what the cover actually is right now;
-it does not sense anything on its own.
+it does not sense anything on its own. In
+[Single button (cycling)](#controlling-a-cover-with-a-single-button) mode it
+additionally re-anchors the tracked phase, which is how that mode's ["The
+`resync` action"](#the-resync-action) restores a phase that has drifted (see
+the honest limits above).
 
 | Field | Description |
 | --- | --- |
 | `state` | The cover's true current state: `closed` or `open`. |
+
+For any mode other than single button, `resync` overlaps with
+[`set_known_position`](#cover_time_basedset_known_position), which can set
+any position (not just the two endpoints) — `resync` is just the friendly
+closed/open shortcut, most useful wired into an automation.
+
+A single button is enough to trigger it — the action needs only the fixed
+`state` field, so a dashboard control does not need a two-button stack:
+
+```yaml
+type: button
+name: Mark closed
+icon: mdi:arrow-collapse-down
+tap_action:
+  action: perform-action
+  perform_action: cover_time_based.resync
+  target:
+    entity_id: cover.garage_single_button
+  data:
+    state: closed
+```
+
+Add a second button with `state: open` (and an "open" icon) for the other
+direction. Older Home Assistant versions use `action: call-service` and
+`service: cover_time_based.resync` in place of `perform-action`/`perform_action`
+— the current names are aliases of those legacy ones, so either form works.
 
 ## Troubleshooting
 

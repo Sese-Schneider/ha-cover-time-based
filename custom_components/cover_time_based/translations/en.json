@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resync",
-      "description": "Re-anchor a single-button cover's tracked position after the physical button or RF remote was used. Tell the integration the cover's true state.",
+      "description": "Re-anchor a cover's tracked position to fully closed or fully open after the physical button or RF remote was used. In single-button mode this also re-anchors the tracked phase. Tell the integration the cover's true state.",
       "fields": {
         "state": {
           "name": "State",
