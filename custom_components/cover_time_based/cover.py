@@ -62,6 +62,7 @@ from .const import (
     DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
     DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
+    RESYNC_POSITIONS,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
 from .helpers import resolve_entity
@@ -230,7 +231,7 @@ TILT_POSITION_SCHEMA = cv.make_entity_service_schema(
         vol.Required(ATTR_TILT_POSITION): cv.positive_int,
     }
 )
-RESYNC_SCHEMA = {vol.Required("state"): vol.In(["closed", "open"])}
+RESYNC_SCHEMA = {vol.Required("state"): vol.In(list(RESYNC_POSITIONS))}
 
 # ---------------------------------------------------------------------------
 # YAML migration helpers

@@ -48,6 +48,7 @@ from .const import (
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
     DIRECTION_CHANGE_DELAY,
+    RESYNC_POSITIONS,
 )
 from .cover_calibration import CalibrationMixin
 from .position_storage import async_get_position_store
@@ -1485,28 +1486,30 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def async_resync(self, state: str) -> None:
         """Re-anchor the reported position to fully closed or fully open.
 
-        Works for every control mode: maps ``state`` to a position (0 for
-        "closed", 100 for "open") and declares it via the same known-position
-        path as ``set_known_position`` — stopping any in-flight movement,
-        snapping tilt trackers to their physical endpoint, writing state, and
-        persisting — so every mode re-anchors consistently after the cover
-        was moved outside Home Assistant (an RF remote, a physical button,
-        or anything else the integration could not observe).
+        Works for every control mode: maps ``state`` to a position via
+        RESYNC_POSITIONS (0 for "closed", 100 for "open") and declares it via
+        the same known-position path as ``set_known_position`` — stopping any
+        in-flight movement, snapping tilt trackers to their physical
+        endpoint, writing state, and persisting — so every mode re-anchors
+        consistently after the cover was moved outside Home Assistant (an RF
+        remote, a physical button, or anything else the integration could not
+        observe).
 
-        Single-button control mode additionally re-anchors its tracked
-        phase; see SingleButtonModeCover.async_resync, which sets the phase
-        and then delegates here.
+        Calls _on_resync_position before delegating, so a mode with extra
+        resync bookkeeping (single-button's tracked phase) updates it in the
+        same pass, before the single write/persist below.
         """
-        if state == "closed":
-            position = 0
-        elif state == "open":
-            position = 100
-        else:
+        if state not in RESYNC_POSITIONS:
             raise HomeAssistantError(f"unknown resync state: {state!r}")
-        # ATTR_POSITION is the exact kwarg key set_known_position reads
-        # (kwargs[ATTR_POSITION]) — spelled via the constant rather than a
-        # literal "position" so the two stay linked if HA ever renames it.
-        await self.set_known_position(**{ATTR_POSITION: position})
+        position = RESYNC_POSITIONS[state]
+        self._on_resync_position(position)
+        await self.set_known_position(position=position)
+
+    def _on_resync_position(self, position: int) -> None:
+        """Hook for modes with extra resync bookkeeping (e.g. phase).
+
+        No-op by default.
+        """
 
     # -----------------------------------------------------------------------
     # Movement orchestration

@@ -505,8 +505,8 @@ class TestResync:
         with pytest.raises(HomeAssistantError, match="halfway"):
             await cover.async_resync("halfway")
         # An invalid state must not touch the phase -- it is left at
-        # whatever it was, since the base class rejects before the
-        # single-button override ever reassigns it.
+        # whatever it was, since the base class rejects before
+        # _on_resync_position is ever called.
         assert cover._phase is Phase.AT_CLOSED
 
 
