@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resynchroniser",
-      "description": "Réancre la position suivie d'un volet à bouton unique après l'utilisation du bouton physique ou de la télécommande RF. Indique à l'intégration l'état réel du volet.",
+      "description": "Réancre la position suivie d'un volet à l'état complètement fermé ou complètement ouvert, après l'utilisation du bouton physique ou de la télécommande RF. En mode à bouton unique, cela réancre également la phase suivie. Indique à l'intégration l'état réel du volet.",
       "fields": {
         "state": {
           "name": "État",

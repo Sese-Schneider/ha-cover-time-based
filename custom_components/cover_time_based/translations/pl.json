@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resynchronizuj",
-      "description": "Ponownie zakotwicza śledzoną pozycję rolety sterowanej jednym przyciskiem po użyciu fizycznego przycisku lub pilota RF. Informuje integrację o rzeczywistym stanie rolety.",
+      "description": "Ponownie zakotwicza śledzoną pozycję rolety jako całkowicie zamkniętą lub całkowicie otwartą po użyciu fizycznego przycisku lub pilota RF. W trybie sterowania jednym przyciskiem ponownie zakotwicza to również śledzoną fazę. Informuje integrację o rzeczywistym stanie rolety.",
       "fields": {
         "state": {
           "name": "Stan",

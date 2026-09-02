@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resynchronisieren",
-      "description": "Verankert die verfolgte Position eines Einzeltasten-Rollladens neu, nachdem der physische Taster oder die Funkfernbedienung verwendet wurde. Teilt der Integration den tatsächlichen Zustand des Rollladens mit.",
+      "description": "Verankert die verfolgte Position eines Rollladens auf vollständig geschlossen oder vollständig offen neu, nachdem der physische Taster oder die Funkfernbedienung verwendet wurde. Im Einzeltasten-Modus wird dabei auch die verfolgte Phase neu verankert. Teilt der Integration den tatsächlichen Zustand des Rollladens mit.",
       "fields": {
         "state": {
           "name": "Zustand",

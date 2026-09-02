@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Risincronizza",
-      "description": "Riancora la posizione tracciata di una tapparella a pulsante singolo dopo che è stato usato il pulsante fisico o il telecomando RF. Comunica all'integrazione lo stato reale della tapparella.",
+      "description": "Riancora la posizione tracciata di una tapparella a completamente chiusa o completamente aperta dopo che è stato usato il pulsante fisico o il telecomando RF. In modalità a pulsante singolo, questo riancora anche la fase tracciata. Comunica all'integrazione lo stato reale della tapparella.",
       "fields": {
         "state": {
           "name": "Stato",
