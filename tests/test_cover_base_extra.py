@@ -1298,19 +1298,56 @@ def test_close_includes_tilt_can_be_disabled(make_cover):
 
 
 # ===================================================================
-# async_resync default (base class) — only single_button mode overrides it
+# async_resync (base class) — works for every control mode; single_button
+# additionally re-anchors its tracked phase (see
+# tests/test_cover_single_button_mode.py::TestResync).
 # ===================================================================
 
 
-class TestResyncNotSupportedOutsideSingleButton:
-    """The base class's async_resync must keep refusing non-single_button
-    covers; SingleButtonModeCover is the only mode that overrides it (see
-    tests/test_cover_single_button_mode.py::TestResync)."""
+class TestResyncAllModes:
+    """The base class's async_resync re-anchors position for every mode,
+    reusing the same known-position path as set_known_position."""
 
     @pytest.mark.asyncio
-    async def test_switch_mode_resync_raises_home_assistant_error(self, make_cover):
+    async def test_switch_mode_resync_closed_sets_position_zero(self, make_cover):
+        cover = make_cover()  # CONTROL_MODE_SWITCH by default
+        cover.travel_calc.set_position(70)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_resync("closed")
+
+        assert cover.travel_calc.current_position() == 0
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_switch_mode_resync_open_sets_position_hundred(self, make_cover):
+        cover = make_cover()  # CONTROL_MODE_SWITCH by default
+        cover.travel_calc.set_position(30)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_resync("open")
+
+        assert cover.travel_calc.current_position() == 100
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_resync_rejects_unknown_state(self, make_cover):
         from homeassistant.exceptions import HomeAssistantError
 
+        cover = make_cover()
+        with pytest.raises(HomeAssistantError, match="halfway"):
+            await cover.async_resync("halfway")
+
+    @pytest.mark.asyncio
+    async def test_non_single_button_cover_has_no_phase_and_resync_does_not_raise(
+        self, make_cover
+    ):
+        """A non-single-button cover has no _phase attribute at all; resync
+        must not require or create one, and must complete without error."""
         cover = make_cover()  # CONTROL_MODE_SWITCH by default
-        with pytest.raises(HomeAssistantError, match="single_button"):
+        assert not hasattr(cover, "_phase")
+
+        with patch.object(cover, "async_write_ha_state"):
             await cover.async_resync("closed")
+
+        assert not hasattr(cover, "_phase")

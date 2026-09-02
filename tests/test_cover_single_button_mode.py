@@ -499,9 +499,15 @@ class TestResync:
 
     @pytest.mark.asyncio
     async def test_resync_rejects_unknown(self):
+        from homeassistant.exceptions import HomeAssistantError
+
         cover = _make_sb_cover()
-        with pytest.raises(ValueError):
+        with pytest.raises(HomeAssistantError, match="halfway"):
             await cover.async_resync("halfway")
+        # An invalid state must not touch the phase -- it is left at
+        # whatever it was, since the base class rejects before
+        # _on_resync_position is ever called.
+        assert cover._phase is Phase.AT_CLOSED
 
 
 class TestRemovalCancelsBackgroundWork:
@@ -564,3 +570,55 @@ class TestRemovalCancelsBackgroundWork:
             # The phase must not have been silently anchored by a settle task
             # that kept running after removal.
             assert cover._phase is Phase.MOVING_UP
+
+
+class TestResyncCancelsInFlightPress:
+    """resync declares a fixed endpoint (issue #245). If it fires while a
+    press sequence is mid-flight, that sequence's own next iteration would
+    otherwise overwrite `_phase` from the plan it computed before resync
+    ran -- silently clobbering the phase resync just set, while the motor
+    keeps running the old sequence against a cover we just declared parked.
+    resync must cancel the in-flight sequence (and leave the button OFF)
+    before anchoring the phase, mirroring _send_open/_send_close/_send_stop's
+    own _cancel_settle + _supersede_active_press cleanup."""
+
+    @pytest.mark.asyncio
+    async def test_resync_cancels_in_flight_press_sequence_and_wins_the_phase(
+        self,
+    ):
+        cover = _make_sb_cover(pulse_time=0.01)
+        # STOPPED_AFTER_UP -> open is the 3-press nudge: a genuinely
+        # multi-step sequence, so there is more than one press left for the
+        # old plan to (wrongly) keep issuing if resync doesn't cancel it.
+        cover._phase = Phase.STOPPED_AFTER_UP
+        cover.async_write_ha_state = MagicMock()
+        cover._async_persist_position = AsyncMock()
+
+        # Deliberately do NOT patch `sleep`: real asyncio.sleep with a tiny
+        # pulse_time gives the press task a genuine suspend point, so
+        # `await asyncio.sleep(0)` can park it mid-pulse (button ON, task
+        # not done) exactly as TestMidPressInterruption does.
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode."
+            "DIRECTION_CHANGE_DELAY",
+            0.01,
+        ):
+            await cover._send_open()
+            await asyncio.sleep(0)  # park mid-pulse
+
+            assert cover._press_task is not None
+            assert not cover._press_task.done()
+
+            await cover.async_resync("open")
+            await _drain(cover)
+
+        # The in-flight sequence was cancelled outright -- not left to run
+        # its remaining presses.
+        assert cover._press_task is None
+        # The button ended OFF, not left latched from the interrupted pulse.
+        assert cover.hass.services.async_call.call_args_list[-1] == call(
+            "homeassistant", "turn_off", {"entity_id": "switch.button"}, False
+        )
+        # Resync's phase wins -- not whatever the interrupted sequence would
+        # have gone on to set.
+        assert cover._phase is Phase.AT_OPEN

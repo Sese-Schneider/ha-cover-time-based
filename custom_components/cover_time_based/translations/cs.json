@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resynchronizace",
-      "description": "Znovu ukotví sledovanou pozici rolety s jedním tlačítkem poté, co bylo použito fyzické tlačítko nebo RF dálkové ovládání. Sdělí integraci skutečný stav rolety.",
+      "description": "Znovu ukotví sledovanou pozici rolety jako zcela zavřenou nebo zcela otevřenou poté, co bylo použito fyzické tlačítko nebo RF dálkové ovládání. V režimu s jedním tlačítkem tím také znovu ukotví sledovanou fázi. Sdělí integraci skutečný stav rolety.",
       "fields": {
         "state": {
           "name": "Stav",

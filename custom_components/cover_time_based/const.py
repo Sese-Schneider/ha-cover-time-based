@@ -1,6 +1,14 @@
 """Constants for the cover_time_based integration."""
 
+from homeassistant.const import STATE_CLOSED, STATE_OPEN
+
 DOMAIN = "cover_time_based"
+
+# The resync service's known-position domain: the states a user can resync a
+# cover to, and the position each re-anchors to (0=closed, 100=open). Shared
+# by cover.py's RESYNC_SCHEMA validator and CoverTimeBased.async_resync so the
+# accepted values and their meaning are defined exactly once.
+RESYNC_POSITIONS = {STATE_CLOSED: 0, STATE_OPEN: 100}
 
 CONF_TILT_MODE = "tilt_mode"
 CONF_TRAVEL_TIME_CLOSE = "travel_time_close"

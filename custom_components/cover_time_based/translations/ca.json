@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resincronitza",
-      "description": "Torna a ancorar la posició rastrejada d'una persiana d'un sol botó després que s'hagi utilitzat el botó físic o el comandament RF. Indica a la integració l'estat real de la persiana.",
+      "description": "Torna a ancorar la posició rastrejada d'una persiana a totalment tancada o totalment oberta després que s'hagi utilitzat el botó físic o el comandament RF. En el mode d'un sol botó, això també torna a ancorar la fase rastrejada. Indica a la integració l'estat real de la persiana.",
       "fields": {
         "state": {
           "name": "Estat",
