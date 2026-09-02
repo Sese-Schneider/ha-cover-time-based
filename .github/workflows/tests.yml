@@ -7,8 +7,83 @@ on:
     branches: [main]
 
 jobs:
+  # Decide whether this change needs the full test suite. Docs-only changes
+  # (Markdown, docs/, LICENSE, images) and a version-only bump of manifest.json
+  # can't affect any test outcome, so the heavy jobs below are skipped for them.
+  # hassfest (validate) and HACS Action still run unconditionally in their own
+  # workflows, so a version bump's manifest is always validated.
+  #
+  # The three skippable jobs are gated with a job-level `if:` (not a trigger
+  # `paths-ignore`): a skipped required check reports "skipped" and counts as
+  # passing, whereas a path-ignored required check hangs "pending" forever and
+  # blocks the merge.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run_tests: ${{ steps.detect.outputs.run_tests }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect whether tests need to run
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PUSH_AFTER_SHA: ${{ github.sha }}
+        run: |
+          # Any failure to work out the diff falls back to running the full
+          # suite — never silently skip because detection broke.
+          emit() { echo "run_tests=$1" >> "$GITHUB_OUTPUT"; echo "decision: run_tests=$1"; exit 0; }
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"; head="$PR_HEAD_SHA"
+          else
+            base="$PUSH_BEFORE_SHA"; head="$PUSH_AFTER_SHA"
+          fi
+
+          # A missing/zero base (new branch, shallow history) → run everything.
+          git rev-parse --verify --quiet "${base}^{commit}" >/dev/null 2>&1 || emit true
+          git rev-parse --verify --quiet "${head}^{commit}" >/dev/null 2>&1 || emit true
+
+          changed="$(git diff --name-only "${base}...${head}" 2>/dev/null)" || emit true
+          echo "changed files:"; printf '  %s\n' $changed
+
+          # Strip the skip-eligible doc/asset paths; whatever remains decides.
+          remaining="$(printf '%s\n' "$changed" \
+            | grep -vE '\.md$|^docs/|^LICENSE$|\.(png|jpe?g|gif|svg|webp|ico)$' \
+            | sed '/^$/d' || true)"
+
+          MANIFEST="custom_components/cover_time_based/manifest.json"
+
+          if [ -z "$remaining" ]; then
+            emit false                                   # docs/assets only
+          elif [ "$remaining" = "$MANIFEST" ]; then
+            # Only the manifest changed — skip only if it's a version-line-only
+            # bump. Any other manifest edit (e.g. requirements) runs the suite.
+            # Count added/removed lines (excluding the ---/+++ headers) that are
+            # not the "version" line; a count-based test is portable where a
+            # `grep -vq` early-exit is not.
+            nonversion="$(git diff "${base}...${head}" -- "$MANIFEST" \
+              | grep -E '^[+-]' \
+              | grep -vE '^[+-]{3} ' \
+              | grep -vcE '^[+-][[:space:]]*"version":' || true)"
+            if [ "${nonversion:-0}" -gt 0 ]; then
+              emit true                                  # a non-version line changed
+            else
+              emit false                                 # version-only bump
+            fi
+          else
+            emit true
+          fi
+
   test:
     name: test (${{ matrix.ha-channel }}, py${{ matrix.python-version }})
+    needs: changes
+    if: needs.changes.outputs.run_tests == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -61,6 +136,8 @@ jobs:
         run: pytest tests/ -v
 
   frontend:
+    needs: changes
+    if: needs.changes.outputs.run_tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -84,6 +161,8 @@ jobs:
         run: npm run lint
 
   lint:
+    needs: changes
+    if: needs.changes.outputs.run_tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
