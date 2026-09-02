@@ -305,102 +305,78 @@ endpoints.
 
 ### Controlling a cover with a single button
 
-Choose **Single button (cycling)** for a motor with only one control input —
-no separate open and close relay, just one line to pulse. Select the switch or
-script entity that drives it as the **Button**. Each press advances a fixed
-cycle, and the motor remembers where it is in that cycle and stops itself at
-its physical limits:
+Choose **Single button (cycling)** for a motor with only one control input — no
+separate open and close relays, just one line to pulse. Select the switch or
+`script` entity that drives it as the **Button**. Each press advances a fixed
+cycle, and the motor stops itself at its physical limits:
 
-| The motor is currently... | The next press... |
+| The cover is... | The next press... |
 | --- | --- |
-| at the closed limit | starts moving up |
-| moving up | stops it |
-| stopped mid-travel, having last moved up | reverses it, starts moving down |
-| at the open limit | starts moving down |
-| moving down | stops it |
-| stopped mid-travel, having last moved down | reverses it, starts moving up |
+| at the closed limit | starts it opening |
+| opening | stops it |
+| stopped, was opening | reverses it and starts closing |
+| at the open limit | starts it closing |
+| closing | stops it |
+| stopped, was closing | reverses it and starts opening |
 
-This suits motors with an external "impulse" or "button" input rather than
-independent open/close relays — for example a **Jarolift TDEF** shutter driven
-through its optional external button line by a Shelly relay emulating a button
-press, or a **Hörmann** garage door operator's impulse trigger. In this mode
-the integration turns an open, close, or stop command into one or more presses
-of that single button, a second apart, worked out from the motor's current
-place in the cycle. Occasionally that means one brief press in the _wrong_
-direction before the motor stops and reverses — accepted as the cost of a
-clean reversal, rather than driving all the way round to the far endpoint.
+This suits motors with an "impulse" or "button" input rather than independent
+open/close relays — for example a **Jarolift TDEF** shutter driven through its
+external button line by a Shelly relay, or a **Hörmann** garage door operator's
+impulse trigger. The integration turns an open, close, or stop command into
+however many presses the cycle needs, a second apart. Reversing part-way
+through a movement sometimes means one brief press the wrong way before the
+motor stops and turns around, which is quicker than driving all the way to the
+far end.
 
 > [!WARNING]
-> **This mode has no position or direction feedback of any kind.** The
-> integration tracks where the motor is in its cycle by dead reckoning —
-> remembering what it last told the motor to do — with no way to observe
-> whether the cover actually got there. Read the limits below before relying
-> on it, especially if the cover can also be moved by an RF remote or the
-> physical button itself.
+> **This mode has no position or direction feedback.** The integration works
+> out where the cover is only from what it last told the motor to do, and
+> cannot see whether the cover actually got there. Read the notes below before
+> relying on it, especially if the cover can also be moved by an RF remote or
+> the button itself.
 
-#### Setting up the correct starting phase
+#### Setting the starting position
 
-Every press is planned from the phase the integration currently believes the
-motor is in, so that belief has to be right from the start. The first time a
-cover is configured in this mode, either:
+Every press is planned from where the integration believes the cover is, so
+that has to be right to begin with. The first time you set up a cover in this
+mode, either **fully close it** before using it — the assumed starting point —
+or call the [`resync`](#cover_time_basedresync) action to tell the integration
+its true state. Skip this and it is guessing from the start.
 
-- **Fully close the cover** before using it (the assumed starting phase is
-  "at closed"), or
-- Immediately call the [`resync`](#cover_time_basedresync) action to declare
-  the cover's true state.
+#### What to expect
 
-Skipping this step leaves the integration guessing, with the failure mode
-described next.
-
-#### Honest limits
-
-- **No feedback, so every position is a guess, not a measurement.** The
-  points below all follow from that.
-- **A full open or full close re-anchors position, but only when the tracked
-  phase already matched reality.** Driving all the way to a limit is the one
-  operation that corrects accumulated _timing_ drift, because the tracker
-  snaps position to the endpoint once the motor has had time to reach it — how
-  long it waits past the estimated arrival before doing so is the
-  [Endpoint run-on time](#endpoint-run-on-time), reused here as a settle
-  margin rather than a relay hold. It cannot correct a _wrong phase_, though:
-  it snaps to the endpoint it _believes_ it was driving toward, not the one
-  physically reached.
-- **A wrong phase inverts positions, and does not self-heal.** If the tracked
-  phase is wrong — say the integration believes the cover is closed when it is
-  physically open — every following command is mis-planned: an "open" command
-  is sent as the press that follows "at closed", which on a motor already
-  sitting at its open limit actually drives it _down_, and the tracker then
-  reports 100% while the cover sits at 0%. Every position after that is
-  inverted. A full open or close does not fix this — it just re-anchors the
-  wrong endpoint with full confidence. Only the
-  [`resync`](#cover_time_basedresync) action restores the correct phase. This
-  is not limited to a full inversion: any phase-tracking error produces wrong
-  outcomes, and none of them correct themselves with use.
-- **Silent desync is unrecoverable on its own.** If the cover is moved by an
-  RF remote or the physical button itself, Home Assistant cannot see it, and
-  the tracked phase is now wrong per the point above. The integration cannot
-  safely auto-home either, since it has no way to detect the motor reaching a
-  limit by itself. Recovery is manual: call
-  [`resync`](#cover_time_basedresync) after using the remote or button.
-- **Arbitrary set-position is best-effort.** A partial target (anything other
-  than fully open or fully closed) is reached with a timed stop press — the
-  same dead reckoning the rest of the mode relies on — and drifts until the
-  next full open or close re-anchors it.
-- **Tilt is not available.** Tilt needs a short pulse in a _chosen_ direction;
-  a single button cannot choose a direction, so tilt is disabled for this mode
-  rather than merely unconfigured.
+- **Every position is an estimate.** With no feedback, the integration counts
+  time rather than reading the cover.
+- **A full open or close corrects timing drift** by snapping the position to
+  the endpoint once the motor has had time to get there. How long it waits past
+  the estimated arrival is the [Endpoint run-on time](#endpoint-run-on-time),
+  which here acts as a settle margin rather than a relay hold.
+- **Only [`resync`](#cover_time_basedresync) fixes a wrong starting point.** If
+  the integration has the cover wrong to start with — thinks it is closed when
+  it is open — every command afterwards is planned backwards and the positions
+  come out inverted. A full open or close will not straighten this out; it just
+  anchors the wrong end with confidence. Run `resync` to set it right.
+- **Moving the cover outside Home Assistant throws it out of sync.** An RF
+  remote or a press of the physical button advances the motor where Home
+  Assistant cannot see it, so the tracked position is then wrong. It cannot
+  correct itself — call [`resync`](#cover_time_basedresync) afterwards to line
+  it back up.
+- **A partial position is approximate.** Anything between fully open and fully
+  closed is reached with a timed stop, and drifts until the next full open or
+  close corrects it.
+- **Tilt is not available.** Tilting needs a pulse in a chosen direction, which
+  a single button cannot give, so the option is off for this mode.
 
 #### The `resync` action
 
 Use the [`cover_time_based.resync`](#cover_time_basedresync) action — or the
-**Resync** control on the configuration card, which offers the same two
-choices as buttons — to tell the integration the cover's true state after it
-was moved outside Home Assistant: an RF remote, the physical button, or any
-other way the motor's cycle could have advanced without the integration
-knowing. Pick **Fully closed** or **Fully open** to match what the cover is
-actually doing; the integration re-anchors both the tracked phase and the
-position (0% or 100%) to match. Wire it into an automation triggered by your
-remote if you want the tracker to stay in sync automatically.
+**Resync** control on the configuration card — to tell the integration the
+cover's true state after it was moved outside Home Assistant, whether by an RF
+remote, the physical button, or anything else it could not see. Pick **Fully
+closed** or **Fully open** to match where the cover actually is, and the
+integration sets its tracked state and position (0% or 100%) to match. Wire it
+into an automation triggered by your remote to keep the tracker in sync
+automatically.
 
 ### Tilt
 
