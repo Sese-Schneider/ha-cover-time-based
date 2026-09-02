@@ -249,17 +249,21 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
     # --- resync ----------------------------------------------------------
     async def async_resync(self, state: str) -> None:
-        """Re-anchor phase and position after off-system control."""
+        """Re-anchor phase and position after off-system control.
+
+        Sets the phase BEFORE delegating to the base class so
+        _extra_persist_data (which reads self._phase) captures the updated
+        value in the single write/persist super().async_resync performs via
+        set_known_position -- no double state-write or double persist here.
+
+        An invalid state leaves the phase untouched: super().async_resync
+        rejects it (HomeAssistantError) before anything is written.
+        """
         if state == "closed":
             self._phase = Phase.AT_CLOSED
-            self.travel_calc.set_position(0)
         elif state == "open":
             self._phase = Phase.AT_OPEN
-            self.travel_calc.set_position(100)
-        else:
-            raise ValueError(f"unknown resync state: {state}")
-        self.async_write_ha_state()
-        await self._async_persist_position()
+        await super().async_resync(state)
 
     # --- persistence -----------------------------------------------------
     def _extra_persist_data(self) -> dict:

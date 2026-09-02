@@ -1483,15 +1483,30 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         await self._async_persist_position()
 
     async def async_resync(self, state: str) -> None:
-        """Re-anchor phase and position after off-system control.
+        """Re-anchor the reported position to fully closed or fully open.
 
-        Only meaningful for single-button control mode, which has no
-        feedback and tracks phase by dead reckoning; see
-        SingleButtonModeCover.async_resync for the real implementation.
+        Works for every control mode: maps ``state`` to a position (0 for
+        "closed", 100 for "open") and declares it via the same known-position
+        path as ``set_known_position`` — stopping any in-flight movement,
+        snapping tilt trackers to their physical endpoint, writing state, and
+        persisting — so every mode re-anchors consistently after the cover
+        was moved outside Home Assistant (an RF remote, a physical button,
+        or anything else the integration could not observe).
+
+        Single-button control mode additionally re-anchors its tracked
+        phase; see SingleButtonModeCover.async_resync, which sets the phase
+        and then delegates here.
         """
-        raise HomeAssistantError(
-            "resync is only supported in single_button control mode"
-        )
+        if state == "closed":
+            position = 0
+        elif state == "open":
+            position = 100
+        else:
+            raise HomeAssistantError(f"unknown resync state: {state!r}")
+        # ATTR_POSITION is the exact kwarg key set_known_position reads
+        # (kwargs[ATTR_POSITION]) — spelled via the constant rather than a
+        # literal "position" so the two stay linked if HA ever renames it.
+        await self.set_known_position(**{ATTR_POSITION: position})
 
     # -----------------------------------------------------------------------
     # Movement orchestration

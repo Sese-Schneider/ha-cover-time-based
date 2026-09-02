@@ -499,9 +499,15 @@ class TestResync:
 
     @pytest.mark.asyncio
     async def test_resync_rejects_unknown(self):
+        from homeassistant.exceptions import HomeAssistantError
+
         cover = _make_sb_cover()
-        with pytest.raises(ValueError):
+        with pytest.raises(HomeAssistantError, match="halfway"):
             await cover.async_resync("halfway")
+        # An invalid state must not touch the phase -- it is left at
+        # whatever it was, since the base class rejects before the
+        # single-button override ever reassigns it.
+        assert cover._phase is Phase.AT_CLOSED
 
 
 class TestRemovalCancelsBackgroundWork:
