@@ -1495,9 +1495,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         remote, a physical button, or anything else the integration could not
         observe).
 
-        Calls _on_resync_position before delegating, so a mode with extra
-        resync bookkeeping (single-button's tracked phase) updates it in the
-        same pass, before the single write/persist below.
+        Calls _on_resync_position before delegating to set_known_position, so a
+        mode with extra resync bookkeeping (single-button's tracked phase)
+        updates it first and set_known_position's single write/persist captures
+        it in the same pass.
         """
         if state not in RESYNC_POSITIONS:
             raise HomeAssistantError(f"unknown resync state: {state!r}")
