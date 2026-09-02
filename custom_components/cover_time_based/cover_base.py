@@ -1503,10 +1503,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if state not in RESYNC_POSITIONS:
             raise HomeAssistantError(f"unknown resync state: {state!r}")
         position = RESYNC_POSITIONS[state]
-        self._on_resync_position(position)
+        await self._on_resync_position(position)
         await self.set_known_position(position=position)
 
-    def _on_resync_position(self, position: int) -> None:
+    async def _on_resync_position(self, position: int) -> None:
         """Hook for modes with extra resync bookkeeping (e.g. phase).
 
         No-op by default.

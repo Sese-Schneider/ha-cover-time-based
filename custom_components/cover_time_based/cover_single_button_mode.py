@@ -248,8 +248,19 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
                 self._settle_task = None
 
     # --- resync ----------------------------------------------------------
-    def _on_resync_position(self, position: int) -> None:
-        """Re-anchor the tracked phase to match the resynced position."""
+    async def _on_resync_position(self, position: int) -> None:
+        """Re-anchor the tracked phase to match the resynced position.
+
+        Resync declares a fixed endpoint -- cancel any in-flight press
+        sequence/settle first so its own next iteration can't overwrite the
+        phase we set below (it would otherwise plan from -- and keep
+        driving toward -- the phase computed before resync ran, silently
+        clobbering it while the motor kept running against a cover we just
+        declared parked). Same cleanup _send_open/_send_close/_send_stop
+        already perform before starting a new sequence.
+        """
+        self._cancel_settle()
+        await self._supersede_active_press()
         self._phase = Phase.AT_OPEN if position == 100 else Phase.AT_CLOSED
 
     # --- persistence -----------------------------------------------------
