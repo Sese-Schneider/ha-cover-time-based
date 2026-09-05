@@ -884,7 +884,7 @@ listed here, use the card.
 | `close_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that closes the cover. May be a `script` entity in pulse mode. | |
 | `stop_switch_entity_id` | entity | Required in pulse mode | Switch that stops the cover. May be a `script` entity in pulse mode. | None |
 | `cover_entity_id` | entity | **Required**, or the open/close switches | Existing cover entity to wrap. | |
-| `input_mode` | string | _Optional_ | Control mode for switch-based covers: `switch`, `pulse`, `toggle`, or `toggle_opposite`. | `switch` |
+| `input_mode` | string | _Optional_ | Control mode for switch-based covers: `switch`, `pulse`, `toggle`, `toggle_opposite`, or `single_button`. | `switch` |
 | `travelling_time_down` | float | _Optional_ | Seconds to close the cover. Minimum 0.1 s. | unset |
 | `travelling_time_up` | float | _Optional_ | Seconds to open the cover. Minimum 0.1 s. | unset |
 | `tilting_time_down` | float | _Optional_ | Seconds to tilt the cover fully closed. Minimum 0.1 s. | None |

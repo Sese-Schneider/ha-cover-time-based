@@ -33,6 +33,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
     """A cover driven by a single cycling button."""
 
     supports_tilt = False
+    _missing_entities_label = "button entity"
 
     def __init__(self, pulse_time, **kwargs):
         super().__init__(**kwargs)
@@ -52,14 +53,6 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         """One button is enough for this mode."""
         return bool(self._open_switch_entity_id)
 
-    def _get_missing_configuration(self) -> list[str]:
-        missing = []
-        if not self._are_entities_configured():
-            missing.append("button entity")
-        if self._travel_time_close is None and self._travel_time_open is None:
-            missing.append("travel times")
-        return missing
-
     # --- capabilities --------------------------------------------------
     def _self_stops_at_endpoints(self) -> bool:
         return True
@@ -76,6 +69,14 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         self._log("single_button :: ignoring external state change on %s", entity_id)
 
     # --- press sequencing ---------------------------------------------
+    async def _release_button(self) -> None:
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._open_switch_entity_id},
+            False,
+        )
+
     def _start_press_sequence(
         self, action: Action, *, arm_feedback: bool = False
     ) -> None:
@@ -135,12 +136,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         if not self._press_active:
             return
         self._press_active = False
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._open_switch_entity_id},
-            False,
-        )
+        await self._release_button()
         await sleep(DIRECTION_CHANGE_DELAY)
 
     async def _run_press_sequence(
@@ -192,9 +188,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
                 self._phase = phase
                 self._press_active = True
                 await sleep(self._pulse_time)
-                await self.hass.services.async_call(
-                    "homeassistant", "turn_off", {"entity_id": entity_id}, False
-                )
+                await self._release_button()
                 self._press_active = False
         except asyncio.CancelledError:
             # Cleanup (compensating turn_off + gap, if the pulse was actually
@@ -210,9 +204,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             # over the original one) and clear the flag, then re-raise so
             # the error is still surfaced/logged by asyncio.
             with contextlib.suppress(Exception):
-                await self.hass.services.async_call(
-                    "homeassistant", "turn_off", {"entity_id": entity_id}, False
-                )
+                await self._release_button()
             self._press_active = False
             raise
         finally:
@@ -254,12 +246,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         self._press_task = None
         self._cancel_settle()
         if self._open_switch_entity_id:
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._open_switch_entity_id},
-                False,
-            )
+            await self._release_button()
 
     # --- the mode contract --------------------------------------------
     async def _send_open(self) -> None:

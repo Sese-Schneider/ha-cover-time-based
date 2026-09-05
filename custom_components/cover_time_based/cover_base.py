@@ -2549,11 +2549,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         return True
 
+    # What _get_missing_configuration calls the driving entities; modes with a
+    # different input vocabulary override it.
+    _missing_entities_label = "input entities"
+
     def _get_missing_configuration(self) -> list[str]:
         """Return list of missing configuration items."""
         missing = []
         if not self._are_entities_configured():
-            missing.append("input entities")
+            missing.append(self._missing_entities_label)
         if self._travel_time_close is None and self._travel_time_open is None:
             missing.append("travel times")
         return missing

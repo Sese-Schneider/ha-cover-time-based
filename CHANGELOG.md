@@ -7,7 +7,7 @@
 - **Added a per-cover "Wait for relay confirmation before tracking" option** ([#231](https://github.com/Sese-Schneider/ha-cover-time-based/issues/231)).
 - **Serbian — Latin (`sr-Latn`) translation added.**
 - **Czech (`cs`) translation added** ([#241](https://github.com/Sese-Schneider/ha-cover-time-based/pull/241)).
-- **Added a "Single button (cycling)" control mode** ([#245](https://github.com/Sese-Schneider/ha-cover-time-based/issues/245)) for motors with one control input, where each press cycles down → stop → up → stop. Also adds a `cover_time_based.resync` action, now available in every control mode.
+- **Added a "Single button (cycling)" control mode** ([#245](https://github.com/Sese-Schneider/ha-cover-time-based/issues/245)) for motors with one control input, where each press cycles down → stop → up → stop. Also adds a `cover_time_based.resync` action, now available in every control mode. The mode accepts a `script` entity as the button, reads **Pulse time** as the press duration and **Endpoint run-on time** as its settle margin (both now editable on the card), supports **Wait for relay confirmation**, and offers only the travel-time calibrations (the stepped startup-delay and minimum-movement tests reverse a cycling motor).
 
 ### Fixes
 

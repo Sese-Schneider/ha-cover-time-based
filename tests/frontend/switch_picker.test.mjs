@@ -138,10 +138,10 @@ test("coverConfirmedWithoutTilt only confirms for an available, tilt-less cover"
 });
 
 // ---------------------------------------------------------------------------
-// clearedScriptEntities — pulse-only script entities must not survive a mode
-// switch (F4): a script left in a switch slot after leaving pulse mode makes
-// every subsequent save fail (the backend rejects script entities outside
-// pulse mode).
+// clearedScriptEntities — script entities must not survive a switch to a mode
+// that cannot drive them (F4): a script left in a switch slot after leaving a
+// script-capable mode (pulse, single button) makes every subsequent save fail
+// (the backend rejects script entities in the other modes).
 // ---------------------------------------------------------------------------
 
 test("clearedScriptEntities nulls a script-valued open switch slot when leaving pulse mode", () => {
