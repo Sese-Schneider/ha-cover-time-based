@@ -20,6 +20,7 @@ from custom_components.cover_time_based import (
 from custom_components.cover_time_based.card_resources import (
     _CARD_INSTALLED_ISSUE,
     _RESOURCE_ID_KEY,
+    async_register_card_resource,
 )
 from custom_components.cover_time_based.const import DOMAIN
 
@@ -579,6 +580,34 @@ class TestCardResourceUnregistration:
         assert resources.deleted == ["new-id"]
 
     @pytest.mark.asyncio
+    async def test_failed_delete_still_clears_recorded_id(self):
+        """A hand-deleted resource makes async_delete_item raise. The recorded
+        id must still be dropped, or the registrar's guard would skip
+        re-registration for the rest of the session."""
+        resources = FakeResources(
+            items=[{"id": "new-id", "url": _CARD_JS_URL}], loaded=True
+        )
+        resources.async_delete_item = AsyncMock(side_effect=Exception("gone"))
+        entry = MagicMock()
+        entry.entry_id = "e1"
+        hass = self._make_remove_hass(resources, remaining=[])
+
+        with patch(
+            "custom_components.cover_time_based.async_get_position_store"
+        ) as mock_store:
+            mock_store.return_value.async_remove = AsyncMock()
+            await async_remove_entry(hass, entry)
+
+        assert _RESOURCE_ID_KEY not in hass.data[DOMAIN]
+
+        # ...so re-adding a cover in the same session registers the card again:
+        # the real registrar rescans, finds the still-present resource by URL
+        # and re-records its id.
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+        await async_setup_entry(hass, entry)
+        assert hass.data[DOMAIN][_RESOURCE_ID_KEY] == "new-id"
+
+    @pytest.mark.asyncio
     async def test_remove_last_entry_falls_back_to_remove_extra_js_url(self):
         # Registered via the add_extra_js_url fallback → no stored resource id.
         entry = MagicMock()
@@ -599,3 +628,33 @@ class TestCardResourceUnregistration:
         mock_remove_js.assert_called_once()
         _, js_url = mock_remove_js.call_args.args
         assert js_url == _CARD_JS_URL
+
+
+class TestCardResourceRegisteredOnce:
+    """Registering the card must not rescan every Lovelace resource once the
+    resource id is already recorded for this session — every config entry's
+    setup calls the registrar."""
+
+    @pytest.mark.asyncio
+    async def test_register_returns_early_when_id_recorded(self):
+        resources = FakeResources()
+        resources.async_items = MagicMock(wraps=resources.async_items)
+        resources.async_create_item = AsyncMock(wraps=resources.async_create_item)
+        hass = _make_setup_hass(resources)
+        hass.data[DOMAIN] = {_RESOURCE_ID_KEY: "abc"}
+
+        await async_register_card_resource(hass, _CARD_BASE_URL, _CARD_JS_URL)
+
+        resources.async_items.assert_not_called()
+        resources.async_create_item.assert_not_awaited()
+        assert hass.data[DOMAIN][_RESOURCE_ID_KEY] == "abc"
+
+    @pytest.mark.asyncio
+    async def test_register_creates_resource_when_id_not_recorded(self):
+        resources = FakeResources()
+        hass = _make_setup_hass(resources)
+
+        await async_register_card_resource(hass, _CARD_BASE_URL, _CARD_JS_URL)
+
+        assert resources.created == [{"res_type": "module", "url": _CARD_JS_URL}]
+        assert hass.data[DOMAIN][_RESOURCE_ID_KEY] == "new-id"

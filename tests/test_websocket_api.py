@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.helpers.entity_component import DATA_INSTANCES
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -2208,7 +2209,7 @@ class TestWsResolveEntity:
         component = MagicMock()
         component.get_entity.return_value = None
         hass = MagicMock()
-        hass.data = {"entity_components": {"cover": component}}
+        hass.data = {DATA_INSTANCES: {"cover": component}}
         assert resolve_entity_or_none(hass, "cover.test") is None
 
     def test_returns_none_wrong_type(self):
@@ -2217,7 +2218,7 @@ class TestWsResolveEntity:
         component = MagicMock()
         component.get_entity.return_value = MagicMock()  # not CoverTimeBased
         hass = MagicMock()
-        hass.data = {"entity_components": {"cover": component}}
+        hass.data = {DATA_INSTANCES: {"cover": component}}
         assert resolve_entity_or_none(hass, "cover.test") is None
 
     def test_returns_entity_when_valid(self):
@@ -2238,7 +2239,7 @@ class TestWsResolveEntity:
         component = MagicMock()
         component.get_entity.return_value = entity
         hass = MagicMock()
-        hass.data = {"entity_components": {"cover": component}}
+        hass.data = {DATA_INSTANCES: {"cover": component}}
 
         result = resolve_entity_or_none(hass, "cover.test")
         assert result is entity

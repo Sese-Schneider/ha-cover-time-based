@@ -19,6 +19,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
+from homeassistant.core import State
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .cover_base import CoverTimeBased
@@ -135,14 +136,15 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Wrapped mode drives the wrapped cover entity for all tilt."""
         return self._cover_entity_id
 
-    def _wrapped_features(self) -> int | None:
+    def _wrapped_features(self, *, state: State | None = None) -> int | None:
         """Return the wrapped entity's supported_features bitmask, or None.
 
         None means "unknown" — the entity is missing, unavailable, or reports
         no integer feature bitmask. Mirrors _wrapped_supports_tilt's treatment
-        of an offline entity as "don't assume capabilities".
+        of an offline entity as "don't assume capabilities". ``state`` lets a
+        caller that already holds the entity's state skip the machine read.
         """
-        state = self.hass.states.get(self._cover_entity_id)
+        state = self.hass.states.get(self._cover_entity_id) if state is None else state
         if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return None
         features = state.attributes.get(ATTR_SUPPORTED_FEATURES)
@@ -150,24 +152,32 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return None
         return features
 
-    def _wrapped_supports_set_position(self) -> bool:
-        """Return True if the wrapped cover advertises native SET_POSITION."""
-        features = self._wrapped_features()
+    def _wrapped_supports_set_position(self, *, features: int | None = None) -> bool:
+        """Return True if the wrapped cover advertises native SET_POSITION.
+
+        ``features`` lets a caller that already fetched the bitmask reuse it;
+        None means fetch. One decision reads the state machine once and judges
+        the whole chain against the same bitmask, so it can't answer half its
+        questions from a capability set that changed mid-decision.
+        """
+        features = self._wrapped_features() if features is None else features
         return features is not None and bool(features & CoverEntityFeature.SET_POSITION)
 
-    def _wrapped_supports_stop(self) -> bool:
+    def _wrapped_supports_stop(self, *, features: int | None = None) -> bool:
         """Return True if the wrapped cover advertises native STOP."""
-        features = self._wrapped_features()
+        features = self._wrapped_features() if features is None else features
         return features is not None and bool(features & CoverEntityFeature.STOP)
 
-    def _wrapped_supports_set_tilt_position(self) -> bool:
+    def _wrapped_supports_set_tilt_position(
+        self, *, features: int | None = None
+    ) -> bool:
         """Return True if the wrapped cover advertises native SET_TILT_POSITION."""
-        features = self._wrapped_features()
+        features = self._wrapped_features() if features is None else features
         return features is not None and bool(
             features & CoverEntityFeature.SET_TILT_POSITION
         )
 
-    def _use_native_tilt(self) -> bool:
+    def _use_native_tilt(self, *, features: int | None = None) -> bool:
         """Return True if tilt commands should be forwarded to the wrapped
         cover's own tilt instead of simulated with the main motor.
 
@@ -183,7 +193,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return False
         if not isinstance(self._tilt_strategy, InlineTilt):
             return False
-        return self._wrapped_supports_set_tilt_position()
+        return self._wrapped_supports_set_tilt_position(features=features)
 
     async def _plan_tilt_for_travel(self, target, command, current_pos, current_tilt):
         """Sweep the tilt DISPLAY to the direction endpoint during native travel.
@@ -206,7 +216,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             target, command, current_pos, current_tilt
         )
 
-    def _use_native_set_position(self) -> bool:
+    def _use_native_set_position(self, *, features: int | None = None) -> bool:
         """Return True if set_cover_position should be forwarded natively.
 
         Auto-detected from the wrapped entity's SET_POSITION support, with three
@@ -235,17 +245,27 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # natively (_use_native_tilt) the wrapped device owns its slats, so
         # driving position natively is coupling-safe and gives device-accurate
         # positioning. Dual-motor/sequential (timed tilt) keep the timed path.
-        if self._tilt_strategy is not None and not self._use_native_tilt():
+        if self._tilt_strategy is not None and not self._use_native_tilt(
+            features=features
+        ):
             return False
-        return self._wrapped_supports_set_position()
+        return self._wrapped_supports_set_position(features=features)
 
     def _position_driver(self) -> PositionDriver:
         """Select the position actuation driver from current capabilities.
 
         Re-evaluated per call: the wrapped entity's supported_features can
         change at runtime (e.g. it goes unavailable and back).
+
+        The bitmask is fetched once here and threaded through the decision:
+        the chain below would otherwise read the state machine twice.
         """
-        if self._use_native_set_position():
+        features = self._wrapped_features()
+        # Unknown capabilities: every support helper answers False on None, so
+        # the decision below can only land on the timed driver.
+        if features is None:
+            return self._timed_position_driver
+        if self._use_native_set_position(features=features):
             return self._native_position_driver
         return self._timed_position_driver
 
@@ -511,12 +531,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
         because their values may be stale or live depending on the device.
 
         While a self-initiated timed move is in flight, reports are ignored
-        outright rather than checked for opening/closing: an underlying that
-        reports current_position but never opening/closing (e.g. an MQTT
-        position-topic-only cover) always looks "stopped" to that check, so
-        its mid-travel reports would otherwise snap the tracker and cancel
-        the pending auto-stop (see the is_traveling guard below). Native
-        (holds_itself) moves are unaffected and keep snapping.
+        even though they look stopped: an underlying that reports
+        current_position but never opening/closing (e.g. an MQTT
+        position-topic-only cover) always looks "stopped", so its mid-travel
+        reports would otherwise snap the tracker and cancel the pending
+        auto-stop (see the is_traveling guard, below the stopped-state check).
+        Native (holds_itself) moves are unaffected and keep snapping.
 
         Command-echo covers (reports_command_not_endpoint) report no
         trustworthy position or endpoint, so we ignore their attribute-only
@@ -537,6 +557,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         if self._reports_command_not_endpoint:
             return
         if self._in_bounce_grace_window():
+            return
+        new_state = event.data.get("new_state")
+        if new_state is None or new_state.state not in _STOPPED_STATES:
             return
         # A self-initiated TIMED move in flight: the pending auto-stop is the
         # only thing that will halt the underlying, and _snap_to_position would
@@ -560,26 +583,31 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 " position report"
             )
             return
-        new_state = event.data.get("new_state")
-        if new_state is None or new_state.state not in _STOPPED_STATES:
-            return
         # Only the reported position, never the closed-state fallback: an
         # attribute touch that carries no position says nothing new about
         # endpoints (the transition *into* closed already snapped, above), and
         # trusting it here would re-open issue #160 through the side door —
         # a reappearance whose bare `closed` we just refused snaps anyway on
         # whatever attribute the entity settles next.
-        target = self._wrapped_reported_position(trust_closed=False)
-        if target is not None:
+        target = self._wrapped_reported_position(trust_closed=False, state=new_state)
+        # The snap exists to park a still-running auto-updater and record a
+        # new value; when neither applies it would only stop, write and
+        # persist the same number again — a device reporting every 1 % step
+        # does that ~100 times per travel.
+        if target is not None and (
+            target != self.travel_calc.current_position()
+            or self._unsubscribe_auto_updater is not None
+        ):
             await self._snap_to_position(target)
-        await self._maybe_snap_to_reported_tilt()
+        await self._maybe_snap_to_reported_tilt(state=new_state)
 
     async def _snap_to_position(self, target: int) -> None:
         """Snap our tracker to a known position.
 
         Always goes through set_known_position so that a still-running
-        auto-updater is stopped even when our calculated position happens
-        to match the target at this instant.
+        auto-updater is stopped even when our calculated position happens to
+        match the target at this instant; the caller skips the call only when
+        the position matches and no updater is running.
         """
         self._log("_snap_to_position :: snapping to %d", target)
         # The device reporting where it ended up, not a command — it must not
@@ -622,7 +650,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._returning_from_unavailable = False
         return still_returning and new_val in _COMMANDED_STATES
 
-    def _wrapped_reported_position(self, *, trust_closed: bool = True) -> int | None:
+    def _wrapped_reported_position(
+        self, *, trust_closed: bool = True, state: State | None = None
+    ) -> int | None:
         """Return the wrapped cover's reported position, or None if unknown.
 
         Prefers the current_position attribute. Falls back to 0 for
@@ -644,7 +674,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # the time-based tracker rather than a value we do not trust.
         if self._ignore_all_reports:
             return None
-        state = self.hass.states.get(self._cover_entity_id)
+        state = self.hass.states.get(self._cover_entity_id) if state is None else state
         if state is None:
             return None
         # When configured to ignore the reported position, behave like a cover
@@ -663,7 +693,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return self._invert_position(0)
         return None
 
-    def _wrapped_reported_tilt_position(self) -> int | None:
+    def _wrapped_reported_tilt_position(
+        self, *, state: State | None = None
+    ) -> int | None:
         """Return the wrapped cover's reported tilt position, or None.
 
         Honors ignore_reported_position — a device whose reported values are
@@ -673,7 +705,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """
         if self._ignore_reported_position:
             return None
-        state = self.hass.states.get(self._cover_entity_id)
+        state = self.hass.states.get(self._cover_entity_id) if state is None else state
         if state is None:
             return None
         attr_tilt = state.attributes.get(ATTR_CURRENT_TILT_POSITION)
@@ -681,7 +713,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return int(attr_tilt)
         return None
 
-    async def _maybe_snap_to_reported_tilt(self) -> None:
+    async def _maybe_snap_to_reported_tilt(self, *, state: State | None = None) -> None:
         """Snap tilt_calc to the wrapped cover's reported tilt once it settles.
 
         Gated on _use_native_tilt(): only covers whose tilt we forward natively
@@ -689,11 +721,14 @@ class WrappedCoverTimeBased(CoverTimeBased):
         the coupling model owns the tilt tracker, so we must not clobber it.
         Skipped while our own tilt animation is still in flight.
         """
-        if not self._use_native_tilt():
+        # A caller-supplied state already carries the feature bitmask; without
+        # one, leave the fetch to the gate.
+        features = None if state is None else self._wrapped_features(state=state)
+        if not self._use_native_tilt(features=features):
             return
         if self.tilt_calc.is_traveling():
             return
-        target = self._wrapped_reported_tilt_position()
+        target = self._wrapped_reported_tilt_position(state=state)
         if target is None or self.tilt_calc.current_position() == target:
             return
         self._log("_maybe_snap_to_reported_tilt :: snapping tilt to %d", target)

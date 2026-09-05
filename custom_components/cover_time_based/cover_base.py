@@ -171,6 +171,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._config_entry_id: str | None = None
         self._calibration: CalibrationState | None = None
         self._unsubscribe_auto_updater = None
+        self._auto_updater_last_written: tuple | None = None
         self._delay_task = None
         self._startup_delay_task = None
         self._last_command = None
@@ -243,7 +244,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
 
     def _log(self, msg, *args):
-        """Log a debug message prefixed with the entity ID."""
+        """Log a debug message prefixed with the entity ID.
+
+        Guarded: this is called on every tick and event, so the format
+        concat and the logger call must cost nothing with DEBUG off.
+        """
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
         _LOGGER.debug("(%s) " + msg, self.entity_id, *args)
 
     def _extra_persist_data(self) -> dict:
@@ -2571,10 +2578,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 base_timestamp=base_timestamp,
             )
             if coupled_target is not None:
-                # extra_delay (mechanical startup delay) applies to the coupled
-                # calc too: the old sleep-based path delayed the whole start
-                # callback, offsetting both calcs equally. pre_step_delay is the
-                # primary's alone — the coupled calc IS the pre-step.
+                # extra_delay (the mechanical startup delay) applies to the
+                # coupled calc too so both calcs start together; pre_step_delay
+                # is the primary's alone — the coupled calc IS the pre-step.
                 coupled_calc.start_travel(
                     int(coupled_target),
                     delay=extra_delay,
@@ -2649,6 +2655,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._log("start_auto_updater")
         if self._unsubscribe_auto_updater is None:
             self._log("init _unsubscribe_auto_updater")
+            # Forget the last written positions so the first tick always writes.
+            self._auto_updater_last_written = None
             interval = timedelta(seconds=0.1)
             self._unsubscribe_auto_updater = async_track_time_interval(
                 self.hass, self.auto_updater_hook, interval
@@ -2656,12 +2664,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     @callback
     def auto_updater_hook(self, _now):
-        """Call for the autoupdater."""
-        self.async_schedule_update_ha_state()
-        if self.position_reached():
+        """Call for the autoupdater.
+
+        Write only when the reported position or tilt changed; spawn the
+        auto-stop only on arrival.
+        """
+        positions = (self.current_cover_position, self.current_cover_tilt_position)
+        if positions != self._auto_updater_last_written:
+            self._auto_updater_last_written = positions
+            self.async_schedule_update_ha_state()
+        if self.position_reached(positions=positions):
             self._log("auto_updater_hook :: position_reached")
             self.stop_auto_updater()
-        self.hass.async_create_task(self.auto_stop_if_necessary())
+            self.hass.async_create_task(self.auto_stop_if_necessary())
 
     def stop_auto_updater(self):
         """Stop the autoupdater."""
@@ -2670,10 +2685,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._unsubscribe_auto_updater()
             self._unsubscribe_auto_updater = None
 
-    def position_reached(self):
-        """Return if cover has reached its final position."""
-        return self.travel_calc.position_reached() and (
-            not self._has_tilt_support() or self.tilt_calc.position_reached()
+    def position_reached(
+        self, *, positions: tuple[int | None, int | None] | None = None
+    ) -> bool:
+        """Return if cover has reached its final position.
+
+        ``positions`` is a ``(position, tilt_position)`` pair a caller already
+        computed (the auto-updater tick), handed down so neither calculator
+        recalculates. Its tilt member is ignored when tilt is unsupported.
+        """
+        travel_pos, tilt_pos = (None, None) if positions is None else positions
+        return self.travel_calc.position_reached(travel_pos) and (
+            not self._has_tilt_support() or self.tilt_calc.position_reached(tilt_pos)
         )
 
     # -----------------------------------------------------------------------
@@ -2681,7 +2704,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # -----------------------------------------------------------------------
 
     async def auto_stop_if_necessary(self):
-        """Do auto stop if necessary."""
+        """Do auto stop if necessary.
+
+        ``auto_updater_hook`` spawns this only on arrival, so anything added
+        outside the ``position_reached`` check below would never run for it.
+        """
         if self.position_reached():
             self._log(
                 "auto_stop_if_necessary :: position reached (self_initiated=%s)",

@@ -345,15 +345,22 @@ class TestRemoveFromHass:
 # ===================================================================
 
 
+@pytest.fixture
+def traveling_cover(make_cover):
+    """A cover part-way through a 0 → 100 travel, with the updater torn down."""
+    cover = make_cover()
+    cover.travel_calc.set_position(0)
+    cover.travel_calc.start_travel(100)
+    yield cover
+    cover.stop_auto_updater()
+
+
 class TestAutoUpdaterHook:
     """Test the periodic auto-updater callback."""
 
     @pytest.mark.asyncio
-    async def test_auto_updater_hook_calls_update(self, make_cover):
-        cover = make_cover()
-        cover.travel_calc.set_position(0)
-        cover.travel_calc.start_travel(100)
-
+    async def test_auto_updater_hook_calls_update(self, traveling_cover):
+        cover = traveling_cover
         mock_update = MagicMock()
         with (
             patch.object(cover, "async_schedule_update_ha_state", mock_update),
@@ -381,6 +388,103 @@ class TestAutoUpdaterHook:
         # Auto updater should have been stopped
         unsub.assert_called_once()
         assert cover._unsubscribe_auto_updater is None
+
+
+class TestAutoUpdaterTickCost:
+    """One tick writes state only when the integer position/tilt changed, and
+    spawns the auto-stop task only when the position is reached."""
+
+    @pytest.mark.asyncio
+    async def test_unchanged_position_writes_once(self, traveling_cover):
+        cover = traveling_cover
+        cover.start_auto_updater()
+        mock_update = MagicMock()
+        with patch.object(cover, "async_schedule_update_ha_state", mock_update):
+            for _ in range(5):  # microseconds apart: the integer position is the same
+                cover.auto_updater_hook(None)
+        assert mock_update.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_changed_position_writes_again(self, traveling_cover):
+        cover = traveling_cover
+        cover.start_auto_updater()
+        mock_update = MagicMock()
+        with patch.object(cover, "async_schedule_update_ha_state", mock_update):
+            cover.auto_updater_hook(None)
+            cover.travel_calc.set_position(50)
+            cover.travel_calc.start_travel(100)
+            cover.auto_updater_hook(None)
+        assert mock_update.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_restart_writes_on_first_tick(self, traveling_cover):
+        cover = traveling_cover
+        mock_update = MagicMock()
+        with patch.object(cover, "async_schedule_update_ha_state", mock_update):
+            cover.start_auto_updater()
+            cover.auto_updater_hook(None)
+            cover.stop_auto_updater()
+            cover.start_auto_updater()
+            cover.auto_updater_hook(None)
+        assert mock_update.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_no_stop_task_before_arrival(self, traveling_cover):
+        cover = traveling_cover
+        with patch.object(cover, "async_schedule_update_ha_state"):
+            cover.auto_updater_hook(None)
+        assert cover.hass._test_tasks == []
+
+    @pytest.mark.asyncio
+    async def test_stop_task_on_arrival(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel(50)  # already at target
+        with (
+            patch.object(cover, "async_schedule_update_ha_state"),
+            patch.object(
+                cover, "auto_stop_if_necessary", new_callable=AsyncMock
+            ) as stop,
+        ):
+            cover.auto_updater_hook(None)
+            for task in cover.hass._test_tasks:
+                await task
+        stop.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_tilt_arrival_decides_the_spawn(self, make_cover):
+        """Each member of the tick's positions pair is judged by its own
+        calculator: travel sits at its target throughout, so only the tilt
+        member can decide the spawn."""
+        cover = make_cover(
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+            tilt_time_open=5.0,
+            tilt_time_close=5.0,
+        )
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel(50)
+        cover.tilt_calc.set_position(30)
+        cover.tilt_calc.start_travel(30)  # tilt already at its target
+
+        with (
+            patch.object(cover, "async_schedule_update_ha_state"),
+            patch.object(
+                cover, "auto_stop_if_necessary", new_callable=AsyncMock
+            ) as stop,
+        ):
+            cover.auto_updater_hook(None)
+            for task in cover.hass._test_tasks:
+                await task
+        stop.assert_awaited_once()
+
+        cover.hass._test_tasks.clear()
+        cover.tilt_calc.start_travel(100)  # tilt now mid-travel
+        with patch.object(cover, "async_schedule_update_ha_state"):
+            cover.auto_updater_hook(None)
+        assert cover.hass._test_tasks == []
 
 
 # ===================================================================
@@ -1351,3 +1455,40 @@ class TestResyncAllModes:
             await cover.async_resync("closed")
 
         assert not hasattr(cover, "_phase")
+
+
+# ===================================================================
+# _log guard
+# ===================================================================
+
+
+class TestLogGuard:
+    """_log reaches the logger only when DEBUG is enabled."""
+
+    def test_log_skips_logger_when_debug_off(self, make_cover):
+        cover = make_cover()
+        with (
+            patch(
+                "custom_components.cover_time_based.cover_base._LOGGER.isEnabledFor",
+                return_value=False,
+            ),
+            patch(
+                "custom_components.cover_time_based.cover_base._LOGGER.debug"
+            ) as debug,
+        ):
+            cover._log("hello %s", "world")
+        debug.assert_not_called()
+
+    def test_log_logs_when_debug_on(self, make_cover):
+        cover = make_cover()
+        with (
+            patch(
+                "custom_components.cover_time_based.cover_base._LOGGER.isEnabledFor",
+                return_value=True,
+            ),
+            patch(
+                "custom_components.cover_time_based.cover_base._LOGGER.debug"
+            ) as debug,
+        ):
+            cover._log("hello %s", "world")
+        debug.assert_called_once()
