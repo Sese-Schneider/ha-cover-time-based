@@ -16,7 +16,7 @@ import asyncio
 import contextlib
 import time
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from homeassistant.const import SERVICE_OPEN_COVER
@@ -60,13 +60,15 @@ def _echo_event(entity_id, old, new, last_changed=FIXED_ECHO):
     return event
 
 
-def _taps(cover):
-    """The relay taps (``turn_on``) sent through the mock service bus."""
-    return [
-        c.args
-        for c in cover.hass.services.async_call.await_args_list
-        if c.args[1] == "turn_on"
-    ]
+def _ha(service, entity_id):
+    """Shorthand for a homeassistant.turn_on / turn_off call."""
+    return call("homeassistant", service, {"entity_id": entity_id}, False)
+
+
+def _taps(cover, entity_id):
+    """The taps (``turn_on``) sent to ``entity_id`` on the mock service bus."""
+    tap = _ha("turn_on", entity_id)
+    return [c for c in cover.hass.services.async_call.call_args_list if c == tap]
 
 
 class TestRelayFeedbackStart:
@@ -381,7 +383,7 @@ class TestRelayFeedbackGuards:
     """Every guard degrades to today's inline command-fire start."""
 
     @pytest.mark.asyncio
-    async def test_silent_relay_times_out_to_inline_start(self, make_cover):
+    async def test_silent_relay_times_out_to_a_command_anchored_start(self, make_cover):
         cover = make_cover(wait_for_relay_feedback=True)
         _stub_switches(cover)
         cover.travel_calc.set_position(0)
@@ -394,7 +396,8 @@ class TestRelayFeedbackGuards:
             await cover.async_open_cover()
             await asyncio.sleep(0)
             assert cover.travel_calc.is_traveling() is False  # parked
-            # No echo ever arrives; the wait times out and starts inline.
+            # No echo ever arrives; the wait times out and tracking starts,
+            # backdated to the command.
             await asyncio.sleep(0.25)
 
         assert cover.travel_calc.is_traveling() is True
@@ -717,7 +720,7 @@ class TestRelayFeedbackToggleMode:
         )
 
 
-class TestToggleStopWaitsForConfirmation:
+class TestRelayFeedbackToggleStop:
     """A toggle stop is a tap on the driving relay; tapped before the relay's
     ON echo lands it can be swallowed, leaving the motor running untracked."""
 
@@ -755,7 +758,7 @@ class TestToggleStopWaitsForConfirmation:
         await stop
 
         # Exactly one tap, after the confirmation.
-        assert len(_taps(cover)) == 1
+        assert len(_taps(cover, "switch.open")) == 1
         assert cover.travel_calc.is_traveling() is False
 
     @pytest.mark.asyncio
@@ -775,11 +778,10 @@ class TestToggleStopWaitsForConfirmation:
         )
         await stop
 
-        sent = [
-            (c.args[1], c.args[2]["entity_id"])
-            for c in cover.hass.services.async_call.await_args_list
+        assert cover.hass.services.async_call.call_args_list == [
+            _ha("turn_off", "switch.open"),
+            _ha("turn_on", "switch.open"),
         ]
-        assert sent == [("turn_off", "switch.open"), ("turn_on", "switch.open")]
 
     @pytest.mark.asyncio
     async def test_stop_gives_up_waiting_after_the_timeout(self, make_cover):
@@ -803,7 +805,7 @@ class TestToggleStopWaitsForConfirmation:
             cover.hass.services.async_call.reset_mock()
             await cover.async_stop_cover()
 
-        assert len(_taps(cover)) == 1
+        assert len(_taps(cover, "switch.open")) == 1
         # The silent relay's wait was not merely abandoned: its command-fire
         # fallback started tracking, so the stop lands on a tracked move.
         assert cover._startup_delay_task is None
@@ -821,7 +823,7 @@ class TestToggleStopWaitsForConfirmation:
         finally:
             cover._triggered_externally = False
 
-        assert _taps(cover) == []
+        assert _taps(cover, "switch.open") == []
 
     @pytest.mark.asyncio
     async def test_stop_with_no_pending_wait_taps_immediately(
@@ -838,10 +840,25 @@ class TestToggleStopWaitsForConfirmation:
 
         stop = asyncio.ensure_future(cover.async_stop_cover())
         await asyncio.sleep(0)
-        assert _taps(cover)
+        assert _taps(cover, "switch.open")
         await stop
 
-        assert len(_taps(cover)) == 1
+        assert len(_taps(cover, "switch.open")) == 1
+
+    @pytest.mark.asyncio
+    async def test_an_orphaned_wait_is_released_by_the_backstop(self, make_cover):
+        """A future with no owner has nobody to time it out, so the deferral's
+        own timeout has to end the wait rather than block the stop forever."""
+        cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
+        cover._feedback_wait_entity = "switch.open"
+        orphan = asyncio.get_running_loop().create_future()
+        cover._feedback_wait_future = orphan
+
+        with patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.05):
+            await asyncio.wait_for(cover._await_pending_relay_confirmation(), 1.0)
+
+        # Passive: the wait gives up on the future, it does not cancel it.
+        assert not orphan.done()
 
 
 class TestRelayFeedbackToggleOppositeMode:
@@ -1043,7 +1060,7 @@ class TestRelayFeedbackPulseMode:
         )
 
 
-class TestPendingWindowNeverShrinks:
+class TestRelayFeedbackPendingWindow:
     """A later, shorter mark (a stop's default window) must not truncate the
     long window a feedback-gated move armed while its echo is outstanding."""
 
@@ -1118,7 +1135,7 @@ class TestPendingWindowNeverShrinks:
         assert delays[-1] == 5.0
 
 
-class TestWaitSlotBelongsToItsOwner:
+class TestRelayFeedbackWaitSlot:
     """A cancelled wait's cleanup must not clear a replacement wait that
     registered before the cancelled task's `finally` ran (HA creates tasks
     eagerly, so that ordering is the normal one)."""

@@ -4063,14 +4063,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         return commanded_at
 
     async def _await_pending_relay_confirmation(self) -> None:
-        """Block until a pending relay-feedback wait resolves, bounded by the
-        same timeout as the wait itself.
+        """Block until a pending relay-feedback wait resolves.
 
         For a caller about to tap the driving relay: a tap sent before that
         relay's ON echo lands can be swallowed by the hardware (a toggle stop is
         a tap, not an off), leaving the motor running while tracking is torn
         down. Waiting is passive — ``asyncio.wait`` never cancels the future — so
-        the task that owns the wait keeps both its slot and its own timeout.
+        the task that owns the wait keeps both its slot and its own timeout, and
+        it is that owner timing out and cancelling the future that normally
+        wakes this wait. The explicit timeout is a backstop for a future left
+        behind with no owner to end it.
         """
         future = self._feedback_wait_future
         if future is None or future.done():

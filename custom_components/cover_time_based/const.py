@@ -101,20 +101,20 @@ CONF_WAIT_FOR_RELAY_FEEDBACK = "wait_for_relay_feedback"
 DEFAULT_WAIT_FOR_RELAY_FEEDBACK = False
 
 # How long a feedback-gated move (wait_for_relay_feedback) waits for its relay's
-# ON confirmation echo before falling back to the command-fire start. Generous
-# relative to the few seconds a cold Zigbee mesh takes; the fallback only
-# matters for a relay that never reports its state at all.
+# ON confirmation echo before falling back to the command-fire start (issue
+# #231). Generous relative to the few seconds a cold Zigbee mesh takes; the
+# fallback only matters for a relay that never reports its state at all.
 RELAY_FEEDBACK_TIMEOUT = 10.0
 
 # Safety window the awaited relay's pending-echo count lives for while a
-# feedback wait is armed. Longer than the wait itself, so a late echo is still
-# filtered as our own rather than read as an external press.
+# feedback wait is armed (issue #231). Longer than the wait itself, so a late
+# echo is still filtered as our own rather than read as an external press.
 RELAY_FEEDBACK_PENDING_TIMEOUT = RELAY_FEEDBACK_TIMEOUT + 2.0
 
 # Default safety window for a relay's own state-change echoes: after it, an
 # unmatched pending count is dropped so a stale count can never swallow a
 # genuine external press. Sized for a promptly-reporting relay; the feedback
-# and pulse paths widen it.
+# (issue #231) and pulse paths widen it.
 ECHO_PENDING_WINDOW = 5.0
 
 # All modes. When True, a set_cover_position command first drives the cover
