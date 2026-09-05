@@ -4063,16 +4063,23 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         return commanded_at
 
     async def _await_pending_relay_confirmation(self) -> None:
-        """Block until a pending relay-feedback wait resolves.
+        """Block until a pending relay-feedback wait has been acted on.
 
         For a caller about to tap the driving relay: a tap sent before that
         relay's ON echo lands can be swallowed by the hardware (a toggle stop is
         a tap, not an off), leaving the motor running while tracking is torn
-        down. Waiting is passive — ``asyncio.wait`` never cancels the future — so
-        the task that owns the wait keeps both its slot and its own timeout: the
-        confirmation resolves the future, and when none arrives it is the owner
-        timing out and cancelling the future that wakes this wait. The explicit
-        timeout is a backstop for a future left behind with no owner to end it.
+        down. The wait is on the deferred-start TASK, not on the future the echo
+        resolves: both wake off that same future, so waiting on the future alone
+        would only put this caller in the same wake-up batch as the task that
+        owns it, leaving "the start ran first" to callback ordering. Behind the
+        task, tracking has provably started (confirmation) or been anchored on
+        the command (the owner's own timeout fallback) before this returns.
+
+        Waiting is passive — ``asyncio.wait`` never cancels what it waits on — so
+        the owner keeps its slot and its own timeout. With no task the wait falls
+        back to the future (a calibration drive owns its wait inline); the
+        explicit timeout is then a backstop for a future left behind with no
+        owner to end it.
         """
         future = self._feedback_wait_future
         if future is None or future.done():
@@ -4081,6 +4088,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             "_await_pending_relay_confirmation :: deferring until %s confirms",
             self._feedback_wait_entity,
         )
+        task = self._startup_delay_task
+        if task is not None and not task.done():
+            await asyncio.wait([task], timeout=RELAY_FEEDBACK_TIMEOUT)
+            return
         await asyncio.wait([future], timeout=RELAY_FEEDBACK_TIMEOUT)
 
     def _unmark_switch_pending(self, entity_id, count=1):

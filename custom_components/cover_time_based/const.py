@@ -100,10 +100,10 @@ DEFAULT_FORCE_ENDPOINT_REDRIVE = False
 CONF_WAIT_FOR_RELAY_FEEDBACK = "wait_for_relay_feedback"
 DEFAULT_WAIT_FOR_RELAY_FEEDBACK = False
 
-# How long a feedback-gated move (wait_for_relay_feedback) waits for its relay's
-# ON confirmation echo before falling back to the command-fire start (issue
-# #231). Generous relative to the few seconds a cold Zigbee mesh takes; the
-# fallback only matters for a relay that never reports its state at all.
+# How long a feedback-gated move (wait_for_relay_feedback) waits for its
+# relay's ON confirmation echo before falling back to the command-fire start
+# (issue #231). Generous relative to the few seconds a cold Zigbee mesh takes;
+# the fallback only matters for a relay that never reports its state at all.
 RELAY_FEEDBACK_TIMEOUT = 10.0
 
 # Safety window the awaited relay's pending-echo count lives for while a

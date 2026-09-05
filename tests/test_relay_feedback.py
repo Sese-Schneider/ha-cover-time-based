@@ -405,9 +405,11 @@ class TestRelayFeedbackGuards:
         assert cover._startup_delay_task is None
         # The fallback anchors on the command, not on the moment the wait gave
         # up: a relay whose ON report was dropped has been running since the
-        # command.
+        # command. The tolerance only has to stay well inside the patched 0.2s
+        # timeout that separates the two anchors, so it is loose enough to
+        # survive a loaded CI runner.
         assert cover.travel_calc._last_known_position_timestamp == pytest.approx(
-            t0, abs=0.01
+            t0, abs=0.05
         )
 
     @pytest.mark.asyncio
@@ -843,6 +845,35 @@ class TestRelayFeedbackToggleStop:
         assert _taps(cover, "switch.open")
         await stop
 
+        assert len(_taps(cover, "switch.open")) == 1
+
+    @pytest.mark.asyncio
+    async def test_the_stop_resumes_behind_the_start_it_waited_for(
+        self, parked_toggle_cover
+    ):
+        """The confirmation wakes the parked start and the waiting stop alike,
+        so the stop must resume behind the start rather than merely alongside
+        it: it reads ``was_active`` off the tracker, and an idle tracker means
+        no tap, leaving the motor running untracked."""
+        cover = parked_toggle_cover
+        traveling_at_cancel = []
+        real_cancel = cover._cancel_startup_delay_task
+
+        def _spy():
+            # _neutralize_tracked_movement's first act, so this samples the
+            # tracker at the instant the stop decided what to tear down.
+            traveling_at_cancel.append(cover.travel_calc.is_traveling())
+            return real_cancel()
+
+        with patch.object(cover, "_cancel_startup_delay_task", _spy):
+            stop = asyncio.ensure_future(cover.async_stop_cover())
+            await asyncio.sleep(0)
+            await cover._async_switch_state_changed(
+                _echo_event("switch.open", "off", "on", datetime.now(UTC))
+            )
+            await stop
+
+        assert traveling_at_cancel == [True]
         assert len(_taps(cover, "switch.open")) == 1
 
     @pytest.mark.asyncio
