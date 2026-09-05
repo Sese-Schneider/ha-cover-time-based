@@ -21,6 +21,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_WRAPPED,
 )
+from custom_components.cover_time_based.cover_base import RawCommandNotSupported
 
 # ===================================================================
 # Name / unique_id / device_class / assumed_state properties
@@ -1600,3 +1601,82 @@ class TestKnownPositionHaltsMovement:
             await cover.async_resync("open")
         send_stop.assert_awaited_once()
         assert cover.travel_calc.current_position() == 100
+
+
+class TestAsyncRawCommand:
+    """Raw commands bypass the tracker; outside a calibration the tracked
+    position becomes unknown and that is persisted, so a restart does not
+    re-anchor at the stale pre-command value (3.20)."""
+
+    @pytest.mark.asyncio
+    async def test_open_clears_and_persists_unknown(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(40)
+        with (
+            patch.object(cover, "async_write_ha_state") as write,
+            patch.object(cover, "_send_open", AsyncMock()) as send_open,
+            patch.object(cover, "_async_persist_position", AsyncMock()) as persist,
+        ):
+            await cover.async_raw_command("open")
+        send_open.assert_awaited_once()
+        assert cover.travel_calc.current_position() is None
+        write.assert_called_once()
+        persist.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_open_while_traveling_halts_the_tracker_first(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_open", AsyncMock()),
+            patch.object(cover, "_async_persist_position", AsyncMock()),
+        ):
+            await cover.async_raw_command("open")
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() is None
+
+    @pytest.mark.asyncio
+    async def test_tilt_without_tilt_motor_is_rejected(self, make_cover):
+        cover = make_cover()
+        with pytest.raises(RawCommandNotSupported):
+            await cover.async_raw_command("tilt_open")
+
+    @pytest.mark.asyncio
+    async def test_tilt_clears_only_the_tilt_axis(self, make_cover):
+        cover = make_cover(
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+            tilt_time_open=5.0,
+            tilt_time_close=5.0,
+        )
+        cover.travel_calc.set_position(40)
+        cover.tilt_calc.set_position(60)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_tilt_open", AsyncMock()) as send_tilt_open,
+            patch.object(cover, "_async_persist_position", AsyncMock()),
+        ):
+            await cover.async_raw_command("tilt_open")
+        send_tilt_open.assert_awaited_once()
+        assert cover.tilt_calc.current_position() is None
+        assert cover.travel_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_during_calibration_only_sends(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(40)
+        cover._calibration = MagicMock()
+        with (
+            patch.object(cover, "async_write_ha_state") as write,
+            patch.object(cover, "_send_close", AsyncMock()) as send_close,
+            patch.object(cover, "_async_persist_position", AsyncMock()) as persist,
+        ):
+            await cover.async_raw_command("close")
+        send_close.assert_awaited_once()
+        assert cover.travel_calc.current_position() == 40
+        write.assert_not_called()
+        persist.assert_not_awaited()

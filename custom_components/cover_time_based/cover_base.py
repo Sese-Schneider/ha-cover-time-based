@@ -93,6 +93,11 @@ _EXTERNAL_TRIGGER: ContextVar[frozenset] = ContextVar(
     "cover_time_based_external_trigger", default=frozenset()
 )
 
+
+class RawCommandNotSupported(HomeAssistantError):
+    """A raw command the configured hardware cannot take (tilt without a tilt motor)."""
+
+
 # "travel" drives self.travel_calc; "tilt" drives self.tilt_calc on a
 # dedicated tilt motor (dual_motor). Named here once so a typo reads as a
 # type error instead of silently picking the wrong branch — see the axis
@@ -3597,6 +3602,32 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     @abstractmethod
     async def _send_stop(self) -> None:
         """Send the stop command to the underlying device."""
+
+    async def async_raw_command(self, command: str) -> None:
+        """Drive the device directly, bypassing the position tracker.
+
+        The card's calibration-screen buttons. Outside a calibration the tracked
+        position becomes unknown and is persisted as such, so a restart does not
+        re-anchor at the stale pre-command value; during a calibration the
+        session owns the tracker and only the command is sent.
+        """
+        if command.startswith("tilt_") and not self._has_tilt_motor():
+            raise RawCommandNotSupported("Tilt motor not configured")
+        in_calibration = self._calibration is not None
+        if not in_calibration:
+            self._cancel_startup_delay_task()
+            self._cancel_delay_task()
+            self._handle_stop()
+        await self._raw_direction_command(command)
+        if in_calibration:
+            return
+        if command.startswith("tilt_"):
+            if self._has_tilt_support():
+                self.tilt_calc.clear_position()
+        else:
+            self.travel_calc.clear_position()
+        self.async_write_ha_state()
+        await self._async_persist_position()
 
     async def _raw_direction_command(self, command: str) -> None:
         """Execute a raw direction command (for calibration screen buttons).

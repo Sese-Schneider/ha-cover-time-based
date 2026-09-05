@@ -37,9 +37,8 @@ class PositionStore:
         return (await self._ensure_loaded()).get(entry_id)
 
     async def async_save(self, entry_id: str, data: dict[str, int | str]) -> None:
-        """Save entry data, debounced. Skips if nothing would change."""
-        if not data:
-            return
+        """Save entry data, debounced. Skips if nothing would change; an empty
+        record is a real value (position unknown)."""
         current = await self._ensure_loaded()
         if current.get(entry_id) == data:
             return
