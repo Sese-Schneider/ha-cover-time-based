@@ -214,6 +214,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._state = True
         self._pending_switch = {}
         self._pending_switch_timers = {}
+        # Absolute monotonic expiry per entity, so a re-mark can never shorten
+        # an outstanding window (see _mark_switch_pending).
+        self._pending_switch_deadlines = {}
         self._state_listener_unsubs = []
         # Relay-feedback timing (wait_for_relay_feedback). Three short-lived
         # fields spanning one deferred move:
@@ -354,6 +357,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         for timer in self._pending_switch_timers.values():
             timer()
         self._pending_switch_timers.clear()
+        self._pending_switch_deadlines.clear()
         # Cancel the two ghost timers: the endpoint run-on stop and the
         # startup-delay arming. Left alive across a reload (every card save
         # reloads the entry) they later fire real relay commands against the
@@ -3913,6 +3917,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._pending_switch[entity_id],
         )
 
+        # The window never shrinks: a stop's default window arriving while a
+        # feedback-gated move's long window is outstanding would otherwise
+        # truncate it, and the late echo would dispatch as an external press.
+        now = time.monotonic()
+        deadline = self._pending_switch_deadlines.get(entity_id)
+        if deadline is not None:
+            timeout = max(timeout, deadline - now)
+        self._pending_switch_deadlines[entity_id] = now + timeout
+
         # Cancel any existing timeout for this switch
         if entity_id in self._pending_switch_timers:
             self._pending_switch_timers[entity_id]()
@@ -3924,6 +3937,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._log("_mark_switch_pending :: timeout clearing %s", entity_id)
                 del self._pending_switch[entity_id]
             self._pending_switch_timers.pop(entity_id, None)
+            self._pending_switch_deadlines.pop(entity_id, None)
 
         self._pending_switch_timers[entity_id] = async_call_later(
             self.hass, timeout, _clear_pending
@@ -4034,6 +4048,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._pending_switch[entity_id] = remaining
             return
         del self._pending_switch[entity_id]
+        self._pending_switch_deadlines.pop(entity_id, None)
         timer = self._pending_switch_timers.pop(entity_id, None)
         if timer:
             timer()
@@ -4087,6 +4102,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._pending_switch[entity_id] -= 1
             if self._pending_switch[entity_id] <= 0:
                 del self._pending_switch[entity_id]
+                self._pending_switch_deadlines.pop(entity_id, None)
                 # Cancel the safety timeout
                 timer = self._pending_switch_timers.pop(entity_id, None)
                 if timer:

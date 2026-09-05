@@ -904,3 +904,76 @@ class TestRelayFeedbackPulseMode:
             "pending window must cover the 8s pulse so the completion OFF echo "
             "is still filtered as our own"
         )
+
+
+class TestPendingWindowNeverShrinks:
+    """A later, shorter mark (a stop's default window) must not truncate the
+    long window a feedback-gated move armed while its echo is outstanding."""
+
+    @pytest.mark.asyncio
+    async def test_short_remark_keeps_the_longer_remaining_window(self, make_cover):
+        cover = make_cover(wait_for_relay_feedback=True)
+        _stub_switches(cover)
+        delays = []
+
+        def fake_call_later(hass, delay, action):
+            delays.append(delay)
+            return MagicMock()
+
+        with patch.object(cover_base, "async_call_later", fake_call_later):
+            cover._mark_switch_pending("switch.open", 1, timeout=12.0)
+            cover._mark_switch_pending("switch.open", 1, timeout=5.0)
+        assert delays[0] == 12.0
+        assert delays[1] == pytest.approx(12.0, abs=0.05)
+
+    @pytest.mark.asyncio
+    async def test_longer_remark_extends(self, make_cover):
+        cover = make_cover(wait_for_relay_feedback=True)
+        _stub_switches(cover)
+        delays = []
+
+        def fake_call_later(hass, delay, action):
+            delays.append(delay)
+            return MagicMock()
+
+        with patch.object(cover_base, "async_call_later", fake_call_later):
+            cover._mark_switch_pending("switch.open", 1, timeout=5.0)
+            cover._mark_switch_pending("switch.open", 1, timeout=12.0)
+        assert delays[1] == 12.0
+
+    @pytest.mark.asyncio
+    async def test_deadline_is_dropped_once_the_echo_is_consumed(self, make_cover):
+        """A fresh mark after the count clears starts from its own timeout —
+        a stale deadline must not keep extending later, unrelated windows."""
+        cover = make_cover(wait_for_relay_feedback=True)
+        _stub_switches(cover)
+        delays = []
+
+        def fake_call_later(hass, delay, action):
+            delays.append(delay)
+            return MagicMock()
+
+        with patch.object(cover_base, "async_call_later", fake_call_later):
+            cover._mark_switch_pending("switch.open", 1, timeout=12.0)
+            await cover._async_switch_state_changed(
+                _echo_event("switch.open", "off", "on")
+            )
+            assert "switch.open" not in cover._pending_switch
+            cover._mark_switch_pending("switch.open", 1, timeout=5.0)
+        assert delays[-1] == 5.0
+
+    @pytest.mark.asyncio
+    async def test_unmark_drops_the_deadline(self, make_cover):
+        cover = make_cover(wait_for_relay_feedback=True)
+        _stub_switches(cover)
+        delays = []
+
+        def fake_call_later(hass, delay, action):
+            delays.append(delay)
+            return MagicMock()
+
+        with patch.object(cover_base, "async_call_later", fake_call_later):
+            cover._mark_switch_pending("switch.open", 1, timeout=12.0)
+            cover._unmark_switch_pending("switch.open", 1)
+            cover._mark_switch_pending("switch.open", 1, timeout=5.0)
+        assert delays[-1] == 5.0
