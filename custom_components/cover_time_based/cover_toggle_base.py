@@ -196,11 +196,30 @@ class ToggleBaseCover(SwitchCoverTimeBased):
     async def async_stop_cover(
         self, *, supersede: bool = True, tilt_axis_reported: bool = False, **kwargs
     ):
-        """Stop the cover, only sending relay command if it was active.
+        """Stop the cover and publish the result.
 
         See CoverTimeBased.async_stop_cover for ``supersede`` and
         ``tilt_axis_reported``.
         """
+        await self._stop_hardware(
+            supersede=supersede, tilt_axis_reported=tilt_axis_reported
+        )
+        self.async_write_ha_state()
+        await self._async_persist_position()
+
+    async def _stop_hardware(
+        self, *, supersede: bool = True, tilt_axis_reported: bool = False
+    ) -> None:
+        """Stop the cover without publishing, only tapping the relay if it was active.
+
+        See CoverTimeBased._stop_hardware for ``supersede`` and
+        ``tilt_axis_reported``.
+        """
+        # Narrower than the base's _movement_in_progress (which also counts a
+        # tilt tracker, a pre-step and a tilt motor) and than _movement_started
+        # ("did the move just commanded begin"): a toggle stop is a tap, and a
+        # tap on an idle motor starts it, so only what is/was about to be driven
+        # here may be tapped.
         was_active = (
             self.is_opening
             or self.is_closing
@@ -216,9 +235,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             tilt_axis_reported=tilt_axis_reported,
         )
         travel_was_moving = self.travel_calc.is_traveling()
-        self._cancel_startup_delay_task()
-        self._cancel_delay_task()
-        self._handle_stop(supersede=supersede)
+        self._neutralize_tracked_movement(supersede=supersede)
         if self._tilt_strategy is not None:
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
@@ -274,10 +291,8 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             await self._tilt_settle()
         self._moving_tilt_motor = False
         self._moving_tilt = False
-        self.async_write_ha_state()
         self._last_command = None
         self._last_tilt_direction = None
-        await self._async_persist_position()
 
     def _on_tilt_motor_move_complete(self) -> None:
         """Clear the stale-direction bookkeeping once a tilt-motor move ends.

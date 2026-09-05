@@ -56,9 +56,7 @@ class CalibrationMixin:
         def _has_tilt_motor(self) -> bool: ...
         def async_write_ha_state(self) -> None: ...
         def _self_stops_at_endpoints(self) -> bool: ...
-        def _cancel_startup_delay_task(self) -> None: ...
-        def _cancel_delay_task(self) -> bool: ...
-        def _handle_stop(self, *, supersede: bool = True) -> None: ...
+        def _neutralize_tracked_movement(self, *, supersede: bool = True) -> None: ...
 
     async def start_calibration(self, **kwargs):
         """Start a calibration test for the given attribute."""
@@ -92,12 +90,10 @@ class CalibrationMixin:
                 "Tilt time must be configured before calibrating startup delay"
             )
 
-        # Neutralize any in-flight tracked movement: calibration drives the
-        # motors directly, and a still-armed auto-updater would fire a relay
-        # STOP mid-measurement when the old target is reached.
-        self._cancel_startup_delay_task()
-        self._cancel_delay_task()
-        self._handle_stop()
+        # Calibration drives the motors directly, and a still-armed
+        # auto-updater would fire a relay STOP mid-measurement when the old
+        # target is reached.
+        self._neutralize_tracked_movement()
 
         # Create state only after validation passes
         self._calibration = CalibrationState(attribute=attribute, timeout=timeout)

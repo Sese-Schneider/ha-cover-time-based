@@ -204,19 +204,27 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             )
 
     # --- the mode contract --------------------------------------------
-    async def _send_open(self) -> None:
+    async def _abort_press_plan(self) -> None:
+        """Drop the pending plan so nothing left over presses the button.
+
+        A settle task would re-anchor the phase, and an in-flight sequence would
+        keep pressing from the phase it planned against — both against whatever
+        replaces the plan. A press caught mid-pulse is released by
+        _supersede_active_press.
+        """
         self._cancel_settle()
         await self._supersede_active_press()
+
+    async def _send_open(self) -> None:
+        await self._abort_press_plan()
         self._start_press_sequence(Action.OPEN)
 
     async def _send_close(self) -> None:
-        self._cancel_settle()
-        await self._supersede_active_press()
+        await self._abort_press_plan()
         self._start_press_sequence(Action.CLOSE)
 
     async def _send_stop(self) -> None:
-        self._cancel_settle()
-        await self._supersede_active_press()
+        await self._abort_press_plan()
         self._start_press_sequence(Action.STOP)
 
     # --- endpoint re-anchor -------------------------------------------
@@ -245,23 +253,15 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
     # --- known position ------------------------------------------------
     async def _halt_for_known_position(self) -> None:
-        """Cancel the press plan without pressing.
+        """Cancel the press plan instead of stopping, then park the tracker.
 
         The button is a cycle input: a "stop" press on a motor already parked at
-        the declared position would start it. So only the in-flight press
-        sequence and settle margin are cancelled (a press caught mid-pulse is
-        released by _supersede_active_press) and the tracker is parked. The
-        startup-delay and run-on waits go too: a deferred start() firing after
-        the declaration would animate the tracker from the declared position
-        toward the old target with no press behind it.
+        the declared position would start it, so nothing is pressed here.
         """
-        self._cancel_settle()
-        self._cancel_startup_delay_task()
-        self._cancel_delay_task()
-        await self._supersede_active_press()
-        self._handle_stop()
+        await self._abort_press_plan()
+        self._neutralize_tracked_movement()
 
-    async def _on_known_position(self, position: int) -> None:
+    def _on_known_position(self, position: int) -> None:
         """Anchor the tracked phase when an endpoint is declared.
 
         An intermediate position says nothing about where the motor is in its

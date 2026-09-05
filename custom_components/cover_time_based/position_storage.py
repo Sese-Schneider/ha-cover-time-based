@@ -37,8 +37,12 @@ class PositionStore:
         return (await self._ensure_loaded()).get(entry_id)
 
     async def async_save(self, entry_id: str, data: dict[str, int | str]) -> None:
-        """Save entry data, debounced. Skips if nothing would change; an empty
-        record is a real value (position unknown)."""
+        """Save entry data, debounced, skipping a write that would change nothing.
+
+        An empty record is a real value — the position is unknown — so it must
+        be able to overwrite a stored one; refusing it hands the stale position
+        back on the next restart.
+        """
         current = await self._ensure_loaded()
         if current.get(entry_id) == data:
             return
