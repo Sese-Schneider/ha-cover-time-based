@@ -7,7 +7,7 @@
 - **Added a per-cover "Wait for relay confirmation before tracking" option** ([#231](https://github.com/Sese-Schneider/ha-cover-time-based/issues/231)).
 - **Serbian — Latin (`sr-Latn`) translation added.**
 - **Czech (`cs`) translation added** ([#241](https://github.com/Sese-Schneider/ha-cover-time-based/pull/241)).
-- **Added a "Single button (cycling)" control mode** ([#245](https://github.com/Sese-Schneider/ha-cover-time-based/issues/245)) for motors with one control input, where each press cycles down → stop → up → stop. Also adds a `cover_time_based.resync` action, now available in every control mode.
+- **Added a "Single button (cycling)" control mode** ([#245](https://github.com/Sese-Schneider/ha-cover-time-based/issues/245)) for motors with one control input, where each press cycles down → stop → up → stop. Also adds a `cover_time_based.resync` action, now available in every control mode. The mode accepts a `script` entity as the button, reads **Pulse time** as the press duration and **Endpoint run-on time** as its settle margin (both now editable on the card), supports **Wait for relay confirmation**, and offers only the travel-time calibrations (the stepped startup-delay and minimum-movement tests reverse a cycling motor).
 
 ### Fixes
 
@@ -22,6 +22,7 @@
 - **"Wait for relay confirmation": a stop or reversal sent while the relay's confirmation is still outstanding no longer causes the late confirmation to be read as a wall-switch press** ([#231](https://github.com/Sese-Schneider/ha-cover-time-based/issues/231)): the new command re-marked the relay with the ordinary echo window, which truncated the longer one the waiting move had armed, so a confirmation arriving after it fell through to the external-press handler and was tracked as a move started at the wall.
 - **Toggle covers with "Wait for relay confirmation": a stop pressed before the relay confirms is now sent after the confirmation** ([#231](https://github.com/Sese-Schneider/ha-cover-time-based/issues/231)), so the stop tap can no longer be swallowed while the motor runs on untracked.
 - **"Wait for relay confirmation": changing direction while the relay's confirmation is still outstanding no longer loses the new move's confirmation** ([#231](https://github.com/Sese-Schneider/ha-cover-time-based/issues/231)): the cancelled wait's cleanup could clear the replacement's registration, so the new move never started tracking and, after the timeout, phantom-tracked a move the motor was not making.
+- **A calibration that times out on a motor that stops itself at its limits now records the cover at that limit**: Wrapped, Toggle, Toggle (opposite button), Pulse covers without the endpoint stop, and Single button covers are not sent a stop on timeout (a stop pulse would move them), so the motor runs to its limit; the tracked position used to stay wherever it was when the calibration started.
 
 ## 4.11.0 (2026-08-04)
 

@@ -335,3 +335,62 @@ test("_onResync logs and does not throw when the service call rejects", async ()
   await expect(card._onResync("open")).resolves.toBeUndefined();
   expect(errSpy).toHaveBeenCalled();
 });
+
+// ---------------------------------------------------------------------------
+// Calibration tab: only the travel times can be measured on a cycling button
+// ---------------------------------------------------------------------------
+
+test("single_button mode: calibration list offers only travel_time_close and travel_time_open", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: singleButtonCfg({ travel_time_close: 20, travel_time_open: 20 }),
+    activeTab: "calibration",
+    knownPosition: "closed",
+  });
+  const options = [...card.shadowRoot.querySelectorAll("#cal-attribute option")].map(
+    (o) => o.value,
+  );
+  expect(options).toEqual(["travel_time_close", "travel_time_open"]);
+});
+
+test("switch mode: calibration list still offers the startup-delay and minimum-movement tests", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg({ travel_time_close: 20, travel_time_open: 20 }),
+    activeTab: "calibration",
+    knownPosition: "closed",
+  });
+  const options = [...card.shadowRoot.querySelectorAll("#cal-attribute option")].map(
+    (o) => o.value,
+  );
+  expect(options).toContain("travel_startup_delay");
+  expect(options).toContain("min_movement_time");
+});
+
+// ---------------------------------------------------------------------------
+// Options the mode reads must be editable: pulse_time (press duration) and
+// endpoint_runon_time (settle margin)
+// ---------------------------------------------------------------------------
+
+test("single_button mode: the Pulse time field is shown on the device tab", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: singleButtonCfg({ pulse_time: 0.5 }),
+    activeTab: "device",
+  });
+  // The pulse-time field is the only .inline-field in the control-mode section
+  // (see "pulse mode renders .inline-field" in card_render.test.mjs).
+  expect(card.shadowRoot.querySelector(".inline-field")).not.toBeNull();
+});
+
+test("single_button mode: timing table includes the endpoint_runon_time row", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: singleButtonCfg(),
+    activeTab: "timing",
+  });
+  const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
+  // travel_time_close, travel_time_open, travel_startup_delay,
+  // min_movement_time, endpoint_runon_time
+  expect(inputs.length).toBe(5);
+});

@@ -113,7 +113,8 @@ _FIELD_MAP = {
 }
 
 
-# Entity-id slots that must not hold a `script.` entity outside pulse mode.
+# Entity-id slots that must not hold a `script.` entity in a mode that cannot
+# drive one.
 _SWITCH_ENTITY_CONF_KEYS = (
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -123,21 +124,26 @@ _SWITCH_ENTITY_CONF_KEYS = (
     CONF_TILT_STOP_SWITCH,
 )
 
+# Modes that turn the driving entity off themselves after pulse_time, so a
+# script's own auto-off is never misread as a stop.
+_SCRIPT_CAPABLE_MODES = frozenset({CONTROL_MODE_PULSE, CONTROL_MODE_SINGLE_BUTTON})
 
-def _script_in_non_pulse_mode(control_mode, options):
-    """Return the first script entity_id configured outside pulse mode, else None.
 
-    Scripts are only supported in pulse mode (they auto-return to 'off',
-    which switch/toggle modes misread as a stop). Every other mode rejects
-    them, keeping the rule simple and unequivocal. The card clears the
-    wrapped-mode switch slots, and any script-valued switch slot left over
-    from pulse mode, whenever the control mode changes (see
-    _onControlModeChange / clearedEntitiesForMode / clearedScriptEntities in
-    cover-time-based-card.js and entity-filter.js) — so this rejection is a
-    backstop that mainly fires on raw API/YAML misuse the card's own clearing
-    can't reach. `options` is the merged config that would be persisted.
+def _unsupported_script_entity(control_mode, options):
+    """Return the first script entity_id configured in a mode that cannot drive
+    one, else None.
+
+    Scripts auto-return to 'off', which the latching and toggle modes read as
+    a stop; only the modes in _SCRIPT_CAPABLE_MODES drive the entity as a
+    timed press and ignore its state. The card clears the wrapped-mode switch
+    slots, and any script-valued slot left over from a script-capable mode,
+    whenever the control mode changes (see _onControlModeChange /
+    clearedEntitiesForMode / clearedScriptEntities in cover-time-based-card.js
+    and entity-filter.js) — so this rejection is a backstop that mainly fires
+    on raw API/YAML misuse. `options` is the merged config that would be
+    persisted.
     """
-    if control_mode == CONTROL_MODE_PULSE:
+    if control_mode in _SCRIPT_CAPABLE_MODES:
         return None
     for key in _SWITCH_ENTITY_CONF_KEYS:
         value = options.get(key)
@@ -404,18 +410,19 @@ async def ws_update_config(
                     value = "sequential_close"
                 new_options[conf_key] = value
 
-    # Reject script entities outside pulse mode (they auto-return to 'off',
-    # which switch/toggle modes misread as a stop). Validate the merged result
-    # so switching an existing script-configured cover into switch/toggle is
-    # caught too.
-    offending = _script_in_non_pulse_mode(
+    # Reject script entities in a mode that cannot drive one (they auto-return
+    # to 'off', which switch/toggle modes misread as a stop). Validate the
+    # merged result so switching an existing script-configured cover into
+    # switch/toggle is caught too.
+    offending = _unsupported_script_entity(
         new_options.get(CONF_CONTROL_MODE), new_options
     )
     if offending is not None:
         connection.send_error(
             msg["id"],
             "invalid_entity",
-            f"Script entities are only supported in pulse mode (got {offending})",
+            "Script entities are only supported in pulse and single-button "
+            f"modes (got {offending})",
         )
         return
 

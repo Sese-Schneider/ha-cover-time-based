@@ -1,7 +1,7 @@
 import { html } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import { renderTextfield } from "./textfield-render.js";
 import { switchPickerDomains, showsPulseTime } from "./entity-filter.js";
-import { TIMING_ATTRIBUTES } from "./constants.js";
+import { STEPPED_CALIBRATION_ATTRIBUTES, TIMING_ATTRIBUTES } from "./constants.js";
 import { renderLanguageBanner, GITHUB_REPO_URL } from "./language-banner.js";
 
 // Deep-link to the README section documenting the position-reporting profiles,
@@ -703,13 +703,16 @@ export function renderTimingTable(card, c) {
   // Endpoint run-on applies to modes that send a relay stop at the endpoint:
   // switch mode (its latched relay must be de-energized) and pulse mode when it
   // sends the endpoint stop (send_endpoint_stop, default on — it pulses a
-  // dedicated stop relay, deferred by run-on). Toggle/wrapped covers — and pulse
-  // covers with the endpoint stop turned off — self-stop at their limit
-  // switches, so the setting has no effect there.
+  // dedicated stop relay, deferred by run-on). Single-button mode reads the
+  // same value as its settle margin before it anchors the phase at a limit.
+  // Toggle/wrapped covers — and pulse covers with the endpoint stop turned off
+  // — self-stop at their limit switches, so the setting has no effect there.
   const mode = c.control_mode || "switch";
-  const sendsEndpointStop =
-    mode === "switch" || (mode === "pulse" && c.send_endpoint_stop !== false);
-  if (sendsEndpointStop) {
+  const showsEndpointRunon =
+    mode === "switch" ||
+    (mode === "pulse" && c.send_endpoint_stop !== false) ||
+    mode === "single_button";
+  if (showsEndpointRunon) {
     travelRows.push(["timing.endpoint_runon_time", "endpoint_runon_time", c.endpoint_runon_time]);
   }
 
@@ -847,8 +850,13 @@ export function renderCalibration(card, calibrating) {
     tiltMode === "dual_motor" ||
     tiltMode === "inline";
 
+  // A cycling button reverses on every restart after a stop, so the stepped
+  // startup-delay and minimum-movement tests measure nothing there (the
+  // backend refuses them too); only the travel times can be timed.
+  const isSingleButton = card._config?.control_mode === "single_button";
   const availableAttributes = TIMING_ATTRIBUTES.filter(([key]) => {
     if (!hasTiltCalibration && key.startsWith("tilt_")) return false;
+    if (isSingleButton && STEPPED_CALIBRATION_ATTRIBUTES.has(key)) return false;
     return true;
   });
 

@@ -23,6 +23,13 @@ CALIBRATABLE_ATTRIBUTES = [
     "min_movement_time",
 ]
 
+# The tests that restart the motor in one direction from a stop: an overhead
+# test steps, a minimum-movement test pulses. A cycling (single-button) motor
+# reverses on every restart, so neither measures anything there.
+STEPPED_CALIBRATION_ATTRIBUTES = frozenset(
+    {"travel_startup_delay", "tilt_startup_delay", "min_movement_time"}
+)
+
 SERVICE_START_CALIBRATION = "start_calibration"
 SERVICE_STOP_CALIBRATION = "stop_calibration"
 

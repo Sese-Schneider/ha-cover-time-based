@@ -20,3 +20,12 @@ export const ATTRIBUTE_TO_CONFIG = {
   tilt_startup_delay: "tilt_startup_delay",
   min_movement_time: "min_movement_time",
 };
+
+// The calibration tests that restart the motor in one direction from a stop:
+// an overhead test steps, a minimum-movement test pulses. Mirrors
+// STEPPED_CALIBRATION_ATTRIBUTES in calibration.py.
+export const STEPPED_CALIBRATION_ATTRIBUTES = new Set([
+  "travel_startup_delay",
+  "tilt_startup_delay",
+  "min_movement_time",
+]);

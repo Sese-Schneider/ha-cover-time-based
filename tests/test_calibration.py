@@ -4,6 +4,14 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
+
+from custom_components.cover_time_based.cover import (
+    CONTROL_MODE_SINGLE_BUTTON,
+    CONTROL_MODE_TOGGLE,
+)
+from custom_components.cover_time_based.single_button_cycle import Phase
+from tests.helpers import single_button_sleep_patch
 
 
 class TestConfigEntryAccess:
@@ -1375,4 +1383,142 @@ class TestDualMotorTiltCalibrationDrivesTiltMotor:
             # ...and the whole-shade travel service was NOT.
             assert ("cover", "close_cover", "cover.inner") not in calls, calls
 
+            await cover.stop_calibration(cancel=True)
+
+
+def _sb_cover(make_cover, **kw):
+    return make_cover(
+        control_mode=CONTROL_MODE_SINGLE_BUTTON,
+        open_switch="switch.button",
+        close_switch=None,
+        **kw,
+    )
+
+
+class TestCalibrationAnchorsSingleButtonPhase:
+    """A finished or timed-out calibration parks a self-stopping motor at its
+    limit; single-button mode must anchor its phase there too."""
+
+    @pytest.mark.asyncio
+    async def test_finish_anchors_phase_at_endpoint(self, make_cover):
+        cover = _sb_cover(make_cover)
+        cover._phase = Phase.AT_CLOSED
+        with patch.object(cover, "async_write_ha_state"), single_button_sleep_patch():
+            await cover.start_calibration(attribute="travel_time_open", timeout=60)
+            await asyncio.sleep(0)  # the press lands: phase MOVING_UP
+            assert cover._phase is Phase.MOVING_UP
+            result = await cover.stop_calibration()
+        assert result["attribute"] == "travel_time_open"
+        assert cover.travel_calc.current_position() == 100
+        assert cover._phase is Phase.AT_OPEN
+
+    @pytest.mark.asyncio
+    async def test_timeout_anchors_phase_and_position_at_endpoint(self, make_cover):
+        cover = _sb_cover(make_cover)
+        cover._phase = Phase.AT_OPEN
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"), single_button_sleep_patch():
+            await cover.start_calibration(attribute="travel_time_close", timeout=0.1)
+            await asyncio.sleep(0.3)
+        assert cover._calibration is None
+        assert cover.travel_calc.current_position() == 0
+        assert cover._phase is Phase.AT_CLOSED
+
+
+class TestCalibrationTimeoutOnSelfStoppingMotor:
+    @pytest.mark.asyncio
+    async def test_toggle_timeout_anchors_tracker_at_endpoint_without_a_stop(
+        self, make_cover
+    ):
+        """Nothing stopped the motor, so it is at the limit it was driven to."""
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_close", timeout=0.1)
+            calls_after_drive = len(cover.hass.services.async_call.call_args_list)
+            await asyncio.sleep(0.3)
+        assert cover._calibration is None
+        assert cover.travel_calc.current_position() == 0
+        # No stop pulse: on toggle hardware that would be a movement command.
+        assert len(cover.hass.services.async_call.call_args_list) == calls_after_drive
+
+    @pytest.mark.asyncio
+    async def test_switch_timeout_stops_and_leaves_tracker_alone(self, make_cover):
+        """A latched relay is cut mid-travel; the position is then unknown-ish
+        and must not be snapped to the endpoint."""
+        cover = make_cover()
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_time_close", timeout=0.1)
+            await asyncio.sleep(0.3)
+        assert cover._calibration is None
+        assert cover.travel_calc.current_position() == 100
+
+    @pytest.mark.asyncio
+    async def test_overhead_stepped_phase_timeout_leaves_tracker_alone(
+        self, make_cover
+    ):
+        """Mid-way through the stepped phase the motor is parked between the
+        limits, not at one, so a timeout must not claim an endpoint."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_TOGGLE,
+            travel_time_close=60.0,
+            travel_time_open=60.0,
+        )
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_startup_delay", timeout=0.1)
+            await asyncio.sleep(0.3)
+        assert cover._calibration is None
+        # Step 1 is still running its ~10% move, so the tracker is just off
+        # 100 — the point is that it was not snapped to the far endpoint.
+        assert cover.travel_calc.current_position() > 90
+
+    @pytest.mark.asyncio
+    async def test_overhead_continuous_phase_timeout_anchors_at_endpoint(
+        self, make_cover
+    ):
+        """The continuous phase drives to the limit and nothing stops it."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_TOGGLE,
+            travel_time_close=60.0,
+            travel_time_open=60.0,
+        )
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_startup_delay", timeout=0.1)
+            cover._calibration.final_step = True
+            await asyncio.sleep(0.3)
+        assert cover._calibration is None
+        assert cover.travel_calc.current_position() == 0
+
+
+class TestSingleButtonRefusesSteppedCalibration:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("attribute", ["travel_startup_delay", "min_movement_time"])
+    async def test_start_raises_and_leaves_no_state(self, make_cover, attribute):
+        cover = _sb_cover(make_cover)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            single_button_sleep_patch(),
+            pytest.raises(HomeAssistantError, match="not available"),
+        ):
+            await cover.start_calibration(attribute=attribute, timeout=60)
+        assert cover._calibration is None
+        cover.hass.services.async_call.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_travel_time_calibration_still_starts(self, make_cover):
+        cover = _sb_cover(make_cover)
+        with patch.object(cover, "async_write_ha_state"), single_button_sleep_patch():
+            await cover.start_calibration(attribute="travel_time_open", timeout=60)
+            assert cover._calibration is not None
+            await cover.stop_calibration(cancel=True)
+
+    @pytest.mark.asyncio
+    async def test_switch_mode_still_runs_the_overhead_test(self, make_cover):
+        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_startup_delay", timeout=60)
+            assert cover._calibration is not None
             await cover.stop_calibration(cancel=True)

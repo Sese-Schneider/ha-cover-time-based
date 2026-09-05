@@ -114,6 +114,7 @@ test("send_endpoint_stop toggle does NOT render for wrapped mode", async () => {
 //   switch mode  → 5 rows (incl. endpoint_runon_time)
 //   pulse w/stop-on (default) → 5 rows (endpoint_runon_time shown)
 //   pulse w/stop-off → 4 rows (endpoint_runon_time hidden)
+//   single button → 5 rows (endpoint_runon_time shown, as the settle margin)
 //   toggle / wrapped → 4 rows (endpoint_runon_time hidden)
 // ---------------------------------------------------------------------------
 

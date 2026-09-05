@@ -14,7 +14,7 @@ from homeassistant.const import (
 )
 from homeassistant.exceptions import HomeAssistantError
 
-from .calibration import CalibrationState
+from .calibration import STEPPED_CALIBRATION_ATTRIBUTES, CalibrationState
 from .const import RELAY_FEEDBACK_TIMEOUT
 
 if TYPE_CHECKING:
@@ -57,6 +57,8 @@ class CalibrationMixin:
         def _has_tilt_motor(self) -> bool: ...
         def async_write_ha_state(self) -> None: ...
         def _self_stops_at_endpoints(self) -> bool: ...
+        def _supports_stepped_calibration(self) -> bool: ...
+        def _on_known_position(self, position: int) -> None: ...
         def _neutralize_tracked_movement(self, *, supersede: bool = True) -> None: ...
 
     async def start_calibration(self, **kwargs):
@@ -75,6 +77,15 @@ class CalibrationMixin:
         ):
             raise HomeAssistantError(
                 "Tilt time calibration not available for this tilt mode"
+            )
+
+        if (
+            attribute in STEPPED_CALIBRATION_ATTRIBUTES
+            and not self._supports_stepped_calibration()
+        ):
+            raise HomeAssistantError(
+                "Startup delay and minimum movement calibration are not"
+                " available for this control mode"
             )
 
         if attribute == "travel_startup_delay" and not (
@@ -436,12 +447,18 @@ class CalibrationMixin:
             ):
                 self._calibration.automation_task.cancel()
             try:
-                # Stop the motor. On momentary hardware
-                # (toggle/pulse-no-endpoint-stop) the time-test protocol
-                # means the motor already self-stopped at its limit — a stop
-                # pulse there is a movement command (#153/#133), so skip it.
-                # A timeout is never a user cancel.
-                if not self._self_stops_at_endpoints():
+                if self._self_stops_at_endpoints():
+                    # A stop pulse would be a movement command on this
+                    # hardware (#153/#133), so nothing is sent. The motor is
+                    # therefore at the limit only if it was being driven
+                    # continuously towards one. A stepped test's motor is
+                    # either parked in an inter-step pause or still driving a
+                    # step the cancelled automation task never stops, so its
+                    # position is simply unknown and must be left alone. A
+                    # timeout is never a user cancel.
+                    if self._driven_continuously_to_endpoint():
+                        self._set_position_after_calibration(self._calibration)
+                else:
                     await self._calibration_stop()
             finally:
                 # Always undo the startup-delay zeroing and clear the
@@ -453,6 +470,20 @@ class CalibrationMixin:
             self.async_write_ha_state()
         except asyncio.CancelledError:
             _LOGGER.debug("_calibration_timeout :: cancelled")
+
+    def _driven_continuously_to_endpoint(self) -> bool:
+        """Is the running calibration driving the motor at a limit right now?
+
+        True for the travel/tilt time tests, which run to the endpoint from
+        the first command, and for a stepped test once it reaches its final
+        continuous step. False during a stepped test's stepped phase, where
+        the motor is somewhere between the limits.
+        """
+        assert self._calibration is not None
+        return (
+            self._calibration.attribute not in STEPPED_CALIBRATION_ATTRIBUTES
+            or self._calibration.final_step
+        )
 
     async def stop_calibration(self, **kwargs):
         """Stop an in-progress calibration test."""
@@ -517,6 +548,10 @@ class CalibrationMixin:
             endpoint,
         )
         calc.set_position(endpoint)
+        if not is_tilt:
+            # A mode that tracks more than the position (single-button's cycle
+            # phase) anchors it at the limit the same way a declared position does.
+            self._on_known_position(endpoint)
 
     def _calculate_calibration_result(self):
         """Calculate the calibration result based on attribute type."""

@@ -21,14 +21,16 @@ test("pulse mode allows switch and script domains", () => {
   assert.deepEqual(switchPickerDomains("pulse"), ["switch", "script"]);
 });
 
-test("the pulse-time field shows only for pulse mode", () => {
+test("the pulse-time field shows for the modes that hold their output", () => {
   // Toggle relays are momentary/self-releasing and no longer use pulse_time,
-  // so only pulse mode configures it.
+  // so only the modes that hold an output for a configured duration show it.
   assert.equal(showsPulseTime("pulse"), true);
   assert.equal(showsPulseTime("toggle"), false);
   assert.equal(showsPulseTime("switch"), false);
   assert.equal(showsPulseTime("wrapped"), false);
   assert.equal(showsPulseTime(undefined), false);
+  // Single-button mode holds the button for pulse_time on every press.
+  assert.equal(showsPulseTime("single_button"), true);
 });
 
 test("non-pulse modes allow only the switch domain", () => {
@@ -136,10 +138,10 @@ test("coverConfirmedWithoutTilt only confirms for an available, tilt-less cover"
 });
 
 // ---------------------------------------------------------------------------
-// clearedScriptEntities — pulse-only script entities must not survive a mode
-// switch (F4): a script left in a switch slot after leaving pulse mode makes
-// every subsequent save fail (the backend rejects script entities outside
-// pulse mode).
+// clearedScriptEntities — script entities must not survive a switch to a mode
+// that cannot drive them (F4): a script left in a switch slot after leaving a
+// script-capable mode (pulse, single button) makes every subsequent save fail
+// (the backend rejects script entities in the other modes).
 // ---------------------------------------------------------------------------
 
 test("clearedScriptEntities nulls a script-valued open switch slot when leaving pulse mode", () => {
@@ -196,4 +198,13 @@ test("toggle_opposite behaves like toggle for pickers and clearing", () => {
     stop_switch_entity_id: null,
     tilt_stop_switch: null,
   });
+});
+
+test("switchPickerDomains: single_button mode offers switches and scripts as the button", () => {
+  assert.deepEqual(switchPickerDomains("single_button"), ["switch", "script"]);
+});
+
+test("clearedScriptEntities keeps a script button when switching into single_button mode", () => {
+  const config = { open_switch_entity_id: "script.press_button" };
+  assert.deepEqual(clearedScriptEntities("single_button", config), {});
 });

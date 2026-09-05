@@ -117,6 +117,12 @@ RELAY_FEEDBACK_PENDING_TIMEOUT = RELAY_FEEDBACK_TIMEOUT + 2.0
 # (issue #231) and pulse paths widen it.
 ECHO_PENDING_WINDOW = 5.0
 
+# Slack added past the hold duration when an output is held ON for a while
+# and then released: its own OFF echo arrives after the hold, so the pending
+# window must outlast hold + round-trip or the echo is read as an external
+# change.
+PULSE_ECHO_MARGIN = 2.0
+
 # All modes. When True, a set_cover_position command first drives the cover
 # fully open — a physical datum, since the motor stalls against its limit — and
 # only then moves to the requested position. For a cover with no position

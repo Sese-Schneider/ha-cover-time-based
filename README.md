@@ -145,7 +145,7 @@ detail. A blank cell means the option is not shown for that mode.
 | [Position reporting](#position-reporting) | ✓ | | | | | |
 | [Force time-based positioning](#force-time-based-positioning) | ✓ | | | | | |
 | [Invert position](#invert-position) | ✓ | | | | | |
-| [Pulse time](#pulse-time) | | | ✓ | | | |
+| [Pulse time](#pulse-time) | | | ✓ | | | ✓ |
 | [Relay reports its own OFF](#relay-reports-its-own-off) | | | | ✓ | ✓ | |
 | [Send stop signal at endpoints](#send-stop-signal-at-endpoints) | | | ✓ | | | |
 | [Wait for relay confirmation](#wait-for-relay-confirmation-before-tracking) | | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -250,20 +250,24 @@ mode.
 
 In Pulse mode these entities may be `script` entities as well as switches, which
 suits IR-controlled covers where each script fires an open, close, or stop
-command. The other modes need real `switch` entities, because they rely on the
-switch reporting a held, latched on-state that a script (which returns to `off`
-by itself) cannot provide.
+command. So may the **Button** in
+[Single button mode](#controlling-a-cover-with-a-single-button). The other modes
+need real `switch` entities, because they rely on the switch reporting a held,
+latched on-state that a script (which returns to `off` by itself) cannot
+provide.
 
 #### Pulse time
 
 In **Pulse** mode, **Pulse time** is how long the switch is held on before it is
-turned off again. It defaults to **1 second**. The Toggle modes do not use it,
-since a toggle relay releases itself after its own brief pulse.
+turned off again; in **Single button** mode it is how long each press holds the
+button. It defaults to **1 second**. The Toggle modes do not use it, since a
+toggle relay releases itself after its own brief pulse.
 
 > [!NOTE]
-> Keep any Pulse-mode scripts short. When the pulse time elapses the integration
-> turns the entity off, which cancels a script still running, so a script whose
-> own internal delay is longer than the pulse time would be cut off partway.
+> Keep any scripts used in Pulse or Single button mode short. When the pulse
+> time elapses the integration turns the entity off, which cancels a script
+> still running, so a script whose own internal delay is longer than the pulse
+> time would be cut off partway.
 
 #### Relay reports its own OFF
 
@@ -277,14 +281,20 @@ a single on command per press, giving exactly one clean activation each time.
 
 #### Wait for relay confirmation before tracking
 
-Available in every switch mode. Normally the position timer starts the moment a
-command is sent. On a slow or cold Zigbee or Z-Wave mesh the command can take a
-second or two to actually reach the relay, and that delay is then wrongly counted
-as travel, so the tracked position runs ahead of the cover. Turn this **on** to
-start the timer only when the relay reports that it has switched on. If the
-relay never confirms at all, the timer starts anyway, counted from when the
-command was sent. Leave it **off** unless the position drifts on a cover whose
-relay responds slowly.
+Available in every mode that drives a switch or button (Single button included).
+Normally the position timer starts the moment a command is sent. On a slow or
+cold Zigbee or Z-Wave mesh the command can take a second or two to actually reach
+the relay, and that delay is then wrongly counted as travel, so the tracked
+position runs ahead of the cover. Turn this **on** to start the timer only when
+the relay reports that it has switched on. In **Single button** mode the timer
+waits for the press that actually starts the motor — the last press when a
+reversal needs several — to be confirmed. That wait is ten seconds from the
+command, so a reversal that needs several presses with a long pulse time can time
+out before the motor-starting press goes out; tracking then starts from the
+command time, as it does when the relay never confirms. If the relay never
+confirms at all, the timer starts anyway, counted from when the command was sent.
+Leave it **off** unless the position drifts on a cover whose relay responds
+slowly.
 
 > [!NOTE]
 > On the two **Toggle** modes a stop is a tap on the driving relay rather than a
@@ -367,6 +377,10 @@ its true state. Skip this and it is guessing from the start.
 - **A partial position is approximate.** Anything between fully open and fully
   closed is reached with a timed stop, and drifts until the next full open or
   close corrects it.
+- **Only the travel times can be measured.** The startup-delay and
+  minimum-movement tests restart the motor in the same direction after a
+  stop, which on a cycling button is a reversal, so the card does not offer
+  them for this mode. Type those values in by hand if you need them.
 - **Tilt is not available.** Tilting needs a pulse in a chosen direction, which
   a single button cannot give, so the option is off for this mode.
 
@@ -503,7 +517,7 @@ Most timings can be measured for you:
 | **Travel time (open)** | Seconds for the cover to open fully. | — |
 | **Travel startup delay** | Compensates for the motor's start-up lag. See [Startup delay](#startup-delay). | not set |
 | **Minimum movement time** | Blocks movements too short to physically move the cover. See [Minimum movement time](#minimum-movement-time). | not set |
-| **Endpoint run-on time** | Extra relay time at the endpoints so the motor reaches its limit. Typed in rather than measured. See [Endpoint run-on time](#endpoint-run-on-time). | 2.0 |
+| **Endpoint run-on time** | Extra relay time at the endpoints so the motor reaches its limit (in Single button mode, a settle wait instead). Typed in rather than measured. See [Endpoint run-on time](#endpoint-run-on-time). | 2.0 |
 
 ### Tilt timings
 
@@ -544,7 +558,9 @@ value differently: there is no relay to hold, since the motor self-stops, so
 this becomes the **settle margin** — how long the integration keeps treating
 the motor as still travelling past its estimated arrival time before it locks
 in the endpoint, snapping the tracked position to 0 or 100 and marking the
-phase settled. It is a wait, not a relay hold.
+phase settled. It is a wait, not a relay hold. If the presses that started the
+move are still being sent when the estimated arrival time passes, the wait
+starts once the last press has gone out.
 
 ### Minimum movement time
 
@@ -588,7 +604,7 @@ Start a calibration test to measure a timing.
 | --- | --- |
 | `entity_id` | The cover entity. |
 | `attribute` | The timing to calibrate. |
-| `timeout` | Safety timeout in seconds; the motor auto-stops if `stop_calibration` is not called. |
+| `timeout` | Safety timeout in seconds. If `stop_calibration` has not been called by then the calibration ends: a latched relay is switched off, and a motor that stops itself at its limits is recorded at the limit it was driven to. |
 | `direction` | Direction to move, `open` or `close`. Auto-detected if not set. |
 
 ### `cover_time_based.stop_calibration`
@@ -868,21 +884,21 @@ listed here, use the card.
 | Name | Type | Requirement | Description | Default |
 | --- | --- | --- | --- | --- |
 | `name` | string | **Required** | Name of the created entity. | |
-| `open_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that opens the cover. May be a `script` entity in pulse mode. | |
+| `open_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that opens the cover, or the button in single button mode. May be a `script` entity in pulse and single button modes. | |
 | `close_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that closes the cover. May be a `script` entity in pulse mode. | |
 | `stop_switch_entity_id` | entity | Required in pulse mode | Switch that stops the cover. May be a `script` entity in pulse mode. | None |
 | `cover_entity_id` | entity | **Required**, or the open/close switches | Existing cover entity to wrap. | |
-| `input_mode` | string | _Optional_ | Control mode for switch-based covers: `switch`, `pulse`, `toggle`, or `toggle_opposite`. | `switch` |
+| `input_mode` | string | _Optional_ | Control mode for switch-based covers: `switch`, `pulse`, `toggle`, `toggle_opposite`, or `single_button`. | `switch` |
 | `travelling_time_down` | float | _Optional_ | Seconds to close the cover. Minimum 0.1 s. | unset |
 | `travelling_time_up` | float | _Optional_ | Seconds to open the cover. Minimum 0.1 s. | unset |
 | `tilting_time_down` | float | _Optional_ | Seconds to tilt the cover fully closed. Minimum 0.1 s. | None |
 | `tilting_time_up` | float | _Optional_ | Seconds to tilt the cover fully open. Minimum 0.1 s. | None |
 | `travel_moves_with_tilt` | boolean | _Optional_ | Whether tilt movements also change travel proportionally. | false |
-| `endpoint_runon_time` | float | _Optional_ | Extra relay time at the endpoints. Also accepted under its old name `travel_delay_at_end`. | 2.0 |
+| `endpoint_runon_time` | float | _Optional_ | Extra relay time at the endpoints (in Single button mode, a settle wait instead). Also accepted under its old name `travel_delay_at_end`. | 2.0 |
 | `min_movement_time` | float | _Optional_ | Minimum movement duration; blocks shorter movements. | None |
 | `travel_startup_delay` | float | _Optional_ | Startup compensation for travel movements. | None |
 | `tilt_startup_delay` | float | _Optional_ | Startup compensation for tilt movements. | None |
-| `pulse_time` | float | _Optional_ | Pulse duration in pulse mode. Minimum 0.1 s. | 1.0 |
+| `pulse_time` | float | _Optional_ | Pulse duration in pulse mode; press duration in single button mode. Minimum 0.1 s. | 1.0 |
 | `relay_reports_off` | boolean | _Optional_ | Toggle mode: set `false` for pulse modules that never report their off. | true |
 | `send_endpoint_stop` | boolean | _Optional_ | Pulse mode: set `false` for auto-stop controllers that reposition on a stop received while stopped. | true |
 | `direction_change_delay` | float | _Deprecated_ | No longer configurable. Accepted and ignored; the reversing pause is fixed at 1.0s. | — |

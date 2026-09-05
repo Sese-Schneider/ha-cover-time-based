@@ -15,7 +15,7 @@ way past regressions in this echo-handling area slipped past CI.
 import asyncio
 import contextlib
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -23,27 +23,11 @@ from homeassistant.const import SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based import cover_base
 from custom_components.cover_time_based.calibration import CalibrationState
+from custom_components.cover_time_based.cover import CONTROL_MODE_SINGLE_BUTTON
+from tests.helpers import single_button_sleep_patch, stub_switches
 
 # A fixed, timezone-aware moment used as the relay echo's ``last_changed``.
 FIXED_ECHO = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-
-
-def _stub_switches(cover, *, on=(), optimistic=()):
-    """Make ``hass.states.get`` deterministic for the feedback guards.
-
-    Without this the conftest MagicMock hass returns a truthy MagicMock for
-    ``attributes.get("assumed_state")``, which would read every relay as
-    optimistic. Listed entities are ON and/or optimistic; everything else is a
-    plain OFF, non-optimistic switch.
-    """
-
-    def _get(entity_id):
-        st = MagicMock()
-        st.state = "on" if entity_id in on else "off"
-        st.attributes = {"assumed_state": True} if entity_id in optimistic else {}
-        return st
-
-    cover.hass.states.get = _get
 
 
 def _echo_event(entity_id, old, new, last_changed=FIXED_ECHO):
@@ -81,7 +65,7 @@ class TestRelayFeedbackStart:
         cover = make_cover(
             wait_for_relay_feedback=True, travel_time_open=30, travel_time_close=30
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
         echo_time = datetime.now(UTC)
 
@@ -117,7 +101,7 @@ class TestRelayFeedbackStart:
         cover = make_cover(
             wait_for_relay_feedback=True, travel_time_open=30, travel_time_close=30
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         # Relay confirmed 3s after the command was queued.
@@ -149,7 +133,7 @@ class TestRelayFeedbackStart:
         cover = make_cover(
             wait_for_relay_feedback=True, travel_time_open=30, travel_time_close=30
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
         echo_time = datetime.now(UTC)
 
@@ -174,7 +158,7 @@ class TestRelayFeedbackStart:
         cover = make_cover(
             wait_for_relay_feedback=False, travel_time_open=30, travel_time_close=30
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -202,7 +186,7 @@ class TestRelayFeedbackTilt:
     @pytest.mark.asyncio
     async def test_tilt_move_parks_until_tilt_relay_echo(self, make_cover):
         cover = self._make_dual_motor(make_cover)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
         echo_time = datetime.now(UTC)
@@ -234,7 +218,7 @@ class TestRelayFeedbackCalibration:
         self, make_cover
     ):
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(100)  # open; calibrate the close travel
 
         clock = {"t": 1000.0}
@@ -273,7 +257,7 @@ class TestRelayFeedbackCalibration:
     async def test_time_calibration_unaffected_when_option_off(self, make_cover):
         """With the option off, calibration times from the command as before."""
         cover = make_cover(wait_for_relay_feedback=False)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(100)
 
         clock = {"t": 1000.0}
@@ -311,7 +295,7 @@ class TestRelayFeedbackCalibration:
         """The startup-delay (overhead) test times its continuous phase from the
         relay echo too, so the Zigbee gap is not measured as motor overhead."""
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover._calibration = CalibrationState(
             attribute="travel_startup_delay", timeout=600
         )
@@ -355,7 +339,7 @@ class TestRelayFeedbackCoupled:
         cover = make_cover(
             wait_for_relay_feedback=True, tilt_time_open=10, tilt_time_close=10
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
         echo_time = datetime.now(UTC)
@@ -385,7 +369,7 @@ class TestRelayFeedbackGuards:
     @pytest.mark.asyncio
     async def test_silent_relay_times_out_to_a_command_anchored_start(self, make_cover):
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with (
@@ -415,7 +399,7 @@ class TestRelayFeedbackGuards:
     @pytest.mark.asyncio
     async def test_optimistic_switch_starts_inline(self, make_cover):
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover, optimistic=("switch.open",))
+        stub_switches(cover, optimistic=("switch.open",))
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -431,7 +415,7 @@ class TestRelayFeedbackGuards:
         """A move that reaches _begin_movement without a _send_* (a forced
         redrive) must not inherit an arm left by an earlier resync."""
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
         # Leftover arm as an endpoint resync would strand it.
         cover._feedback_armed_entity = "switch.open"
@@ -447,7 +431,7 @@ class TestRelayFeedbackGuards:
     @pytest.mark.asyncio
     async def test_direction_relay_already_on_starts_inline(self, make_cover):
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover, on=("switch.open",))
+        stub_switches(cover, on=("switch.open",))
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -463,7 +447,7 @@ class TestRelayFeedbackGuards:
     async def test_external_press_starts_inline(self, make_cover):
         """An external press already switched the relay — nothing to wait for."""
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -480,7 +464,7 @@ class TestRelayFeedbackGuards:
     @pytest.mark.asyncio
     async def test_reverse_during_wait_cancels_wait_and_stops(self, make_cover):
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(50)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -508,7 +492,7 @@ class TestRelayFeedbackGuards:
     @pytest.mark.asyncio
     async def test_stop_during_wait_cancels_wait(self, make_cover):
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -528,7 +512,7 @@ class TestRelayFeedbackGuards:
         """The awaited relay's echo stays classifiable as our own for the whole
         feedback wait — so its pending window is the longer feedback timeout."""
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with (
@@ -570,7 +554,7 @@ class TestRelayFeedbackToggleMode:
             travel_time_open=30,
             travel_time_close=30,
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
         echo_time = datetime.now(UTC)
 
@@ -600,7 +584,7 @@ class TestRelayFeedbackToggleMode:
             travel_time_open=30,
             travel_time_close=30,
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -622,7 +606,7 @@ class TestRelayFeedbackToggleMode:
             tilt_time_open=3,
             tilt_time_close=3,
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
         echo_time = datetime.now(UTC)
@@ -652,7 +636,7 @@ class TestRelayFeedbackToggleMode:
             wait_for_relay_feedback=True,
             relay_reports_off=False,
         )
-        _stub_switches(cover, on=("switch.open",))
+        stub_switches(cover, on=("switch.open",))
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -672,7 +656,7 @@ class TestRelayFeedbackToggleMode:
         genuine OFF->ON edge is produced — tracking still gates on that ON echo,
         which arrives as the second of the two echoes."""
         cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
-        _stub_switches(cover, on=("switch.open",))
+        stub_switches(cover, on=("switch.open",))
         cover.travel_calc.set_position(0)
         echo_time = datetime.now(UTC)
 
@@ -702,7 +686,7 @@ class TestRelayFeedbackToggleMode:
     @pytest.mark.asyncio
     async def test_armed_relay_gets_extended_pending_window(self, make_cover):
         cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with (
@@ -734,7 +718,7 @@ class TestRelayFeedbackToggleStop:
         service mock is reset at the yield so ``_taps`` sees only the stop.
         """
         cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -774,7 +758,7 @@ class TestRelayFeedbackToggleStop:
         stop = asyncio.ensure_future(cover.async_stop_cover())
         await asyncio.sleep(0)
 
-        _stub_switches(cover, on=("switch.open",))
+        stub_switches(cover, on=("switch.open",))
         await cover._async_switch_state_changed(
             _echo_event("switch.open", "off", "on", datetime.now(UTC))
         )
@@ -795,7 +779,7 @@ class TestRelayFeedbackToggleStop:
             travel_time_open=1,
             travel_time_close=1,
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with (
@@ -904,7 +888,7 @@ class TestRelayFeedbackToggleOppositeMode:
             travel_time_open=30,
             travel_time_close=30,
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
         echo_time = datetime.now(UTC)
 
@@ -939,7 +923,7 @@ class TestRelayFeedbackPulseMode:
             travel_time_open=30,
             travel_time_close=30,
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
         echo_time = datetime.now(UTC)
 
@@ -969,7 +953,7 @@ class TestRelayFeedbackPulseMode:
             travel_time_open=30,
             travel_time_close=30,
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -993,7 +977,7 @@ class TestRelayFeedbackPulseMode:
             tilt_time_open=3,
             tilt_time_close=3,
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
         cover.tilt_calc.set_position(0)
         echo_time = datetime.now(UTC)
@@ -1022,7 +1006,7 @@ class TestRelayFeedbackPulseMode:
             stop_switch="switch.stop",
             wait_for_relay_feedback=True,
         )
-        _stub_switches(cover, on=("switch.open",))
+        stub_switches(cover, on=("switch.open",))
         cover.travel_calc.set_position(0)
 
         with patch.object(cover, "async_write_ha_state"):
@@ -1039,7 +1023,7 @@ class TestRelayFeedbackPulseMode:
             stop_switch="switch.stop",
             wait_for_relay_feedback=True,
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with (
@@ -1071,7 +1055,7 @@ class TestRelayFeedbackPulseMode:
             pulse_time=8,
             wait_for_relay_feedback=False,
         )
-        _stub_switches(cover)
+        stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with (
@@ -1103,7 +1087,7 @@ class TestRelayFeedbackPendingWindow:
         in call order.
         """
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         delays = []
 
         def fake_call_later(hass, delay, action):
@@ -1188,7 +1172,7 @@ class TestRelayFeedbackWaitSlot:
     @pytest.mark.asyncio
     async def test_cancelled_wait_does_not_clear_the_new_wait(self, make_cover):
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         first = asyncio.ensure_future(cover._wait_for_relay_echo("switch.open", 5))
         await asyncio.sleep(0)  # first registers its slot
         first.cancel()
@@ -1209,7 +1193,7 @@ class TestRelayFeedbackWaitSlot:
         self, make_cover
     ):
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
 
         def _park(entity_id):
             return cover.hass.async_create_task(
@@ -1234,7 +1218,7 @@ class TestRelayFeedbackWaitSlot:
         """An overwritten calibration wait must not stay parked: it would
         re-stamp a later phase's baseline off the wrong relay confirmation."""
         cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
+        stub_switches(cover)
         cover._calibration = CalibrationState(
             attribute="travel_startup_delay", timeout=600
         )
@@ -1257,3 +1241,83 @@ class TestRelayFeedbackWaitSlot:
                 await second
         finally:
             cover._calibration = None
+
+
+class TestSingleButtonFeedback:
+    """The parked start resolves on the button's pre-counted ON echo."""
+
+    @pytest.mark.asyncio
+    async def test_open_parks_until_the_button_confirms(self, make_cover):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SINGLE_BUTTON,
+            open_switch="switch.button",
+            close_switch=None,
+            wait_for_relay_feedback=True,
+            travel_time_open=30,
+            travel_time_close=30,
+        )
+        stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        # A live timestamp: anchoring on FIXED_ECHO (months in the past) would
+        # finish the 30s travel the instant tracking starts.
+        echo_time = datetime.now(UTC)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            single_button_sleep_patch(),
+        ):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)  # press lands; feedback wait parked
+            assert not cover.travel_calc.is_traveling()
+            assert cover._pending_switch.get("switch.button", 0) == 2
+            await cover._async_switch_state_changed(
+                _echo_event("switch.button", "off", "on", echo_time)
+            )
+            await asyncio.sleep(0)
+        assert cover.travel_calc.is_traveling()
+        assert cover._pending_switch.get("switch.button", 0) == 1
+
+    @pytest.mark.asyncio
+    async def test_stop_during_the_wait_is_deferred_until_the_button_confirms(
+        self, make_cover
+    ):
+        """A stop is a press, and the run it ends started at the press before
+        it: stopping while the start is still parked must wait out the
+        confirmation, or the motor runs between the two presses untracked."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SINGLE_BUTTON,
+            open_switch="switch.button",
+            close_switch=None,
+            wait_for_relay_feedback=True,
+            travel_time_open=30,
+            travel_time_close=30,
+        )
+        stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        # The relay switched three seconds before its echo reached us, so a
+        # tracker anchored on the confirmation is visibly off 0% — evidence the
+        # run between the two presses was counted.
+        echo_time = datetime.now(UTC) - timedelta(seconds=3)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            single_button_sleep_patch(),
+        ):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)  # press lands; feedback wait parked
+            assert cover._feedback_wait_entity == "switch.button"
+
+            stop = asyncio.ensure_future(cover.async_stop_cover())
+            for _ in range(5):
+                await asyncio.sleep(0)
+            # Parked: neither the stop nor its press has gone anywhere while
+            # the button is unconfirmed.
+            assert not stop.done()
+            assert len(_taps(cover, "switch.button")) == 1
+
+            await cover._async_switch_state_changed(
+                _echo_event("switch.button", "off", "on", echo_time)
+            )
+            await asyncio.wait_for(stop, 1.0)
+            await asyncio.sleep(0)  # the stop press sequence runs
+
+        assert len(_taps(cover, "switch.button")) == 2
+        assert cover.travel_calc.current_position() > 0

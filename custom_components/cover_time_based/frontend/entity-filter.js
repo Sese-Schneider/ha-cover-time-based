@@ -16,16 +16,20 @@ export function filterEntitiesByValidEntries(entityRegistry, validConfigEntryIds
     .map((e) => e.entity_id);
 }
 
+// Modes that drive the entity as a timed press — turn_on, hold for pulse_time,
+// turn_off — and ignore its state. That is why they show the Pulse time field
+// and why a script, which turns itself off when it finishes, works as well as
+// a switch.
+const TIMED_PRESS_MODES = new Set(["pulse", "single_button"]);
+
 /**
  * Entity-picker domains for switch-based control modes.
  *
- * Pulse mode commands via homeassistant.turn_on/off and ignores the OFF
- * edge, so `script` entities (e.g. IR-remote open/close/stop scripts) work
- * there. Switch and toggle modes rely on a latched/held state a script
- * cannot provide, so they stay switch-only.
+ * Switch and toggle modes rely on a latched/held state a script cannot
+ * provide, so they stay switch-only.
  */
 export function switchPickerDomains(controlMode) {
-  return controlMode === "pulse" ? ["switch", "script"] : ["switch"];
+  return TIMED_PRESS_MODES.has(controlMode) ? ["switch", "script"] : ["switch"];
 }
 
 /**
@@ -42,12 +46,13 @@ export function switchLabelKey(baseKey, controlMode) {
 /**
  * Whether the control mode exposes the "Pulse time" field.
  *
- * Only pulse mode holds the relay ON for a configured duration. Toggle relays
- * are momentary/self-releasing — the integration sends a single turn_on and
- * never holds the relay — so pulse_time is irrelevant there.
+ * Pulse mode holds the relay ON for that long; single-button mode holds the
+ * button for that long on every press. Toggle relays are momentary and
+ * self-releasing — the integration sends a single turn_on and never holds
+ * the relay — so pulse_time is irrelevant there.
  */
 export function showsPulseTime(controlMode) {
-  return controlMode === "pulse";
+  return TIMED_PRESS_MODES.has(controlMode);
 }
 
 // CoverEntityFeature bit flags.
@@ -125,12 +130,12 @@ export function clearedEntitiesForMode(mode) {
 }
 
 /**
- * Null out script-valued switch slots when leaving pulse mode — scripts are
- * pulse-only (the backend rejects them anywhere else), and keeping them makes
+ * Null out script-valued switch slots when switching to a mode that cannot
+ * drive a script (the backend rejects them there), since keeping them makes
  * every subsequent save fail with no visible cause.
  */
 export function clearedScriptEntities(mode, config) {
-  if (mode === "pulse" || !config) return {};
+  if (TIMED_PRESS_MODES.has(mode) || !config) return {};
   const updates = {};
   for (const key of [
     "open_switch_entity_id",

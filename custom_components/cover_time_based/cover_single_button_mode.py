@@ -17,11 +17,20 @@ from .const import DIRECTION_CHANGE_DELAY
 from .cover_switch import SwitchCoverTimeBased
 from .single_button_cycle import Action, Phase, plan
 
+# The phase a self-stopping motor is in once it has reached a travel limit.
+_PHASE_AT_ENDPOINT: dict[int, Phase] = {100: Phase.AT_OPEN, 0: Phase.AT_CLOSED}
+
+
+def _live(task: asyncio.Task | None) -> asyncio.Task | None:
+    """The task if it is still running, else None."""
+    return task if task is not None and not task.done() else None
+
 
 class SingleButtonModeCover(SwitchCoverTimeBased):
     """A cover driven by a single cycling button."""
 
     supports_tilt = False
+    _missing_entities_label = "button entity"
 
     def __init__(self, pulse_time, **kwargs):
         super().__init__(**kwargs)
@@ -41,17 +50,15 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         """One button is enough for this mode."""
         return bool(self._open_switch_entity_id)
 
-    def _get_missing_configuration(self) -> list[str]:
-        missing = []
-        if not self._are_entities_configured():
-            missing.append("button entity")
-        if self._travel_time_close is None and self._travel_time_open is None:
-            missing.append("travel times")
-        return missing
-
     # --- capabilities --------------------------------------------------
     def _self_stops_at_endpoints(self) -> bool:
         return True
+
+    def _supports_stepped_calibration(self) -> bool:
+        # A restart in the same direction after a stop is a reversal press
+        # sequence here (the motor first runs the wrong way), so the stepped
+        # overhead and minimum-movement tests measure nothing on this cycle.
+        return False
 
     async def _handle_external_state_change(self, entity_id, old_state, new_state):
         # The button is an output we drive; its state changes are our own
@@ -59,17 +66,35 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         self._log("single_button :: ignoring external state change on %s", entity_id)
 
     # --- press sequencing ---------------------------------------------
+    async def _release_button(self) -> None:
+        await self.hass.services.async_call(
+            "homeassistant",
+            "turn_off",
+            {"entity_id": self._open_switch_entity_id},
+            False,
+        )
+
     def _start_press_sequence(self, action: Action) -> None:
         """Plan from the current phase and schedule the press sequence.
 
         Callers must already have awaited _supersede_active_press() before
         calling this, so there is nothing live left to cancel here -- we
         only need to plan (from the now-settled phase) and schedule.
+
+        A movement arms wait_for_relay_feedback on the button. The arm has to
+        be set here, synchronously: the base consumes it the moment the command
+        returns, before the first press has gone out.
         """
+        self._feedback_armed_entity = None
         phases = plan(self._phase, action)
         if not phases:
             return
-        self._press_task = self.hass.async_create_task(self._run_press_sequence(phases))
+        armed = action is not Action.STOP and self._arm_relay_feedback(
+            self._open_switch_entity_id
+        )
+        self._press_task = self.hass.async_create_task(
+            self._run_press_sequence(phases, mark_final_press=armed)
+        )
 
     async def _supersede_active_press(self) -> None:
         """Cleanly end any in-flight press sequence before a new command.
@@ -99,23 +124,20 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         done/None while `_press_active` is still True, this still performs
         the same cleanup rather than trusting the task's own exit path.
         """
-        task = self._press_task
-        if task is not None and not task.done():
+        task = _live(self._press_task)
+        if task is not None:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
         if not self._press_active:
             return
         self._press_active = False
-        await self.hass.services.async_call(
-            "homeassistant",
-            "turn_off",
-            {"entity_id": self._open_switch_entity_id},
-            False,
-        )
+        await self._release_button()
         await sleep(DIRECTION_CHANGE_DELAY)
 
-    async def _run_press_sequence(self, phases: list[Phase]) -> None:
+    async def _run_press_sequence(
+        self, phases: list[Phase], *, mark_final_press: bool = False
+    ) -> None:
         """Press once per planned phase, gap-spaced, updating phase each time.
 
         Each press is a discrete, self-contained pulse performed inline: ON,
@@ -133,21 +155,34 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         clean up -- this method does not issue its own turn_off on
         cancellation, since that would race the superseding command's
         cleanup.
+
+        ``mark_final_press`` pre-counts the ON and OFF echoes of the LAST press
+        only. The base starts a parked feedback wait from the echo-filter
+        branch, so a pre-counted ON echo is what anchors tracking -- and the
+        press that actually starts the motor is the last one of the plan, not
+        a nudge before it. Uncounted echoes fall through to
+        _handle_external_state_change, which ignores them.
         """
         entity_id = self._open_switch_entity_id
         try:
             for index, phase in enumerate(phases):
                 if index:
                     await sleep(DIRECTION_CHANGE_DELAY)
+                if mark_final_press and index == len(phases) - 1:
+                    self._mark_switch_pending(
+                        entity_id,
+                        2,
+                        timeout=self._armed_echo_window(
+                            self._held_echo_window(self._pulse_time)
+                        ),
+                    )
                 await self.hass.services.async_call(
                     "homeassistant", "turn_on", {"entity_id": entity_id}, False
                 )
                 self._phase = phase
                 self._press_active = True
                 await sleep(self._pulse_time)
-                await self.hass.services.async_call(
-                    "homeassistant", "turn_off", {"entity_id": entity_id}, False
-                )
+                await self._release_button()
                 self._press_active = False
         except asyncio.CancelledError:
             # Cleanup (compensating turn_off + gap, if the pulse was actually
@@ -163,9 +198,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             # over the original one) and clear the flag, then re-raise so
             # the error is still surfaced/logged by asyncio.
             with contextlib.suppress(Exception):
-                await self.hass.services.async_call(
-                    "homeassistant", "turn_off", {"entity_id": entity_id}, False
-                )
+                await self._release_button()
             self._press_active = False
             raise
         finally:
@@ -184,8 +217,9 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         await self._supersede_active_press()
 
     def _cancel_settle(self) -> None:
-        if self._settle_task is not None and not self._settle_task.done():
-            self._settle_task.cancel()
+        task = _live(self._settle_task)
+        if task is not None:
+            task.cancel()
         self._settle_task = None
 
     # --- removal / reload -----------------------------------------------
@@ -202,17 +236,13 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         unconditionally turn the button off so a press caught mid-pulse is
         not left latched ON.
         """
-        if self._press_task is not None and not self._press_task.done():
-            self._press_task.cancel()
+        task = _live(self._press_task)
+        if task is not None:
+            task.cancel()
         self._press_task = None
         self._cancel_settle()
         if self._open_switch_entity_id:
-            await self.hass.services.async_call(
-                "homeassistant",
-                "turn_off",
-                {"entity_id": self._open_switch_entity_id},
-                False,
-            )
+            await self._release_button()
 
     # --- the mode contract --------------------------------------------
     async def _send_open(self) -> None:
@@ -223,27 +253,63 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         await self._abort_press_plan()
         self._start_press_sequence(Action.CLOSE)
 
+    async def _stop_hardware(
+        self, *, supersede: bool = True, tilt_axis_reported: bool = False
+    ) -> None:
+        """Stop the cover without publishing, once the button has confirmed.
+
+        A stop here is another press, and the run it ends began at the press
+        before it: the tracker has to have started on that press's ON
+        confirmation before the movement is torn down, or the motor runs
+        between the two presses with nothing counting it. A no-op unless a
+        feedback wait is actually pending. An external trigger presses the
+        button itself, so there is no wait of ours to protect.
+
+        See CoverTimeBased._stop_hardware for ``supersede`` and
+        ``tilt_axis_reported``.
+        """
+        if not self._triggered_externally:
+            await self._await_pending_relay_confirmation()
+        await super()._stop_hardware(
+            supersede=supersede, tilt_axis_reported=tilt_axis_reported
+        )
+
     async def _send_stop(self) -> None:
         await self._abort_press_plan()
         self._start_press_sequence(Action.STOP)
 
     # --- endpoint re-anchor -------------------------------------------
     def _on_endpoint_reached(self, endpoint: int) -> None:
-        target = Phase.AT_OPEN if endpoint == 100 else Phase.AT_CLOSED
-        margin = self._endpoint_runon_time
-        if not margin or margin <= 0:
+        """Anchor the phase at the limit the tracker just reached.
+
+        The tracker counts from the command, but the motor only moves once the
+        press sequence has delivered its last press -- for a short move that is
+        after the tracker's arrival. An anchor written while presses are still
+        to come would be overwritten by them, so it waits for the sequence, and
+        then for the settle margin (endpoint_runon_time), during which a
+        re-press still predicts STOP rather than a reversal.
+        """
+        target = _PHASE_AT_ENDPOINT[endpoint]
+        margin = self._endpoint_runon_time or 0
+        press = _live(self._press_task)
+        if press is None and margin <= 0:
             self._phase = target
             return
-        # Keep the moving phase for a settle margin so a re-press during the
-        # motor's final run predicts STOP, not a reversal; then anchor.
         self._cancel_settle()
         self._settle_task = self.hass.async_create_task(
-            self._settle_endpoint(margin, target)
+            self._settle_endpoint(press, margin, target)
         )
 
-    async def _settle_endpoint(self, margin, target) -> None:
+    async def _settle_endpoint(
+        self, press_task: asyncio.Task | None, margin: float, target: Phase
+    ) -> None:
         try:
-            await sleep(margin)
+            if press_task is not None:
+                # Passive: _supersede_active_press owns cancelling the
+                # sequence; this only waits for it to end either way.
+                await asyncio.wait([press_task])
+            if margin > 0:
+                await sleep(margin)
             self._phase = target
         except asyncio.CancelledError:
             pass
@@ -267,10 +333,9 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         An intermediate position says nothing about where the motor is in its
         cycle, so the phase is left alone.
         """
-        if position == 100:
-            self._phase = Phase.AT_OPEN
-        elif position == 0:
-            self._phase = Phase.AT_CLOSED
+        phase = _PHASE_AT_ENDPOINT.get(position)
+        if phase is not None:
+            self._phase = phase
 
     # --- persistence -----------------------------------------------------
     def _extra_persist_data(self) -> dict:

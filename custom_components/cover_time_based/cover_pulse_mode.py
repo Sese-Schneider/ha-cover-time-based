@@ -3,14 +3,7 @@
 import asyncio
 from asyncio import sleep
 
-from .const import ECHO_PENDING_WINDOW
 from .cover_switch import SwitchCoverTimeBased
-
-# The completion turn_off fires pulse_time after a pulse, and its OFF echo then
-# round-trips back. A pulse relay's pending window is sized to pulse_time plus
-# this margin so that own OFF echo stays filtered rather than read as an
-# external change, even on a pulse longer than ECHO_PENDING_WINDOW.
-_PULSE_COMPLETION_ECHO_MARGIN = 2.0
 
 
 class PulseModeCover(SwitchCoverTimeBased):
@@ -187,9 +180,7 @@ class PulseModeCover(SwitchCoverTimeBased):
         ``_mark_driving_relay_pending``) and widens the window further (issue
         #231). An already-ON relay produces no ON edge, so it is never armed.
         """
-        pulse_window = max(
-            ECHO_PENDING_WINDOW, self._pulse_time + _PULSE_COMPLETION_ECHO_MARGIN
-        )
+        pulse_window = self._held_echo_window(self._pulse_time)
         if self._switch_is_on(entity_id):
             # Re-pulse on an already-ON relay: no ON edge, only the completion's
             # deferred OFF echo.
