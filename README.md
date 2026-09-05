@@ -250,9 +250,11 @@ mode.
 
 In Pulse mode these entities may be `script` entities as well as switches, which
 suits IR-controlled covers where each script fires an open, close, or stop
-command. The other modes need real `switch` entities, because they rely on the
-switch reporting a held, latched on-state that a script (which returns to `off`
-by itself) cannot provide.
+command. So may the **Button** in
+[Single button mode](#controlling-a-cover-with-a-single-button). The other modes
+need real `switch` entities, because they rely on the switch reporting a held,
+latched on-state that a script (which returns to `off` by itself) cannot
+provide.
 
 #### Pulse time
 
@@ -876,7 +878,7 @@ listed here, use the card.
 | Name | Type | Requirement | Description | Default |
 | --- | --- | --- | --- | --- |
 | `name` | string | **Required** | Name of the created entity. | |
-| `open_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that opens the cover. May be a `script` entity in pulse mode. | |
+| `open_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that opens the cover, or the button in single button mode. May be a `script` entity in pulse and single button modes. | |
 | `close_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that closes the cover. May be a `script` entity in pulse mode. | |
 | `stop_switch_entity_id` | entity | Required in pulse mode | Switch that stops the cover. May be a `script` entity in pulse mode. | None |
 | `cover_entity_id` | entity | **Required**, or the open/close switches | Existing cover entity to wrap. | |
