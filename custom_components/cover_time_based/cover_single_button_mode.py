@@ -243,21 +243,34 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             if self._settle_task is asyncio.current_task():
                 self._settle_task = None
 
-    # --- resync ----------------------------------------------------------
-    async def _on_resync_position(self, position: int) -> None:
-        """Re-anchor the tracked phase to match the resynced position.
+    # --- known position ------------------------------------------------
+    async def _halt_for_known_position(self) -> None:
+        """Cancel the press plan without pressing.
 
-        Resync declares a fixed endpoint -- cancel any in-flight press
-        sequence/settle first so its own next iteration can't overwrite the
-        phase we set below (it would otherwise plan from -- and keep
-        driving toward -- the phase computed before resync ran, silently
-        clobbering it while the motor kept running against a cover we just
-        declared parked). Same cleanup _send_open/_send_close/_send_stop
-        already perform before starting a new sequence.
+        The button is a cycle input: a "stop" press on a motor already parked at
+        the declared position would start it. So only the in-flight press
+        sequence and settle margin are cancelled (a press caught mid-pulse is
+        released by _supersede_active_press) and the tracker is parked. The
+        startup-delay and run-on waits go too: a deferred start() firing after
+        the declaration would animate the tracker from the declared position
+        toward the old target with no press behind it.
         """
         self._cancel_settle()
+        self._cancel_startup_delay_task()
+        self._cancel_delay_task()
         await self._supersede_active_press()
-        self._phase = Phase.AT_OPEN if position == 100 else Phase.AT_CLOSED
+        self._handle_stop()
+
+    async def _on_known_position(self, position: int) -> None:
+        """Anchor the tracked phase when an endpoint is declared.
+
+        An intermediate position says nothing about where the motor is in its
+        cycle, so the phase is left alone.
+        """
+        if position == 100:
+            self._phase = Phase.AT_OPEN
+        elif position == 0:
+            self._phase = Phase.AT_CLOSED
 
     # --- persistence -----------------------------------------------------
     def _extra_persist_data(self) -> dict:

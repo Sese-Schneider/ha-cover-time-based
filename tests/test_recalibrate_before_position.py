@@ -1014,26 +1014,25 @@ async def test_set_known_position_stale_last_command_no_spurious_stop(
     """``is_direction_change`` alone is not enough to gate the pre-drive
     stop in
     ``_stop_and_settle_before_recalibration_drive`` -- it must also require
-    something to actually be moving. ``set_known_position`` -> ``_handle_stop``
-    halts ``travel_calc`` but never touches ``_last_command``, so a stale
-    command can outlive the movement it described. A following
-    ``set_position`` then sees a "direction change" against nothing moving;
-    without the "is anything moving" conjunct this pulses an extra stop at an
-    idle motor -- on toggle-opposite hardware a movement command that runs
-    the cover to its endpoint (#153-class hazard)."""
+    something to actually be moving. A bare ``_handle_stop`` (calibration
+    start, raw_command) halts ``travel_calc`` but never touches
+    ``_last_command``, so a stale command can outlive the movement it
+    described. A following ``set_position`` then sees a "direction change"
+    against nothing moving; without the "is anything moving" conjunct this
+    pulses an extra stop at an idle motor -- on toggle-opposite hardware a
+    movement command that runs the cover to its endpoint (#153-class
+    hazard)."""
     cover = make_cover(control_mode="toggle_opposite", recalibrate_before_position=True)
     cover.travel_calc.set_position(80)
     cover.travel_calc.start_travel(20)
     cover._last_command = SERVICE_CLOSE_COVER
 
-    with patch.object(cover, "async_write_ha_state"):
-        await cover.set_known_position(position=80)
+    cover._handle_stop()
+    cover.travel_calc.set_position(80)
 
-    assert not cover.travel_calc.is_traveling(), (
-        "must be halted by the known-position reset"
-    )
+    assert not cover.travel_calc.is_traveling(), "must be halted by the reset"
     assert cover._last_command == SERVICE_CLOSE_COVER, (
-        "set_known_position/_handle_stop must not touch _last_command -- that's the setup"
+        "_handle_stop must not touch _last_command -- that's the setup"
     )
 
     calls, spy = command_spy(cover)

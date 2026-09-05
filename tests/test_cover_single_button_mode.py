@@ -506,8 +506,72 @@ class TestResync:
             await cover.async_resync("halfway")
         # An invalid state must not touch the phase -- it is left at
         # whatever it was, since the base class rejects before
-        # _on_resync_position is ever called.
+        # _on_known_position is ever called.
         assert cover._phase is Phase.AT_CLOSED
+
+    @pytest.mark.asyncio
+    async def test_set_known_position_endpoint_anchors_phase(self):
+        cover = _make_sb_cover()
+        cover._phase = Phase.MOVING_UP
+        cover.async_write_ha_state = MagicMock()
+        cover._async_persist_position = AsyncMock()
+        await cover.set_known_position(position=100)
+        assert cover._phase is Phase.AT_OPEN
+        assert cover.travel_calc.current_position() == 100
+
+    @pytest.mark.asyncio
+    async def test_set_known_position_intermediate_leaves_phase(self):
+        cover = _make_sb_cover()
+        cover._phase = Phase.STOPPED_AFTER_DOWN
+        cover.async_write_ha_state = MagicMock()
+        cover._async_persist_position = AsyncMock()
+        await cover.set_known_position(position=50)
+        assert cover._phase is Phase.STOPPED_AFTER_DOWN
+        assert cover.travel_calc.current_position() == 50
+
+    @pytest.mark.asyncio
+    async def test_pending_startup_delay_is_cancelled(self):
+        """The startup-delay wait must go too: its deferred start() would
+        re-animate the tracker from the declared position toward the old
+        target with no press behind it."""
+        cover = _make_sb_cover()
+        cover._phase = Phase.MOVING_UP
+        cover.async_write_ha_state = MagicMock()
+        cover._async_persist_position = AsyncMock()
+        cover._startup_delay_task = cover.hass.async_create_task(asyncio.sleep(60))
+        cover.hass.services.async_call.reset_mock()
+        await cover.set_known_position(position=100)
+        assert (
+            cover._startup_delay_task is None or cover._startup_delay_task.cancelled()
+        )
+        turn_ons = [
+            c
+            for c in cover.hass.services.async_call.await_args_list
+            if c.args[1] == "turn_on"
+        ]
+        assert turn_ons == []
+        assert cover._phase is Phase.AT_OPEN
+
+    @pytest.mark.asyncio
+    async def test_resync_while_moving_presses_nothing(self):
+        """A declared endpoint means the motor is parked there; a 'stop' press
+        on a parked single-button motor would start it."""
+        cover = _make_sb_cover()
+        cover._phase = Phase.MOVING_UP
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        cover.async_write_ha_state = MagicMock()
+        cover._async_persist_position = AsyncMock()
+        cover.hass.services.async_call.reset_mock()
+        await cover.async_resync("open")
+        turn_ons = [
+            c
+            for c in cover.hass.services.async_call.await_args_list
+            if c.args[1] == "turn_on"
+        ]
+        assert turn_ons == []
+        assert cover._phase is Phase.AT_OPEN
+        assert not cover.travel_calc.is_traveling()
 
 
 class TestRemovalCancelsBackgroundWork:

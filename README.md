@@ -604,10 +604,13 @@ the honest limits above).
 | --- | --- |
 | `state` | The cover's true current state: `closed` or `open`. |
 
-For any mode other than single button, `resync` overlaps with
-[`set_known_position`](#cover_time_basedset_known_position), which can set
-any position (not just the two endpoints) — `resync` is just the friendly
-closed/open shortcut, most useful wired into an automation.
+`resync` is the closed/open shortcut of
+[`set_known_position`](#cover_time_basedset_known_position), which can set any
+position (not just the two endpoints) and re-anchors the phase in the same way
+when you give it an endpoint. Both stop the motor first if Home Assistant is
+still driving it, so the relay is released rather than left on while the
+tracker shows the declared position. `resync` is the friendlier one to wire into
+an automation.
 
 A single button is enough to trigger it — the action needs only the fixed
 `state` field, so a dashboard control does not need a two-button stack:

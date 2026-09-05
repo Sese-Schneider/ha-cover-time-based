@@ -1094,7 +1094,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         ``_last_command`` for the direction (a shared-motor tilt phase records
         whichever relay it actually energised there, inversions included) and
         "is anything actually moving" so a stale command outliving its movement
-        — ``set_known_position`` leaves exactly that — cannot suppress a drive
+        — a bare ``_handle_stop`` leaves exactly that — cannot suppress a drive
         at a stopped motor. Deliberately ``== command`` rather than ``not
         _is_direction_change(command)``: the latter also matches
         ``_last_command is None``, and suppressing on *no* recorded direction
@@ -1464,22 +1464,74 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("async_set_cover_tilt_position: %d", position)
             await self.set_tilt_position(position)
 
-    async def set_known_position(self, *, supersede: bool = True, **kwargs):
-        """Set the cover to a known position (0=closed, 100=open).
+    def _movement_in_progress(self) -> bool:
+        """Whether this entity is still driving the cover under its own lifecycle.
 
-        Exposed as a service (a user resyncing the tracker is a real command,
-        hence the default) and used internally by wrapped covers to snap to a
-        position the device just reported, which is not — see _handle_stop.
+        Everything that leaves a relay energised or a follow-up pending: a live
+        travel or tilt tracker, a startup-delay or relay-feedback wait, an
+        endpoint run-on, a tilt pre-step or restore, and a dedicated tilt motor.
+        """
+
+        def pending(task):
+            return task is not None and not task.done()
+
+        return (
+            self.travel_calc.is_traveling()
+            or (self._has_tilt_support() and self.tilt_calc.is_traveling())
+            or pending(self._startup_delay_task)
+            or pending(self._delay_task)
+            or self._tilt_restore_active
+            or self._pending_travel_target is not None
+            or self._pending_tilt_target is not None
+            or self._moving_tilt_motor
+        )
+
+    async def _halt_for_known_position(self) -> None:
+        """Stop whatever this entity is still driving before a position is declared.
+
+        Goes through async_stop_cover so each mode's own stop semantics apply
+        (switch de-energises, pulse sends its stop relay, toggle taps only while
+        active). The tracker parking on its own is not enough: the relay stays
+        latched and the motor runs to its limit while HA reports the declared
+        position.
+
+        The idle branch is still a supersession, not a no-op: the epoch bump in
+        _handle_stop cancels a reversal parked in its settle gap, which would
+        otherwise drive away from the position just declared.
+        """
+        if self._movement_in_progress():
+            await self.async_stop_cover()
+        else:
+            self._handle_stop()
+
+    async def set_known_position(self, *, supersede: bool = True, **kwargs):
+        """Declare the cover's real position (0=closed, 100=open).
+
+        A user declaring where the cover *is* — the service, the card's presets,
+        async_resync — is a real command (``supersede`` True): it claims the
+        movement and stops the hardware first. Wrapped covers pass
+        ``supersede=False`` to snap to a position the device just reported, which
+        must neither claim the movement nor send anything — see _handle_stop.
         """
         position = kwargs[ATTR_POSITION]
-        self._handle_stop(supersede=supersede)
+        if supersede:
+            await self._halt_for_known_position()
+        else:
+            self._handle_stop(supersede=False)
         self.travel_calc.set_position(position)
         if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
+        await self._on_known_position(position)
         self.async_write_ha_state()
         await self._async_persist_position()
+
+    async def _on_known_position(self, position: int) -> None:
+        """Hook for modes with extra known-position bookkeeping (single-button's phase).
+
+        No-op by default.
+        """
 
     async def set_known_tilt_position(self, **kwargs):
         """Set the tilt to a known position (0=closed, 100=open)."""
@@ -1493,31 +1545,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def async_resync(self, state: str) -> None:
         """Re-anchor the reported position to fully closed or fully open.
 
-        Works for every control mode: maps ``state`` to a position via
-        RESYNC_POSITIONS (0 for "closed", 100 for "open") and declares it via
-        the same known-position path as ``set_known_position`` — stopping any
-        in-flight movement, snapping tilt trackers to their physical
-        endpoint, writing state, and persisting — so every mode re-anchors
-        consistently after the cover was moved outside Home Assistant (an RF
-        remote, a physical button, or anything else the integration could not
-        observe).
-
-        Calls _on_resync_position before delegating to set_known_position, so a
-        mode with extra resync bookkeeping (single-button's tracked phase)
-        updates it first and set_known_position's single write/persist captures
-        it in the same pass.
+        The endpoint shortcut of set_known_position for every control mode:
+        maps ``state`` via RESYNC_POSITIONS and declares that position.
         """
         if state not in RESYNC_POSITIONS:
             raise HomeAssistantError(f"unknown resync state: {state!r}")
-        position = RESYNC_POSITIONS[state]
-        await self._on_resync_position(position)
-        await self.set_known_position(position=position)
-
-    async def _on_resync_position(self, position: int) -> None:
-        """Hook for modes with extra resync bookkeeping (e.g. phase).
-
-        No-op by default.
-        """
+        await self.set_known_position(position=RESYNC_POSITIONS[state])
 
     # -----------------------------------------------------------------------
     # Movement orchestration

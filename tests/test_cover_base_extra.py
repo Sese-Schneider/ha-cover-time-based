@@ -17,6 +17,11 @@ from homeassistant.components.cover import (
 )
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
+from custom_components.cover_time_based.cover import (
+    CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_WRAPPED,
+)
+
 # ===================================================================
 # Name / unique_id / device_class / assumed_state properties
 # ===================================================================
@@ -1457,7 +1462,9 @@ class TestResyncAllModes:
         assert not hasattr(cover, "_phase")
 
 
-# ===================================================================
+# ============================================================
+
+
 # _log guard
 # ===================================================================
 
@@ -1492,3 +1499,104 @@ class TestLogGuard:
         ):
             cover._log("hello %s", "world")
         debug.assert_called_once()
+=======
+class TestKnownPositionHaltsMovement:
+    """A declared known position is a command: if we are still driving the
+    cover it stops the hardware first (2.1). A passive wrapped snap
+    (supersede=False) never sends anything."""
+
+    @pytest.mark.asyncio
+    async def test_switch_mode_traveling_sends_stop(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=0)
+        send_stop.assert_awaited_once()
+        assert cover.travel_calc.current_position() == 0
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_idle_cover_sends_nothing(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(70)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=0)
+        send_stop.assert_not_awaited()
+        assert cover.travel_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_pending_startup_delay_counts_as_moving(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(50)
+        cover._startup_delay_task = cover.hass.async_create_task(asyncio.sleep(60))
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=0)
+        send_stop.assert_awaited_once()
+        assert (
+            cover._startup_delay_task is None or cover._startup_delay_task.cancelled()
+        )
+
+    @pytest.mark.asyncio
+    async def test_passive_snap_never_sends_stop(self, make_cover):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_WRAPPED, cover_entity_id="cover.inner"
+        )
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=40, supersede=False)
+        send_stop.assert_not_awaited()
+        assert cover.travel_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_toggle_mode_traveling_sends_stop(self, make_cover):
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=0)
+        send_stop.assert_awaited_once()
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_toggle_mode_idle_does_not_tap(self, make_cover):
+        """Toggle's stop is a tap that would START a parked motor; its own
+        async_stop_cover gating (was_active) must be what set_known_position
+        goes through."""
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover.travel_calc.set_position(70)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=100)
+        send_stop.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_resync_is_the_endpoint_shortcut(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.async_resync("open")
+        send_stop.assert_awaited_once()
+        assert cover.travel_calc.current_position() == 100
