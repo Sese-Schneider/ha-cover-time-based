@@ -291,8 +291,8 @@ relay responds slowly.
 > guaranteed off, so a stop you press before the relay confirms is held back
 > until the confirmation arrives — or until the wait times out — and only then
 > tapped out. It is no longer swallowed. A *reversal* is not held back: if you
-> send the cover the other way, or a wall switch reverses it, before the
-> confirmation has arrived, that taps the relay immediately.
+> send the cover the other way before the confirmation has arrived, the relay
+> is tapped immediately.
 
 #### Send stop signal at endpoints
 

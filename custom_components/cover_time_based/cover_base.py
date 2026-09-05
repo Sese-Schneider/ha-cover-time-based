@@ -4069,10 +4069,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         relay's ON echo lands can be swallowed by the hardware (a toggle stop is
         a tap, not an off), leaving the motor running while tracking is torn
         down. Waiting is passive — ``asyncio.wait`` never cancels the future — so
-        the task that owns the wait keeps both its slot and its own timeout, and
-        it is that owner timing out and cancelling the future that normally
-        wakes this wait. The explicit timeout is a backstop for a future left
-        behind with no owner to end it.
+        the task that owns the wait keeps both its slot and its own timeout: the
+        confirmation resolves the future, and when none arrives it is the owner
+        timing out and cancelling the future that wakes this wait. The explicit
+        timeout is a backstop for a future left behind with no owner to end it.
         """
         future = self._feedback_wait_future
         if future is None or future.done():
