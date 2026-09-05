@@ -438,12 +438,15 @@ class CalibrationMixin:
                 self._calibration.automation_task.cancel()
             try:
                 if self._self_stops_at_endpoints():
-                    # Nothing stopped the motor, so it is parked at the limit
-                    # it was driven towards: anchor the tracker (and any mode
-                    # phase) there. A stop pulse would be a movement command
-                    # on this hardware (#153/#133). A timeout is never a user
-                    # cancel.
-                    self._set_position_after_calibration(self._calibration)
+                    # A stop pulse would be a movement command on this
+                    # hardware (#153/#133), so nothing is sent. The motor is
+                    # therefore at the limit only if it was being driven
+                    # continuously towards one; the overhead test's stepped
+                    # phase parks it between the limits, and there the honest
+                    # position is the unchanged one. A timeout is never a
+                    # user cancel.
+                    if self._driven_continuously_to_endpoint():
+                        self._set_position_after_calibration(self._calibration)
                 else:
                     await self._calibration_stop()
             finally:
@@ -456,6 +459,20 @@ class CalibrationMixin:
             self.async_write_ha_state()
         except asyncio.CancelledError:
             _LOGGER.debug("_calibration_timeout :: cancelled")
+
+    def _driven_continuously_to_endpoint(self) -> bool:
+        """Is the running calibration driving the motor at a limit right now?
+
+        True for the travel/tilt time tests, which run to the endpoint from
+        the first command, and for the overhead test once it reaches its
+        final continuous step. False during the overhead test's stepped
+        phase, where the motor is parked part-way.
+        """
+        assert self._calibration is not None
+        attribute = self._calibration.attribute
+        if "travel_time" in attribute or "tilt_time" in attribute:
+            return True
+        return self._calibration.final_step
 
     async def stop_calibration(self, **kwargs):
         """Stop an in-progress calibration test."""

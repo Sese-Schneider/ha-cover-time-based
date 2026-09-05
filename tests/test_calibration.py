@@ -1457,3 +1457,41 @@ class TestCalibrationTimeoutOnSelfStoppingMotor:
             await asyncio.sleep(0.3)
         assert cover._calibration is None
         assert cover.travel_calc.current_position() == 100
+
+    @pytest.mark.asyncio
+    async def test_overhead_stepped_phase_timeout_leaves_tracker_alone(
+        self, make_cover
+    ):
+        """Mid-way through the stepped phase the motor is parked between the
+        limits, not at one, so a timeout must not claim an endpoint."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_TOGGLE,
+            travel_time_close=60.0,
+            travel_time_open=60.0,
+        )
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_startup_delay", timeout=0.1)
+            await asyncio.sleep(0.3)
+        assert cover._calibration is None
+        # Step 1 is still running its ~10% move, so the tracker is just off
+        # 100 — the point is that it was not snapped to the far endpoint.
+        assert cover.travel_calc.current_position() > 90
+
+    @pytest.mark.asyncio
+    async def test_overhead_continuous_phase_timeout_anchors_at_endpoint(
+        self, make_cover
+    ):
+        """The continuous phase drives to the limit and nothing stops it."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_TOGGLE,
+            travel_time_close=60.0,
+            travel_time_open=60.0,
+        )
+        cover.travel_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_startup_delay", timeout=0.1)
+            cover._calibration.final_step = True
+            await asyncio.sleep(0.3)
+        assert cover._calibration is None
+        assert cover.travel_calc.current_position() == 0
