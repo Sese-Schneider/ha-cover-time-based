@@ -383,6 +383,79 @@ class TestAutoUpdaterHook:
         assert cover._unsubscribe_auto_updater is None
 
 
+class TestAutoUpdaterTickCost:
+    """One tick writes state only when the integer position/tilt changed, and
+    spawns the auto-stop task only when the position is reached."""
+
+    @pytest.mark.asyncio
+    async def test_unchanged_position_writes_once(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        cover.start_auto_updater()
+        mock_update = MagicMock()
+        with patch.object(cover, "async_schedule_update_ha_state", mock_update):
+            for _ in range(5):  # microseconds apart: the integer position is the same
+                cover.auto_updater_hook(None)
+        assert mock_update.call_count == 1
+        cover.stop_auto_updater()
+
+    @pytest.mark.asyncio
+    async def test_changed_position_writes_again(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        cover.start_auto_updater()
+        mock_update = MagicMock()
+        with patch.object(cover, "async_schedule_update_ha_state", mock_update):
+            cover.auto_updater_hook(None)
+            cover.travel_calc.set_position(50)
+            cover.travel_calc.start_travel(100)
+            cover.auto_updater_hook(None)
+        assert mock_update.call_count == 2
+        cover.stop_auto_updater()
+
+    @pytest.mark.asyncio
+    async def test_restart_writes_on_first_tick(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        mock_update = MagicMock()
+        with patch.object(cover, "async_schedule_update_ha_state", mock_update):
+            cover.start_auto_updater()
+            cover.auto_updater_hook(None)
+            cover.stop_auto_updater()
+            cover.start_auto_updater()
+            cover.auto_updater_hook(None)
+        assert mock_update.call_count == 2
+        cover.stop_auto_updater()
+
+    @pytest.mark.asyncio
+    async def test_no_stop_task_before_arrival(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with patch.object(cover, "async_schedule_update_ha_state"):
+            cover.auto_updater_hook(None)
+        assert cover.hass._test_tasks == []
+
+    @pytest.mark.asyncio
+    async def test_stop_task_on_arrival(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel(50)  # already at target
+        with (
+            patch.object(cover, "async_schedule_update_ha_state"),
+            patch.object(
+                cover, "auto_stop_if_necessary", new_callable=AsyncMock
+            ) as stop,
+        ):
+            cover.auto_updater_hook(None)
+            for task in cover.hass._test_tasks:
+                await task
+        stop.assert_awaited_once()
+
+
 # ===================================================================
 # auto_stop_if_necessary with tilt
 # ===================================================================

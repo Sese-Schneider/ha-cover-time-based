@@ -171,6 +171,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._config_entry_id: str | None = None
         self._calibration: CalibrationState | None = None
         self._unsubscribe_auto_updater = None
+        self._auto_updater_last_written: tuple | None = None
         self._delay_task = None
         self._startup_delay_task = None
         self._last_command = None
@@ -2649,6 +2650,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._log("start_auto_updater")
         if self._unsubscribe_auto_updater is None:
             self._log("init _unsubscribe_auto_updater")
+            # Forget the last written snapshot so the first tick always writes.
+            self._auto_updater_last_written = None
             interval = timedelta(seconds=0.1)
             self._unsubscribe_auto_updater = async_track_time_interval(
                 self.hass, self.auto_updater_hook, interval
@@ -2656,12 +2659,24 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     @callback
     def auto_updater_hook(self, _now):
-        """Call for the autoupdater."""
-        self.async_schedule_update_ha_state()
+        """Call for the autoupdater.
+
+        Ticks every 100 ms while moving, but the integer position changes far
+        less often on a long travel: write state only when the snapshot the
+        UI sees has changed, and spawn the auto-stop only on arrival — its
+        body is entirely inside the same position_reached check.
+        """
+        snapshot = (
+            self.travel_calc.current_position(),
+            self.tilt_calc.current_position() if self._has_tilt_support() else None,
+        )
+        if snapshot != self._auto_updater_last_written:
+            self._auto_updater_last_written = snapshot
+            self.async_schedule_update_ha_state()
         if self.position_reached():
             self._log("auto_updater_hook :: position_reached")
             self.stop_auto_updater()
-        self.hass.async_create_task(self.auto_stop_if_necessary())
+            self.hass.async_create_task(self.auto_stop_if_necessary())
 
     def stop_auto_updater(self):
         """Stop the autoupdater."""
