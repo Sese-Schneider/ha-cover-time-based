@@ -8,6 +8,8 @@ export const EN = {
   yaml_warning:
     "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings \u2192 Devices & Services \u2192 Helpers \u2192 Create Helper \u2192 Cover Time Based.",
   load_failed: "Failed to load configuration. Please try again.",
+  admin_required:
+    "This card needs an administrator account. Sign in as an administrator to configure covers.",
   "tabs.device": "Device",
   "tabs.calibration": "Calibration",
   "control_mode.label": "Control Mode",
@@ -179,6 +181,8 @@ export const TRANSLATIONS = {
     yaml_warning:
       "Esta entidade utiliza configuração YAML e não pode ser configurada a partir deste cartão. Por favor, migre para a interface gráfica: Definições > Dispositivos e Serviços > Auxiliares > Criar Auxiliar > Estore Baseado em Tempo.",
     load_failed: "Falha ao carregar a configuração. Por favor, tente novamente.",
+    admin_required:
+      "Este cartão requer uma conta de administrador. Inicie sessão como administrador para configurar estores.",
     "tabs.device": "Dispositivo",
     "tabs.calibration": "Calibração",
     "control_mode.label": "Modo de Controlo",
@@ -350,6 +354,8 @@ export const TRANSLATIONS = {
     yaml_warning:
       "Ta encja używa konfiguracji YAML i nie może być konfigurowana z tej karty. Proszę przeprowadzić migrację do interfejsu użytkownika: Ustawienia > Urządzenia i usługi > Pomocniki > Utwórz pomocnik > Roleta sterowana czasowo.",
     load_failed: "Nie udało się załadować konfiguracji. Spróbuj ponownie.",
+    admin_required:
+      "Ta karta wymaga konta administratora. Zaloguj się jako administrator, aby skonfigurować rolety.",
     "tabs.device": "Urządzenie",
     "tabs.calibration": "Kalibracja",
     "control_mode.label": "Tryb sterowania",
@@ -521,6 +527,8 @@ export const TRANSLATIONS = {
     yaml_warning:
       "Diese Entität verwendet eine YAML-Konfiguration und kann nicht über diese Karte konfiguriert werden. Bitte migriere sie auf die Benutzeroberfläche: Einstellungen → Geräte & Dienste → Helfer → Helfer erstellen → Cover Time Based.",
     load_failed: "Laden der Konfiguration fehlgeschlagen. Bitte versuche es erneut.",
+    admin_required:
+      "Diese Karte benötigt ein Administratorkonto. Melde dich als Administrator an, um Rollläden zu konfigurieren.",
     "tabs.device": "Gerät",
     "tabs.calibration": "Kalibrierung",
     "control_mode.label": "Steuerungsmodus",
@@ -696,6 +704,8 @@ export const TRANSLATIONS = {
     yaml_warning:
       "Questa entità utilizza la configurazione YAML e non può essere configurata da questa scheda. Esegui la migrazione all'interfaccia utente: Impostazioni → Dispositivi e servizi → Helper → Crea helper → Cover Time Based.",
     load_failed: "Caricamento della configurazione non riuscito. Riprova.",
+    admin_required:
+      "Questa scheda richiede un account amministratore. Accedi come amministratore per configurare le tapparelle.",
     "tabs.device": "Dispositivo",
     "tabs.calibration": "Calibrazione",
     "control_mode.label": "Modalità di controllo",
@@ -867,6 +877,8 @@ export const TRANSLATIONS = {
     yaml_warning:
       "Deze entiteit gebruikt YAML-configuratie en kan niet vanuit deze kaart worden geconfigureerd. Migreer naar de gebruikersinterface: Instellingen → Apparaten en diensten → Helpers → Helper aanmaken → Cover Time Based.",
     load_failed: "Laden van de configuratie mislukt. Probeer het opnieuw.",
+    admin_required:
+      "Deze kaart vereist een beheerdersaccount. Log in als beheerder om rolluiken te configureren.",
     "tabs.device": "Apparaat",
     "tabs.calibration": "Kalibratie",
     "control_mode.label": "Besturingsmodus",
@@ -1038,6 +1050,8 @@ export const TRANSLATIONS = {
     yaml_warning:
       "Cette entité utilise une configuration YAML et ne peut pas être configurée depuis cette carte. Veuillez migrer vers l'interface utilisateur\u00a0: Paramètres → Appareils et services → Entrées → Créer une entrée → Cover Time Based.",
     load_failed: "Échec du chargement de la configuration. Veuillez réessayer.",
+    admin_required:
+      "Cette carte nécessite un compte administrateur. Veuillez vous connecter en tant qu'administrateur pour configurer les volets.",
     "tabs.device": "Appareil",
     "tabs.calibration": "Étalonnage",
     "control_mode.label": "Mode de commande",
@@ -1209,6 +1223,8 @@ export const TRANSLATIONS = {
     yaml_warning:
       "Esta entidad usa configuración YAML y no se puede configurar desde esta tarjeta. Migra a la interfaz de usuario: Configuración → Dispositivos y servicios → Ayudantes → Crear ayudante → Cover Time Based.",
     load_failed: "Error al cargar la configuración. Inténtalo de nuevo.",
+    admin_required:
+      "Esta tarjeta necesita una cuenta de administrador. Inicia sesión como administrador para configurar persianas.",
     "tabs.device": "Dispositivo",
     "tabs.calibration": "Calibración",
     "control_mode.label": "Modo de control",
@@ -1383,6 +1399,8 @@ export const TRANSLATIONS = {
     yaml_warning:
       "Aquesta entitat utilitza configuració YAML i no es pot configurar des d'aquesta targeta. Migra a la interfície d'usuari: Configuració → Dispositius i serveis → Ajudants → Crea ajudant → Cover Time Based.",
     load_failed: "No s'ha pogut carregar la configuració. Torna-ho a provar.",
+    admin_required:
+      "Aquesta targeta necessita un compte d'administrador. Inicia la sessió com a administrador per configurar persianes.",
     "tabs.device": "Dispositiu",
     "tabs.calibration": "Calibració",
     "control_mode.label": "Mode de control",
@@ -1557,6 +1575,8 @@ export const TRANSLATIONS = {
     yaml_warning:
       "Tato entita používá konfiguraci YAML a nelze ji nastavit z této karty. Přejděte prosím na uživatelské rozhraní: Nastavení → Zařízení a služby → Pomocníci → Vytvořit pomocníka → Cover Time Based.",
     load_failed: "Nepodařilo se načíst konfiguraci. Zkuste to prosím znovu.",
+    admin_required:
+      "Tato karta vyžaduje účet administrátora. Přihlaste se prosím jako administrátor, abyste mohli nastavit rolety.",
     "tabs.device": "Zařízení",
     "tabs.calibration": "Kalibrace",
     "control_mode.label": "Režim ovládání",
@@ -1726,6 +1746,8 @@ export const TRANSLATIONS = {
     yaml_warning:
       "Ovaj entitet koristi YAML konfiguraciju i ne može se podesiti sa ove kartice. Pređite na korisnički interfejs: Podešavanja → Uređaji i usluge → Pomoćnici → Kreirajte pomoćnika → Cover Time Based.",
     load_failed: "Učitavanje konfiguracije nije uspelo. Pokušajte ponovo.",
+    admin_required:
+      "Ova kartica zahteva administratorski nalog. Prijavite se kao administrator da biste podesili roletne.",
     "tabs.device": "Uređaj",
     "tabs.calibration": "Kalibracija",
     "control_mode.label": "Režim upravljanja",

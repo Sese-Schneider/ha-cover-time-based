@@ -8,6 +8,10 @@
 - **Serbian — Latin (`sr-Latn`) translation added.**
 - **Added a "Single button (cycling)" control mode** ([#245](https://github.com/Sese-Schneider/ha-cover-time-based/issues/245)) for motors with one control input, where each press cycles down → stop → up → stop. Also adds a `cover_time_based.resync` action, now available in every control mode.
 
+### Fixes
+
+- **The configuration card's backend websocket commands and the `start_calibration` / `stop_calibration` actions now require an administrator account**: they accepted any authenticated user, including read-only ones, and now return `unauthorized` for non-administrators, matching how Home Assistant itself gates configuration changes.
+
 ## 4.11.0 (2026-08-04)
 
 ### Features
