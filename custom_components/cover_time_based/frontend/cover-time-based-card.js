@@ -338,12 +338,19 @@ class CoverTimeBasedCard extends LitElement {
       this._config = null;
       // Only a genuinely unconfigured entity (the backend's ws_get_config
       // sends error code "not_found" when the entity has no config entry —
-      // see websocket_api.py) warrants the YAML-migration lecture. Any other
-      // failure (a dropped connection, a transient server error, ...) is
-      // unrelated to YAML config and should say so generically instead of
-      // sending the user off on a wild goose chase to "migrate" an entity
-      // that is already fine.
-      this._loadError = this._t(err?.code === "not_found" ? "yaml_warning" : "load_failed");
+      // see websocket_api.py) warrants the YAML-migration lecture, and only a
+      // non-administrator gets "unauthorized" from the backend's require_admin,
+      // for whom "try again" would never succeed. Any other failure (a dropped
+      // connection, a transient server error, ...) is unrelated to YAML config
+      // and should say so generically instead of sending the user off on a wild
+      // goose chase to "migrate" an entity that is already fine.
+      const messageKey = { not_found: "yaml_warning", unauthorized: "admin_required" };
+      const code = err?.code;
+      this._loadError = this._t(
+        // hasOwn, not a bare lookup: a code like "constructor" would otherwise
+        // resolve to an inherited Object.prototype member.
+        Object.hasOwn(messageKey, code) ? messageKey[code] : "load_failed",
+      );
     } finally {
       // Only the newest request owns the spinner: an older one must not clear
       // it while a newer load is still running, but a request that was merely

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import voluptuous as vol
 import yaml
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, Unauthorized
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -18,6 +18,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_SWITCH,
     SERVICE_START_CALIBRATION,
     SERVICE_STOP_CALIBRATION,
+    _admin_only,
     _create_cover_from_options,
     _register_services,
 )
@@ -132,6 +133,8 @@ class TestServiceHandlers:
             "attribute": "travel_time_close",
             "timeout": 60.0,
         }
+        # An internal call carries no user, which _admin_only waves through.
+        service_call.context.user_id = None
 
         from unittest.mock import patch
 
@@ -172,6 +175,8 @@ class TestServiceHandlers:
 
         service_call = MagicMock()
         service_call.data = {"entity_id": "cover.test", "cancel": False}
+        # An internal call carries no user, which _admin_only waves through.
+        service_call.context.user_id = None
 
         from unittest.mock import patch
 
@@ -182,6 +187,43 @@ class TestServiceHandlers:
             await handler(service_call)
 
         mock_entity.stop_calibration.assert_awaited_once_with(cancel=False)
+
+
+# ---------------------------------------------------------------------------
+# _admin_only
+# ---------------------------------------------------------------------------
+
+
+class TestAdminOnly:
+    """The calibration services drive relays and rewrite options, so a
+    non-administrator must not reach their handlers."""
+
+    @staticmethod
+    def _call(user_id):
+        call = MagicMock()
+        call.context.user_id = user_id
+        return call
+
+    @pytest.mark.asyncio
+    async def test_non_admin_is_rejected(self):
+        handler = AsyncMock()
+        hass = MagicMock()
+        hass.auth.async_get_user = AsyncMock(return_value=MagicMock(is_admin=False))
+
+        with pytest.raises(Unauthorized):
+            await _admin_only(hass, handler)(self._call("read-only-user"))
+
+        handler.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_admin_reaches_the_handler(self):
+        handler = AsyncMock(return_value={"value": 45.0})
+        hass = MagicMock()
+        hass.auth.async_get_user = AsyncMock(return_value=MagicMock(is_admin=True))
+
+        call = self._call("admin-user")
+        assert await _admin_only(hass, handler)(call) == {"value": 45.0}
+        handler.assert_awaited_once_with(call)
 
 
 # ---------------------------------------------------------------------------
