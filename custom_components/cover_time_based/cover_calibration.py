@@ -57,6 +57,7 @@ class CalibrationMixin:
         def _has_tilt_motor(self) -> bool: ...
         def async_write_ha_state(self) -> None: ...
         def _self_stops_at_endpoints(self) -> bool: ...
+        def _on_known_position(self, position: int) -> None: ...
         def _neutralize_tracked_movement(self, *, supersede: bool = True) -> None: ...
 
     async def start_calibration(self, **kwargs):
@@ -436,12 +437,14 @@ class CalibrationMixin:
             ):
                 self._calibration.automation_task.cancel()
             try:
-                # Stop the motor. On momentary hardware
-                # (toggle/pulse-no-endpoint-stop) the time-test protocol
-                # means the motor already self-stopped at its limit — a stop
-                # pulse there is a movement command (#153/#133), so skip it.
-                # A timeout is never a user cancel.
-                if not self._self_stops_at_endpoints():
+                if self._self_stops_at_endpoints():
+                    # Nothing stopped the motor, so it is parked at the limit
+                    # it was driven towards: anchor the tracker (and any mode
+                    # phase) there. A stop pulse would be a movement command
+                    # on this hardware (#153/#133). A timeout is never a user
+                    # cancel.
+                    self._set_position_after_calibration(self._calibration)
+                else:
                     await self._calibration_stop()
             finally:
                 # Always undo the startup-delay zeroing and clear the
@@ -517,6 +520,10 @@ class CalibrationMixin:
             endpoint,
         )
         calc.set_position(endpoint)
+        if not is_tilt:
+            # A mode that tracks more than the position (single-button's cycle
+            # phase) anchors it at the limit the same way a declared position does.
+            self._on_known_position(endpoint)
 
     def _calculate_calibration_result(self):
         """Calculate the calibration result based on attribute type."""
