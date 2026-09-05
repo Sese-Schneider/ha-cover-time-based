@@ -218,12 +218,13 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     }
 )
 
-# HA's own ATTR_POSITION range; anything above 100 would be tracked and
-# persisted as a position the calculator then travels *from*.
+# HA's own ATTR_POSITION range, shared with the tilt-limit percentages in the
+# websocket schema; anything above 100 would be tracked and persisted as a
+# position the calculator then travels *from*.
 PERCENT = vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
 
 # No explicit entity_id key: make_entity_service_schema supplies the optional
-# entity/device/area/label targets services.yaml advertises and requires one.
+# entity, device, area, floor and label targets and requires one.
 POSITION_SCHEMA = cv.make_entity_service_schema({vol.Required(ATTR_POSITION): PERCENT})
 TILT_POSITION_SCHEMA = cv.make_entity_service_schema(
     {vol.Required(ATTR_TILT_POSITION): PERCENT}

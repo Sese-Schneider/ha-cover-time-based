@@ -1507,21 +1507,44 @@ class TestPulseTimeSchemaValidation:
 
 
 class TestTimingFieldValidation:
-    """Verify that travel/tilt time fields reject 0 (min 0.1) while delay fields allow it."""
+    """The duration floor is one constant shared with the YAML schema, so the
+    websocket side is pinned against the registered schema rather than a local
+    copy of the validator. Delay and auxiliary fields sit below that floor:
+    0 is a legitimate value for them.
+    """
 
     @pytest.mark.parametrize(
-        "field",
-        ["travel_time_close", "travel_time_open", "tilt_time_close", "tilt_time_open"],
+        ("field", "maximum"),
+        [
+            ("pulse_time", 10),
+            ("travel_time_close", 600),
+            ("travel_time_open", 600),
+            ("tilt_time_close", 600),
+            ("tilt_time_open", 600),
+        ],
     )
-    def test_zero_rejected_for_travel_tilt_times(self, field):
-        """travel_time_* and tilt_time_* require >= 0.1."""
+    def test_duration_bounds(self, field, maximum):
+        """Durations span MIN_DURATION..maximum inclusive; outside is rejected."""
         import voluptuous as vol
 
-        validator = vol.All(vol.Coerce(float), vol.Range(min=0.1, max=600))
+        schema = ws_update_config._ws_schema
+
+        def call(value):
+            return schema(
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    field: value,
+                }
+            )
+
         with pytest.raises(vol.Invalid):
-            validator(0)
-        # 0.1 must be accepted
-        assert validator(0.1) == pytest.approx(0.1)
+            call(0)
+        assert call(0.1)[field] == pytest.approx(0.1)
+        assert call(maximum)[field] == pytest.approx(maximum)
+        with pytest.raises(vol.Invalid):
+            call(maximum + 0.1)
 
     @pytest.mark.parametrize(
         "field",
@@ -1534,10 +1557,16 @@ class TestTimingFieldValidation:
     )
     def test_zero_accepted_for_delay_fields(self, field):
         """Delay and auxiliary timing fields allow 0."""
-        import voluptuous as vol
-
-        validator = vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
-        assert validator(0) == pytest.approx(0)
+        schema = ws_update_config._ws_schema
+        result = schema(
+            {
+                "id": 1,
+                "type": "cover_time_based/update_config",
+                "entity_id": ENTITY_ID,
+                field: 0,
+            }
+        )
+        assert result[field] == pytest.approx(0)
 
 
 # ---------------------------------------------------------------------------

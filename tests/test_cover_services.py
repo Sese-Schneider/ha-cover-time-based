@@ -375,7 +375,12 @@ class TestKnownPositionSchemas:
 
     @pytest.mark.parametrize(
         ("key", "value"),
-        [("area_id", "kitchen"), ("device_id", "abc123"), ("label_id", "blinds")],
+        [
+            ("area_id", "kitchen"),
+            ("device_id", "abc123"),
+            ("floor_id", "ground"),
+            ("label_id", "blinds"),
+        ],
     )
     def test_target_kinds_accepted(self, schema, field, key, value):
         assert schema({key: value, field: 50})[key] == [value]
