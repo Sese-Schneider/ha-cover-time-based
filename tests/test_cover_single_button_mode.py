@@ -11,7 +11,7 @@ from custom_components.cover_time_based.cover_single_button_mode import (
 from custom_components.cover_time_based.single_button_cycle import Phase
 
 
-def _make_sb_cover(button="switch.button", pulse_time=1.0, travel=30):
+def _make_sb_cover(button="switch.button", pulse_time=1.0, travel=30, feedback=False):
     cover = SingleButtonModeCover(
         device_id="test_sb",
         name="Test SB",
@@ -28,6 +28,7 @@ def _make_sb_cover(button="switch.button", pulse_time=1.0, travel=30):
         close_switch_entity_id=None,
         stop_switch_entity_id=None,
         pulse_time=pulse_time,
+        wait_for_relay_feedback=feedback,
     )
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
@@ -786,3 +787,103 @@ class TestResyncCancelsInFlightPress:
         # Resync's phase wins -- not whatever the interrupted sequence would
         # have gone on to set.
         assert cover._phase is Phase.AT_OPEN
+
+
+def _stub_button_state(cover, *, on=False):
+    """A deterministic, non-optimistic button state for the feedback guards."""
+    state = MagicMock()
+    state.state = "on" if on else "off"
+    state.attributes = {}
+    cover.hass.states.get = lambda _entity_id: state
+
+
+class TestRelayFeedbackArming:
+    """wait_for_relay_feedback anchors tracking on the press that starts the
+    motor: the last press of the plan."""
+
+    @pytest.mark.asyncio
+    async def test_movement_arms_the_button_and_counts_the_final_press(self):
+        cover = _make_sb_cover(feedback=True)
+        _stub_button_state(cover)
+        cover._phase = Phase.STOPPED_AFTER_UP  # OPEN = 3 presses
+        gate = asyncio.Event()
+
+        async def gated_sleep(_seconds):
+            await gate.wait()
+
+        with (
+            patch(
+                "custom_components.cover_time_based.cover_single_button_mode.sleep",
+                side_effect=gated_sleep,
+            ),
+            patch("custom_components.cover_time_based.cover_base.async_call_later"),
+        ):
+            await cover._send_open()
+            # Armed synchronously: _begin_movement consumes it right after
+            # _async_handle_command returns.
+            assert cover._consume_feedback_arm() == "switch.button"
+            await asyncio.sleep(0)  # press 1 ON edge
+            # A nudge press is not pre-counted; its echo must not resolve the wait.
+            assert cover._pending_switch.get("switch.button", 0) == 0
+            gate.set()
+            await _drain(cover)
+        assert len(_presses(cover)) == 3
+        # Only the final press's ON + OFF echoes are pre-counted.
+        assert cover._pending_switch.get("switch.button", 0) == 2
+
+    @pytest.mark.asyncio
+    async def test_single_press_plan_counts_that_press(self):
+        cover = _make_sb_cover(feedback=True)
+        _stub_button_state(cover)
+        cover._phase = Phase.AT_CLOSED
+        with (
+            patch(
+                "custom_components.cover_time_based.cover_single_button_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+            patch("custom_components.cover_time_based.cover_base.async_call_later"),
+        ):
+            await cover._send_open()
+            assert cover._consume_feedback_arm() == "switch.button"
+            await _drain(cover)
+        assert cover._pending_switch.get("switch.button", 0) == 2
+
+    @pytest.mark.asyncio
+    async def test_stop_never_arms(self):
+        cover = _make_sb_cover(feedback=True)
+        _stub_button_state(cover)
+        cover._phase = Phase.MOVING_UP
+        with (
+            patch(
+                "custom_components.cover_time_based.cover_single_button_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+            patch("custom_components.cover_time_based.cover_base.async_call_later"),
+        ):
+            await cover._send_stop()
+            assert cover._consume_feedback_arm() is None
+            await _drain(cover)
+        assert cover._pending_switch.get("switch.button", 0) == 0
+
+    @pytest.mark.asyncio
+    async def test_empty_plan_does_not_arm(self):
+        cover = _make_sb_cover(feedback=True)
+        _stub_button_state(cover)
+        cover._phase = Phase.MOVING_UP  # OPEN already satisfied
+        await cover._send_open()
+        assert cover._consume_feedback_arm() is None
+        assert cover._press_task is None
+
+    @pytest.mark.asyncio
+    async def test_option_off_arms_and_counts_nothing(self):
+        cover = _make_sb_cover(feedback=False)
+        _stub_button_state(cover)
+        cover._phase = Phase.AT_CLOSED
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover._send_open()
+            assert cover._consume_feedback_arm() is None
+            await _drain(cover)
+        assert cover._pending_switch.get("switch.button", 0) == 0

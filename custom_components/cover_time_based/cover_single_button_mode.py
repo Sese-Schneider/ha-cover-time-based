@@ -13,12 +13,20 @@ import asyncio
 import contextlib
 from asyncio import sleep
 
-from .const import DIRECTION_CHANGE_DELAY
+from .const import (
+    DIRECTION_CHANGE_DELAY,
+    ECHO_PENDING_WINDOW,
+    RELAY_FEEDBACK_PENDING_TIMEOUT,
+)
 from .cover_switch import SwitchCoverTimeBased
 from .single_button_cycle import Action, Phase, plan
 
 # The phase a self-stopping motor is in once it has reached a travel limit.
 _PHASE_AT_ENDPOINT: dict[int, Phase] = {100: Phase.AT_OPEN, 0: Phase.AT_CLOSED}
+
+# Slack after the press duration for the button's own OFF echo to arrive
+# before its pre-counted pending window lapses.
+_PRESS_ECHO_MARGIN = 2.0
 
 
 class SingleButtonModeCover(SwitchCoverTimeBased):
@@ -68,17 +76,28 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         self._log("single_button :: ignoring external state change on %s", entity_id)
 
     # --- press sequencing ---------------------------------------------
-    def _start_press_sequence(self, action: Action) -> None:
+    def _start_press_sequence(
+        self, action: Action, *, arm_feedback: bool = False
+    ) -> None:
         """Plan from the current phase and schedule the press sequence.
 
         Callers must already have awaited _supersede_active_press() before
         calling this, so there is nothing live left to cancel here -- we
         only need to plan (from the now-settled phase) and schedule.
+
+        ``arm_feedback`` (a movement, not a stop) arms wait_for_relay_feedback
+        on the button. The arm has to be set here, synchronously: the base
+        consumes it the moment the command returns, before the first press
+        has gone out.
         """
+        self._feedback_armed_entity = None
         phases = plan(self._phase, action)
         if not phases:
             return
-        self._press_task = self.hass.async_create_task(self._run_press_sequence(phases))
+        armed = arm_feedback and self._arm_relay_feedback(self._open_switch_entity_id)
+        self._press_task = self.hass.async_create_task(
+            self._run_press_sequence(phases, mark_final_press=armed)
+        )
 
     async def _supersede_active_press(self) -> None:
         """Cleanly end any in-flight press sequence before a new command.
@@ -124,7 +143,9 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         )
         await sleep(DIRECTION_CHANGE_DELAY)
 
-    async def _run_press_sequence(self, phases: list[Phase]) -> None:
+    async def _run_press_sequence(
+        self, phases: list[Phase], *, mark_final_press: bool = False
+    ) -> None:
         """Press once per planned phase, gap-spaced, updating phase each time.
 
         Each press is a discrete, self-contained pulse performed inline: ON,
@@ -142,12 +163,29 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         clean up -- this method does not issue its own turn_off on
         cancellation, since that would race the superseding command's
         cleanup.
+
+        ``mark_final_press`` pre-counts the ON and OFF echoes of the LAST press
+        only. The base starts a parked feedback wait from the echo-filter
+        branch, so a pre-counted ON echo is what anchors tracking -- and the
+        press that actually starts the motor is the last one of the plan, not
+        a nudge before it. Uncounted echoes fall through to
+        _handle_external_state_change, which ignores them.
         """
         entity_id = self._open_switch_entity_id
         try:
             for index, phase in enumerate(phases):
                 if index:
                     await sleep(DIRECTION_CHANGE_DELAY)
+                if mark_final_press and index == len(phases) - 1:
+                    self._mark_switch_pending(
+                        entity_id,
+                        2,
+                        timeout=max(
+                            ECHO_PENDING_WINDOW,
+                            RELAY_FEEDBACK_PENDING_TIMEOUT,
+                            self._pulse_time + _PRESS_ECHO_MARGIN,
+                        ),
+                    )
                 await self.hass.services.async_call(
                     "homeassistant", "turn_on", {"entity_id": entity_id}, False
                 )
@@ -226,11 +264,11 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
     # --- the mode contract --------------------------------------------
     async def _send_open(self) -> None:
         await self._abort_press_plan()
-        self._start_press_sequence(Action.OPEN)
+        self._start_press_sequence(Action.OPEN, arm_feedback=True)
 
     async def _send_close(self) -> None:
         await self._abort_press_plan()
-        self._start_press_sequence(Action.CLOSE)
+        self._start_press_sequence(Action.CLOSE, arm_feedback=True)
 
     async def _send_stop(self) -> None:
         await self._abort_press_plan()

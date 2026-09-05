@@ -16,13 +16,14 @@ import asyncio
 import contextlib
 import time
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from homeassistant.const import SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based import cover_base
 from custom_components.cover_time_based.calibration import CalibrationState
+from custom_components.cover_time_based.cover import CONTROL_MODE_SINGLE_BUTTON
 
 # A fixed, timezone-aware moment used as the relay echo's ``last_changed``.
 FIXED_ECHO = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
@@ -1257,3 +1258,40 @@ class TestRelayFeedbackWaitSlot:
                 await second
         finally:
             cover._calibration = None
+
+
+class TestSingleButtonFeedback:
+    """The parked start resolves on the button's pre-counted ON echo."""
+
+    @pytest.mark.asyncio
+    async def test_open_parks_until_the_button_confirms(self, make_cover):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SINGLE_BUTTON,
+            open_switch="switch.button",
+            close_switch=None,
+            wait_for_relay_feedback=True,
+            travel_time_open=30,
+            travel_time_close=30,
+        )
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        # A live timestamp: anchoring on FIXED_ECHO (months in the past) would
+        # finish the 30s travel the instant tracking starts.
+        echo_time = datetime.now(UTC)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_single_button_mode.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)  # press lands; feedback wait parked
+            assert not cover.travel_calc.is_traveling()
+            assert cover._pending_switch.get("switch.button", 0) == 2
+            await cover._async_switch_state_changed(
+                _echo_event("switch.button", "off", "on", echo_time)
+            )
+            await asyncio.sleep(0)
+        assert cover.travel_calc.is_traveling()
+        assert cover._pending_switch.get("switch.button", 0) == 1

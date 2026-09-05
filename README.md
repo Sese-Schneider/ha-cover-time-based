@@ -285,7 +285,9 @@ Available in every switch mode. Normally the position timer starts the moment a
 command is sent. On a slow or cold Zigbee or Z-Wave mesh the command can take a
 second or two to actually reach the relay, and that delay is then wrongly counted
 as travel, so the tracked position runs ahead of the cover. Turn this **on** to
-start the timer only when the relay reports that it has switched on. If the
+start the timer only when the relay reports that it has switched on. In
+**Single button** mode the timer waits for the press that actually starts the
+motor — the last press when a reversal needs several — to be confirmed. If the
 relay never confirms at all, the timer starts anyway, counted from when the
 command was sent. Leave it **off** unless the position drifts on a cover whose
 relay responds slowly.
