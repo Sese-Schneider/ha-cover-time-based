@@ -114,6 +114,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # cannot choose a direction, so it sets this False (see the design spec).
     supports_tilt = True
 
+    # What _get_missing_configuration calls the driving entities; modes with a
+    # different input vocabulary override it.
+    _missing_entities_label = "input entities"
+
     def __init__(
         self,
         device_id,
@@ -2549,10 +2553,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         Subclasses override this to check their specific entity IDs.
         """
         return True
-
-    # What _get_missing_configuration calls the driving entities; modes with a
-    # different input vocabulary override it.
-    _missing_entities_label = "input entities"
 
     def _get_missing_configuration(self) -> list[str]:
         """Return list of missing configuration items."""

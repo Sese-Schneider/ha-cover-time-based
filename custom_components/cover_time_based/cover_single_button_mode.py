@@ -253,6 +253,27 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         await self._abort_press_plan()
         self._start_press_sequence(Action.CLOSE)
 
+    async def _stop_hardware(
+        self, *, supersede: bool = True, tilt_axis_reported: bool = False
+    ) -> None:
+        """Stop the cover without publishing, once the button has confirmed.
+
+        A stop here is another press, and the run it ends began at the press
+        before it: the tracker has to have started on that press's ON
+        confirmation before the movement is torn down, or the motor runs
+        between the two presses with nothing counting it. A no-op unless a
+        feedback wait is actually pending. An external trigger presses the
+        button itself, so there is no wait of ours to protect.
+
+        See CoverTimeBased._stop_hardware for ``supersede`` and
+        ``tilt_axis_reported``.
+        """
+        if not self._triggered_externally:
+            await self._await_pending_relay_confirmation()
+        await super()._stop_hardware(
+            supersede=supersede, tilt_axis_reported=tilt_axis_reported
+        )
+
     async def _send_stop(self) -> None:
         await self._abort_press_plan()
         self._start_press_sequence(Action.STOP)

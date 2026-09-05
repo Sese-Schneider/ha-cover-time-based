@@ -15,7 +15,7 @@ way past regressions in this echo-handling area slipped past CI.
 import asyncio
 import contextlib
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -1275,3 +1275,49 @@ class TestSingleButtonFeedback:
             await asyncio.sleep(0)
         assert cover.travel_calc.is_traveling()
         assert cover._pending_switch.get("switch.button", 0) == 1
+
+    @pytest.mark.asyncio
+    async def test_stop_during_the_wait_is_deferred_until_the_button_confirms(
+        self, make_cover
+    ):
+        """A stop is a press, and the run it ends started at the press before
+        it: stopping while the start is still parked must wait out the
+        confirmation, or the motor runs between the two presses untracked."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SINGLE_BUTTON,
+            open_switch="switch.button",
+            close_switch=None,
+            wait_for_relay_feedback=True,
+            travel_time_open=30,
+            travel_time_close=30,
+        )
+        stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        # The relay switched three seconds before its echo reached us, so a
+        # tracker anchored on the confirmation is visibly off 0% — evidence the
+        # run between the two presses was counted.
+        echo_time = datetime.now(UTC) - timedelta(seconds=3)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            single_button_sleep_patch(),
+        ):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)  # press lands; feedback wait parked
+            assert cover._feedback_wait_entity == "switch.button"
+
+            stop = asyncio.ensure_future(cover.async_stop_cover())
+            for _ in range(5):
+                await asyncio.sleep(0)
+            # Parked: neither the stop nor its press has gone anywhere while
+            # the button is unconfirmed.
+            assert not stop.done()
+            assert len(_taps(cover, "switch.button")) == 1
+
+            await cover._async_switch_state_changed(
+                _echo_event("switch.button", "off", "on", echo_time)
+            )
+            await asyncio.wait_for(stop, 1.0)
+            await asyncio.sleep(0)  # the stop press sequence runs
+
+        assert len(_taps(cover, "switch.button")) == 2
+        assert cover.travel_calc.current_position() > 0

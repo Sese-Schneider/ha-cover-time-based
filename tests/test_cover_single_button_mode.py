@@ -109,6 +109,14 @@ def test_only_button_required():
     assert cover._are_entities_configured() is False
 
 
+def test_missing_button_is_named_as_a_button():
+    """The mode's own label, not the base's generic "input entities"."""
+    cover = _make_sb_cover()
+    assert cover._get_missing_configuration() == []
+    cover._open_switch_entity_id = None
+    assert "button entity" in cover._get_missing_configuration()
+
+
 def test_self_stops_at_endpoints():
     assert _make_sb_cover()._self_stops_at_endpoints() is True
 
