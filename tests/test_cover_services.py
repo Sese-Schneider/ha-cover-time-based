@@ -8,6 +8,7 @@ import pytest
 import voluptuous as vol
 import yaml
 from homeassistant.exceptions import HomeAssistantError, Unauthorized
+from homeassistant.helpers.entity_component import DATA_INSTANCES
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -47,7 +48,7 @@ class TestResolveEntity:
 
     def test_raises_when_entity_components_has_no_cover(self):
         hass = MagicMock()
-        hass.data = {"entity_components": {}}
+        hass.data = {DATA_INSTANCES: {}}
 
         with pytest.raises(HomeAssistantError, match="Cover platform not loaded"):
             resolve_entity(hass, "cover.test")
@@ -57,7 +58,7 @@ class TestResolveEntity:
         component.get_entity.return_value = None
 
         hass = MagicMock()
-        hass.data = {"entity_components": {"cover": component}}
+        hass.data = {DATA_INSTANCES: {"cover": component}}
 
         with pytest.raises(HomeAssistantError, match=r"cover.test"):
             resolve_entity(hass, "cover.test")
@@ -68,7 +69,7 @@ class TestResolveEntity:
         component.get_entity.return_value = MagicMock()  # not CoverTimeBased
 
         hass = MagicMock()
-        hass.data = {"entity_components": {"cover": component}}
+        hass.data = {DATA_INSTANCES: {"cover": component}}
 
         with pytest.raises(HomeAssistantError, match="not a cover_time_based"):
             resolve_entity(hass, "cover.test")
@@ -91,7 +92,7 @@ class TestResolveEntity:
         component.get_entity.return_value = entity
 
         hass = MagicMock()
-        hass.data = {"entity_components": {"cover": component}}
+        hass.data = {DATA_INSTANCES: {"cover": component}}
 
         result = resolve_entity(hass, "cover.test")
         assert result is entity

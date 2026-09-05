@@ -1808,6 +1808,52 @@ class TestStartupDelayEchoDoesNotHijackTimedMove:
         assert cover._startup_delay_task is None or cover._startup_delay_task.done()
 
 
+class TestRedundantReportDuringStartupDelay:
+    """A redundant position report inside the travel_startup_delay window must
+    not clear the pending move's bookkeeping.
+
+    Snapping runs set_known_position -> _handle_stop and drops _last_command,
+    which is the only record of the pending move's direction while the tracker
+    is still parked. Without it a reversal issued in the window no longer
+    reads as a direction change: async_close_cover sees the tracker settled at
+    0 with nothing to cancel, skips the re-drive, and the delay fires on the
+    original target — the cover runs on instead of stopping.
+    """
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_reversal_survives_redundant_report_in_startup_window(self):
+        # features = 15 == OPEN|CLOSE|SET_POSITION|STOP; force_time_based keeps
+        # the timed path so the move waits out travel_startup_delay.
+        cover = _make_wrapped_cover(
+            force_time_based_position=True, travel_startup_delay=1.5
+        )
+        st = _set_wrapped_features(cover, 15, state="closed", current_position=0)
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        await cover.async_set_cover_position(position=40)
+        assert cover._startup_delay_task is not None
+        assert not cover._startup_delay_task.done()
+        assert not cover.travel_calc.is_traveling()  # parked in the window
+
+        # The underlying re-reports the position it already had, past the
+        # bounce grace window and while the delay is still pending.
+        cover._last_self_command_time = None
+        await cover._handle_external_attribute_change(_attr_event("cover.inner", st))
+
+        cover.hass.services.async_call.reset_mock()
+        await cover.async_close_cover()
+
+        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        assert "stop_cover" in services
+        assert cover._startup_delay_task is None or cover._startup_delay_task.done()
+
+
 class TestWrappedSyncsToLivePositionAtStartup:
     """B12: on restart the tracker restores from the PositionStore, but the
     underlying may have been moved (app/remote) while HA was down. Trust a

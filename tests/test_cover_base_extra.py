@@ -451,6 +451,41 @@ class TestAutoUpdaterTickCost:
                 await task
         stop.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_tilt_arrival_decides_the_spawn(self, make_cover):
+        """Each member of the tick's positions pair is judged by its own
+        calculator: travel sits at its target throughout, so only the tilt
+        member can decide the spawn."""
+        cover = make_cover(
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+            tilt_time_open=5.0,
+            tilt_time_close=5.0,
+        )
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel(50)
+        cover.tilt_calc.set_position(30)
+        cover.tilt_calc.start_travel(30)  # tilt already at its target
+
+        with (
+            patch.object(cover, "async_schedule_update_ha_state"),
+            patch.object(
+                cover, "auto_stop_if_necessary", new_callable=AsyncMock
+            ) as stop,
+        ):
+            cover.auto_updater_hook(None)
+            for task in cover.hass._test_tasks:
+                await task
+        stop.assert_awaited_once()
+
+        cover.hass._test_tasks.clear()
+        cover.tilt_calc.start_travel(100)  # tilt now mid-travel
+        with patch.object(cover, "async_schedule_update_ha_state"):
+            cover.auto_updater_hook(None)
+        assert cover.hass._test_tasks == []
+
 
 # ===================================================================
 # auto_stop_if_necessary with tilt
@@ -1428,6 +1463,8 @@ class TestResyncAllModes:
 
 
 class TestLogGuard:
+    """_log reaches the logger only when DEBUG is enabled."""
+
     def test_log_skips_logger_when_debug_off(self, make_cover):
         cover = make_cover()
         with (

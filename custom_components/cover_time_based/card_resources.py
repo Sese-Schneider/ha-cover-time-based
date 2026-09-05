@@ -82,11 +82,13 @@ async def async_register_card_resource(
     resource left over from a previous version so it can be cache-busted in
     place; ``card_url`` is the current, content-hashed URL. Falls back to
     ``add_extra_js_url`` if the Lovelace resource store isn't available.
+    Returns immediately once the resource id is recorded for this session.
     """
     # Once recorded for this session the resource exists; every further entry
     # setup would only rescan every Lovelace resource to reach the same state.
     # async_unregister_card_resource pops the id, so a re-add after the last
-    # removal registers again.
+    # removal registers again — but a resource deleted by hand mid-session is
+    # only re-created on restart, or once the last entry is removed.
     if _RESOURCE_ID_KEY in hass.data.get(DOMAIN, {}):
         return
 
@@ -154,7 +156,8 @@ async def async_unregister_card_resource(
 
     Mirrors :func:`async_register_card_resource`: deletes the resource by the id
     stored at registration time, or — if the card was added via the
-    ``add_extra_js_url`` fallback (no stored id) — removes that instead.
+    ``add_extra_js_url`` fallback (no stored id) — removes that instead, and
+    forgets the recorded id, re-arming :func:`async_register_card_resource`.
     """
     resource_id = hass.data.get(DOMAIN, {}).get(_RESOURCE_ID_KEY)
     if resource_id is None:

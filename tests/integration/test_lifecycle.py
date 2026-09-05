@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from homeassistant.components.cover import ATTR_CURRENT_POSITION, CoverEntityFeature
 from homeassistant.core import HomeAssistant, State
+from homeassistant.helpers.entity_component import DATA_INSTANCES
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     mock_restore_cache,
@@ -17,7 +18,7 @@ from .conftest import DOMAIN
 
 def _get_cover_entity(hass: HomeAssistant):
     """Return the CoverTimeBased entity object."""
-    entity_comp = hass.data["entity_components"]["cover"]
+    entity_comp = hass.data[DATA_INSTANCES]["cover"]
     entities = [e for e in entity_comp.entities if e.entity_id == "cover.test_cover"]
     assert entities, "Cover entity not found"
     return entities[0]

@@ -19,6 +19,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
+from homeassistant.core import State
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .cover_base import CoverTimeBased
@@ -135,7 +136,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Wrapped mode drives the wrapped cover entity for all tilt."""
         return self._cover_entity_id
 
-    def _wrapped_features(self, *, state=None) -> int | None:
+    def _wrapped_features(self, *, state: State | None = None) -> int | None:
         """Return the wrapped entity's supported_features bitmask, or None.
 
         None means "unknown" — the entity is missing, unavailable, or reports
@@ -162,9 +163,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         features = self._wrapped_features() if features is None else features
         return features is not None and bool(features & CoverEntityFeature.SET_POSITION)
 
-    def _wrapped_supports_stop(self) -> bool:
+    def _wrapped_supports_stop(self, *, features: int | None = None) -> bool:
         """Return True if the wrapped cover advertises native STOP."""
-        features = self._wrapped_features()
+        features = self._wrapped_features() if features is None else features
         return features is not None and bool(features & CoverEntityFeature.STOP)
 
     def _wrapped_supports_set_tilt_position(
@@ -257,7 +258,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         change at runtime (e.g. it goes unavailable and back).
 
         The bitmask is fetched once here and threaded through the decision:
-        the chain below would otherwise read the state machine up to 3 times.
+        the chain below would otherwise read the state machine twice.
         """
         features = self._wrapped_features()
         # Unknown capabilities: every support helper answers False on None, so
@@ -530,12 +531,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
         because their values may be stale or live depending on the device.
 
         While a self-initiated timed move is in flight, reports are ignored
-        whatever state they carry: an underlying that reports current_position
-        but never opening/closing (e.g. an MQTT position-topic-only cover)
-        always looks "stopped", so its mid-travel reports would otherwise snap
-        the tracker and cancel the pending auto-stop (see the is_traveling
-        guard below). Native (holds_itself) moves are unaffected and keep
-        snapping.
+        even though they look stopped: an underlying that reports
+        current_position but never opening/closing (e.g. an MQTT
+        position-topic-only cover) always looks "stopped", so its mid-travel
+        reports would otherwise snap the tracker and cancel the pending
+        auto-stop (see the is_traveling guard, below the stopped-state check).
+        Native (holds_itself) moves are unaffected and keep snapping.
 
         Command-echo covers (reports_command_not_endpoint) report no
         trustworthy position or endpoint, so we ignore their attribute-only
@@ -604,8 +605,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Snap our tracker to a known position.
 
         Always goes through set_known_position so that a still-running
-        auto-updater is stopped even when our calculated position happens
-        to match the target at this instant.
+        auto-updater is stopped even when our calculated position happens to
+        match the target at this instant; the caller skips the call only when
+        the position matches and no updater is running.
         """
         self._log("_snap_to_position :: snapping to %d", target)
         # The device reporting where it ended up, not a command — it must not
@@ -649,7 +651,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         return still_returning and new_val in _COMMANDED_STATES
 
     def _wrapped_reported_position(
-        self, *, trust_closed: bool = True, state=None
+        self, *, trust_closed: bool = True, state: State | None = None
     ) -> int | None:
         """Return the wrapped cover's reported position, or None if unknown.
 
@@ -691,7 +693,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return self._invert_position(0)
         return None
 
-    def _wrapped_reported_tilt_position(self, *, state=None) -> int | None:
+    def _wrapped_reported_tilt_position(
+        self, *, state: State | None = None
+    ) -> int | None:
         """Return the wrapped cover's reported tilt position, or None.
 
         Honors ignore_reported_position — a device whose reported values are
@@ -709,7 +713,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return int(attr_tilt)
         return None
 
-    async def _maybe_snap_to_reported_tilt(self, *, state=None) -> None:
+    async def _maybe_snap_to_reported_tilt(self, *, state: State | None = None) -> None:
         """Snap tilt_calc to the wrapped cover's reported tilt once it settles.
 
         Gated on _use_native_tilt(): only covers whose tilt we forward natively
@@ -718,7 +722,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         Skipped while our own tilt animation is still in flight.
         """
         # A caller-supplied state already carries the feature bitmask; without
-        # one, leave the fetch to the gate so it stays behind the cheap checks.
+        # one, leave the fetch to the gate.
         features = None if state is None else self._wrapped_features(state=state)
         if not self._use_native_tilt(features=features):
             return

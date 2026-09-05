@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_component import DATA_INSTANCES
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -30,7 +31,7 @@ POSITION_STORE_KEY = STORAGE_KEY
 
 
 def _get_cover_entity(hass: HomeAssistant):
-    entity_comp = hass.data["entity_components"]["cover"]
+    entity_comp = hass.data[DATA_INSTANCES]["cover"]
     entities = [e for e in entity_comp.entities if e.entity_id == "cover.test_cover"]
     assert entities, "Cover entity not found"
     return entities[0]
