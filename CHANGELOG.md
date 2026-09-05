@@ -18,6 +18,7 @@
 - **Wrapped covers with a startup delay no longer drop a reversal issued during that delay after the device re-reports its position**: a redundant position report used to reset the pending move's bookkeeping, so the next command was ignored and the cover ran on to the endpoint.
 - **`resync` and `set_known_position` now stop the motor if Home Assistant is still driving it**: declaring a position mid-travel used to park the tracker but leave the relay energised, so the motor ran on to its limit while Home Assistant reported the declared position. In **Single button (cycling)** mode the in-flight press sequence is cancelled instead (a press would start a parked motor), and `set_known_position` now re-anchors that mode's phase at an endpoint just as `resync` does — so the card's position presets fix a drifted phase too.
 - **The card's raw open/close/stop buttons now leave the position unknown across a restart**: they cleared the tracked position but the stored one was never overwritten, so after a restart the cover re-anchored at the stale pre-command value. A stop on a cover whose position is unknown now persists it as unknown too.
+- **"Wait for relay confirmation" no longer loses the first ten seconds of a move when the relay never confirms**: the fallback used to start tracking at the moment it gave up waiting, so a relay whose ON report was dropped ran untracked for the whole wait. Tracking is now anchored on the command time, as it is with the option off.
 
 ## 4.11.0 (2026-08-04)
 

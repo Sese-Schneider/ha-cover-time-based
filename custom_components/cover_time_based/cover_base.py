@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from abc import abstractmethod
 from asyncio import sleep
 from contextvars import ContextVar
@@ -48,6 +49,9 @@ from .const import (
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
     DIRECTION_CHANGE_DELAY,
+    ECHO_PENDING_WINDOW,
+    RELAY_FEEDBACK_PENDING_TIMEOUT,
+    RELAY_FEEDBACK_TIMEOUT,
     RESYNC_POSITIONS,
 )
 from .cover_calibration import CalibrationMixin
@@ -62,18 +66,6 @@ from .tilt_strategies.planning import (
 from .travel_calculator import TravelCalculator, TravelStatus
 
 _LOGGER = logging.getLogger(__name__)
-
-# How long a feedback-gated move (wait_for_relay_feedback) waits for its relay's
-# ON confirmation echo before falling back to the inline command-fire start.
-# Generous relative to the few seconds a cold Zigbee mesh has been seen to take,
-# since the fallback only matters for a relay that never reports its state at all.
-RELAY_FEEDBACK_TIMEOUT = 10.0
-
-# Safety window the awaited relay's pending-echo count lives for while a feedback
-# wait is armed. Kept above RELAY_FEEDBACK_TIMEOUT so the timeout fires first: a
-# late echo is then still filtered as our own rather than reclassified as an
-# external press.
-RELAY_FEEDBACK_PENDING_TIMEOUT = 12.0
 
 # (task, cover) pairs for the external-state handlers currently running.
 #
@@ -3869,7 +3861,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         return entity_id
 
     def _mark_driving_relay_pending(
-        self, entity_id, expected_transitions=1, arm=True, base_timeout=5
+        self,
+        entity_id,
+        expected_transitions=1,
+        arm=True,
+        base_timeout=ECHO_PENDING_WINDOW,
     ):
         """Mark the direction relay a move is energizing OFF->ON as pending.
 
@@ -3898,7 +3894,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 entity_id, expected_transitions, timeout=base_timeout
             )
 
-    def _mark_switch_pending(self, entity_id, expected_transitions, timeout=5):
+    def _mark_switch_pending(
+        self, entity_id, expected_transitions, timeout=ECHO_PENDING_WINDOW
+    ):
         """Mark a switch as having pending echo transitions to ignore.
 
         ``timeout`` is the safety window (seconds) after which a still-unmatched
@@ -3988,8 +3986,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         _cancel_startup_delay_task — treats a feedback wait exactly like a fixed
         startup delay. On confirmation, tracking is timestamped from the echo;
         the fixed mechanical ``startup_delay`` is then folded on top of the same
-        anchor. On timeout the move starts inline, as it does with the option off.
+        anchor. On timeout the move is anchored on the command time — the relay
+        may have switched without reporting, so the motor has been running since
+        the command, exactly as it is assumed to be with the option off.
         """
+        commanded_at = time.time()
         try:
             base_ts = await self._wait_for_relay_echo(entity_id, RELAY_FEEDBACK_TIMEOUT)
             if base_ts is not None:
@@ -4005,7 +4006,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     " timeout -> command-fire start",
                     entity_id,
                 )
-            start_callback(base_timestamp=base_ts, extra_delay=startup_delay or 0.0)
+            start_callback(
+                base_timestamp=base_ts if base_ts is not None else commanded_at,
+                extra_delay=startup_delay or 0.0,
+            )
             self._startup_delay_task = None
         except asyncio.CancelledError:
             self._log("_execute_with_relay_feedback :: cancelled")

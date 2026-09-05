@@ -15,6 +15,7 @@ from homeassistant.const import (
 from homeassistant.exceptions import HomeAssistantError
 
 from .calibration import CalibrationState
+from .const import RELAY_FEEDBACK_TIMEOUT
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -188,8 +189,6 @@ class CalibrationMixin:
         )
 
     async def _await_calibration_feedback(self, entity_id: str, field: str) -> None:
-        from .cover_base import RELAY_FEEDBACK_TIMEOUT
-
         confirmed = await self._wait_for_relay_echo(entity_id, RELAY_FEEDBACK_TIMEOUT)
         # None means the relay never confirmed: keep the command-fire baseline,
         # exactly as it behaves with the option off.

@@ -13,6 +13,7 @@ way past regressions in this echo-handling area slipped past CI.
 """
 
 import asyncio
+import time
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
@@ -376,18 +377,25 @@ class TestRelayFeedbackGuards:
         cover.travel_calc.set_position(0)
 
         with (
-            patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.02),
+            patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.2),
             patch.object(cover, "async_write_ha_state"),
         ):
+            t0 = time.time()
             await cover.async_open_cover()
             await asyncio.sleep(0)
             assert cover.travel_calc.is_traveling() is False  # parked
             # No echo ever arrives; the wait times out and starts inline.
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.25)
 
         assert cover.travel_calc.is_traveling() is True
         assert cover._feedback_wait_entity is None
         assert cover._startup_delay_task is None
+        # The fallback anchors on the command, not on the moment the wait gave
+        # up: a relay whose ON report was dropped has been running since the
+        # command.
+        assert cover.travel_calc._last_known_position_timestamp == pytest.approx(
+            t0, abs=0.01
+        )
 
     @pytest.mark.asyncio
     async def test_optimistic_switch_starts_inline(self, make_cover):
