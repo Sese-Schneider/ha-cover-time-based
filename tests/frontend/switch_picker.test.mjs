@@ -199,3 +199,12 @@ test("toggle_opposite behaves like toggle for pickers and clearing", () => {
     tilt_stop_switch: null,
   });
 });
+
+test("switchPickerDomains: single_button mode offers switches and scripts as the button", () => {
+  assert.deepEqual(switchPickerDomains("single_button"), ["switch", "script"]);
+});
+
+test("clearedScriptEntities keeps a script button when switching into single_button mode", () => {
+  const config = { open_switch_entity_id: "script.press_button" };
+  assert.deepEqual(clearedScriptEntities("single_button", config), {});
+});

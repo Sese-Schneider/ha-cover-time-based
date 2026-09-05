@@ -16,16 +16,19 @@ export function filterEntitiesByValidEntries(entityRegistry, validConfigEntryIds
     .map((e) => e.entity_id);
 }
 
+// Modes that drive the entity as a timed press (turn_on, hold, turn_off) and
+// ignore its state, so a script — which turns itself off when it finishes —
+// works as well as a switch.
+const SCRIPT_CAPABLE_MODES = new Set(["pulse", "single_button"]);
+
 /**
  * Entity-picker domains for switch-based control modes.
  *
- * Pulse mode commands via homeassistant.turn_on/off and ignores the OFF
- * edge, so `script` entities (e.g. IR-remote open/close/stop scripts) work
- * there. Switch and toggle modes rely on a latched/held state a script
- * cannot provide, so they stay switch-only.
+ * Switch and toggle modes rely on a latched/held state a script cannot
+ * provide, so they stay switch-only.
  */
 export function switchPickerDomains(controlMode) {
-  return controlMode === "pulse" ? ["switch", "script"] : ["switch"];
+  return SCRIPT_CAPABLE_MODES.has(controlMode) ? ["switch", "script"] : ["switch"];
 }
 
 /**
@@ -126,12 +129,12 @@ export function clearedEntitiesForMode(mode) {
 }
 
 /**
- * Null out script-valued switch slots when leaving pulse mode — scripts are
- * pulse-only (the backend rejects them anywhere else), and keeping them makes
+ * Null out script-valued switch slots when switching to a mode that cannot
+ * drive a script (the backend rejects them there), since keeping them makes
  * every subsequent save fail with no visible cause.
  */
 export function clearedScriptEntities(mode, config) {
-  if (mode === "pulse" || !config) return {};
+  if (SCRIPT_CAPABLE_MODES.has(mode) || !config) return {};
   const updates = {};
   for (const key of [
     "open_switch_entity_id",

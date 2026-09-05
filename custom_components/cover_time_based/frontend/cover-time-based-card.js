@@ -482,9 +482,9 @@ class CoverTimeBasedCard extends LitElement {
     const mode = e.target.value;
     // Clear entities that don't belong to the new mode so they don't linger
     // as stale config (see clearedEntitiesForMode), and null out any switch
-    // slot left holding a pulse-only script entity (see clearedScriptEntities)
-    // — the backend rejects those outside pulse mode and every subsequent
-    // save would otherwise fail silently.
+    // slot left holding a script entity (see clearedScriptEntities) — the
+    // backend rejects those in a mode that cannot drive a script and every
+    // subsequent save would otherwise fail silently.
     const updates = {
       control_mode: mode,
       ...clearedEntitiesForMode(mode),

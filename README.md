@@ -262,9 +262,10 @@ button. It defaults to **1 second**. The Toggle modes do not use it, since a
 toggle relay releases itself after its own brief pulse.
 
 > [!NOTE]
-> Keep any Pulse-mode scripts short. When the pulse time elapses the integration
-> turns the entity off, which cancels a script still running, so a script whose
-> own internal delay is longer than the pulse time would be cut off partway.
+> Keep any scripts used in Pulse or Single button mode short. When the pulse
+> time elapses the integration turns the entity off, which cancels a script
+> still running, so a script whose own internal delay is longer than the pulse
+> time would be cut off partway.
 
 #### Relay reports its own OFF
 

@@ -35,6 +35,7 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
     CONTROL_MODE_PULSE,
+    CONTROL_MODE_SINGLE_BUTTON,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_TOGGLE_OPPOSITE,
@@ -44,7 +45,7 @@ from custom_components.cover_time_based.cover import (
 from custom_components.cover_time_based.cover_base import RawCommandNotSupported
 from custom_components.cover_time_based.websocket_api import (
     _resolve_config_entry,
-    _script_in_non_pulse_mode,
+    _unsupported_script_entity,
     async_register_websocket_api,
     ws_get_config,
     ws_raw_command,
@@ -2246,12 +2247,12 @@ class TestCloseIncludesTiltFieldRoundTrip:
 
 
 # ---------------------------------------------------------------------------
-# _script_in_non_pulse_mode helper
+# _unsupported_script_entity helper
 # ---------------------------------------------------------------------------
 
 
 class TestScriptGuardHelper:
-    """Tests for _script_in_non_pulse_mode (pure validation helper)."""
+    """Tests for _unsupported_script_entity (pure validation helper)."""
 
     def test_allows_scripts_in_pulse_mode(self):
         options = {
@@ -2260,7 +2261,16 @@ class TestScriptGuardHelper:
             CONF_CLOSE_SWITCH_ENTITY_ID: "script.close_blind",
             CONF_STOP_SWITCH_ENTITY_ID: "script.stop_blind",
         }
-        assert _script_in_non_pulse_mode(CONTROL_MODE_PULSE, options) is None
+        assert _unsupported_script_entity(CONTROL_MODE_PULSE, options) is None
+
+    def test_allows_script_button_in_single_button_mode(self):
+        # The mode ignores the entity's state and turns it off itself after
+        # pulse_time, exactly like pulse mode, so a script is a valid button.
+        options = {
+            CONF_CONTROL_MODE: CONTROL_MODE_SINGLE_BUTTON,
+            CONF_OPEN_SWITCH_ENTITY_ID: "script.press_button",
+        }
+        assert _unsupported_script_entity(CONTROL_MODE_SINGLE_BUTTON, options) is None
 
     def test_rejects_script_in_switch_mode(self):
         options = {
@@ -2269,7 +2279,7 @@ class TestScriptGuardHelper:
             CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close_relay",
         }
         assert (
-            _script_in_non_pulse_mode(CONTROL_MODE_SWITCH, options)
+            _unsupported_script_entity(CONTROL_MODE_SWITCH, options)
             == "script.open_blind"
         )
 
@@ -2279,7 +2289,7 @@ class TestScriptGuardHelper:
             CONF_TILT_OPEN_SWITCH: "script.tilt_open",
         }
         assert (
-            _script_in_non_pulse_mode(CONTROL_MODE_TOGGLE, options)
+            _unsupported_script_entity(CONTROL_MODE_TOGGLE, options)
             == "script.tilt_open"
         )
 
@@ -2288,26 +2298,26 @@ class TestScriptGuardHelper:
             CONF_OPEN_SWITCH_ENTITY_ID: "switch.open_relay",
             CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close_relay",
         }
-        assert _script_in_non_pulse_mode(CONTROL_MODE_SWITCH, options) is None
+        assert _unsupported_script_entity(CONTROL_MODE_SWITCH, options) is None
 
     def test_rejects_script_in_wrapped_mode(self):
-        # Only pulse mode supports scripts. Wrapped never carries switch-slot
-        # scripts via the UI (the card clears them on mode switch), so this
-        # only guards against raw API/YAML misuse — the rule stays simple:
-        # scripts are valid in pulse mode, rejected everywhere else.
+        # Wrapped never carries switch-slot scripts via the UI (the card
+        # clears them on mode switch), so this only guards against raw
+        # API/YAML misuse — the rule stays simple: scripts are valid in the
+        # script-capable modes, rejected everywhere else.
         options = {
             CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
             CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind",
         }
         assert (
-            _script_in_non_pulse_mode(CONTROL_MODE_WRAPPED, options)
+            _unsupported_script_entity(CONTROL_MODE_WRAPPED, options)
             == "script.open_blind"
         )
 
     def test_rejects_script_when_control_mode_absent(self):
         # No explicit mode → runtime defaults to switch → scripts must be rejected.
         options = {CONF_OPEN_SWITCH_ENTITY_ID: "script.open_blind"}
-        assert _script_in_non_pulse_mode(None, options) == "script.open_blind"
+        assert _unsupported_script_entity(None, options) == "script.open_blind"
 
 
 # ---------------------------------------------------------------------------
@@ -2316,7 +2326,7 @@ class TestScriptGuardHelper:
 
 
 class TestScriptGuardInUpdateConfig:
-    """ws_update_config rejects script entities outside pulse mode."""
+    """ws_update_config rejects script entities in modes that cannot drive one."""
 
     @pytest.mark.asyncio
     async def test_rejects_setting_script_in_switch_mode(self):
@@ -2392,6 +2402,30 @@ class TestScriptGuardInUpdateConfig:
         conn.send_error.assert_not_called()
         new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_opts[CONF_OPEN_SWITCH_ENTITY_ID] == "script.open_blind"
+
+    @pytest.mark.asyncio
+    async def test_allows_script_button_in_single_button_mode(self):
+        config_entry = MagicMock()
+        config_entry.domain = DOMAIN
+        config_entry.options = {CONF_CONTROL_MODE: CONTROL_MODE_SINGLE_BUTTON}
+        hass = MagicMock()
+        conn = _make_connection()
+        msg = {
+            "id": 1,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "open_switch_entity_id": "script.press_button",
+        }
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api._resolve_config_entry",
+            return_value=(config_entry, None),
+        ):
+            await _ws_update_config(hass, conn, msg)
+
+        conn.send_error.assert_not_called()
+        new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_opts[CONF_OPEN_SWITCH_ENTITY_ID] == "script.press_button"
 
 
 class TestReportsCommandNotEndpointRoundTrip:
