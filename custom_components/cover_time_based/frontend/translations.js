@@ -1834,7 +1834,7 @@ export const TRANSLATIONS = {
       "Za roletne bez povratne informacije o poziciji koje daljinski upravljač takođe može da pomera. Pre svake komande za poziciju roletnu potpuno otvara, pa kretanje počinje od poznate pozicije umesto od izmaknute procene. Otprilike udvostručuje kretanje pri svakom pomeranju, a kod istovremenog ili sekvencijalnog nagiba pomera roletnu kada podešavate lamele.",
     "resync.label": "Ponovna sinhronizacija",
     "resync.helper":
-      "Recite integraciji stvarnu poziciju roletne nakon što je pomerena fizičkim dugmetom ili RF daljinskim upravljačem. Ovo ponovo usidrava praćenje pozicije i zaustavlja motor ako ga Home Assistant i dalje pokreće; nikada ga ne uključuje.",
+      "Recite integraciji stvarnu poziciju roletne nakon što je pomerena fizičkim dugmetom ili RF daljinskim upravljačem. Ovo ponovo usidrava praćenje pozicije i zaustavlja motor ako njime Home Assistant i dalje upravlja; nikada ga ne pokreće.",
     more_info: "Više informacija",
     "timing.travel_attribute_header": "Atribut kretanja",
     "timing.tilt_attribute_header": "Atribut nagiba",

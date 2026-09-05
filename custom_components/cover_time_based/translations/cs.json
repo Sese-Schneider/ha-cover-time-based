@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Nastavit pozici rolety",
-      "description": "Deklaruje aktuální polohu rolety. Nejprve zastaví motor, pokud jej Home Assistant stále ovládá; v režimu s jedním tlačítkem krajní poloha také znovu ukotví sledovanou fázi.",
+      "description": "Deklaruje aktuální pozici rolety. Nejprve zastaví motor, pokud jej Home Assistant stále ovládá; v režimu s jedním tlačítkem krajní pozice také znovu ukotví sledovanou fázi.",
       "fields": {
         "position": {
           "name": "Pozice",
@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resynchronizace",
-      "description": "Znovu ukotví sledovanou pozici rolety jako zcela zavřenou nebo zcela otevřenou poté, co bylo použito fyzické tlačítko nebo RF dálkové ovládání. V režimu s jedním tlačítkem tím také znovu ukotví sledovanou fázi, stejně jako set_known_position v krajní poloze. Sdělí integraci skutečný stav rolety.",
+      "description": "Znovu ukotví sledovanou pozici rolety jako zcela zavřenou nebo zcela otevřenou poté, co bylo použito fyzické tlačítko nebo RF dálkové ovládání. V režimu s jedním tlačítkem tím také znovu ukotví sledovanou fázi, stejně jako set_known_position v krajní pozici. Sdělí integraci skutečný stav rolety.",
       "fields": {
         "state": {
           "name": "Stav",

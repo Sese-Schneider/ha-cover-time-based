@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Podesi poziciju roletne",
-      "description": "Deklariše trenutnu poziciju roletne. Prvo zaustavlja motor ako ga Home Assistant i dalje pokreće; u režimu sa jednim dugmetom krajnja pozicija takođe ponovo usidruje praćenu fazu.",
+      "description": "Deklariše trenutnu poziciju roletne. Prvo zaustavlja motor ako njime Home Assistant i dalje upravlja; u režimu sa jednim dugmetom krajnja pozicija takođe ponovo usidruje praćenu fazu.",
       "fields": {
         "position": {
           "name": "Pozicija",
