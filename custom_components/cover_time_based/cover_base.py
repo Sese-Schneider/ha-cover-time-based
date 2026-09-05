@@ -2578,10 +2578,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 base_timestamp=base_timestamp,
             )
             if coupled_target is not None:
-                # extra_delay (mechanical startup delay) applies to the coupled
-                # calc too: the old sleep-based path delayed the whole start
-                # callback, offsetting both calcs equally. pre_step_delay is the
-                # primary's alone — the coupled calc IS the pre-step.
+                # extra_delay (the mechanical startup delay) applies to the
+                # coupled calc too so both calcs start together; pre_step_delay
+                # is the primary's alone — the coupled calc IS the pre-step.
                 coupled_calc.start_travel(
                     int(coupled_target),
                     delay=extra_delay,

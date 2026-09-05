@@ -43,6 +43,11 @@ def _record_resource_id(hass: HomeAssistant, resource_id: str) -> None:
     hass.data.setdefault(DOMAIN, {})[_RESOURCE_ID_KEY] = resource_id
 
 
+def card_resource_registered(hass: HomeAssistant) -> bool:
+    """Whether this session already recorded the card's Lovelace resource id."""
+    return _RESOURCE_ID_KEY in hass.data.get(DOMAIN, {})
+
+
 def _create_refresh_issue(hass: HomeAssistant) -> None:
     """Raise a repair issue telling the user to hard-refresh for the new card.
 
@@ -159,11 +164,16 @@ async def async_unregister_card_resource(
             )
         return
 
+    # Dropped before the delete, not after it: once we've decided the resource
+    # is going, a stale id must not survive a failed delete (a hand-deleted
+    # resource makes it raise) — async_setup_entry treats a recorded id as
+    # "already registered" and would skip re-registering for the session. A
+    # transient failure is safe: the next register rescans by URL and re-records.
+    hass.data.get(DOMAIN, {}).pop(_RESOURCE_ID_KEY, None)
     try:
         resources = _get_lovelace_resources(hass)
         if resources is not None and hasattr(resources, "async_delete_item"):
             await resources.async_delete_item(resource_id)
-            hass.data.get(DOMAIN, {}).pop(_RESOURCE_ID_KEY, None)
     except Exception:  # pylint: disable=broad-exception-caught
         _LOGGER.debug(
             "Could not remove Lovelace resource %s", resource_id, exc_info=True

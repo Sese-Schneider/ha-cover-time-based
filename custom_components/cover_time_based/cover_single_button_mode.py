@@ -122,11 +122,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         wait pulse_time, OFF -- fully resolved before the next press's gap
         even starts. This guarantees the button is OFF between consecutive
         presses regardless of how pulse_time compares to
-        DIRECTION_CHANGE_DELAY (the previous behaviour scheduled each press's
-        OFF as a background task, so with the default pulse_time equal to
-        DIRECTION_CHANGE_DELAY a re-press could race and cancel the prior
-        press's pending OFF -- the motor would then register fewer presses
-        than intended, desyncing the tracked phase).
+        DIRECTION_CHANGE_DELAY.
 
         `_phase` is updated -- and `_press_active` raised -- immediately
         after the ON edge, before the pulse-time sleep, not after the OFF: a

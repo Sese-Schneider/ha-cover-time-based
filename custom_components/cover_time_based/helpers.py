@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity_component import DATA_INSTANCES
 
 
 def resolve_entity(hass: HomeAssistant, entity_id: str):
@@ -13,7 +14,7 @@ def resolve_entity(hass: HomeAssistant, entity_id: str):
     """
     from .cover_base import CoverTimeBased
 
-    component = hass.data.get("entity_components", {}).get("cover")
+    component = hass.data.get(DATA_INSTANCES, {}).get("cover")
     if component is None:
         raise HomeAssistantError("Cover platform not loaded")
     entity = component.get_entity(entity_id)

@@ -579,6 +579,36 @@ class TestCardResourceUnregistration:
         assert resources.deleted == ["new-id"]
 
     @pytest.mark.asyncio
+    async def test_failed_delete_still_clears_recorded_id(self):
+        """A hand-deleted resource makes async_delete_item raise. The recorded
+        id must still be dropped, or the setup-entry guard would skip
+        re-registration for the rest of the session."""
+        resources = FakeResources(
+            items=[{"id": "new-id", "url": _CARD_JS_URL}], loaded=True
+        )
+        resources.async_delete_item = AsyncMock(side_effect=Exception("gone"))
+        entry = MagicMock()
+        entry.entry_id = "e1"
+        hass = self._make_remove_hass(resources, remaining=[])
+
+        with patch(
+            "custom_components.cover_time_based.async_get_position_store"
+        ) as mock_store:
+            mock_store.return_value.async_remove = AsyncMock()
+            await async_remove_entry(hass, entry)
+
+        assert _RESOURCE_ID_KEY not in hass.data[DOMAIN]
+
+        # ...so re-adding a cover in the same session registers the card again.
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+        with patch(
+            "custom_components.cover_time_based.async_register_card_resource",
+            AsyncMock(),
+        ) as reg:
+            await async_setup_entry(hass, entry)
+        reg.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_remove_last_entry_falls_back_to_remove_extra_js_url(self):
         # Registered via the add_extra_js_url fallback → no stored resource id.
         entry = MagicMock()
@@ -599,3 +629,34 @@ class TestCardResourceUnregistration:
         mock_remove_js.assert_called_once()
         _, js_url = mock_remove_js.call_args.args
         assert js_url == _CARD_JS_URL
+
+
+class TestCardResourceRegisteredOnce:
+    """Each config entry's setup must not rescan every Lovelace resource once
+    the card's resource id is already recorded for this session."""
+
+    @pytest.mark.asyncio
+    async def test_setup_entry_skips_registration_when_recorded(self):
+        hass = MagicMock()
+        hass.data = {DOMAIN: {_RESOURCE_ID_KEY: "abc"}}
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+        entry = MagicMock()
+        with patch(
+            "custom_components.cover_time_based.async_register_card_resource",
+            AsyncMock(),
+        ) as reg:
+            await async_setup_entry(hass, entry)
+        reg.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_setup_entry_registers_when_not_recorded(self):
+        hass = MagicMock()
+        hass.data = {}
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+        entry = MagicMock()
+        with patch(
+            "custom_components.cover_time_based.async_register_card_resource",
+            AsyncMock(),
+        ) as reg:
+            await async_setup_entry(hass, entry)
+        reg.assert_awaited_once()

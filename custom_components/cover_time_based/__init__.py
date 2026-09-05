@@ -13,6 +13,7 @@ from homeassistant.helpers.typing import ConfigType
 from .card_resources import (
     async_register_card_resource,
     async_unregister_card_resource,
+    card_resource_registered,
 )
 from .const import DOMAIN
 from .position_storage import async_get_position_store
@@ -61,10 +62,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Cover Time Based from a config entry."""
-    # Idempotent: re-establishes the card resource whenever an entry is added,
-    # including re-adding a cover after the last one was removed (which
-    # unregisters the resource) — async_setup only runs once per session.
-    await async_register_card_resource(hass, _CARD_BASE_URL, _CARD_JS_URL)
+    # Re-establishes the card resource when an entry is added after the last
+    # one was removed (which unregisters it). Once recorded for this session,
+    # every further entry would only rescan every Lovelace resource.
+    if not card_resource_registered(hass):
+        await async_register_card_resource(hass, _CARD_BASE_URL, _CARD_JS_URL)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
