@@ -176,6 +176,28 @@ test("_loadConfig on a 'not_found' WS error sets _loadError to the yaml_warning 
   expect(errSpy).toHaveBeenCalled();
 });
 
+test("_loadConfig on an 'unauthorized' WS error sets _loadError to the admin_required string", async () => {
+  // The card intentionally calls console.error on this path — that is expected behavior.
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const hass = makeHass({
+    ws: {
+      // What @websocket_api.require_admin sends a non-administrator. Retrying
+      // can never help them, so the card must not offer "please try again".
+      "cover_time_based/get_config": () => {
+        throw { code: "unauthorized", message: "Unauthorized" };
+      },
+    },
+  });
+  card = await mountCard(hass);
+  card._selectedEntity = "cover.my_cover";
+  card._config = { some: "data" };
+  await card._loadConfig();
+  expect(card._config).toBeNull();
+  expect(card._loadError).toBe(card._t("admin_required"));
+  expect(card._loading).toBe(false);
+  expect(errSpy).toHaveBeenCalled();
+});
+
 // ---------------------------------------------------------------------------
 // _loadConfig — early-return (no _selectedEntity)
 // ---------------------------------------------------------------------------

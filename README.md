@@ -90,7 +90,8 @@ detail.
 ## The configuration card
 
 The configuration card is a visual interface for every setting, and it can
-measure your cover's timings for you. It has two tabs, **Device** and
+measure your cover's timings for you. You need an administrator account to use
+it; for anyone else its commands are rejected. It has two tabs, **Device** and
 **Calibration**; fill in the Device tab first, as the Calibration tab depends on
 it. The card remembers the last cover you were working on and reselects it next
 time the dashboard loads. (That memory is kept per browser rather than per Home

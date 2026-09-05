@@ -144,7 +144,13 @@ def _script_in_non_pulse_mode(control_mode, options):
 
 
 def async_register_websocket_api(hass: HomeAssistant) -> None:
-    """Register WebSocket API commands."""
+    """Register WebSocket API commands.
+
+    Every command here reads or writes a cover's configuration, or drives a
+    relay, so each handler carries ``@websocket_api.require_admin``
+    (outermost), matching HA core's gating of config-entry writes. A new
+    command must too.
+    """
     websocket_api.async_register_command(hass, ws_get_config)
     websocket_api.async_register_command(hass, ws_update_config)
     websocket_api.async_register_command(hass, ws_start_calibration)
@@ -169,6 +175,7 @@ def _resolve_config_entry(hass: HomeAssistant, entity_id: str):
     return config_entry, None
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         "type": "cover_time_based/get_config",
@@ -261,6 +268,7 @@ async def ws_get_config(
     )
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         "type": "cover_time_based/update_config",
@@ -417,6 +425,7 @@ async def ws_update_config(
     connection.send_result(msg["id"], {"success": True})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         "type": "cover_time_based/start_calibration",
@@ -450,6 +459,7 @@ async def ws_start_calibration(
     connection.send_result(msg["id"], {"success": True})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         "type": "cover_time_based/stop_calibration",
@@ -478,6 +488,7 @@ async def ws_stop_calibration(
     connection.send_result(msg["id"], result)
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         "type": "cover_time_based/raw_command",

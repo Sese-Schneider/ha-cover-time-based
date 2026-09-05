@@ -15,6 +15,7 @@ from homeassistant.const import (
     CONF_NAME,
 )
 from homeassistant.core import HomeAssistant, SupportsResponse
+from homeassistant.exceptions import Unauthorized, UnknownUser
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
@@ -555,6 +556,27 @@ async def async_setup_entry(
     _register_services(platform)
 
 
+def _admin_only(hass, handler):
+    """Wrap a service handler so only an administrator reaches it.
+
+    An internal call carries no user and passes straight through, matching HA's
+    own ``async_register_admin_service`` — which cannot be used here because on
+    our minimum supported HA it has no ``supports_response`` parameter, and
+    stop_calibration returns a response.
+    """
+
+    async def wrapped(call):
+        if call.context.user_id:
+            user = await hass.auth.async_get_user(call.context.user_id)
+            if user is None:
+                raise UnknownUser(context=call.context)
+            if not user.is_admin:
+                raise Unauthorized(context=call.context)
+        return await handler(call)
+
+    return wrapped
+
+
 def _register_services(platform):
     """Register entity services on the given platform."""
     platform.async_register_entity_service(
@@ -569,6 +591,10 @@ def _register_services(platform):
 
     hass = platform.hass
 
+    # The calibration services drive relays and rewrite the config entry's
+    # options, so both go through _admin_only, like the websocket commands. The
+    # entity services above get their permission check from HA's entity-service
+    # machinery; these plain services would have none.
     if not hass.services.has_service(DOMAIN, SERVICE_START_CALIBRATION):
 
         async def _handle_start_calibration(call):
@@ -580,7 +606,7 @@ def _register_services(platform):
         hass.services.async_register(
             DOMAIN,
             SERVICE_START_CALIBRATION,
-            _handle_start_calibration,
+            _admin_only(hass, _handle_start_calibration),
             schema=vol.Schema(
                 {
                     vol.Required("entity_id"): cv.entity_id,
@@ -604,7 +630,7 @@ def _register_services(platform):
         hass.services.async_register(
             DOMAIN,
             SERVICE_STOP_CALIBRATION,
-            _handle_stop_calibration,
+            _admin_only(hass, _handle_stop_calibration),
             schema=vol.Schema(
                 {
                     vol.Required("entity_id"): cv.entity_id,
