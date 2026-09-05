@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Set cover position",
-      "description": "Sets a known position for the cover internally.",
+      "description": "Declares the cover's current position. Stops the motor first if Home Assistant is still driving it; in single-button mode an endpoint also re-anchors the tracked phase.",
       "fields": {
         "position": {
           "name": "Position",
@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resync",
-      "description": "Re-anchor a cover's tracked position to fully closed or fully open after the physical button or RF remote was used. In single-button mode this also re-anchors the tracked phase. Tell the integration the cover's true state.",
+      "description": "Re-anchor a cover's tracked position to fully closed or fully open after the physical button or RF remote was used. In single-button mode this also re-anchors the tracked phase, as set_known_position does at an endpoint. Tell the integration the cover's true state.",
       "fields": {
         "state": {
           "name": "State",

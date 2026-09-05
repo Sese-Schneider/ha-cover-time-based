@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Podesi poziciju roletne",
-      "description": "Interno postavlja poznatu poziciju roletne.",
+      "description": "Deklariše trenutnu poziciju roletne. Prvo zaustavlja motor ako ga Home Assistant i dalje pokreće; u režimu sa jednim dugmetom krajnja pozicija takođe ponovo usidruje praćenu fazu.",
       "fields": {
         "position": {
           "name": "Pozicija",
@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resinhronizuj",
-      "description": "Ponovo usidruje praćenu poziciju roletne na potpuno zatvoreno ili potpuno otvoreno nakon što je korišćeno fizičko dugme ili RF daljinski upravljač. U režimu sa jednim dugmetom ovo takođe ponovo usidruje praćenu fazu. Obaveštava integraciju o stvarnom stanju roletne.",
+      "description": "Ponovo usidruje praćenu poziciju roletne na potpuno zatvoreno ili potpuno otvoreno nakon što je korišćeno fizičko dugme ili RF daljinski upravljač. U režimu sa jednim dugmetom ovo takođe ponovo usidruje praćenu fazu, kao što to čini set_known_position u krajnjoj poziciji. Obaveštava integraciju o stvarnom stanju roletne.",
       "fields": {
         "state": {
           "name": "Stanje",

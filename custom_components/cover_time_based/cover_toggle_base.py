@@ -216,10 +216,10 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         ``tilt_axis_reported``.
         """
         # Narrower than the base's _movement_in_progress (which also counts a
-        # tilt tracker, a pre-step and a tilt motor) and than _movement_started
-        # ("did the move just commanded begin"): a toggle stop is a tap, and a
-        # tap on an idle motor starts it, so only what is/was about to be driven
-        # here may be tapped.
+        # tilt tracker, a pre-step, a tilt restore and a tilt motor) and than
+        # _movement_started ("did the move just commanded begin"): a toggle stop
+        # is a tap, and a tap on an idle motor starts it, so only what is/was
+        # about to be driven here may be tapped.
         was_active = (
             self.is_opening
             or self.is_closing

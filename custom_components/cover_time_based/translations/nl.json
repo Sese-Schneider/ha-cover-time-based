@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Rolluikpositie instellen",
-      "description": "Stelt intern een bekende positie voor het rolluik in.",
+      "description": "Geeft de huidige positie van het rolluik op. Stopt eerst de motor als Home Assistant die nog aanstuurt; in de modus met één knop wordt bij een eindpositie ook de bijgehouden fase opnieuw verankerd.",
       "fields": {
         "position": {
           "name": "Positie",
@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Hersynchroniseren",
-      "description": "Verankert de bijgehouden positie van een rolluik opnieuw op volledig gesloten of volledig open nadat de fysieke knop of RF-afstandsbediening is gebruikt. In de modus met één knop wordt hierbij ook de bijgehouden fase opnieuw verankerd. Vertelt de integratie de werkelijke status van het rolluik.",
+      "description": "Verankert de bijgehouden positie van een rolluik opnieuw op volledig gesloten of volledig open nadat de fysieke knop of RF-afstandsbediening is gebruikt. In de modus met één knop wordt hierbij ook de bijgehouden fase opnieuw verankerd, net als set_known_position bij een eindpositie. Vertelt de integratie de werkelijke status van het rolluik.",
       "fields": {
         "state": {
           "name": "Status",

@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Définir la position du volet",
-      "description": "Définit en interne une position connue pour le volet.",
+      "description": "Déclare la position actuelle du volet. Arrête d'abord le moteur si Home Assistant le pilote encore ; en mode à bouton unique, une position de fin de course réancre également la phase suivie.",
       "fields": {
         "position": {
           "name": "Position",
@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resynchroniser",
-      "description": "Réancre la position suivie d'un volet à l'état complètement fermé ou complètement ouvert, après l'utilisation du bouton physique ou de la télécommande RF. En mode à bouton unique, cela réancre également la phase suivie. Indique à l'intégration l'état réel du volet.",
+      "description": "Réancre la position suivie d'un volet à l'état complètement fermé ou complètement ouvert, après l'utilisation du bouton physique ou de la télécommande RF. En mode à bouton unique, cela réancre également la phase suivie, comme le fait set_known_position à une position de fin de course. Indique à l'intégration l'état réel du volet.",
       "fields": {
         "state": {
           "name": "État",

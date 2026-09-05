@@ -172,6 +172,17 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             if self._press_task is asyncio.current_task():
                 self._press_task = None
 
+    async def _abort_press_plan(self) -> None:
+        """Drop the pending plan so nothing left over presses the button.
+
+        A settle task would re-anchor the phase, and an in-flight sequence would
+        keep pressing from the phase it planned against — both against whatever
+        replaces the plan. A press caught mid-pulse is released by
+        _supersede_active_press.
+        """
+        self._cancel_settle()
+        await self._supersede_active_press()
+
     def _cancel_settle(self) -> None:
         if self._settle_task is not None and not self._settle_task.done():
             self._settle_task.cancel()
@@ -204,17 +215,6 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             )
 
     # --- the mode contract --------------------------------------------
-    async def _abort_press_plan(self) -> None:
-        """Drop the pending plan so nothing left over presses the button.
-
-        A settle task would re-anchor the phase, and an in-flight sequence would
-        keep pressing from the phase it planned against — both against whatever
-        replaces the plan. A press caught mid-pulse is released by
-        _supersede_active_press.
-        """
-        self._cancel_settle()
-        await self._supersede_active_press()
-
     async def _send_open(self) -> None:
         await self._abort_press_plan()
         self._start_press_sequence(Action.OPEN)

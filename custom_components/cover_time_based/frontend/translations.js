@@ -94,7 +94,7 @@ export const EN = {
     "For covers with no position feedback that a remote can also move. Drives the cover fully open before each position command, so the move starts from a known position instead of a drifted guess. Roughly doubles the travel of every move, and on inline or sequential tilt it moves the cover when you adjust the slats.",
   "resync.label": "Resync",
   "resync.helper":
-    "Tell the integration the cover's true position after it was moved by the physical button or an RF remote. This re-anchors tracking; it does not move the cover.",
+    "Tell the integration the cover's true position after it was moved by the physical button or an RF remote. This re-anchors tracking and stops the motor if Home Assistant is still driving it; it never starts one.",
   more_info: "More info",
   "timing.travel_attribute_header": "Travel Attribute",
   "timing.tilt_attribute_header": "Tilt Attribute",
@@ -269,7 +269,7 @@ export const TRANSLATIONS = {
       "Para estores sem retorno de posição que também podem ser movidos por um telecomando. Antes de cada comando de definir posição, move primeiro o estore para totalmente aberto, para que o movimento comece a partir de uma posição conhecida em vez de uma estimativa desviada. Isto duplica, grosso modo, o tempo de deslocamento de cada movimento e, na inclinação durante o deslocamento ou na inclinação sequencial, ajustar as lâminas também move o estore.",
     "resync.label": "Ressincronizar",
     "resync.helper":
-      "Indica à integração a posição real do estore depois de ter sido movido pelo botão físico ou por um telecomando RF. Isto reancora o rastreio da posição; não move o estore.",
+      "Indica à integração a posição real do estore depois de ter sido movido pelo botão físico ou por um telecomando RF. Isto reancora o rastreio da posição e para o motor se o Home Assistant ainda o estiver a acionar; nunca o põe em movimento.",
     more_info: "Mais informação",
     "timing.travel_attribute_header": "Atributo de deslocamento",
     "timing.tilt_attribute_header": "Atributo de inclinação",
@@ -443,7 +443,7 @@ export const TRANSLATIONS = {
       "Dla rolet bez informacji zwrotnej o pozycji, które mogą być poruszane również pilotem. Przed każdym poleceniem ustawienia pozycji najpierw otwiera roletę w pełni, dzięki czemu ruch zaczyna się od znanej pozycji, a nie od nieaktualnego przybliżenia. Z grubsza podwaja czas ruchu przy każdym przesunięciu, a przy nachyleniu w trakcie ruchu lub nachyleniu sekwencyjnym regulacja listew porusza także samą roletę.",
     "resync.label": "Resynchronizacja",
     "resync.helper":
-      "Poinformuj integrację o rzeczywistej pozycji rolety po tym, jak została poruszona fizycznym przyciskiem lub pilotem RF. To ponownie zakotwicza śledzenie pozycji; nie porusza roletą.",
+      "Poinformuj integrację o rzeczywistej pozycji rolety po tym, jak została poruszona fizycznym przyciskiem lub pilotem RF. To ponownie zakotwicza śledzenie pozycji i zatrzymuje silnik, jeśli Home Assistant nadal nim steruje; nigdy go nie uruchamia.",
     more_info: "Więcej informacji",
     "timing.travel_attribute_header": "Atrybut ruchu",
     "timing.tilt_attribute_header": "Atrybut nachylenia",
@@ -617,7 +617,7 @@ export const TRANSLATIONS = {
       "Für Rollläden ohne Positionsrückmeldung, die sich auch per Fernbedienung bewegen lassen. Fährt den Rollladen vor jedem Positionsbefehl zuerst vollständig auf, sodass die Fahrt von einer bekannten Position statt von einer abgedrifteten Schätzung beginnt. Verdoppelt dadurch etwa die Fahrzeit jeder Fahrt, und bei Neigung während der Fahrt oder bei sequenzieller Neigung bewegt sich der Rollladen mit, sobald du die Lamellen verstellst.",
     "resync.label": "Neuausrichtung",
     "resync.helper":
-      "Teile der Integration die tatsächliche Position des Rollladens mit, nachdem er über die physische Taste oder eine RF-Fernbedienung bewegt wurde. Dies verankert die Positionsverfolgung neu; der Rollladen wird dabei nicht bewegt.",
+      "Teile der Integration die tatsächliche Position des Rollladens mit, nachdem er über die physische Taste oder eine RF-Fernbedienung bewegt wurde. Dies verankert die Positionsverfolgung neu und stoppt den Motor, falls Home Assistant ihn noch ansteuert; gestartet wird er dabei nie.",
     more_info: "Weitere Informationen",
     "timing.travel_attribute_header": "Fahrattribut",
     "timing.tilt_attribute_header": "Neigungsattribut",
@@ -793,7 +793,7 @@ export const TRANSLATIONS = {
       "Per le tapparelle senza retroazione di posizione che possono essere spostate anche da un telecomando. Porta la tapparella in apertura completa prima di ogni comando di posizionamento, così il movimento parte da una posizione nota anziché da una stima alla deriva. Raddoppia circa il tempo di corsa di ogni movimento e, con l'inclinazione durante la corsa o quella sequenziale, muove la tapparella anche quando regoli le lamelle.",
     "resync.label": "Risincronizza",
     "resync.helper":
-      "Comunica all'integrazione la posizione reale della tapparella dopo che è stata mossa con il pulsante fisico o un telecomando RF. Questo riancora il tracciamento della posizione; non muove la tapparella.",
+      "Comunica all'integrazione la posizione reale della tapparella dopo che è stata mossa con il pulsante fisico o un telecomando RF. Questo riancora il tracciamento della posizione e ferma il motore se Home Assistant lo sta ancora comandando; non lo avvia mai.",
     more_info: "Maggiori informazioni",
     "timing.travel_attribute_header": "Attributo di corsa",
     "timing.tilt_attribute_header": "Attributo di inclinazione",
@@ -966,7 +966,7 @@ export const TRANSLATIONS = {
       "Voor rolluiken zonder positieterugkoppeling die ook door een afstandsbediening bewogen kunnen worden. Beweegt het rolluik vóór elk positiecommando eerst volledig open, zodat de beweging start vanaf een bekende positie in plaats van een afgedwaalde schatting. Verdubbelt daarmee ongeveer de looptijd van elke beweging, en bij kantelen tijdens de beweging of sequentieel kantelen beweegt het rolluik mee zodra je de lamellen verstelt.",
     "resync.label": "Hersynchroniseren",
     "resync.helper":
-      "Vertel de integratie de werkelijke positie van het rolluik nadat het met de fysieke knop of een RF-afstandsbediening is bewogen. Dit verankert het volgen van de positie opnieuw; het rolluik wordt hierbij niet bewogen.",
+      "Vertel de integratie de werkelijke positie van het rolluik nadat het met de fysieke knop of een RF-afstandsbediening is bewogen. Dit verankert het volgen van de positie opnieuw en stopt de motor als Home Assistant die nog aanstuurt; hij wordt er nooit door gestart.",
     more_info: "Meer informatie",
     "timing.travel_attribute_header": "Loopattribuut",
     "timing.tilt_attribute_header": "Kantelattribuut",
@@ -1139,7 +1139,7 @@ export const TRANSLATIONS = {
       "Pour les volets sans retour de position qu'une télécommande peut aussi actionner. Ouvre complètement le volet avant chaque commande de position, afin que le mouvement parte d'une position connue plutôt que d'une estimation partie à la dérive. Cela double à peu près la course de chaque mouvement et, avec une inclinaison pendant la course ou une inclinaison séquentielle, le volet bouge lorsque vous réglez les lames.",
     "resync.label": "Resynchroniser",
     "resync.helper":
-      "Indiquez à l'intégration la position réelle du volet après qu'il a été actionné par le bouton physique ou une télécommande RF. Cela réancre le suivi de position sans déplacer le volet.",
+      "Indiquez à l'intégration la position réelle du volet après qu'il a été actionné par le bouton physique ou une télécommande RF. Cela réancre le suivi de position et arrête le moteur si Home Assistant le pilote encore ; il n'est jamais démarré.",
     more_info: "Plus d'informations",
     "timing.travel_attribute_header": "Attribut de course",
     "timing.tilt_attribute_header": "Attribut d'inclinaison",
@@ -1312,7 +1312,7 @@ export const TRANSLATIONS = {
       "Para persianas sin realimentación de posición que un mando a distancia también puede mover. Abre la persiana por completo antes de cada comando de posición, para que el movimiento parta de una posición conocida en lugar de una estimación desviada. Duplica aproximadamente el recorrido de cada movimiento y, con la inclinación durante el recorrido o la inclinación secuencial, mueve la persiana cuando ajustas las lamas.",
     "resync.label": "Resincronizar",
     "resync.helper":
-      "Indica a la integración la posición real de la persiana después de haberla movido con el botón físico o un mando a distancia RF. Esto reancla el seguimiento de la posición; no mueve la persiana.",
+      "Indica a la integración la posición real de la persiana después de haberla movido con el botón físico o un mando a distancia RF. Esto reancla el seguimiento de la posición y detiene el motor si Home Assistant todavía lo está accionando; nunca lo pone en marcha.",
     more_info: "Más información",
     "timing.travel_attribute_header": "Atributo de recorrido",
     "timing.tilt_attribute_header": "Atributo de inclinación",
@@ -1488,7 +1488,7 @@ export const TRANSLATIONS = {
       "Per a persianes sense realimentació de posició que un comandament a distància també pot moure. Obre la persiana del tot abans de cada ordre de posició, perquè el moviment parteixi d'una posició coneguda en lloc d'una estimació desviada. Duplica aproximadament el recorregut de cada moviment i, amb la inclinació durant el recorregut o la inclinació seqüencial, mou la persiana quan ajustes les lamel·les.",
     "resync.label": "Resincronitza",
     "resync.helper":
-      "Indica a la integració la posició real de la persiana després d'haver-la mogut amb el botó físic o un comandament a distància RF. Això reancora el seguiment de la posició; no mou la persiana.",
+      "Indica a la integració la posició real de la persiana després d'haver-la mogut amb el botó físic o un comandament a distància RF. Això reancora el seguiment de la posició i atura el motor si Home Assistant encara l'està accionant; mai no el posa en marxa.",
     more_info: "Més informació",
     "timing.travel_attribute_header": "Atribut de recorregut",
     "timing.tilt_attribute_header": "Atribut d'inclinació",
@@ -1662,7 +1662,7 @@ export const TRANSLATIONS = {
       "Pro rolety bez zpětné vazby pozice, kterými může pohybovat i dálkový ovladač. Před každým příkazem na pozici roletu plně otevře, takže pohyb začíná ze známé pozice místo z odchýleného odhadu. Zhruba zdvojnásobí dráhu každého pohybu a u současného nebo sekvenčního náklonu pohne roletou, když upravujete lamely.",
     "resync.label": "Resynchronizace",
     "resync.helper":
-      "Sdělte integraci skutečnou polohu rolety poté, co byla pohnuta fyzickým tlačítkem nebo RF dálkovým ovladačem. Tím se znovu ukotví sledování polohy; roleta se přitom nepohne.",
+      "Sdělte integraci skutečnou polohu rolety poté, co byla pohnuta fyzickým tlačítkem nebo RF dálkovým ovladačem. Tím se znovu ukotví sledování polohy a zastaví se motor, pokud jej Home Assistant stále ovládá; nikdy jej tím nespustí.",
     more_info: "Více informací",
     "timing.travel_attribute_header": "Atribut pohybu",
     "timing.tilt_attribute_header": "Atribut náklonu",
@@ -1834,7 +1834,7 @@ export const TRANSLATIONS = {
       "Za roletne bez povratne informacije o poziciji koje daljinski upravljač takođe može da pomera. Pre svake komande za poziciju roletnu potpuno otvara, pa kretanje počinje od poznate pozicije umesto od izmaknute procene. Otprilike udvostručuje kretanje pri svakom pomeranju, a kod istovremenog ili sekvencijalnog nagiba pomera roletnu kada podešavate lamele.",
     "resync.label": "Ponovna sinhronizacija",
     "resync.helper":
-      "Recite integraciji stvarnu poziciju roletne nakon što je pomerena fizičkim dugmetom ili RF daljinskim upravljačem. Ovo ponovo usidrava praćenje pozicije; ne pomera roletnu.",
+      "Recite integraciji stvarnu poziciju roletne nakon što je pomerena fizičkim dugmetom ili RF daljinskim upravljačem. Ovo ponovo usidrava praćenje pozicije i zaustavlja motor ako ga Home Assistant i dalje pokreće; nikada ga ne uključuje.",
     more_info: "Više informacija",
     "timing.travel_attribute_header": "Atribut kretanja",
     "timing.tilt_attribute_header": "Atribut nagiba",

@@ -375,8 +375,10 @@ Use the [`cover_time_based.resync`](#cover_time_basedresync) action — or the
 cover's true state after it was moved outside Home Assistant, whether by an RF
 remote, the physical button, or anything else it could not see. Pick **Fully
 closed** or **Fully open** to match where the cover actually is, and the
-integration sets its tracked state and position (0% or 100%) to match. Wire it
-into an automation triggered by your remote to keep the tracker in sync
+integration sets its tracked state and position (0% or 100%) to match. If a
+press sequence is still in flight, resync cancels it rather than pressing the
+button, so nothing is left running against the position you just declared. Wire
+it into an automation triggered by your remote to keep the tracker in sync
 automatically.
 
 ### Tilt
@@ -473,9 +475,11 @@ and how long its movements take. Fill in the Device tab first.
 ### Set the current position
 
 Use the open, stop, and close buttons on the card to move the cover, and the
-slats if tilt is enabled, to a known position. Then set **Current Position** to
-match: fully open, fully closed, or one of the tilt positions. You must set this
-before you can measure any timing.
+slats if tilt is enabled, to a known position. These buttons drive the motor
+without tracking it, so the position stays unknown — across a restart too —
+until you set it. Then set **Current Position** to match: fully open, fully
+closed, or one of the tilt positions. You must set this before you can measure
+any timing.
 
 ### Measure a timing
 
@@ -554,6 +558,13 @@ Manually set a cover's tracked position, which is useful for correcting drift.
 Aim it at any entity, device, area, floor or label; every matching Cover Time
 Based cover is set.
 
+
+If Home Assistant is still driving the cover it stops the motor first, so the
+relay is released rather than left on while the tracker shows the position you
+declared. In
+[Single button (cycling)](#controlling-a-cover-with-a-single-button) mode,
+giving it an endpoint also re-anchors the tracked phase.
+
 | Field | Description |
 | --- | --- |
 | `position` | The position to set (0–100). |
@@ -596,9 +607,9 @@ Assistant — an RF remote, a physical button, or anything else the
 integration could not observe. Tell it what the cover actually is right now;
 it does not sense anything on its own. In
 [Single button (cycling)](#controlling-a-cover-with-a-single-button) mode it
-additionally re-anchors the tracked phase, which is how that mode's ["The
-`resync` action"](#the-resync-action) restores a phase that has drifted (see
-the honest limits above).
+additionally re-anchors the tracked phase, which is how resync or
+`set_known_position` at an endpoint restores a phase that has drifted (see the
+honest limits above).
 
 | Field | Description |
 | --- | --- |
@@ -609,7 +620,10 @@ the honest limits above).
 position (not just the two endpoints) and re-anchors the phase in the same way
 when you give it an endpoint. Both stop the motor first if Home Assistant is
 still driving it, so the relay is released rather than left on while the
-tracker shows the declared position. `resync` is the friendlier one to wire into
+tracker shows the declared position — except in
+[Single button (cycling)](#controlling-a-cover-with-a-single-button) mode, where
+the in-flight press plan is cancelled instead, because a press there would start
+a parked motor rather than stop it. `resync` is the friendlier one to wire into
 an automation.
 
 A single button is enough to trigger it — the action needs only the fixed
