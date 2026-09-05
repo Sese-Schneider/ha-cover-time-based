@@ -1501,8 +1501,8 @@ class TestLogGuard:
         ):
             cover._log("hello %s", "world")
         debug.assert_called_once()
-=======
-=======
+
+
 def _make_dual_motor_cover(make_cover):
     """A cover with a dedicated tilt motor, so tilt has its own relay to stop."""
     return make_cover(

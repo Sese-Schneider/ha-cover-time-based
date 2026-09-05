@@ -558,7 +558,6 @@ Manually set a cover's tracked position, which is useful for correcting drift.
 Aim it at any entity, device, area, floor or label; every matching Cover Time
 Based cover is set.
 
-
 If Home Assistant is still driving the cover it stops the motor first, so the
 relay is released rather than left on while the tracker shows the position you
 declared. In
