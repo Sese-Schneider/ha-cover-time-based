@@ -15,6 +15,7 @@ from homeassistant.const import (
 from homeassistant.exceptions import HomeAssistantError
 
 from .calibration import CalibrationState
+from .const import RELAY_FEEDBACK_TIMEOUT
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -183,13 +184,16 @@ class CalibrationMixin:
         entity_id = self._consume_feedback_arm()
         if entity_id is None or self._calibration is None:
             return
+        # A second drive within one calibration run must not orphan the first
+        # wait: it would still be parked on the shared feedback slot.
+        previous = self._calibration.feedback_task
+        if previous is not None and not previous.done():
+            previous.cancel()
         self._calibration.feedback_task = self.hass.async_create_task(
             self._await_calibration_feedback(entity_id, field)
         )
 
     async def _await_calibration_feedback(self, entity_id: str, field: str) -> None:
-        from .cover_base import RELAY_FEEDBACK_TIMEOUT
-
         confirmed = await self._wait_for_relay_echo(entity_id, RELAY_FEEDBACK_TIMEOUT)
         # None means the relay never confirmed: keep the command-fire baseline,
         # exactly as it behaves with the option off.

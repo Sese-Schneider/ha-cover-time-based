@@ -215,6 +215,14 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         See CoverTimeBased._stop_hardware for ``supersede`` and
         ``tilt_axis_reported``.
         """
+        # A toggle stop is a tap on the driving relay, and a tap that lands
+        # before that relay's ON echo can be swallowed. Wait it out first (a
+        # no-op unless a feedback wait is actually pending), before ``was_active``
+        # is read: the confirmation lets the parked start run, so is_opening /
+        # is_closing then reflect the motor that is genuinely running. An
+        # external stop sends no tap, so there is nothing to protect.
+        if not self._triggered_externally:
+            await self._await_pending_relay_confirmation()
         # Narrower than the base's _movement_in_progress (which also counts a
         # tilt tracker, a pre-step, a tilt restore and a tilt motor) and than
         # _movement_started ("did the move just commanded begin"): a toggle stop
@@ -258,22 +266,6 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             # (travel_was_moving) still fires. See CoverTimeBased.async_stop_cover.
             # (Toggle modes are always momentary, so _self_stops_at_endpoints is
             # True here; the term mirrors the base gate.)
-            #
-            # KNOWN LIMITATION (wait_for_relay_feedback + toggle): if this stop
-            # lands during a feedback wait — before the driving relay has
-            # confirmed its first ON echo — HA still reports that relay OFF, so
-            # _send_stop sends it another turn_on (a toggle stop is a tap, not an
-            # off). A toggle motor only reads that as a stop if it sees a fresh
-            # OFF->ON edge while already running, i.e. only if the relay released
-            # to off between the two taps. On the slow mesh this option targets,
-            # the two taps can arrive bunched (or the second lands on an
-            # already-on relay), so the stop may be swallowed and the motor keep
-            # running. Either way tracking is cancelled above, so the position
-            # desyncs — mildly if the motor did stop, or until an endpoint if it
-            # ran on untracked. Narrow, opt-in, and inherent to toggle's
-            # non-idempotent stop (#153 family); a genuine fix needs the stop
-            # deferred until the relay confirms. Switch/pulse modes are immune
-            # (they de-energize / use a dedicated stop relay).
             await self._send_stop()
         elif (
             tilt_axis_reported
