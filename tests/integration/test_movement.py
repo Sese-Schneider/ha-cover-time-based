@@ -206,3 +206,37 @@ async def test_endpoint_resync(
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+
+
+async def test_resync_mid_travel_releases_the_relay(
+    hass: HomeAssistant, setup_cover, mock_time
+):
+    """Declaring a known position while we are driving the cover stops the motor.
+
+    The tracker parking on its own left the open relay latched and the motor
+    running to its limit while HA reported the declared position.
+    """
+    await hass.services.async_call(
+        "cover", "open_cover", {"entity_id": "cover.test_cover"}, blocking=True
+    )
+    await _advance_time(hass, mock_time, 3)
+    assert hass.states.get("input_boolean.open_switch").state == "on"
+
+    await hass.services.async_call(
+        DOMAIN,
+        "resync",
+        {"entity_id": "cover.test_cover", "state": "closed"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    assert hass.states.get("input_boolean.open_switch").state == "off"
+    state = hass.states.get("cover.test_cover")
+    assert state.state == "closed"
+    assert state.attributes["current_position"] == 0
+
+    # Nothing keeps running: the position does not creep afterwards.
+    await _advance_time(hass, mock_time, 20)
+    state = hass.states.get("cover.test_cover")
+    assert state.state == "closed"
+    assert state.attributes["current_position"] == 0

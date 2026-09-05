@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Imposta la posizione della tapparella",
-      "description": "Imposta internamente una posizione nota per la tapparella.",
+      "description": "Dichiara la posizione attuale della tapparella. Ferma prima il motore se Home Assistant lo sta ancora comandando; in modalità a pulsante singolo, una posizione di fine corsa riancora anche la fase tracciata.",
       "fields": {
         "position": {
           "name": "Posizione",
@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Risincronizza",
-      "description": "Riancora la posizione tracciata di una tapparella a completamente chiusa o completamente aperta dopo che è stato usato il pulsante fisico o il telecomando RF. In modalità a pulsante singolo, questo riancora anche la fase tracciata. Comunica all'integrazione lo stato reale della tapparella.",
+      "description": "Riancora la posizione tracciata di una tapparella a completamente chiusa o completamente aperta dopo che è stato usato il pulsante fisico o il telecomando RF. In modalità a pulsante singolo, questo riancora anche la fase tracciata, come fa set_known_position a una posizione di fine corsa. Comunica all'integrazione lo stato reale della tapparella.",
       "fields": {
         "state": {
           "name": "Stato",

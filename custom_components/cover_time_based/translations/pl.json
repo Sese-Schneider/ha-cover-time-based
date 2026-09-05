@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Ustaw pozycję rolety",
-      "description": "Ustawia wewnętrznie znaną pozycję rolety.",
+      "description": "Deklaruje bieżącą pozycję rolety. Najpierw zatrzymuje silnik, jeśli Home Assistant nadal nim steruje; w trybie sterowania jednym przyciskiem pozycja skrajna ponownie zakotwicza też śledzoną fazę.",
       "fields": {
         "position": {
           "name": "Pozycja",
@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resynchronizuj",
-      "description": "Ponownie zakotwicza śledzoną pozycję rolety jako całkowicie zamkniętą lub całkowicie otwartą po użyciu fizycznego przycisku lub pilota RF. W trybie sterowania jednym przyciskiem ponownie zakotwicza to również śledzoną fazę. Informuje integrację o rzeczywistym stanie rolety.",
+      "description": "Ponownie zakotwicza śledzoną pozycję rolety jako całkowicie zamkniętą lub całkowicie otwartą po użyciu fizycznego przycisku lub pilota RF. W trybie sterowania jednym przyciskiem ponownie zakotwicza to również śledzoną fazę, tak samo jak set_known_position w pozycji skrajnej. Informuje integrację o rzeczywistym stanie rolety.",
       "fields": {
         "state": {
           "name": "Stan",

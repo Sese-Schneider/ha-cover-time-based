@@ -732,7 +732,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         if target is None or self.tilt_calc.current_position() == target:
             return
         self._log("_maybe_snap_to_reported_tilt :: snapping tilt to %d", target)
-        await self.set_known_tilt_position(tilt_position=target)
+        await self.set_known_tilt_position(tilt_position=target, supersede=False)
 
     async def _command_position_move(self, target, command, already_moving_same_dir):
         """Drive a mid-position move via the selected position driver.

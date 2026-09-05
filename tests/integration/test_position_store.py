@@ -281,3 +281,44 @@ async def test_tilt_position_loaded_from_store_on_startup(
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+
+
+async def test_empty_record_overwrites_a_stored_position(
+    hass: HomeAssistant, hass_storage
+):
+    """A cleared position must be able to replace a stored one; otherwise the
+    stale value comes back on restart."""
+    store = await async_get_position_store(hass)
+    await store.async_save("entry1", {"position": 40})
+    await store.async_save("entry1", {})
+    assert await store.async_get("entry1") == {}
+    await store.async_flush()
+    assert hass_storage[POSITION_STORE_KEY]["data"]["entry1"] == {}
+
+
+async def test_raw_command_persists_unknown_position(
+    hass: HomeAssistant, setup_input_booleans
+):
+    """A raw open clears the tracked position, and that survives a restart —
+    the store used to refuse the empty record and hand the stale value back."""
+    entry = _make_entry(BASIC_OPTIONS)
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    cover = _get_cover_entity(hass)
+    await cover.set_known_position(position=40)
+    await cover.async_raw_command("open")
+    await cover.async_raw_command("stop")
+    # Let this entity consume its own relay echoes before it goes away: an echo
+    # left in the queue is read by the fresh entity as an external press.
+    await hass.async_block_till_done()
+    store = await async_get_position_store(hass)
+    await store.async_flush()
+    assert (await store.async_get(entry.entry_id)) == {}
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    state = hass.states.get("cover.test_cover")
+    assert "current_position" not in state.attributes

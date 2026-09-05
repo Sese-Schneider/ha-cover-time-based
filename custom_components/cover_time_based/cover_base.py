@@ -93,6 +93,11 @@ _EXTERNAL_TRIGGER: ContextVar[frozenset] = ContextVar(
     "cover_time_based_external_trigger", default=frozenset()
 )
 
+
+class RawCommandNotSupported(HomeAssistantError):
+    """A raw command the configured hardware cannot take (tilt without a tilt motor)."""
+
+
 # "travel" drives self.travel_calc; "tilt" drives self.tilt_calc on a
 # dedicated tilt motor (dual_motor). Named here once so a typo reads as a
 # type error instead of silently picking the wrong branch — see the axis
@@ -950,6 +955,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         started" even when the drive's own early-return left it untouched —
         the caller must pass the task it captured immediately before driving,
         so only a delay task the drive itself created counts.
+
+        One of three deliberately different "is anything moving" checks: this
+        one asks whether the move *just commanded* began, _movement_in_progress
+        asks whether anything at all is still being driven, and toggle's
+        ``was_active`` asks only whether a tap would stop rather than start the
+        motor.
         """
         if self.travel_calc.is_traveling():
             return True
@@ -1094,7 +1105,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         ``_last_command`` for the direction (a shared-motor tilt phase records
         whichever relay it actually energised there, inversions included) and
         "is anything actually moving" so a stale command outliving its movement
-        — ``set_known_position`` leaves exactly that — cannot suppress a drive
+        — a bare ``_handle_stop`` leaves exactly that — cannot suppress a drive
         at a stopped motor. Deliberately ``== command`` rather than ``not
         _is_direction_change(command)``: the latter also matches
         ``_last_command is None``, and suppressing on *no* recorded direction
@@ -1338,7 +1349,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def async_stop_cover(
         self, *, supersede: bool = True, tilt_axis_reported: bool = False, **kwargs
     ):
-        """Turn the device stop.
+        """Stop the cover and publish the result.
+
+        See _stop_hardware for ``supersede`` and ``tilt_axis_reported``.
+        """
+        self._log("async_stop_cover")
+        await self._stop_hardware(
+            supersede=supersede, tilt_axis_reported=tilt_axis_reported
+        )
+        self.async_write_ha_state()
+        await self._async_persist_position()
+
+    async def _stop_hardware(
+        self, *, supersede: bool = True, tilt_axis_reported: bool = False
+    ) -> None:
+        """Stop the cover without publishing the result.
+
+        Everything async_stop_cover does bar the trailing write and persist, so
+        a caller that publishes its own outcome — set_known_position — writes
+        and persists once rather than twice.
 
         ``supersede`` defaults True so a stop arriving from HA (service call,
         UI, automation) always claims the movement; the internal and
@@ -1349,7 +1378,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         so a stop must not be echoed back at it — see _should_stop_tilt_motor.
         """
         self._require_configured()
-        self._log("async_stop_cover")
         tilt_restore_was_active = self._tilt_restore_active
         tilt_pre_step_was_active = (
             self._pending_travel_target is not None
@@ -1362,9 +1390,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             tilt_axis_reported=tilt_axis_reported,
         )
         travel_was_moving = self.travel_calc.is_traveling()
-        self._cancel_startup_delay_task()
-        self._cancel_delay_task()
-        self._handle_stop(supersede=supersede)
+        self._neutralize_tracked_movement(supersede=supersede)
         if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
@@ -1400,9 +1426,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self._tilt_settle()
         self._moving_tilt_motor = False
         self._moving_tilt = False
-        self.async_write_ha_state()
         self._last_command = None
-        await self._async_persist_position()
 
     def _should_stop_tilt_motor(
         self, tilt_phase_was_active: bool, *, tilt_axis_reported: bool
@@ -1464,28 +1488,99 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("async_set_cover_tilt_position: %d", position)
             await self.set_tilt_position(position)
 
-    async def set_known_position(self, *, supersede: bool = True, **kwargs):
-        """Set the cover to a known position (0=closed, 100=open).
+    def _movement_in_progress(self) -> bool:
+        """Whether this entity is still driving the cover under its own lifecycle.
 
-        Exposed as a service (a user resyncing the tracker is a real command,
-        hence the default) and used internally by wrapped covers to snap to a
-        position the device just reported, which is not — see _handle_stop.
+        Everything that leaves a relay energised or a follow-up pending: a live
+        travel or tilt tracker, a startup-delay or relay-feedback wait, an
+        endpoint run-on, a tilt pre-step or restore, and a dedicated tilt motor.
+
+        Broader than the other two "is anything moving" checks on purpose:
+        _movement_started asks only whether the move just commanded began, and
+        toggle's ``was_active`` (cover_toggle_base) only whether a tap would
+        stop the motor rather than start it.
+        """
+
+        def pending(task):
+            return task is not None and not task.done()
+
+        return (
+            self.travel_calc.is_traveling()
+            or (self._has_tilt_support() and self.tilt_calc.is_traveling())
+            or pending(self._startup_delay_task)
+            or pending(self._delay_task)
+            or self._tilt_restore_active
+            or self._pending_travel_target is not None
+            or self._pending_tilt_target is not None
+            or self._moving_tilt_motor
+        )
+
+    async def _halt_for_known_position(self) -> None:
+        """Stop whatever this entity is still driving, leaving the publish to the caller.
+
+        Parking the tracker alone is not enough: the relay stays latched and the
+        motor runs to its limit while HA reports the declared position.
+
+        The idle branch is still a supersession, not a no-op: the epoch bump in
+        _handle_stop cancels a reversal parked in its settle gap, which would
+        otherwise drive away from the position just declared.
+        """
+        if self._movement_in_progress():
+            await self._stop_hardware()
+        else:
+            self._handle_stop()
+
+    async def set_known_position(self, *, supersede: bool = True, **kwargs):
+        """Declare the cover's real position (0=closed, 100=open).
+
+        A user declaring where the cover *is* — the service, the card's presets,
+        async_resync — is a real command (``supersede`` True): it claims the
+        movement and stops the hardware first. Wrapped covers pass
+        ``supersede=False`` to snap to a position the device just reported, which
+        must neither claim the movement nor send anything — see _handle_stop.
         """
         position = kwargs[ATTR_POSITION]
-        self._handle_stop(supersede=supersede)
+        self._log("set_known_position: %d", position)
+        if supersede:
+            await self._halt_for_known_position()
+        else:
+            self._handle_stop(supersede=False)
         self.travel_calc.set_position(position)
         if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
+        self._on_known_position(position)
         self.async_write_ha_state()
         await self._async_persist_position()
 
-    async def set_known_tilt_position(self, **kwargs):
-        """Set the tilt to a known position (0=closed, 100=open)."""
+    def _on_known_position(self, position: int) -> None:
+        """Hook: a position was declared for the travel axis.
+
+        Base is a no-op. Overridden by modes that must re-anchor internal
+        state against a declared position (e.g. single-button phase tracking).
+        """
+        return
+
+    async def set_known_tilt_position(self, *, supersede: bool = True, **kwargs):
+        """Declare the cover's real tilt (0=closed, 100=open).
+
+        The tilt twin of set_known_position — the card fires the two back to
+        back for a closed-and-tilted preset. A user declaring where the slats
+        *are* is a real command (``supersede`` True): it claims the movement and
+        stops the hardware first, so a dedicated tilt motor is not left driving
+        past the angle just declared. Wrapped covers pass ``supersede=False`` to
+        snap to a tilt the device just reported, which must neither claim the
+        movement nor send anything — see _handle_stop.
+
+        The travel position is untouched, so _on_known_position is not called.
+        """
         if not self._has_tilt_support():
             return
         position = kwargs[ATTR_TILT_POSITION]
+        self._log("set_known_tilt_position: %d", position)
+        if supersede:
+            await self._halt_for_known_position()
         self.tilt_calc.set_position(position)
         self.async_write_ha_state()
         await self._async_persist_position()
@@ -1493,31 +1588,42 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def async_resync(self, state: str) -> None:
         """Re-anchor the reported position to fully closed or fully open.
 
-        Works for every control mode: maps ``state`` to a position via
-        RESYNC_POSITIONS (0 for "closed", 100 for "open") and declares it via
-        the same known-position path as ``set_known_position`` — stopping any
-        in-flight movement, snapping tilt trackers to their physical
-        endpoint, writing state, and persisting — so every mode re-anchors
-        consistently after the cover was moved outside Home Assistant (an RF
-        remote, a physical button, or anything else the integration could not
-        observe).
-
-        Calls _on_resync_position before delegating to set_known_position, so a
-        mode with extra resync bookkeeping (single-button's tracked phase)
-        updates it first and set_known_position's single write/persist captures
-        it in the same pass.
+        The endpoint shortcut of set_known_position for every control mode:
+        maps ``state`` via RESYNC_POSITIONS and declares that position.
         """
         if state not in RESYNC_POSITIONS:
             raise HomeAssistantError(f"unknown resync state: {state!r}")
-        position = RESYNC_POSITIONS[state]
-        await self._on_resync_position(position)
-        await self.set_known_position(position=position)
+        await self.set_known_position(position=RESYNC_POSITIONS[state])
 
-    async def _on_resync_position(self, position: int) -> None:
-        """Hook for modes with extra resync bookkeeping (e.g. phase).
+    async def async_raw_command(self, command: str) -> None:
+        """Drive the device directly, bypassing the position tracker.
 
-        No-op by default.
+        The card's calibration-screen buttons. Outside a calibration the tracked
+        position becomes unknown and is persisted as such, so a restart does not
+        re-anchor at the stale pre-command value; during a calibration the
+        session owns the tracker and only the command is sent.
+
+        Deliberately not gated on _require_configured: these buttons are how you
+        position a cover in order to measure its travel times, so they have to
+        work before any are configured.
         """
+        self._log("async_raw_command: %s", command)
+        is_tilt = command.startswith("tilt_")
+        if is_tilt and not self._has_tilt_motor():
+            raise RawCommandNotSupported("Tilt motor not configured")
+        in_calibration = self._calibration is not None
+        if not in_calibration:
+            self._neutralize_tracked_movement()
+        await self._raw_direction_command(command)
+        if in_calibration:
+            return
+        if is_tilt:
+            if self._has_tilt_support():
+                self.tilt_calc.clear_position()
+        else:
+            self.travel_calc.clear_position()
+        self.async_write_ha_state()
+        await self._async_persist_position()
 
     # -----------------------------------------------------------------------
     # Movement orchestration
@@ -2992,18 +3098,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         return
 
     async def _delayed_stop(self, delay):
-        """Stop the relay after a delay."""
+        """Stop the relay after a delay.
+
+        Clears ``_delay_task`` only while it still points at this task: a
+        cancel's cleanup runs a loop turn later, by which time a replacement
+        run-on may already be registered, and clearing that would hide a
+        pending relay stop from _cancel_delay_task and _movement_in_progress.
+        """
         self._log("_delayed_stop :: waiting %fs before stopping relay", delay)
         try:
             await sleep(delay)
             self._log("_delayed_stop :: delay complete, stopping relay")
             await self._async_handle_command(SERVICE_STOP_COVER)
             self._last_command = None
-            self._delay_task = None
         except asyncio.CancelledError:
             self._log("_delayed_stop :: delay cancelled")
-            self._delay_task = None
             raise
+        finally:
+            if self._delay_task is asyncio.current_task():
+                self._delay_task = None
 
     async def _stop_travel_relay_if_needed(self, *, travel_was_running: bool) -> None:
         """Send the travel STOP unless it would be a movement command.
@@ -3125,8 +3238,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         ``supersede`` says whether this is a fresh command to halt the cover,
         which claims the movement and so keeps a reversal parked in its settle
         gap from driving afterwards. Every route that halts the cover lands
-        here — both async_stop_cover implementations (the toggle override does
-        not call super), plus the known-position resets.
+        here — through _neutralize_tracked_movement for both _stop_hardware
+        implementations (CoverTimeBased's and ToggleBaseCover's, which does not
+        call super), calibration start and a raw command, and directly for the
+        known-position declarations.
 
         Passive routes must pass ``supersede=False``: a wrapped cover reporting
         its settled position snaps via set_known_position, and a switch-mode
@@ -3156,6 +3271,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("_handle_stop :: button stops tilt movement")
             self.tilt_calc.stop()
             self.stop_auto_updater()
+
+    def _neutralize_tracked_movement(self, *, supersede: bool = True) -> None:
+        """Park the tracker and cancel deferred starts, without touching a relay.
+
+        The prelude every route that takes the movement away from the tracker
+        shares: a deferred start left armed would later drive the motor, or fire
+        a relay stop, against whatever took over.
+
+        See _handle_stop for ``supersede``.
+        """
+        self._cancel_startup_delay_task()
+        self._cancel_delay_task()
+        self._handle_stop(supersede=supersede)
 
     async def _start_tilt_pre_step(
         self, tilt_target, travel_target, travel_command, restore_target

@@ -172,6 +172,17 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             if self._press_task is asyncio.current_task():
                 self._press_task = None
 
+    async def _abort_press_plan(self) -> None:
+        """Drop the pending plan so nothing left over presses the button.
+
+        A settle task would re-anchor the phase, and an in-flight sequence would
+        keep pressing from the phase it planned against — both against whatever
+        replaces the plan. A press caught mid-pulse is released by
+        _supersede_active_press.
+        """
+        self._cancel_settle()
+        await self._supersede_active_press()
+
     def _cancel_settle(self) -> None:
         if self._settle_task is not None and not self._settle_task.done():
             self._settle_task.cancel()
@@ -205,18 +216,15 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
     # --- the mode contract --------------------------------------------
     async def _send_open(self) -> None:
-        self._cancel_settle()
-        await self._supersede_active_press()
+        await self._abort_press_plan()
         self._start_press_sequence(Action.OPEN)
 
     async def _send_close(self) -> None:
-        self._cancel_settle()
-        await self._supersede_active_press()
+        await self._abort_press_plan()
         self._start_press_sequence(Action.CLOSE)
 
     async def _send_stop(self) -> None:
-        self._cancel_settle()
-        await self._supersede_active_press()
+        await self._abort_press_plan()
         self._start_press_sequence(Action.STOP)
 
     # --- endpoint re-anchor -------------------------------------------
@@ -243,21 +251,26 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             if self._settle_task is asyncio.current_task():
                 self._settle_task = None
 
-    # --- resync ----------------------------------------------------------
-    async def _on_resync_position(self, position: int) -> None:
-        """Re-anchor the tracked phase to match the resynced position.
+    # --- known position ------------------------------------------------
+    async def _halt_for_known_position(self) -> None:
+        """Cancel the press plan instead of stopping, then park the tracker.
 
-        Resync declares a fixed endpoint -- cancel any in-flight press
-        sequence/settle first so its own next iteration can't overwrite the
-        phase we set below (it would otherwise plan from -- and keep
-        driving toward -- the phase computed before resync ran, silently
-        clobbering it while the motor kept running against a cover we just
-        declared parked). Same cleanup _send_open/_send_close/_send_stop
-        already perform before starting a new sequence.
+        The button is a cycle input: a "stop" press on a motor already parked at
+        the declared position would start it, so nothing is pressed here.
         """
-        self._cancel_settle()
-        await self._supersede_active_press()
-        self._phase = Phase.AT_OPEN if position == 100 else Phase.AT_CLOSED
+        await self._abort_press_plan()
+        self._neutralize_tracked_movement()
+
+    def _on_known_position(self, position: int) -> None:
+        """Anchor the tracked phase when an endpoint is declared.
+
+        An intermediate position says nothing about where the motor is in its
+        cycle, so the phase is left alone.
+        """
+        if position == 100:
+            self._phase = Phase.AT_OPEN
+        elif position == 0:
+            self._phase = Phase.AT_CLOSED
 
     # --- persistence -----------------------------------------------------
     def _extra_persist_data(self) -> dict:

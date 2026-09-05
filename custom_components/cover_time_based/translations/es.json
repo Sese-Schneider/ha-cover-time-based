@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Establecer la posición de la persiana",
-      "description": "Establece internamente una posición conocida para la persiana.",
+      "description": "Declara la posición actual de la persiana. Primero detiene el motor si Home Assistant todavía lo está accionando; en el modo de un solo botón, una posición extrema también vuelve a anclar la fase rastreada.",
       "fields": {
         "position": {
           "name": "Posición",
@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Resincronizar",
-      "description": "Vuelve a anclar la posición rastreada de una persiana a totalmente cerrada o totalmente abierta después de que se haya usado el botón físico o el mando RF. En el modo de un solo botón, esto también vuelve a anclar la fase rastreada. Indica a la integración el estado real de la persiana.",
+      "description": "Vuelve a anclar la posición rastreada de una persiana a totalmente cerrada o totalmente abierta después de que se haya usado el botón físico o el mando RF. En el modo de un solo botón, esto también vuelve a anclar la fase rastreada, igual que hace set_known_position en una posición extrema. Indica a la integración el estado real de la persiana.",
       "fields": {
         "state": {
           "name": "Estado",

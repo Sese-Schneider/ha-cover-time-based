@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Definir a posição do estore",
-      "description": "Definir a posição conhecida do estore.",
+      "description": "Declara a posição atual do estore. Para primeiro o motor se o Home Assistant ainda o estiver a acionar; no modo de botão único, uma posição de extremo também reancora a fase monitorizada.",
       "fields": {
         "position": {
           "name": "Posição",
@@ -79,7 +79,7 @@
     },
     "resync": {
       "name": "Ressincronizar",
-      "description": "Reancora a posição monitorizada de um estore para totalmente fechado ou totalmente aberto depois de o botão físico ou o comando RF terem sido usados. No modo de botão único, isto também reancora a fase monitorizada. Informa a integração do estado real do estore.",
+      "description": "Reancora a posição monitorizada de um estore para totalmente fechado ou totalmente aberto depois de o botão físico ou o comando RF terem sido usados. No modo de botão único, isto também reancora a fase monitorizada, tal como set_known_position faz numa posição de extremo. Informa a integração do estado real do estore.",
       "fields": {
         "state": {
           "name": "Estado",

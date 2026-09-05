@@ -41,6 +41,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_WRAPPED,
     DEFAULT_PULSE_TIME,
 )
+from custom_components.cover_time_based.cover_base import RawCommandNotSupported
 from custom_components.cover_time_based.websocket_api import (
     _resolve_config_entry,
     _script_in_non_pulse_mode,
@@ -1991,20 +1992,12 @@ class TestWsStopCalibration:
 
 
 class TestWsRawCommand:
-    """Tests for ws_raw_command handler."""
+    """The handler is a thin adapter: it resolves the entity, delegates to
+    async_raw_command, and maps its errors onto WS error codes."""
 
-    def _make_entity(self, *, has_tilt_motor=False, has_tilt_support=False):
+    def _make_entity(self):
         entity = MagicMock()
-        entity._raw_direction_command = AsyncMock()
-        entity._has_tilt_motor = MagicMock(return_value=has_tilt_motor)
-        entity._has_tilt_support = MagicMock(return_value=has_tilt_support)
-        entity._calibration = None
-        entity._cancel_startup_delay_task = MagicMock()
-        entity._cancel_delay_task = MagicMock()
-        entity._handle_stop = MagicMock()
-        entity.travel_calc = MagicMock()
-        entity.tilt_calc = MagicMock()
-        entity.async_write_ha_state = MagicMock()
+        entity.async_raw_command = AsyncMock()
         return entity
 
     def _msg(self, command):
@@ -2015,177 +2008,50 @@ class TestWsRawCommand:
             "command": command,
         }
 
-    @pytest.mark.asyncio
-    async def test_entity_not_found(self):
+    async def _call(self, entity, command):
         conn = _make_connection()
         with patch(
             "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=None,
+            return_value=entity,
         ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("open"))
+            await _ws_raw_command(MagicMock(), conn, self._msg(command))
+        return conn
+
+    @pytest.mark.asyncio
+    async def test_entity_not_found(self):
+        conn = await self._call(None, "open")
         conn.send_error.assert_called_once()
         assert conn.send_error.call_args[0][1] == "not_found"
 
     @pytest.mark.asyncio
-    async def test_open(self):
+    @pytest.mark.parametrize(
+        "command", ["open", "close", "stop", "tilt_open", "tilt_close", "tilt_stop"]
+    )
+    async def test_command_is_delegated(self, command):
         entity = self._make_entity()
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("open"))
-        entity._raw_direction_command.assert_awaited_once_with("open")
-        entity.travel_calc.clear_position.assert_called_once()
-        entity.async_write_ha_state.assert_called_once()
+        conn = await self._call(entity, command)
+        entity.async_raw_command.assert_awaited_once_with(command)
         conn.send_result.assert_called_once_with(1, {"success": True})
 
     @pytest.mark.asyncio
-    async def test_close(self):
+    async def test_not_supported_is_mapped(self):
         entity = self._make_entity()
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("close"))
-        entity._raw_direction_command.assert_awaited_once_with("close")
-        entity.travel_calc.clear_position.assert_called_once()
-        conn.send_result.assert_called_once()
+        entity.async_raw_command = AsyncMock(
+            side_effect=RawCommandNotSupported("Tilt motor not configured")
+        )
+        conn = await self._call(entity, "tilt_open")
+        conn.send_error.assert_called_once_with(
+            1, "not_supported", "Tilt motor not configured"
+        )
+        conn.send_result.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_stop(self):
+    async def test_other_errors_are_failures(self):
         entity = self._make_entity()
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("stop"))
-        entity._raw_direction_command.assert_awaited_once_with("stop")
-        entity.travel_calc.clear_position.assert_called_once()
-        conn.send_result.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_tilt_open(self):
-        entity = self._make_entity(has_tilt_motor=True, has_tilt_support=True)
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_open"))
-        entity._raw_direction_command.assert_awaited_once_with("tilt_open")
-        entity.tilt_calc.clear_position.assert_called_once()
-        conn.send_result.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_tilt_open_not_supported(self):
-        entity = self._make_entity(has_tilt_motor=False)
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_open"))
-        conn.send_error.assert_called_once()
-        assert conn.send_error.call_args[0][1] == "not_supported"
-
-    @pytest.mark.asyncio
-    async def test_tilt_close(self):
-        entity = self._make_entity(has_tilt_motor=True, has_tilt_support=True)
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_close"))
-        entity._raw_direction_command.assert_awaited_once_with("tilt_close")
-        entity.tilt_calc.clear_position.assert_called_once()
-        conn.send_result.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_tilt_close_not_supported(self):
-        entity = self._make_entity(has_tilt_motor=False)
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_close"))
-        conn.send_error.assert_called_once()
-        assert conn.send_error.call_args[0][1] == "not_supported"
-
-    @pytest.mark.asyncio
-    async def test_tilt_stop(self):
-        entity = self._make_entity(has_tilt_motor=True, has_tilt_support=True)
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_stop"))
-        entity._raw_direction_command.assert_awaited_once_with("tilt_stop")
-        entity.tilt_calc.clear_position.assert_called_once()
-        conn.send_result.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_tilt_stop_not_supported(self):
-        entity = self._make_entity(has_tilt_motor=False)
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("tilt_stop"))
-        conn.send_error.assert_called_once()
-        assert conn.send_error.call_args[0][1] == "not_supported"
-
-    @pytest.mark.asyncio
-    async def test_lifecycle_stop_called(self):
-        entity = self._make_entity()
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("open"))
-        entity._cancel_startup_delay_task.assert_called_once()
-        entity._cancel_delay_task.assert_called_once()
-        entity._handle_stop.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_calibration_skips_lifecycle_and_clear(self):
-        entity = self._make_entity()
-        entity._calibration = MagicMock()  # not None — calibration active
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("open"))
-        # Command still dispatched
-        entity._raw_direction_command.assert_awaited_once_with("open")
-        # But lifecycle stop and position clear are skipped
-        entity._cancel_startup_delay_task.assert_not_called()
-        entity._cancel_delay_task.assert_not_called()
-        entity._handle_stop.assert_not_called()
-        entity.travel_calc.clear_position.assert_not_called()
-        entity.async_write_ha_state.assert_not_called()
-        conn.send_result.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_exception(self):
-        entity = self._make_entity()
-        entity._raw_direction_command = AsyncMock(side_effect=Exception("hw error"))
-        conn = _make_connection()
-        with patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=entity,
-        ):
-            await _ws_raw_command(MagicMock(), conn, self._msg("open"))
-        conn.send_error.assert_called_once()
-        assert conn.send_error.call_args[0][1] == "failed"
+        entity.async_raw_command = AsyncMock(side_effect=RuntimeError("boom"))
+        conn = await self._call(entity, "open")
+        conn.send_error.assert_called_once_with(1, "failed", "boom")
+        conn.send_result.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,13 @@ from homeassistant.components.cover import (
 )
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
+from custom_components.cover_time_based.cover import (
+    CONTROL_MODE_SWITCH,
+    CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_WRAPPED,
+)
+from custom_components.cover_time_based.cover_base import RawCommandNotSupported
+
 # ===================================================================
 # Name / unique_id / device_class / assumed_state properties
 # ===================================================================
@@ -1457,7 +1464,9 @@ class TestResyncAllModes:
         assert not hasattr(cover, "_phase")
 
 
-# ===================================================================
+# =====================================================
+
+
 # _log guard
 # ===================================================================
 
@@ -1492,3 +1501,310 @@ class TestLogGuard:
         ):
             cover._log("hello %s", "world")
         debug.assert_called_once()
+
+
+def _make_dual_motor_cover(make_cover):
+    """A cover with a dedicated tilt motor, so tilt has its own relay to stop."""
+    return make_cover(
+        tilt_mode="dual_motor",
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        tilt_stop_switch="switch.tilt_stop",
+        tilt_time_open=5.0,
+        tilt_time_close=5.0,
+    )
+
+
+class TestKnownPositionHaltsMovement:
+    """A declared known position is a command: if we are still driving the
+    cover it stops the hardware first. A passive wrapped snap
+    (supersede=False) never sends anything."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("control_mode", [CONTROL_MODE_SWITCH, CONTROL_MODE_TOGGLE])
+    async def test_traveling_sends_stop(self, make_cover, control_mode):
+        cover = make_cover(control_mode=control_mode)
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=0)
+        send_stop.assert_awaited_once()
+        assert cover.travel_calc.current_position() == 0
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("control_mode", [CONTROL_MODE_SWITCH, CONTROL_MODE_TOGGLE])
+    async def test_idle_cover_sends_nothing(self, make_cover, control_mode):
+        """Toggle's stop is a tap that would START a parked motor; its own
+        _stop_hardware gating (was_active) must be what set_known_position goes
+        through."""
+        cover = make_cover(control_mode=control_mode)
+        cover.travel_calc.set_position(70)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=0)
+        send_stop.assert_not_awaited()
+        assert cover.travel_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_publishes_once(self, make_cover):
+        """One declaration, one write and one persist: the stop must not
+        publish an intermediate state of its own."""
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with (
+            patch.object(cover, "async_write_ha_state") as write,
+            patch.object(cover, "_async_persist_position", AsyncMock()) as persist,
+            patch.object(cover, "_send_stop", AsyncMock()),
+        ):
+            await cover.set_known_position(position=0)
+        write.assert_called_once()
+        persist.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_pending_startup_delay_counts_as_moving(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(50)
+        cover._startup_delay_task = cover.hass.async_create_task(asyncio.sleep(60))
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=0)
+        send_stop.assert_awaited_once()
+        assert (
+            cover._startup_delay_task is None or cover._startup_delay_task.cancelled()
+        )
+
+    @pytest.mark.asyncio
+    async def test_pending_endpoint_runon_counts_as_moving(self, make_cover):
+        """The tracker parks at an endpoint before the run-on expires, so only
+        the pending delay task still says the relay is energised."""
+        cover = make_cover()
+        cover.travel_calc.set_position(100)
+        cover._delay_task = cover.hass.async_create_task(asyncio.sleep(60))
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=0)
+        send_stop.assert_awaited_once()
+        assert cover._delay_task is None or cover._delay_task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_declared_tilt_stops_a_running_tilt_motor(self, make_cover):
+        """A declared tilt is the tilt twin of a declared position -- the card
+        fires both back to back for closed_tilt_open, so a dedicated tilt motor
+        still running must be stopped rather than left driving."""
+        cover = _make_dual_motor_cover(make_cover)
+        cover.tilt_calc.set_position(100)
+        cover.tilt_calc.start_travel(0)
+        cover._moving_tilt_motor = True
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_stop_hardware", AsyncMock()) as stop_hardware,
+        ):
+            await cover.set_known_tilt_position(tilt_position=0)
+        stop_hardware.assert_awaited_once()
+        assert cover.tilt_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_declared_tilt_on_an_idle_cover_sends_nothing(self, make_cover):
+        cover = _make_dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_tilt_stop", AsyncMock()) as send_tilt_stop,
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_tilt_position(tilt_position=0)
+        send_tilt_stop.assert_not_awaited()
+        send_stop.assert_not_awaited()
+        assert cover.tilt_calc.current_position() == 0
+
+    @pytest.mark.asyncio
+    async def test_passive_tilt_snap_never_sends_stop(self, make_cover):
+        """A wrapped cover reporting its own tilt is not a command."""
+        cover = _make_dual_motor_cover(make_cover)
+        cover.tilt_calc.set_position(100)
+        cover.tilt_calc.start_travel(0)
+        cover._moving_tilt_motor = True
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_stop_hardware", AsyncMock()) as stop_hardware,
+        ):
+            await cover.set_known_tilt_position(tilt_position=40, supersede=False)
+        stop_hardware.assert_not_awaited()
+        assert cover.tilt_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_passive_snap_never_sends_stop(self, make_cover):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_WRAPPED, cover_entity_id="cover.inner"
+        )
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.set_known_position(position=40, supersede=False)
+        send_stop.assert_not_awaited()
+        assert cover.travel_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_resync_is_the_endpoint_shortcut(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+        ):
+            await cover.async_resync("open")
+        send_stop.assert_awaited_once()
+        assert cover.travel_calc.current_position() == 100
+
+
+class TestAsyncRawCommand:
+    """Raw commands bypass the tracker; outside a calibration the tracked
+    position becomes unknown and that is persisted, so a restart does not
+    re-anchor at the stale pre-command value."""
+
+    @pytest.mark.asyncio
+    async def test_open_clears_and_persists_unknown(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(40)
+        with (
+            patch.object(cover, "async_write_ha_state") as write,
+            patch.object(cover, "_send_open", AsyncMock()) as send_open,
+            patch.object(cover, "_async_persist_position", AsyncMock()) as persist,
+        ):
+            await cover.async_raw_command("open")
+        send_open.assert_awaited_once()
+        assert cover.travel_calc.current_position() is None
+        write.assert_called_once()
+        persist.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_open_while_traveling_halts_the_tracker_first(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(0)
+        cover.travel_calc.start_travel(100)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_open", AsyncMock()),
+            patch.object(cover, "_async_persist_position", AsyncMock()),
+        ):
+            await cover.async_raw_command("open")
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() is None
+
+    @pytest.mark.asyncio
+    async def test_stop_clears_and_persists_unknown(self, make_cover):
+        """A raw stop is as much a bypass as a raw drive: the motor may have
+        been running under someone else's control, so the tracked position is
+        no longer trustworthy either."""
+        cover = make_cover()
+        cover.travel_calc.set_position(40)
+        with (
+            patch.object(cover, "async_write_ha_state") as write,
+            patch.object(cover, "_send_stop", AsyncMock()) as send_stop,
+            patch.object(cover, "_async_persist_position", AsyncMock()) as persist,
+        ):
+            await cover.async_raw_command("stop")
+        send_stop.assert_awaited_once()
+        assert cover.travel_calc.current_position() is None
+        write.assert_called_once()
+        persist.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_tilt_without_tilt_motor_is_rejected(self, make_cover):
+        cover = make_cover()
+        with pytest.raises(RawCommandNotSupported):
+            await cover.async_raw_command("tilt_open")
+
+    @pytest.mark.asyncio
+    async def test_tilt_clears_only_the_tilt_axis(self, make_cover):
+        cover = make_cover(
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_stop_switch="switch.tilt_stop",
+            tilt_time_open=5.0,
+            tilt_time_close=5.0,
+        )
+        cover.travel_calc.set_position(40)
+        cover.tilt_calc.set_position(60)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_tilt_open", AsyncMock()) as send_tilt_open,
+            patch.object(cover, "_async_persist_position", AsyncMock()),
+        ):
+            await cover.async_raw_command("tilt_open")
+        send_tilt_open.assert_awaited_once()
+        assert cover.tilt_calc.current_position() is None
+        assert cover.travel_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_works_before_travel_times_are_configured(self, make_cover):
+        """These buttons are how you position a cover in order to measure its
+        travel times, so they must not be gated on having them."""
+        cover = make_cover(travel_time_open=None, travel_time_close=None)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_open", AsyncMock()) as send_open,
+            patch.object(cover, "_async_persist_position", AsyncMock()),
+        ):
+            await cover.async_raw_command("open")
+        send_open.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_during_calibration_only_sends(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(40)
+        cover._calibration = MagicMock()
+        with (
+            patch.object(cover, "async_write_ha_state") as write,
+            patch.object(cover, "_send_close", AsyncMock()) as send_close,
+            patch.object(cover, "_async_persist_position", AsyncMock()) as persist,
+        ):
+            await cover.async_raw_command("close")
+        send_close.assert_awaited_once()
+        assert cover.travel_calc.current_position() == 40
+        write.assert_not_called()
+        persist.assert_not_awaited()
+
+
+class TestDelayTaskOwnership:
+    """A cancelled run-on task must only clear its own registration.
+
+    Its CancelledError handler runs a loop turn after the cancel, by which
+    time a replacement task can already be registered -- clearing the field
+    blindly then hides a pending run-on from _cancel_delay_task and
+    _movement_in_progress.
+    """
+
+    @pytest.mark.asyncio
+    async def test_cancelled_runon_does_not_clear_its_replacement(self, make_cover):
+        cover = make_cover()
+        cover.travel_calc.set_position(100)
+        cover._delay_task = cover.hass.async_create_task(cover._delayed_stop(60))
+        await asyncio.sleep(0)
+
+        assert cover._cancel_delay_task()
+        replacement = cover.hass.async_create_task(asyncio.sleep(60))
+        cover._delay_task = replacement
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+        assert cover._delay_task is replacement
+        assert cover._movement_in_progress()
+        replacement.cancel()
