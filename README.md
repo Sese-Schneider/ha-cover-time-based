@@ -281,16 +281,20 @@ a single on command per press, giving exactly one clean activation each time.
 
 #### Wait for relay confirmation before tracking
 
-Available in every switch mode. Normally the position timer starts the moment a
-command is sent. On a slow or cold Zigbee or Z-Wave mesh the command can take a
-second or two to actually reach the relay, and that delay is then wrongly counted
-as travel, so the tracked position runs ahead of the cover. Turn this **on** to
-start the timer only when the relay reports that it has switched on. In
-**Single button** mode the timer waits for the press that actually starts the
-motor — the last press when a reversal needs several — to be confirmed. If the
-relay never confirms at all, the timer starts anyway, counted from when the
-command was sent. Leave it **off** unless the position drifts on a cover whose
-relay responds slowly.
+Available in every mode that drives a switch or button (Single button included).
+Normally the position timer starts the moment a command is sent. On a slow or
+cold Zigbee or Z-Wave mesh the command can take a second or two to actually reach
+the relay, and that delay is then wrongly counted as travel, so the tracked
+position runs ahead of the cover. Turn this **on** to start the timer only when
+the relay reports that it has switched on. In **Single button** mode the timer
+waits for the press that actually starts the motor — the last press when a
+reversal needs several — to be confirmed. That wait is ten seconds from the
+command, so a reversal that needs several presses with a long pulse time can time
+out before the motor-starting press goes out; tracking then starts from the
+command time, as it does when the relay never confirms. If the relay never
+confirms at all, the timer starts anyway, counted from when the command was sent.
+Leave it **off** unless the position drifts on a cover whose relay responds
+slowly.
 
 > [!NOTE]
 > On the two **Toggle** modes a stop is a tap on the driving relay rather than a
@@ -513,7 +517,7 @@ Most timings can be measured for you:
 | **Travel time (open)** | Seconds for the cover to open fully. | — |
 | **Travel startup delay** | Compensates for the motor's start-up lag. See [Startup delay](#startup-delay). | not set |
 | **Minimum movement time** | Blocks movements too short to physically move the cover. See [Minimum movement time](#minimum-movement-time). | not set |
-| **Endpoint run-on time** | Extra relay time at the endpoints so the motor reaches its limit. Typed in rather than measured. See [Endpoint run-on time](#endpoint-run-on-time). | 2.0 |
+| **Endpoint run-on time** | Extra relay time at the endpoints so the motor reaches its limit (in Single button mode, a settle wait instead). Typed in rather than measured. See [Endpoint run-on time](#endpoint-run-on-time). | 2.0 |
 
 ### Tilt timings
 
@@ -600,7 +604,7 @@ Start a calibration test to measure a timing.
 | --- | --- |
 | `entity_id` | The cover entity. |
 | `attribute` | The timing to calibrate. |
-| `timeout` | Safety timeout in seconds; the motor auto-stops if `stop_calibration` is not called. |
+| `timeout` | Safety timeout in seconds. If `stop_calibration` has not been called by then the calibration ends: a latched relay is switched off, and a motor that stops itself at its limits is recorded at the limit it was driven to. |
 | `direction` | Direction to move, `open` or `close`. Auto-detected if not set. |
 
 ### `cover_time_based.stop_calibration`
@@ -890,11 +894,11 @@ listed here, use the card.
 | `tilting_time_down` | float | _Optional_ | Seconds to tilt the cover fully closed. Minimum 0.1 s. | None |
 | `tilting_time_up` | float | _Optional_ | Seconds to tilt the cover fully open. Minimum 0.1 s. | None |
 | `travel_moves_with_tilt` | boolean | _Optional_ | Whether tilt movements also change travel proportionally. | false |
-| `endpoint_runon_time` | float | _Optional_ | Extra relay time at the endpoints. Also accepted under its old name `travel_delay_at_end`. | 2.0 |
+| `endpoint_runon_time` | float | _Optional_ | Extra relay time at the endpoints (in Single button mode, a settle wait instead). Also accepted under its old name `travel_delay_at_end`. | 2.0 |
 | `min_movement_time` | float | _Optional_ | Minimum movement duration; blocks shorter movements. | None |
 | `travel_startup_delay` | float | _Optional_ | Startup compensation for travel movements. | None |
 | `tilt_startup_delay` | float | _Optional_ | Startup compensation for tilt movements. | None |
-| `pulse_time` | float | _Optional_ | Pulse duration in pulse mode. Minimum 0.1 s. | 1.0 |
+| `pulse_time` | float | _Optional_ | Pulse duration in pulse mode; press duration in single button mode. Minimum 0.1 s. | 1.0 |
 | `relay_reports_off` | boolean | _Optional_ | Toggle mode: set `false` for pulse modules that never report their off. | true |
 | `send_endpoint_stop` | boolean | _Optional_ | Pulse mode: set `false` for auto-stop controllers that reposition on a stop received while stopped. | true |
 | `direction_change_delay` | float | _Deprecated_ | No longer configurable. Accepted and ignored; the reversing pause is fixed at 1.0s. | — |

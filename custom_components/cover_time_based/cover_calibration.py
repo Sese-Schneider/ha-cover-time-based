@@ -84,7 +84,8 @@ class CalibrationMixin:
             and not self._supports_stepped_calibration()
         ):
             raise HomeAssistantError(
-                f"{attribute} calibration is not available for this control mode"
+                "Startup delay and minimum movement calibration are not"
+                " available for this control mode"
             )
 
         if attribute == "travel_startup_delay" and not (

@@ -24,7 +24,7 @@ from homeassistant.const import SERVICE_OPEN_COVER
 from custom_components.cover_time_based import cover_base
 from custom_components.cover_time_based.calibration import CalibrationState
 from custom_components.cover_time_based.cover import CONTROL_MODE_SINGLE_BUTTON
-from tests.conftest import single_button_sleep_patch, stub_switches
+from tests.helpers import single_button_sleep_patch, stub_switches
 
 # A fixed, timezone-aware moment used as the relay echo's ``last_changed``.
 FIXED_ECHO = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)

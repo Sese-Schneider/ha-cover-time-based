@@ -10,7 +10,7 @@ from custom_components.cover_time_based.cover_single_button_mode import (
     SingleButtonModeCover,
 )
 from custom_components.cover_time_based.single_button_cycle import Phase
-from tests.conftest import stub_switches
+from tests.helpers import stub_switches
 
 
 @contextlib.contextmanager

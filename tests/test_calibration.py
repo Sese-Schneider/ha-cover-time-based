@@ -11,7 +11,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_TOGGLE,
 )
 from custom_components.cover_time_based.single_button_cycle import Phase
-from tests.conftest import single_button_sleep_patch
+from tests.helpers import single_button_sleep_patch
 
 
 class TestConfigEntryAccess:
