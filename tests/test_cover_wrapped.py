@@ -1926,3 +1926,72 @@ class TestWrappedSyncsToLivePositionAtStartup:
 
         assert cover.travel_calc.current_position() == 30
         _mock_position_store.async_save.assert_not_awaited()
+
+
+class TestWrappedDecisionCost:
+    """The wrapped decision helpers read the underlying's state once, and an
+    attribute report that changes nothing does no work.
+    """
+
+    _F_SET_TILT = 128  # CoverEntityFeature.SET_TILT_POSITION
+
+    def test_position_driver_reads_state_once(self):
+        # Native-both inline cover: the longest decision chain
+        # (_position_driver -> _use_native_set_position -> _use_native_tilt
+        # -> _wrapped_supports_set_tilt_position, then
+        # _wrapped_supports_set_position).
+        cover = _make_wrapped_cover(
+            tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
+        )
+        st = _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | self._F_SET_TILT
+        )
+        cover.hass.states.get = MagicMock(return_value=st)
+        assert cover._position_driver() is cover._native_position_driver
+        assert cover.hass.states.get.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_attribute_event_with_same_position_and_no_updater_does_not_snap(
+        self,
+    ):
+        cover = _make_wrapped_cover()
+        cover.travel_calc.set_position(40)
+        st = _set_wrapped_features(cover, 0, state="open", current_position=40)
+        event = MagicMock()
+        event.data = {"entity_id": "cover.inner", "new_state": st}
+        with patch.object(cover, "set_known_position", new=AsyncMock()) as snap:
+            await cover._handle_external_attribute_change(event)
+        snap.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_attribute_event_with_same_position_but_running_updater_still_snaps(
+        self,
+    ):
+        cover = _make_wrapped_cover()
+        cover.travel_calc.set_position(40)
+        cover._unsubscribe_auto_updater = MagicMock()
+        st = _set_wrapped_features(cover, 0, state="open", current_position=40)
+        event = MagicMock()
+        event.data = {"entity_id": "cover.inner", "new_state": st}
+        with patch.object(cover, "set_known_position", new=AsyncMock()) as snap:
+            await cover._handle_external_attribute_change(event)
+        snap.assert_awaited_once()
+        cover._unsubscribe_auto_updater = None
+
+    @pytest.mark.asyncio
+    async def test_attribute_event_reads_position_from_the_event(self):
+        cover = _make_wrapped_cover()
+        cover.travel_calc.set_position(40)
+        event_state = MagicMock()
+        event_state.state = "open"
+        event_state.attributes = {ATTR_CURRENT_POSITION: 55}
+        event = MagicMock()
+        event.data = {"entity_id": "cover.inner", "new_state": event_state}
+        # A different value in the state machine: reading it would give 99.
+        stale = MagicMock()
+        stale.state = "open"
+        stale.attributes = {ATTR_CURRENT_POSITION: 99}
+        cover.hass.states.get = MagicMock(return_value=stale)
+        with patch.object(cover, "set_known_position", new=AsyncMock()) as snap:
+            await cover._handle_external_attribute_change(event)
+        snap.assert_awaited_once_with(position=55, supersede=False)
