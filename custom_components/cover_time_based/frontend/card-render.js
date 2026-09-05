@@ -847,8 +847,14 @@ export function renderCalibration(card, calibrating) {
     tiltMode === "dual_motor" ||
     tiltMode === "inline";
 
+  // A cycling button reverses on every restart after a stop, so the stepped
+  // startup-delay and minimum-movement tests measure nothing there (the
+  // backend refuses them too); only the travel times can be timed.
+  const isSingleButton = card._config?.control_mode === "single_button";
   const availableAttributes = TIMING_ATTRIBUTES.filter(([key]) => {
     if (!hasTiltCalibration && key.startsWith("tilt_")) return false;
+    if (isSingleButton && (key.endsWith("_startup_delay") || key === "min_movement_time"))
+      return false;
     return true;
   });
 

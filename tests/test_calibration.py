@@ -4,6 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_SINGLE_BUTTON,
@@ -1495,3 +1496,42 @@ class TestCalibrationTimeoutOnSelfStoppingMotor:
             await asyncio.sleep(0.3)
         assert cover._calibration is None
         assert cover.travel_calc.current_position() == 0
+
+
+class TestSingleButtonRefusesSteppedCalibration:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("attribute", ["travel_startup_delay", "min_movement_time"])
+    async def test_start_raises_and_leaves_no_state(self, make_cover, attribute):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SINGLE_BUTTON,
+            open_switch="switch.button",
+            close_switch=None,
+        )
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            _sb_sleep_patch(),
+            pytest.raises(HomeAssistantError, match="not available"),
+        ):
+            await cover.start_calibration(attribute=attribute, timeout=60)
+        assert cover._calibration is None
+        cover.hass.services.async_call.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_travel_time_calibration_still_starts(self, make_cover):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SINGLE_BUTTON,
+            open_switch="switch.button",
+            close_switch=None,
+        )
+        with patch.object(cover, "async_write_ha_state"), _sb_sleep_patch():
+            await cover.start_calibration(attribute="travel_time_open", timeout=60)
+            assert cover._calibration is not None
+            await cover.stop_calibration(cancel=True)
+
+    @pytest.mark.asyncio
+    async def test_switch_mode_still_runs_the_overhead_test(self, make_cover):
+        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="travel_startup_delay", timeout=60)
+            assert cover._calibration is not None
+            await cover.stop_calibration(cancel=True)

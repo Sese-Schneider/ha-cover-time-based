@@ -367,6 +367,10 @@ its true state. Skip this and it is guessing from the start.
 - **A partial position is approximate.** Anything between fully open and fully
   closed is reached with a timed stop, and drifts until the next full open or
   close corrects it.
+- **Only the travel times can be measured.** The startup-delay and
+  minimum-movement tests restart the motor in the same direction after a
+  stop, which on a cycling button is a reversal, so the card does not offer
+  them for this mode. Type those values in by hand if you need them.
 - **Tilt is not available.** Tilting needs a pulse in a chosen direction, which
   a single button cannot give, so the option is off for this mode.
 

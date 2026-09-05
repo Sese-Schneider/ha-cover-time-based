@@ -3053,6 +3053,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         return True
 
+    def _supports_stepped_calibration(self) -> bool:
+        """Whether the overhead and minimum-movement tests can run on this mode.
+
+        Both restart the motor in the same direction from a stop, which every
+        relay-driven mode can do. A mode whose restart-after-stop is a
+        reversal overrides this to False.
+        """
+        return True
+
     def _at_endpoint(self, position) -> bool:
         """Return True at a travel endpoint (0/100) where endpoint handling
         (self-stop skip or run-on) applies.

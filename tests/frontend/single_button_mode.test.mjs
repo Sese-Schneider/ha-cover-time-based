@@ -335,3 +335,34 @@ test("_onResync logs and does not throw when the service call rejects", async ()
   await expect(card._onResync("open")).resolves.toBeUndefined();
   expect(errSpy).toHaveBeenCalled();
 });
+
+// ---------------------------------------------------------------------------
+// Calibration tab: only the travel times can be measured on a cycling button
+// ---------------------------------------------------------------------------
+
+test("single_button mode: calibration list offers only travel_time_close and travel_time_open", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: singleButtonCfg({ travel_time_close: 20, travel_time_open: 20 }),
+    activeTab: "calibration",
+    knownPosition: "closed",
+  });
+  const options = [...card.shadowRoot.querySelectorAll("#cal-attribute option")].map(
+    (o) => o.value,
+  );
+  expect(options).toEqual(["travel_time_close", "travel_time_open"]);
+});
+
+test("switch mode: calibration list still offers the startup-delay and minimum-movement tests", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg({ travel_time_close: 20, travel_time_open: 20 }),
+    activeTab: "calibration",
+    knownPosition: "closed",
+  });
+  const options = [...card.shadowRoot.querySelectorAll("#cal-attribute option")].map(
+    (o) => o.value,
+  );
+  expect(options).toContain("travel_startup_delay");
+  expect(options).toContain("min_movement_time");
+});

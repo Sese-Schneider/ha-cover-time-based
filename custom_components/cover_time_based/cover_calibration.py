@@ -14,7 +14,7 @@ from homeassistant.const import (
 )
 from homeassistant.exceptions import HomeAssistantError
 
-from .calibration import CalibrationState
+from .calibration import STEPPED_CALIBRATION_ATTRIBUTES, CalibrationState
 from .const import RELAY_FEEDBACK_TIMEOUT
 
 if TYPE_CHECKING:
@@ -57,6 +57,7 @@ class CalibrationMixin:
         def _has_tilt_motor(self) -> bool: ...
         def async_write_ha_state(self) -> None: ...
         def _self_stops_at_endpoints(self) -> bool: ...
+        def _supports_stepped_calibration(self) -> bool: ...
         def _on_known_position(self, position: int) -> None: ...
         def _neutralize_tracked_movement(self, *, supersede: bool = True) -> None: ...
 
@@ -76,6 +77,14 @@ class CalibrationMixin:
         ):
             raise HomeAssistantError(
                 "Tilt time calibration not available for this tilt mode"
+            )
+
+        if (
+            attribute in STEPPED_CALIBRATION_ATTRIBUTES
+            and not self._supports_stepped_calibration()
+        ):
+            raise HomeAssistantError(
+                f"{attribute} calibration is not available for this control mode"
             )
 
         if attribute == "travel_startup_delay" and not (

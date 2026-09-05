@@ -56,6 +56,12 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
     def _self_stops_at_endpoints(self) -> bool:
         return True
 
+    def _supports_stepped_calibration(self) -> bool:
+        # A restart in the same direction after a stop is a reversal press
+        # sequence here (the motor first runs the wrong way), so the stepped
+        # overhead and minimum-movement tests measure nothing on this cycle.
+        return False
+
     async def _handle_external_state_change(self, entity_id, old_state, new_state):
         # The button is an output we drive; its state changes are our own
         # echoes, and this mode has no feedback to read. Ignore them.
