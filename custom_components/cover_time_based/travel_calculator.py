@@ -195,7 +195,13 @@ class TravelCalculator:
         self.start_travel(self.position_closed)
 
     def current_position(self) -> int | None:
-        """Return current (calculated or known) position."""
+        """Return current (calculated or known) position.
+
+        While a move is in flight, the calculated position never equals the
+        target until the travel time has elapsed; position_reached,
+        is_traveling, is_open, is_closed and external `== target` checks rely
+        on this.
+        """
         if not self._position_confirmed:
             return self._calculate_position()
         return self._last_known_position
@@ -259,14 +265,21 @@ class TravelCalculator:
         )
         if remaining_travel_time <= 0:
             return self._travel_to_position
-        if time.time() > self._last_known_position_timestamp + remaining_travel_time:
+        now = time.time()
+        if now >= self._last_known_position_timestamp + remaining_travel_time:
             return self._travel_to_position
 
         progress = max(
             0.0,
-            (time.time() - self._last_known_position_timestamp) / remaining_travel_time,
+            (now - self._last_known_position_timestamp) / remaining_travel_time,
         )
-        return int(self._last_known_position + relative_position * progress)
+        position = round(self._last_known_position + relative_position * progress)
+        # Arrival is the time check above, never rounding: hold one step short of the
+        # target so position_reached()/is_traveling()/stop() and external `== target`
+        # checks cannot call the move done while the motor is still running.
+        if position == self._travel_to_position:
+            position = self._travel_to_position - (1 if relative_position > 0 else -1)
+        return position
 
     def calculate_travel_time(self, from_position: int, to_position: int) -> float:
         """Calculate time to travel from one position to another."""

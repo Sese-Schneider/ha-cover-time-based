@@ -12,10 +12,9 @@
 ### Fixes
 
 - **The configuration card's backend websocket commands and the `start_calibration` / `stop_calibration` actions now require an administrator account**: they accepted any authenticated user, including read-only ones, and now return `unauthorized` for non-administrators, matching how Home Assistant itself gates configuration changes.
-- **`set_known_position` and `set_known_tilt_position` now accept area, device and label targets and reject values outside 0–100**: the action editor offered areas and devices, but only an entity target validated; and a position above 100 was accepted and tracked, so the next close ran for longer than a full travel.
-- **YAML configuration now rejects a travel, tilt or pulse time of `0`**, as the configuration card already did. A zero duration made the cover twitch while Home Assistant reported it at the endpoint.
 - **`set_known_position` and `set_known_tilt_position` now accept area, floor, device and label targets and reject values outside 0–100**: the action editor offered areas and devices, but only an entity target validated; and a position above 100 was accepted and tracked, so the next close ran for longer than a full travel.
 - **YAML configuration now rejects a travel, tilt or pulse time below 0.1 s**: the configuration card already enforced that minimum, and a zero duration made the cover twitch while Home Assistant reported it at the endpoint.
+- **Partial moves now run for their full travel time in both directions**: the tracked position was truncated to a whole number, so a closing move counted as arrived up to one step early (a one-step close stopped on its first tick) while an opening move waited for the clock. Repeated partial closes drifted "more open" than tracked. Arrival is now decided by elapsed time alone, and the intermediate position is rounded. A cover now reads `closed`/`open` only when its travel time has elapsed, and a stop in the final half-step leaves it one step short rather than at the endpoint.
 
 ## 4.11.0 (2026-08-04)
 
