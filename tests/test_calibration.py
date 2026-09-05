@@ -11,6 +11,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_TOGGLE,
 )
 from custom_components.cover_time_based.single_button_cycle import Phase
+from tests.conftest import single_button_sleep_patch
 
 
 class TestConfigEntryAccess:
@@ -1385,10 +1386,12 @@ class TestDualMotorTiltCalibrationDrivesTiltMotor:
             await cover.stop_calibration(cancel=True)
 
 
-def _sb_sleep_patch():
-    return patch(
-        "custom_components.cover_time_based.cover_single_button_mode.sleep",
-        new_callable=AsyncMock,
+def _sb_cover(make_cover, **kw):
+    return make_cover(
+        control_mode=CONTROL_MODE_SINGLE_BUTTON,
+        open_switch="switch.button",
+        close_switch=None,
+        **kw,
     )
 
 
@@ -1398,13 +1401,9 @@ class TestCalibrationAnchorsSingleButtonPhase:
 
     @pytest.mark.asyncio
     async def test_finish_anchors_phase_at_endpoint(self, make_cover):
-        cover = make_cover(
-            control_mode=CONTROL_MODE_SINGLE_BUTTON,
-            open_switch="switch.button",
-            close_switch=None,
-        )
+        cover = _sb_cover(make_cover)
         cover._phase = Phase.AT_CLOSED
-        with patch.object(cover, "async_write_ha_state"), _sb_sleep_patch():
+        with patch.object(cover, "async_write_ha_state"), single_button_sleep_patch():
             await cover.start_calibration(attribute="travel_time_open", timeout=60)
             await asyncio.sleep(0)  # the press lands: phase MOVING_UP
             assert cover._phase is Phase.MOVING_UP
@@ -1415,14 +1414,10 @@ class TestCalibrationAnchorsSingleButtonPhase:
 
     @pytest.mark.asyncio
     async def test_timeout_anchors_phase_and_position_at_endpoint(self, make_cover):
-        cover = make_cover(
-            control_mode=CONTROL_MODE_SINGLE_BUTTON,
-            open_switch="switch.button",
-            close_switch=None,
-        )
+        cover = _sb_cover(make_cover)
         cover._phase = Phase.AT_OPEN
         cover.travel_calc.set_position(100)
-        with patch.object(cover, "async_write_ha_state"), _sb_sleep_patch():
+        with patch.object(cover, "async_write_ha_state"), single_button_sleep_patch():
             await cover.start_calibration(attribute="travel_time_close", timeout=0.1)
             await asyncio.sleep(0.3)
         assert cover._calibration is None
@@ -1502,14 +1497,10 @@ class TestSingleButtonRefusesSteppedCalibration:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("attribute", ["travel_startup_delay", "min_movement_time"])
     async def test_start_raises_and_leaves_no_state(self, make_cover, attribute):
-        cover = make_cover(
-            control_mode=CONTROL_MODE_SINGLE_BUTTON,
-            open_switch="switch.button",
-            close_switch=None,
-        )
+        cover = _sb_cover(make_cover)
         with (
             patch.object(cover, "async_write_ha_state"),
-            _sb_sleep_patch(),
+            single_button_sleep_patch(),
             pytest.raises(HomeAssistantError, match="not available"),
         ):
             await cover.start_calibration(attribute=attribute, timeout=60)
@@ -1518,12 +1509,8 @@ class TestSingleButtonRefusesSteppedCalibration:
 
     @pytest.mark.asyncio
     async def test_travel_time_calibration_still_starts(self, make_cover):
-        cover = make_cover(
-            control_mode=CONTROL_MODE_SINGLE_BUTTON,
-            open_switch="switch.button",
-            close_switch=None,
-        )
-        with patch.object(cover, "async_write_ha_state"), _sb_sleep_patch():
+        cover = _sb_cover(make_cover)
+        with patch.object(cover, "async_write_ha_state"), single_button_sleep_patch():
             await cover.start_calibration(attribute="travel_time_open", timeout=60)
             assert cover._calibration is not None
             await cover.stop_calibration(cancel=True)

@@ -13,20 +13,17 @@ import asyncio
 import contextlib
 from asyncio import sleep
 
-from .const import (
-    DIRECTION_CHANGE_DELAY,
-    ECHO_PENDING_WINDOW,
-    RELAY_FEEDBACK_PENDING_TIMEOUT,
-)
+from .const import DIRECTION_CHANGE_DELAY
 from .cover_switch import SwitchCoverTimeBased
 from .single_button_cycle import Action, Phase, plan
 
 # The phase a self-stopping motor is in once it has reached a travel limit.
 _PHASE_AT_ENDPOINT: dict[int, Phase] = {100: Phase.AT_OPEN, 0: Phase.AT_CLOSED}
 
-# Slack after the press duration for the button's own OFF echo to arrive
-# before its pre-counted pending window lapses.
-_PRESS_ECHO_MARGIN = 2.0
+
+def _live(task: asyncio.Task | None) -> asyncio.Task | None:
+    """The task if it is still running, else None."""
+    return task if task is not None and not task.done() else None
 
 
 class SingleButtonModeCover(SwitchCoverTimeBased):
@@ -77,25 +74,24 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             False,
         )
 
-    def _start_press_sequence(
-        self, action: Action, *, arm_feedback: bool = False
-    ) -> None:
+    def _start_press_sequence(self, action: Action) -> None:
         """Plan from the current phase and schedule the press sequence.
 
         Callers must already have awaited _supersede_active_press() before
         calling this, so there is nothing live left to cancel here -- we
         only need to plan (from the now-settled phase) and schedule.
 
-        ``arm_feedback`` (a movement, not a stop) arms wait_for_relay_feedback
-        on the button. The arm has to be set here, synchronously: the base
-        consumes it the moment the command returns, before the first press
-        has gone out.
+        A movement arms wait_for_relay_feedback on the button. The arm has to
+        be set here, synchronously: the base consumes it the moment the command
+        returns, before the first press has gone out.
         """
         self._feedback_armed_entity = None
         phases = plan(self._phase, action)
         if not phases:
             return
-        armed = arm_feedback and self._arm_relay_feedback(self._open_switch_entity_id)
+        armed = action is not Action.STOP and self._arm_relay_feedback(
+            self._open_switch_entity_id
+        )
         self._press_task = self.hass.async_create_task(
             self._run_press_sequence(phases, mark_final_press=armed)
         )
@@ -128,8 +124,8 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         done/None while `_press_active` is still True, this still performs
         the same cleanup rather than trusting the task's own exit path.
         """
-        task = self._press_task
-        if task is not None and not task.done():
+        task = _live(self._press_task)
+        if task is not None:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
@@ -176,10 +172,8 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
                     self._mark_switch_pending(
                         entity_id,
                         2,
-                        timeout=max(
-                            ECHO_PENDING_WINDOW,
-                            RELAY_FEEDBACK_PENDING_TIMEOUT,
-                            self._pulse_time + _PRESS_ECHO_MARGIN,
+                        timeout=self._armed_echo_window(
+                            self._held_echo_window(self._pulse_time)
                         ),
                     )
                 await self.hass.services.async_call(
@@ -223,8 +217,9 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         await self._supersede_active_press()
 
     def _cancel_settle(self) -> None:
-        if self._settle_task is not None and not self._settle_task.done():
-            self._settle_task.cancel()
+        task = _live(self._settle_task)
+        if task is not None:
+            task.cancel()
         self._settle_task = None
 
     # --- removal / reload -----------------------------------------------
@@ -241,8 +236,9 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         unconditionally turn the button off so a press caught mid-pulse is
         not left latched ON.
         """
-        if self._press_task is not None and not self._press_task.done():
-            self._press_task.cancel()
+        task = _live(self._press_task)
+        if task is not None:
+            task.cancel()
         self._press_task = None
         self._cancel_settle()
         if self._open_switch_entity_id:
@@ -251,11 +247,11 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
     # --- the mode contract --------------------------------------------
     async def _send_open(self) -> None:
         await self._abort_press_plan()
-        self._start_press_sequence(Action.OPEN, arm_feedback=True)
+        self._start_press_sequence(Action.OPEN)
 
     async def _send_close(self) -> None:
         await self._abort_press_plan()
-        self._start_press_sequence(Action.CLOSE, arm_feedback=True)
+        self._start_press_sequence(Action.CLOSE)
 
     async def _send_stop(self) -> None:
         await self._abort_press_plan()
@@ -274,9 +270,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         """
         target = _PHASE_AT_ENDPOINT[endpoint]
         margin = self._endpoint_runon_time or 0
-        press = self._press_task
-        if press is not None and press.done():
-            press = None
+        press = _live(self._press_task)
         if press is None and margin <= 0:
             self._phase = target
             return
@@ -285,7 +279,9 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             self._settle_endpoint(press, margin, target)
         )
 
-    async def _settle_endpoint(self, press_task, margin, target) -> None:
+    async def _settle_endpoint(
+        self, press_task: asyncio.Task | None, margin: float, target: Phase
+    ) -> None:
         try:
             if press_task is not None:
                 # Passive: _supersede_active_press owns cancelling the

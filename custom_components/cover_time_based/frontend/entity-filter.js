@@ -16,10 +16,11 @@ export function filterEntitiesByValidEntries(entityRegistry, validConfigEntryIds
     .map((e) => e.entity_id);
 }
 
-// Modes that drive the entity as a timed press (turn_on, hold, turn_off) and
-// ignore its state, so a script — which turns itself off when it finishes —
-// works as well as a switch.
-const SCRIPT_CAPABLE_MODES = new Set(["pulse", "single_button"]);
+// Modes that drive the entity as a timed press — turn_on, hold for pulse_time,
+// turn_off — and ignore its state. That is why they show the Pulse time field
+// and why a script, which turns itself off when it finishes, works as well as
+// a switch.
+const TIMED_PRESS_MODES = new Set(["pulse", "single_button"]);
 
 /**
  * Entity-picker domains for switch-based control modes.
@@ -28,7 +29,7 @@ const SCRIPT_CAPABLE_MODES = new Set(["pulse", "single_button"]);
  * provide, so they stay switch-only.
  */
 export function switchPickerDomains(controlMode) {
-  return SCRIPT_CAPABLE_MODES.has(controlMode) ? ["switch", "script"] : ["switch"];
+  return TIMED_PRESS_MODES.has(controlMode) ? ["switch", "script"] : ["switch"];
 }
 
 /**
@@ -51,7 +52,7 @@ export function switchLabelKey(baseKey, controlMode) {
  * the relay — so pulse_time is irrelevant there.
  */
 export function showsPulseTime(controlMode) {
-  return controlMode === "pulse" || controlMode === "single_button";
+  return TIMED_PRESS_MODES.has(controlMode);
 }
 
 // CoverEntityFeature bit flags.
@@ -134,7 +135,7 @@ export function clearedEntitiesForMode(mode) {
  * every subsequent save fail with no visible cause.
  */
 export function clearedScriptEntities(mode, config) {
-  if (SCRIPT_CAPABLE_MODES.has(mode) || !config) return {};
+  if (TIMED_PRESS_MODES.has(mode) || !config) return {};
   const updates = {};
   for (const key of [
     "open_switch_entity_id",

@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from itertools import pairwise
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
@@ -9,6 +10,28 @@ from custom_components.cover_time_based.cover_single_button_mode import (
     SingleButtonModeCover,
 )
 from custom_components.cover_time_based.single_button_cycle import Phase
+from tests.conftest import stub_switches
+
+
+@contextlib.contextmanager
+def _gated_sleep():
+    """Park every sleep the mode makes on one gate, recording what it asked for.
+
+    Yields ``(gate, slept)``: set the gate to release every parked sleep, and
+    read ``slept`` to see which durations have been requested so far.
+    """
+    gate = asyncio.Event()
+    slept = []
+
+    async def gated_sleep(seconds):
+        slept.append(seconds)
+        await gate.wait()
+
+    with patch(
+        "custom_components.cover_time_based.cover_single_button_mode.sleep",
+        side_effect=gated_sleep,
+    ):
+        yield gate, slept
 
 
 def _make_sb_cover(button="switch.button", pulse_time=1.0, travel=30, feedback=False):
@@ -485,15 +508,8 @@ class TestEndpointReanchor:
         cover = _make_sb_cover()
         cover._endpoint_runon_time = None
         cover._phase = Phase.STOPPED_AFTER_UP  # OPEN from here is 3 presses
-        gate = asyncio.Event()
 
-        async def gated_sleep(_seconds):
-            await gate.wait()
-
-        with patch(
-            "custom_components.cover_time_based.cover_single_button_mode.sleep",
-            side_effect=gated_sleep,
-        ):
+        with _gated_sleep() as (gate, _slept):
             await cover._send_open()
             await asyncio.sleep(0)  # press 1 ON edge lands, pulse sleep parked
             assert cover._phase is Phase.MOVING_DOWN
@@ -512,17 +528,8 @@ class TestEndpointReanchor:
         cover = _make_sb_cover()
         cover._endpoint_runon_time = 2.0
         cover._phase = Phase.STOPPED_AFTER_UP
-        gate = asyncio.Event()
-        slept = []
 
-        async def gated_sleep(seconds):
-            slept.append(seconds)
-            await gate.wait()
-
-        with patch(
-            "custom_components.cover_time_based.cover_single_button_mode.sleep",
-            side_effect=gated_sleep,
-        ):
+        with _gated_sleep() as (gate, slept):
             await cover._send_open()
             await asyncio.sleep(0)
             cover._on_endpoint_reached(100)
@@ -545,15 +552,8 @@ class TestEndpointReanchor:
         cover = _make_sb_cover()
         cover._endpoint_runon_time = None
         cover._phase = Phase.STOPPED_AFTER_UP
-        gate = asyncio.Event()
 
-        async def gated_sleep(_seconds):
-            await gate.wait()
-
-        with patch(
-            "custom_components.cover_time_based.cover_single_button_mode.sleep",
-            side_effect=gated_sleep,
-        ):
+        with _gated_sleep() as (gate, _slept):
             await cover._send_open()
             await asyncio.sleep(0)
             cover._on_endpoint_reached(100)
@@ -789,14 +789,6 @@ class TestResyncCancelsInFlightPress:
         assert cover._phase is Phase.AT_OPEN
 
 
-def _stub_button_state(cover, *, on=False):
-    """A deterministic, non-optimistic button state for the feedback guards."""
-    state = MagicMock()
-    state.state = "on" if on else "off"
-    state.attributes = {}
-    cover.hass.states.get = lambda _entity_id: state
-
-
 class TestRelayFeedbackArming:
     """wait_for_relay_feedback anchors tracking on the press that starts the
     motor: the last press of the plan."""
@@ -804,18 +796,11 @@ class TestRelayFeedbackArming:
     @pytest.mark.asyncio
     async def test_movement_arms_the_button_and_counts_the_final_press(self):
         cover = _make_sb_cover(feedback=True)
-        _stub_button_state(cover)
+        stub_switches(cover)
         cover._phase = Phase.STOPPED_AFTER_UP  # OPEN = 3 presses
-        gate = asyncio.Event()
-
-        async def gated_sleep(_seconds):
-            await gate.wait()
 
         with (
-            patch(
-                "custom_components.cover_time_based.cover_single_button_mode.sleep",
-                side_effect=gated_sleep,
-            ),
+            _gated_sleep() as (gate, _slept),
             patch("custom_components.cover_time_based.cover_base.async_call_later"),
         ):
             await cover._send_open()
@@ -834,7 +819,7 @@ class TestRelayFeedbackArming:
     @pytest.mark.asyncio
     async def test_single_press_plan_counts_that_press(self):
         cover = _make_sb_cover(feedback=True)
-        _stub_button_state(cover)
+        stub_switches(cover)
         cover._phase = Phase.AT_CLOSED
         with (
             patch(
@@ -851,7 +836,7 @@ class TestRelayFeedbackArming:
     @pytest.mark.asyncio
     async def test_stop_never_arms(self):
         cover = _make_sb_cover(feedback=True)
-        _stub_button_state(cover)
+        stub_switches(cover)
         cover._phase = Phase.MOVING_UP
         with (
             patch(
@@ -868,7 +853,7 @@ class TestRelayFeedbackArming:
     @pytest.mark.asyncio
     async def test_empty_plan_does_not_arm(self):
         cover = _make_sb_cover(feedback=True)
-        _stub_button_state(cover)
+        stub_switches(cover)
         cover._phase = Phase.MOVING_UP  # OPEN already satisfied
         await cover._send_open()
         assert cover._consume_feedback_arm() is None
@@ -877,7 +862,7 @@ class TestRelayFeedbackArming:
     @pytest.mark.asyncio
     async def test_option_off_arms_and_counts_nothing(self):
         cover = _make_sb_cover(feedback=False)
-        _stub_button_state(cover)
+        stub_switches(cover)
         cover._phase = Phase.AT_CLOSED
         with patch(
             "custom_components.cover_time_based.cover_single_button_mode.sleep",

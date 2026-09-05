@@ -50,6 +50,7 @@ from .const import (
     CONF_WAIT_FOR_RELAY_FEEDBACK,
     DIRECTION_CHANGE_DELAY,
     ECHO_PENDING_WINDOW,
+    PULSE_ECHO_MARGIN,
     RELAY_FEEDBACK_PENDING_TIMEOUT,
     RELAY_FEEDBACK_TIMEOUT,
     RESYNC_POSITIONS,
@@ -3910,6 +3911,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._feedback_armed_entity = None
         return entity_id
 
+    def _held_echo_window(self, hold_time) -> float:
+        """Pending window for an output held ON for ``hold_time``, then released.
+
+        The release's own OFF echo arrives after the hold, so the window has to
+        outlast it; the default window still applies to a short hold.
+        """
+        return max(ECHO_PENDING_WINDOW, hold_time + PULSE_ECHO_MARGIN)
+
+    def _armed_echo_window(self, base_timeout) -> float:
+        """Widen a pending window for an armed relay-feedback wait.
+
+        The awaited confirmation may arrive any time up to the feedback
+        timeout, and must still be filtered as our own echo when it does.
+        """
+        return max(base_timeout, RELAY_FEEDBACK_PENDING_TIMEOUT)
+
     def _mark_driving_relay_pending(
         self,
         entity_id,
@@ -3937,7 +3954,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._mark_switch_pending(
                 entity_id,
                 expected_transitions,
-                timeout=max(base_timeout, RELAY_FEEDBACK_PENDING_TIMEOUT),
+                timeout=self._armed_echo_window(base_timeout),
             )
         else:
             self._mark_switch_pending(

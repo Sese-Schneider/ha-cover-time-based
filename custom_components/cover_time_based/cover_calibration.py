@@ -450,10 +450,11 @@ class CalibrationMixin:
                     # A stop pulse would be a movement command on this
                     # hardware (#153/#133), so nothing is sent. The motor is
                     # therefore at the limit only if it was being driven
-                    # continuously towards one; the overhead test's stepped
-                    # phase parks it between the limits, and there the honest
-                    # position is the unchanged one. A timeout is never a
-                    # user cancel.
+                    # continuously towards one. A stepped test's motor is
+                    # either parked in an inter-step pause or still driving a
+                    # step the cancelled automation task never stops, so its
+                    # position is simply unknown and must be left alone. A
+                    # timeout is never a user cancel.
                     if self._driven_continuously_to_endpoint():
                         self._set_position_after_calibration(self._calibration)
                 else:
@@ -473,15 +474,15 @@ class CalibrationMixin:
         """Is the running calibration driving the motor at a limit right now?
 
         True for the travel/tilt time tests, which run to the endpoint from
-        the first command, and for the overhead test once it reaches its
-        final continuous step. False during the overhead test's stepped
-        phase, where the motor is parked part-way.
+        the first command, and for a stepped test once it reaches its final
+        continuous step. False during a stepped test's stepped phase, where
+        the motor is somewhere between the limits.
         """
         assert self._calibration is not None
-        attribute = self._calibration.attribute
-        if "travel_time" in attribute or "tilt_time" in attribute:
-            return True
-        return self._calibration.final_step
+        return (
+            self._calibration.attribute not in STEPPED_CALIBRATION_ATTRIBUTES
+            or self._calibration.final_step
+        )
 
     async def stop_calibration(self, **kwargs):
         """Stop an in-progress calibration test."""

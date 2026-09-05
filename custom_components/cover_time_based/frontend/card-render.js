@@ -1,7 +1,7 @@
 import { html } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import { renderTextfield } from "./textfield-render.js";
 import { switchPickerDomains, showsPulseTime } from "./entity-filter.js";
-import { TIMING_ATTRIBUTES } from "./constants.js";
+import { STEPPED_CALIBRATION_ATTRIBUTES, TIMING_ATTRIBUTES } from "./constants.js";
 import { renderLanguageBanner, GITHUB_REPO_URL } from "./language-banner.js";
 
 // Deep-link to the README section documenting the position-reporting profiles,
@@ -856,8 +856,7 @@ export function renderCalibration(card, calibrating) {
   const isSingleButton = card._config?.control_mode === "single_button";
   const availableAttributes = TIMING_ATTRIBUTES.filter(([key]) => {
     if (!hasTiltCalibration && key.startsWith("tilt_")) return false;
-    if (isSingleButton && (key.endsWith("_startup_delay") || key === "min_movement_time"))
-      return false;
+    if (isSingleButton && STEPPED_CALIBRATION_ATTRIBUTES.has(key)) return false;
     return true;
   });
 
