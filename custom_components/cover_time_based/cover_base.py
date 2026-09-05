@@ -2666,19 +2666,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     def auto_updater_hook(self, _now):
         """Call for the autoupdater.
 
-        Ticks every 100 ms while moving, but the integer position changes far
-        less often on a long travel: write state only when the snapshot the
-        UI sees has changed, and spawn the auto-stop only on arrival — its
-        body is entirely inside the same position_reached check.
+        Write only when the snapshot the UI sees changed; spawn the auto-stop
+        only on arrival.
         """
-        snapshot = (
-            self.travel_calc.current_position(),
-            self.tilt_calc.current_position() if self._has_tilt_support() else None,
-        )
+        snapshot = (self.current_cover_position, self.current_cover_tilt_position)
         if snapshot != self._auto_updater_last_written:
             self._auto_updater_last_written = snapshot
             self.async_schedule_update_ha_state()
-        if self.position_reached():
+        if self.position_reached(snapshot):
             self._log("auto_updater_hook :: position_reached")
             self.stop_auto_updater()
             self.hass.async_create_task(self.auto_stop_if_necessary())
@@ -2690,10 +2685,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._unsubscribe_auto_updater()
             self._unsubscribe_auto_updater = None
 
-    def position_reached(self):
-        """Return if cover has reached its final position."""
-        return self.travel_calc.position_reached() and (
-            not self._has_tilt_support() or self.tilt_calc.position_reached()
+    def position_reached(self, snapshot=None):
+        """Return if cover has reached its final position.
+
+        ``snapshot`` is a ``(position, tilt_position)`` pair a caller already
+        computed (the auto-updater tick), handed down so neither calculator
+        recalculates. Its tilt member is ignored when tilt is unsupported.
+        """
+        travel_pos, tilt_pos = (None, None) if snapshot is None else snapshot
+        return self.travel_calc.position_reached(travel_pos) and (
+            not self._has_tilt_support() or self.tilt_calc.position_reached(tilt_pos)
         )
 
     # -----------------------------------------------------------------------
@@ -2701,7 +2702,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # -----------------------------------------------------------------------
 
     async def auto_stop_if_necessary(self):
-        """Do auto stop if necessary."""
+        """Do auto stop if necessary.
+
+        ``auto_updater_hook`` spawns this only on arrival, so anything added
+        outside the ``position_reached`` check below would never run for it.
+        """
         if self.position_reached():
             self._log(
                 "auto_stop_if_necessary :: position reached (self_initiated=%s)",

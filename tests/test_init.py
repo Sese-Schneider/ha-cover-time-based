@@ -20,6 +20,7 @@ from custom_components.cover_time_based import (
 from custom_components.cover_time_based.card_resources import (
     _CARD_INSTALLED_ISSUE,
     _RESOURCE_ID_KEY,
+    async_register_card_resource,
 )
 from custom_components.cover_time_based.const import DOMAIN
 
@@ -581,7 +582,7 @@ class TestCardResourceUnregistration:
     @pytest.mark.asyncio
     async def test_failed_delete_still_clears_recorded_id(self):
         """A hand-deleted resource makes async_delete_item raise. The recorded
-        id must still be dropped, or the setup-entry guard would skip
+        id must still be dropped, or the registrar's guard would skip
         re-registration for the rest of the session."""
         resources = FakeResources(
             items=[{"id": "new-id", "url": _CARD_JS_URL}], loaded=True
@@ -599,14 +600,12 @@ class TestCardResourceUnregistration:
 
         assert _RESOURCE_ID_KEY not in hass.data[DOMAIN]
 
-        # ...so re-adding a cover in the same session registers the card again.
+        # ...so re-adding a cover in the same session registers the card again:
+        # the real registrar rescans, finds the still-present resource by URL
+        # and re-records its id.
         hass.config_entries.async_forward_entry_setups = AsyncMock()
-        with patch(
-            "custom_components.cover_time_based.async_register_card_resource",
-            AsyncMock(),
-        ) as reg:
-            await async_setup_entry(hass, entry)
-        reg.assert_awaited_once()
+        await async_setup_entry(hass, entry)
+        assert hass.data[DOMAIN][_RESOURCE_ID_KEY] == "new-id"
 
     @pytest.mark.asyncio
     async def test_remove_last_entry_falls_back_to_remove_extra_js_url(self):
@@ -632,31 +631,30 @@ class TestCardResourceUnregistration:
 
 
 class TestCardResourceRegisteredOnce:
-    """Each config entry's setup must not rescan every Lovelace resource once
-    the card's resource id is already recorded for this session."""
+    """Registering the card must not rescan every Lovelace resource once the
+    resource id is already recorded for this session — every config entry's
+    setup calls the registrar."""
 
     @pytest.mark.asyncio
-    async def test_setup_entry_skips_registration_when_recorded(self):
-        hass = MagicMock()
-        hass.data = {DOMAIN: {_RESOURCE_ID_KEY: "abc"}}
-        hass.config_entries.async_forward_entry_setups = AsyncMock()
-        entry = MagicMock()
-        with patch(
-            "custom_components.cover_time_based.async_register_card_resource",
-            AsyncMock(),
-        ) as reg:
-            await async_setup_entry(hass, entry)
-        reg.assert_not_awaited()
+    async def test_register_returns_early_when_id_recorded(self):
+        resources = FakeResources()
+        resources.async_items = MagicMock(wraps=resources.async_items)
+        resources.async_create_item = AsyncMock(wraps=resources.async_create_item)
+        hass = _make_setup_hass(resources)
+        hass.data[DOMAIN] = {_RESOURCE_ID_KEY: "abc"}
+
+        await async_register_card_resource(hass, _CARD_BASE_URL, _CARD_JS_URL)
+
+        resources.async_items.assert_not_called()
+        resources.async_create_item.assert_not_awaited()
+        assert hass.data[DOMAIN][_RESOURCE_ID_KEY] == "abc"
 
     @pytest.mark.asyncio
-    async def test_setup_entry_registers_when_not_recorded(self):
-        hass = MagicMock()
-        hass.data = {}
-        hass.config_entries.async_forward_entry_setups = AsyncMock()
-        entry = MagicMock()
-        with patch(
-            "custom_components.cover_time_based.async_register_card_resource",
-            AsyncMock(),
-        ) as reg:
-            await async_setup_entry(hass, entry)
-        reg.assert_awaited_once()
+    async def test_register_creates_resource_when_id_not_recorded(self):
+        resources = FakeResources()
+        hass = _make_setup_hass(resources)
+
+        await async_register_card_resource(hass, _CARD_BASE_URL, _CARD_JS_URL)
+
+        assert resources.created == [{"res_type": "module", "url": _CARD_JS_URL}]
+        assert hass.data[DOMAIN][_RESOURCE_ID_KEY] == "new-id"

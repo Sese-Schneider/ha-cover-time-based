@@ -135,14 +135,15 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Wrapped mode drives the wrapped cover entity for all tilt."""
         return self._cover_entity_id
 
-    def _wrapped_features(self) -> int | None:
+    def _wrapped_features(self, *, state=None) -> int | None:
         """Return the wrapped entity's supported_features bitmask, or None.
 
         None means "unknown" — the entity is missing, unavailable, or reports
         no integer feature bitmask. Mirrors _wrapped_supports_tilt's treatment
-        of an offline entity as "don't assume capabilities".
+        of an offline entity as "don't assume capabilities". ``state`` lets a
+        caller that already holds the entity's state skip the machine read.
         """
-        state = self.hass.states.get(self._cover_entity_id)
+        state = self.hass.states.get(self._cover_entity_id) if state is None else state
         if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return None
         features = state.attributes.get(ATTR_SUPPORTED_FEATURES)
@@ -154,8 +155,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         """Return True if the wrapped cover advertises native SET_POSITION.
 
         ``features`` lets a caller that already fetched the bitmask reuse it;
-        None means fetch. Every fetch is a state-machine read, and one decision
-        used to make several.
+        None means fetch. One decision reads the state machine once and judges
+        the whole chain against the same bitmask, so it can't answer half its
+        questions from a capability set that changed mid-decision.
         """
         features = self._wrapped_features() if features is None else features
         return features is not None and bool(features & CoverEntityFeature.SET_POSITION)
@@ -257,7 +259,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
         The bitmask is fetched once here and threaded through the decision:
         the chain below would otherwise read the state machine up to 3 times.
         """
-        if self._use_native_set_position(features=self._wrapped_features()):
+        features = self._wrapped_features()
+        # Unknown capabilities: every support helper answers False on None, so
+        # the decision below can only land on the timed driver.
+        if features is None:
+            return self._timed_position_driver
+        if self._use_native_set_position(features=features):
             return self._native_position_driver
         return self._timed_position_driver
 
@@ -710,7 +717,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
         the coupling model owns the tilt tracker, so we must not clobber it.
         Skipped while our own tilt animation is still in flight.
         """
-        if not self._use_native_tilt():
+        # A caller-supplied state already carries the feature bitmask; without
+        # one, leave the fetch to the gate so it stays behind the cheap checks.
+        features = None if state is None else self._wrapped_features(state=state)
+        if not self._use_native_tilt(features=features):
             return
         if self.tilt_calc.is_traveling():
             return

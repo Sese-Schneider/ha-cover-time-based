@@ -222,9 +222,14 @@ class TravelCalculator:
             self.is_traveling() and self.travel_direction == TravelStatus.DIRECTION_DOWN
         )
 
-    def position_reached(self) -> bool:
-        """Return if cover has reached designated position."""
-        return self.current_position() == self._travel_to_position
+    def position_reached(self, current: int | None = None) -> bool:
+        """Return if cover has reached designated position.
+
+        ``current`` lets a caller that already computed the position (the
+        auto-updater tick) pass it in rather than recalculating it.
+        """
+        current = self.current_position() if current is None else current
+        return current == self._travel_to_position
 
     def is_open(self) -> bool:
         """Return if cover is (fully) open."""

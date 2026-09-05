@@ -345,15 +345,22 @@ class TestRemoveFromHass:
 # ===================================================================
 
 
+@pytest.fixture
+def traveling_cover(make_cover):
+    """A cover part-way through a 0 → 100 travel, with the updater torn down."""
+    cover = make_cover()
+    cover.travel_calc.set_position(0)
+    cover.travel_calc.start_travel(100)
+    yield cover
+    cover.stop_auto_updater()
+
+
 class TestAutoUpdaterHook:
     """Test the periodic auto-updater callback."""
 
     @pytest.mark.asyncio
-    async def test_auto_updater_hook_calls_update(self, make_cover):
-        cover = make_cover()
-        cover.travel_calc.set_position(0)
-        cover.travel_calc.start_travel(100)
-
+    async def test_auto_updater_hook_calls_update(self, traveling_cover):
+        cover = traveling_cover
         mock_update = MagicMock()
         with (
             patch.object(cover, "async_schedule_update_ha_state", mock_update),
@@ -388,23 +395,18 @@ class TestAutoUpdaterTickCost:
     spawns the auto-stop task only when the position is reached."""
 
     @pytest.mark.asyncio
-    async def test_unchanged_position_writes_once(self, make_cover):
-        cover = make_cover()
-        cover.travel_calc.set_position(0)
-        cover.travel_calc.start_travel(100)
+    async def test_unchanged_position_writes_once(self, traveling_cover):
+        cover = traveling_cover
         cover.start_auto_updater()
         mock_update = MagicMock()
         with patch.object(cover, "async_schedule_update_ha_state", mock_update):
             for _ in range(5):  # microseconds apart: the integer position is the same
                 cover.auto_updater_hook(None)
         assert mock_update.call_count == 1
-        cover.stop_auto_updater()
 
     @pytest.mark.asyncio
-    async def test_changed_position_writes_again(self, make_cover):
-        cover = make_cover()
-        cover.travel_calc.set_position(0)
-        cover.travel_calc.start_travel(100)
+    async def test_changed_position_writes_again(self, traveling_cover):
+        cover = traveling_cover
         cover.start_auto_updater()
         mock_update = MagicMock()
         with patch.object(cover, "async_schedule_update_ha_state", mock_update):
@@ -413,13 +415,10 @@ class TestAutoUpdaterTickCost:
             cover.travel_calc.start_travel(100)
             cover.auto_updater_hook(None)
         assert mock_update.call_count == 2
-        cover.stop_auto_updater()
 
     @pytest.mark.asyncio
-    async def test_restart_writes_on_first_tick(self, make_cover):
-        cover = make_cover()
-        cover.travel_calc.set_position(0)
-        cover.travel_calc.start_travel(100)
+    async def test_restart_writes_on_first_tick(self, traveling_cover):
+        cover = traveling_cover
         mock_update = MagicMock()
         with patch.object(cover, "async_schedule_update_ha_state", mock_update):
             cover.start_auto_updater()
@@ -428,13 +427,10 @@ class TestAutoUpdaterTickCost:
             cover.start_auto_updater()
             cover.auto_updater_hook(None)
         assert mock_update.call_count == 2
-        cover.stop_auto_updater()
 
     @pytest.mark.asyncio
-    async def test_no_stop_task_before_arrival(self, make_cover):
-        cover = make_cover()
-        cover.travel_calc.set_position(0)
-        cover.travel_calc.start_travel(100)
+    async def test_no_stop_task_before_arrival(self, traveling_cover):
+        cover = traveling_cover
         with patch.object(cover, "async_schedule_update_ha_state"):
             cover.auto_updater_hook(None)
         assert cover.hass._test_tasks == []
@@ -1432,7 +1428,7 @@ class TestResyncAllModes:
 
 
 class TestLogGuard:
-    def test_log_skips_logger_when_debug_off(self, make_cover, caplog):
+    def test_log_skips_logger_when_debug_off(self, make_cover):
         cover = make_cover()
         with (
             patch(

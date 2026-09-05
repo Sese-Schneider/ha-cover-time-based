@@ -43,11 +43,6 @@ def _record_resource_id(hass: HomeAssistant, resource_id: str) -> None:
     hass.data.setdefault(DOMAIN, {})[_RESOURCE_ID_KEY] = resource_id
 
 
-def card_resource_registered(hass: HomeAssistant) -> bool:
-    """Whether this session already recorded the card's Lovelace resource id."""
-    return _RESOURCE_ID_KEY in hass.data.get(DOMAIN, {})
-
-
 def _create_refresh_issue(hass: HomeAssistant) -> None:
     """Raise a repair issue telling the user to hard-refresh for the new card.
 
@@ -88,6 +83,13 @@ async def async_register_card_resource(
     place; ``card_url`` is the current, content-hashed URL. Falls back to
     ``add_extra_js_url`` if the Lovelace resource store isn't available.
     """
+    # Once recorded for this session the resource exists; every further entry
+    # setup would only rescan every Lovelace resource to reach the same state.
+    # async_unregister_card_resource pops the id, so a re-add after the last
+    # removal registers again.
+    if _RESOURCE_ID_KEY in hass.data.get(DOMAIN, {}):
+        return
+
     # Set only when the resource is created for the first time — the sole case
     # that warrants a refresh prompt (see _create_refresh_issue for why).
     installed = False
@@ -166,8 +168,8 @@ async def async_unregister_card_resource(
 
     # Dropped before the delete, not after it: once we've decided the resource
     # is going, a stale id must not survive a failed delete (a hand-deleted
-    # resource makes it raise) — async_setup_entry treats a recorded id as
-    # "already registered" and would skip re-registering for the session. A
+    # resource makes it raise) — async_register_card_resource treats a recorded
+    # id as "already registered" and would skip re-registering for the session. A
     # transient failure is safe: the next register rescans by URL and re-records.
     hass.data.get(DOMAIN, {}).pop(_RESOURCE_ID_KEY, None)
     try:
