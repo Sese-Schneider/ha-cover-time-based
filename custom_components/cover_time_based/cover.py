@@ -11,7 +11,6 @@ from homeassistant.components.cover import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    ATTR_ENTITY_ID,
     CONF_NAME,
 )
 from homeassistant.core import HomeAssistant, SupportsResponse
@@ -220,17 +219,15 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     }
 )
 
-POSITION_SCHEMA = cv.make_entity_service_schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
-        vol.Required(ATTR_POSITION): cv.positive_int,
-    }
-)
+# HA's own ATTR_POSITION range; anything above 100 would be tracked and
+# persisted as a position the calculator then travels *from*.
+PERCENT = vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
+
+# No explicit entity_id key: make_entity_service_schema supplies the optional
+# entity/device/area/label targets services.yaml advertises and requires one.
+POSITION_SCHEMA = cv.make_entity_service_schema({vol.Required(ATTR_POSITION): PERCENT})
 TILT_POSITION_SCHEMA = cv.make_entity_service_schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
-        vol.Required(ATTR_TILT_POSITION): cv.positive_int,
-    }
+    {vol.Required(ATTR_TILT_POSITION): PERCENT}
 )
 RESYNC_SCHEMA = {vol.Required("state"): vol.In(list(RESYNC_POSITIONS))}
 

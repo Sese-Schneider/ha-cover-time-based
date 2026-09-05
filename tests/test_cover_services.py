@@ -16,8 +16,10 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
     CONTROL_MODE_SWITCH,
+    POSITION_SCHEMA,
     SERVICE_START_CALIBRATION,
     SERVICE_STOP_CALIBRATION,
+    TILT_POSITION_SCHEMA,
     _admin_only,
     _create_cover_from_options,
     _register_services,
@@ -340,3 +342,48 @@ class TestServiceFieldTranslationsMatchServicesYaml:
         for service in ("start_calibration", "stop_calibration"):
             assert "entity_id" in yaml_fields[service]
             assert "entity_id" in strings_fields[service]
+
+
+# ---------------------------------------------------------------------------
+# set_known_position / set_known_tilt_position schemas
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("schema", "field"),
+    [(POSITION_SCHEMA, "position"), (TILT_POSITION_SCHEMA, "tilt_position")],
+    ids=["position", "tilt_position"],
+)
+class TestKnownPositionSchemas:
+    """Both services are target-based (services.yaml declares `target:`), so
+    they must accept any HA target kind, and their percent must stay in
+    0..100 — a value above 100 used to be tracked, persisted, and turned the
+    next close into a 1.5x-travel move."""
+
+    def test_above_100_rejected(self, schema, field):
+        with pytest.raises(vol.Invalid):
+            schema({"entity_id": "cover.x", field: 150})
+
+    def test_negative_rejected(self, schema, field):
+        with pytest.raises(vol.Invalid):
+            schema({"entity_id": "cover.x", field: -1})
+
+    def test_endpoints_accepted(self, schema, field):
+        assert schema({"entity_id": "cover.x", field: 0})[field] == 0
+        assert schema({"entity_id": "cover.x", field: 100})[field] == 100
+
+    def test_string_coerced_to_int(self, schema, field):
+        assert schema({"entity_id": "cover.x", field: "50"})[field] == 50
+
+    def test_area_target_accepted(self, schema, field):
+        assert schema({"area_id": "kitchen", field: 50})["area_id"] == ["kitchen"]
+
+    def test_device_target_accepted(self, schema, field):
+        assert schema({"device_id": "abc123", field: 50})["device_id"] == ["abc123"]
+
+    def test_label_target_accepted(self, schema, field):
+        assert schema({"label_id": "blinds", field: 50})["label_id"] == ["blinds"]
+
+    def test_some_target_required(self, schema, field):
+        with pytest.raises(vol.Invalid):
+            schema({field: 50})

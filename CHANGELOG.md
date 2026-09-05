@@ -11,6 +11,7 @@
 ### Fixes
 
 - **The configuration card's backend websocket commands and the `start_calibration` / `stop_calibration` actions now require an administrator account**: they accepted any authenticated user, including read-only ones, and now return `unauthorized` for non-administrators, matching how Home Assistant itself gates configuration changes.
+- **`set_known_position` and `set_known_tilt_position` now accept area, device and label targets and reject values outside 0–100**: the action editor offered areas and devices, but only an entity target validated; and a position above 100 was accepted and tracked, so the next close ran for longer than a full travel.
 
 ## 4.11.0 (2026-08-04)
 
