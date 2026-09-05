@@ -244,7 +244,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
 
     def _log(self, msg, *args):
-        """Log a debug message prefixed with the entity ID."""
+        """Log a debug message prefixed with the entity ID.
+
+        Guarded: this is called on every tick and event, so the format
+        concat and the logger call must cost nothing with DEBUG off.
+        """
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
         _LOGGER.debug("(%s) " + msg, self.entity_id, *args)
 
     def _extra_persist_data(self) -> dict:

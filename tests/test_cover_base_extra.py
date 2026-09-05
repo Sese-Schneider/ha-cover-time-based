@@ -1424,3 +1424,38 @@ class TestResyncAllModes:
             await cover.async_resync("closed")
 
         assert not hasattr(cover, "_phase")
+
+
+# ===================================================================
+# _log guard
+# ===================================================================
+
+
+class TestLogGuard:
+    def test_log_skips_logger_when_debug_off(self, make_cover, caplog):
+        cover = make_cover()
+        with (
+            patch(
+                "custom_components.cover_time_based.cover_base._LOGGER.isEnabledFor",
+                return_value=False,
+            ),
+            patch(
+                "custom_components.cover_time_based.cover_base._LOGGER.debug"
+            ) as debug,
+        ):
+            cover._log("hello %s", "world")
+        debug.assert_not_called()
+
+    def test_log_logs_when_debug_on(self, make_cover):
+        cover = make_cover()
+        with (
+            patch(
+                "custom_components.cover_time_based.cover_base._LOGGER.isEnabledFor",
+                return_value=True,
+            ),
+            patch(
+                "custom_components.cover_time_based.cover_base._LOGGER.debug"
+            ) as debug,
+        ):
+            cover._log("hello %s", "world")
+        debug.assert_called_once()
