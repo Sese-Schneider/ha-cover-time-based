@@ -708,6 +708,88 @@ class TestRelayFeedbackToggleMode:
         )
 
 
+class TestToggleStopWaitsForConfirmation:
+    """A toggle stop is a tap on the driving relay; tapped before the relay's
+    ON echo lands it can be swallowed, leaving the motor running untracked."""
+
+    @staticmethod
+    def _taps(cover):
+        """The relay taps (``turn_on``) sent through the mock service bus."""
+        return [
+            c.args
+            for c in cover.hass.services.async_call.await_args_list
+            if c.args[1] == "turn_on"
+        ]
+
+    @pytest.mark.asyncio
+    async def test_stop_during_wait_is_deferred_until_the_echo(self, make_cover):
+        cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+            assert cover._feedback_wait_entity == "switch.open"
+            cover.hass.services.async_call.reset_mock()
+
+            stop = asyncio.ensure_future(cover.async_stop_cover())
+            await asyncio.sleep(0)
+            # No tap yet: the relay has not confirmed.
+            assert cover.hass.services.async_call.await_count == 0
+
+            await cover._async_switch_state_changed(
+                _echo_event("switch.open", "off", "on", datetime.now(UTC))
+            )
+            await stop
+
+        # Exactly one tap, after the confirmation.
+        assert len(self._taps(cover)) == 1
+        assert cover.travel_calc.is_traveling() is False
+
+    @pytest.mark.asyncio
+    async def test_stop_gives_up_waiting_after_the_timeout(self, make_cover):
+        cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+
+        with (
+            patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.02),
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+            cover.hass.services.async_call.reset_mock()
+            await cover.async_stop_cover()
+
+        assert len(self._taps(cover)) == 1
+
+    @pytest.mark.asyncio
+    async def test_stop_with_no_pending_wait_taps_immediately(self, make_cover):
+        """The deferral is confined to a live wait: with the option on but the
+        relay already confirmed, the stop still goes out inline."""
+        cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
+        _stub_switches(cover)
+        cover.travel_calc.set_position(0)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+            await cover._async_switch_state_changed(
+                _echo_event("switch.open", "off", "on", datetime.now(UTC))
+            )
+            await asyncio.sleep(0)
+            assert cover._feedback_wait_future is None
+            cover.hass.services.async_call.reset_mock()
+
+            stop = asyncio.ensure_future(cover.async_stop_cover())
+            await asyncio.sleep(0)
+            assert self._taps(cover)
+            await stop
+
+        assert len(self._taps(cover)) == 1
+
+
 class TestRelayFeedbackToggleOppositeMode:
     """Toggle-opposite shares ToggleBaseCover's send path, so the same arming
     applies — one smoke test proves the inheritance rather than re-covering it."""

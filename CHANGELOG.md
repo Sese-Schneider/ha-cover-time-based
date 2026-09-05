@@ -20,6 +20,7 @@
 - **The card's raw open/close/stop buttons now leave the position unknown across a restart**: they cleared the tracked position but the stored one was never overwritten, so after a restart the cover re-anchored at the stale pre-command value. A stop on a cover whose position is unknown now persists it as unknown too.
 - **"Wait for relay confirmation" no longer loses the first ten seconds of a move when the relay never confirms**: the fallback used to start tracking at the moment it gave up waiting, so a relay whose ON report was dropped ran untracked for the whole wait. Tracking is now anchored on the command time, as it is with the option off.
 - **"Wait for relay confirmation": a stop pressed while the relay's confirmation is still outstanding no longer causes the late confirmation to be read as a wall-switch press.**
+- **Toggle covers with "Wait for relay confirmation": a stop pressed before the relay confirms is now sent after the confirmation**, so the stop tap can no longer be swallowed while the motor runs on untracked.
 
 ## 4.11.0 (2026-08-04)
 
