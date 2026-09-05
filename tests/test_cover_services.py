@@ -355,10 +355,8 @@ class TestServiceFieldTranslationsMatchServicesYaml:
     ids=["position", "tilt_position"],
 )
 class TestKnownPositionSchemas:
-    """Both services are target-based (services.yaml declares `target:`), so
-    they must accept any HA target kind, and their percent must stay in
-    0..100 — a value above 100 used to be tracked, persisted, and turned the
-    next close into a 1.5x-travel move."""
+    """Pins what both known-position services accept: any HA target kind, and
+    a percent within 0..100."""
 
     def test_above_100_rejected(self, schema, field):
         with pytest.raises(vol.Invalid):
@@ -375,14 +373,12 @@ class TestKnownPositionSchemas:
     def test_string_coerced_to_int(self, schema, field):
         assert schema({"entity_id": "cover.x", field: "50"})[field] == 50
 
-    def test_area_target_accepted(self, schema, field):
-        assert schema({"area_id": "kitchen", field: 50})["area_id"] == ["kitchen"]
-
-    def test_device_target_accepted(self, schema, field):
-        assert schema({"device_id": "abc123", field: 50})["device_id"] == ["abc123"]
-
-    def test_label_target_accepted(self, schema, field):
-        assert schema({"label_id": "blinds", field: 50})["label_id"] == ["blinds"]
+    @pytest.mark.parametrize(
+        ("key", "value"),
+        [("area_id", "kitchen"), ("device_id", "abc123"), ("label_id", "blinds")],
+    )
+    def test_target_kinds_accepted(self, schema, field, key, value):
+        assert schema({key: value, field: 50})[key] == [value]
 
     def test_some_target_required(self, schema, field):
         with pytest.raises(vol.Invalid):

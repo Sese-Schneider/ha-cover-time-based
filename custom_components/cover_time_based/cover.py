@@ -136,10 +136,12 @@ BASE_DEVICE_SCHEMA = {
     vol.Required(CONF_NAME): cv.string,
 }
 
-# A zero travel, tilt or pulse time makes every move "arrive" on the first
-# tracker tick while the relay still fires; the websocket schema rejects it
-# with the same floor. Startup delays and run-on times may legitimately be 0.
-NONZERO_DURATION = vol.All(vol.Coerce(float), vol.Range(min=0.1))
+# The floor shared by the YAML and websocket schemas: a zero travel, tilt or
+# pulse time makes every move "arrive" on the first tracker tick while the
+# relay still fires. Startup delays and run-on times may legitimately be 0.
+MIN_DURATION = 0.1
+NONZERO_DURATION = vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION))
+NULLABLE_DURATION = vol.Any(NONZERO_DURATION, None)
 
 TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT): cv.boolean,
@@ -179,18 +181,10 @@ DEFAULTS_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
         vol.Optional(CONF_INPUT_MODE): vol.In(INPUT_MODE_VALUES),
-        vol.Optional(CONF_TRAVELLING_TIME_DOWN, default=None): vol.Any(
-            NONZERO_DURATION, None
-        ),
-        vol.Optional(CONF_TRAVELLING_TIME_UP, default=None): vol.Any(
-            NONZERO_DURATION, None
-        ),
-        vol.Optional(CONF_TILTING_TIME_DOWN, default=None): vol.Any(
-            NONZERO_DURATION, None
-        ),
-        vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(
-            NONZERO_DURATION, None
-        ),
+        vol.Optional(CONF_TRAVELLING_TIME_DOWN, default=None): NULLABLE_DURATION,
+        vol.Optional(CONF_TRAVELLING_TIME_UP, default=None): NULLABLE_DURATION,
+        vol.Optional(CONF_TILTING_TIME_DOWN, default=None): NULLABLE_DURATION,
+        vol.Optional(CONF_TILTING_TIME_UP, default=None): NULLABLE_DURATION,
         vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
             cv.positive_float, None
         ),
