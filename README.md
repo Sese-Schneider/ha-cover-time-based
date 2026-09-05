@@ -544,7 +544,9 @@ value differently: there is no relay to hold, since the motor self-stops, so
 this becomes the **settle margin** — how long the integration keeps treating
 the motor as still travelling past its estimated arrival time before it locks
 in the endpoint, snapping the tracked position to 0 or 100 and marking the
-phase settled. It is a wait, not a relay hold.
+phase settled. It is a wait, not a relay hold. If the presses that started the
+move are still being sent when the estimated arrival time passes, the wait
+starts once the last press has gone out.
 
 ### Minimum movement time
 

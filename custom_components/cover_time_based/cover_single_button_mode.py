@@ -17,6 +17,9 @@ from .const import DIRECTION_CHANGE_DELAY
 from .cover_switch import SwitchCoverTimeBased
 from .single_button_cycle import Action, Phase, plan
 
+# The phase a self-stopping motor is in once it has reached a travel limit.
+_PHASE_AT_ENDPOINT: dict[int, Phase] = {100: Phase.AT_OPEN, 0: Phase.AT_CLOSED}
+
 
 class SingleButtonModeCover(SwitchCoverTimeBased):
     """A cover driven by a single cycling button."""
@@ -229,21 +232,36 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
     # --- endpoint re-anchor -------------------------------------------
     def _on_endpoint_reached(self, endpoint: int) -> None:
-        target = Phase.AT_OPEN if endpoint == 100 else Phase.AT_CLOSED
-        margin = self._endpoint_runon_time
-        if not margin or margin <= 0:
+        """Anchor the phase at the limit the tracker just reached.
+
+        The tracker counts from the command, but the motor only moves once the
+        press sequence has delivered its last press -- for a short move that is
+        after the tracker's arrival. An anchor written while presses are still
+        to come would be overwritten by them, so it waits for the sequence, and
+        then for the settle margin (endpoint_runon_time), during which a
+        re-press still predicts STOP rather than a reversal.
+        """
+        target = _PHASE_AT_ENDPOINT[endpoint]
+        margin = self._endpoint_runon_time or 0
+        press = self._press_task
+        if press is not None and press.done():
+            press = None
+        if press is None and margin <= 0:
             self._phase = target
             return
-        # Keep the moving phase for a settle margin so a re-press during the
-        # motor's final run predicts STOP, not a reversal; then anchor.
         self._cancel_settle()
         self._settle_task = self.hass.async_create_task(
-            self._settle_endpoint(margin, target)
+            self._settle_endpoint(press, margin, target)
         )
 
-    async def _settle_endpoint(self, margin, target) -> None:
+    async def _settle_endpoint(self, press_task, margin, target) -> None:
         try:
-            await sleep(margin)
+            if press_task is not None:
+                # Passive: _supersede_active_press owns cancelling the
+                # sequence; this only waits for it to end either way.
+                await asyncio.wait([press_task])
+            if margin > 0:
+                await sleep(margin)
             self._phase = target
         except asyncio.CancelledError:
             pass
@@ -267,10 +285,9 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         An intermediate position says nothing about where the motor is in its
         cycle, so the phase is left alone.
         """
-        if position == 100:
-            self._phase = Phase.AT_OPEN
-        elif position == 0:
-            self._phase = Phase.AT_CLOSED
+        phase = _PHASE_AT_ENDPOINT.get(position)
+        if phase is not None:
+            self._phase = phase
 
     # --- persistence -----------------------------------------------------
     def _extra_persist_data(self) -> dict:

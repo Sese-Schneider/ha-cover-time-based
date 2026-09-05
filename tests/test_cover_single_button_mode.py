@@ -474,6 +474,100 @@ class TestEndpointReanchor:
             await _drain(cover)
         assert cover._phase is Phase.AT_OPEN
 
+    @pytest.mark.asyncio
+    async def test_anchor_waits_for_in_flight_press_sequence(self):
+        """The tracker reaches 100 while the 3-press nudge is still pressing.
+
+        The anchor must land AFTER the last press, or the remaining presses
+        overwrite it and the phase ends one step off the parked motor.
+        """
+        cover = _make_sb_cover()
+        cover._endpoint_runon_time = None
+        cover._phase = Phase.STOPPED_AFTER_UP  # OPEN from here is 3 presses
+        gate = asyncio.Event()
+
+        async def gated_sleep(_seconds):
+            await gate.wait()
+
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            side_effect=gated_sleep,
+        ):
+            await cover._send_open()
+            await asyncio.sleep(0)  # press 1 ON edge lands, pulse sleep parked
+            assert cover._phase is Phase.MOVING_DOWN
+            cover._on_endpoint_reached(100)
+            await asyncio.sleep(0)
+            # Not anchored while the sequence is still in flight.
+            assert cover._phase is Phase.MOVING_DOWN
+            gate.set()
+            await _drain(cover)
+        assert len(_presses(cover)) == 3
+        assert cover._phase is Phase.AT_OPEN
+
+    @pytest.mark.asyncio
+    async def test_anchor_waits_for_sequence_then_margin(self):
+        """With a settle margin the wait is sequence first, then margin."""
+        cover = _make_sb_cover()
+        cover._endpoint_runon_time = 2.0
+        cover._phase = Phase.STOPPED_AFTER_UP
+        gate = asyncio.Event()
+        slept = []
+
+        async def gated_sleep(seconds):
+            slept.append(seconds)
+            await gate.wait()
+
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            side_effect=gated_sleep,
+        ):
+            await cover._send_open()
+            await asyncio.sleep(0)
+            cover._on_endpoint_reached(100)
+            await asyncio.sleep(0)
+            # The margin sleep has not been requested yet: the anchor is
+            # waiting on the press sequence, not on the clock.
+            assert 2.0 not in slept
+            gate.set()
+            await _drain(cover)
+        assert slept[-1] == 2.0
+        assert cover._phase is Phase.AT_OPEN
+
+    @pytest.mark.asyncio
+    async def test_new_command_during_deferred_anchor_drops_the_anchor(self):
+        """A command that supersedes the sequence also drops the pending anchor.
+
+        Otherwise the anchor would fire after the new plan and re-anchor a
+        phase the new presses have already moved on from.
+        """
+        cover = _make_sb_cover()
+        cover._endpoint_runon_time = None
+        cover._phase = Phase.STOPPED_AFTER_UP
+        gate = asyncio.Event()
+
+        async def gated_sleep(_seconds):
+            await gate.wait()
+
+        with patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            side_effect=gated_sleep,
+        ):
+            await cover._send_open()
+            await asyncio.sleep(0)
+            cover._on_endpoint_reached(100)
+            await asyncio.sleep(0)
+            settle = cover._settle_task
+            assert settle is not None
+            gate.set()  # lets the supersede's cleanup gap and later pulses run
+            await cover._send_stop()  # supersedes the nudge mid-pulse
+            assert settle.done()
+            assert cover._settle_task is None
+            await _drain(cover)
+        # The stop was planned from MOVING_DOWN (press 1's phase); the dropped
+        # anchor never turned it into AT_OPEN.
+        assert cover._phase is Phase.STOPPED_AFTER_DOWN
+
 
 class TestResync:
     @pytest.mark.asyncio
