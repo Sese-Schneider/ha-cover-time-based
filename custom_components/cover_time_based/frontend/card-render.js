@@ -703,13 +703,16 @@ export function renderTimingTable(card, c) {
   // Endpoint run-on applies to modes that send a relay stop at the endpoint:
   // switch mode (its latched relay must be de-energized) and pulse mode when it
   // sends the endpoint stop (send_endpoint_stop, default on — it pulses a
-  // dedicated stop relay, deferred by run-on). Toggle/wrapped covers — and pulse
-  // covers with the endpoint stop turned off — self-stop at their limit
-  // switches, so the setting has no effect there.
+  // dedicated stop relay, deferred by run-on). Single-button mode reads the
+  // same value as its settle margin before it anchors the phase at a limit.
+  // Toggle/wrapped covers — and pulse covers with the endpoint stop turned off
+  // — self-stop at their limit switches, so the setting has no effect there.
   const mode = c.control_mode || "switch";
-  const sendsEndpointStop =
-    mode === "switch" || (mode === "pulse" && c.send_endpoint_stop !== false);
-  if (sendsEndpointStop) {
+  const showsEndpointRunon =
+    mode === "switch" ||
+    (mode === "pulse" && c.send_endpoint_stop !== false) ||
+    mode === "single_button";
+  if (showsEndpointRunon) {
     travelRows.push(["timing.endpoint_runon_time", "endpoint_runon_time", c.endpoint_runon_time]);
   }
 

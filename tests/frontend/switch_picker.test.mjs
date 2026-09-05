@@ -21,14 +21,16 @@ test("pulse mode allows switch and script domains", () => {
   assert.deepEqual(switchPickerDomains("pulse"), ["switch", "script"]);
 });
 
-test("the pulse-time field shows only for pulse mode", () => {
+test("the pulse-time field shows for the modes that hold their output", () => {
   // Toggle relays are momentary/self-releasing and no longer use pulse_time,
-  // so only pulse mode configures it.
+  // so only the modes that hold an output for a configured duration show it.
   assert.equal(showsPulseTime("pulse"), true);
   assert.equal(showsPulseTime("toggle"), false);
   assert.equal(showsPulseTime("switch"), false);
   assert.equal(showsPulseTime("wrapped"), false);
   assert.equal(showsPulseTime(undefined), false);
+  // Single-button mode holds the button for pulse_time on every press.
+  assert.equal(showsPulseTime("single_button"), true);
 });
 
 test("non-pulse modes allow only the switch domain", () => {

@@ -366,3 +366,31 @@ test("switch mode: calibration list still offers the startup-delay and minimum-m
   expect(options).toContain("travel_startup_delay");
   expect(options).toContain("min_movement_time");
 });
+
+// ---------------------------------------------------------------------------
+// Options the mode reads must be editable: pulse_time (press duration) and
+// endpoint_runon_time (settle margin)
+// ---------------------------------------------------------------------------
+
+test("single_button mode: the Pulse time field is shown on the device tab", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: singleButtonCfg({ pulse_time: 0.5 }),
+    activeTab: "device",
+  });
+  // The pulse-time field is the only .inline-field in the control-mode section
+  // (see "pulse mode renders .inline-field" in card_render.test.mjs).
+  expect(card.shadowRoot.querySelector(".inline-field")).not.toBeNull();
+});
+
+test("single_button mode: timing table includes the endpoint_runon_time row", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: singleButtonCfg(),
+    activeTab: "timing",
+  });
+  const inputs = card.shadowRoot.querySelectorAll("input.timing-input");
+  // travel_time_close, travel_time_open, travel_startup_delay,
+  // min_movement_time, endpoint_runon_time
+  expect(inputs.length).toBe(5);
+});

@@ -145,7 +145,7 @@ detail. A blank cell means the option is not shown for that mode.
 | [Position reporting](#position-reporting) | ✓ | | | | | |
 | [Force time-based positioning](#force-time-based-positioning) | ✓ | | | | | |
 | [Invert position](#invert-position) | ✓ | | | | | |
-| [Pulse time](#pulse-time) | | | ✓ | | | |
+| [Pulse time](#pulse-time) | | | ✓ | | | ✓ |
 | [Relay reports its own OFF](#relay-reports-its-own-off) | | | | ✓ | ✓ | |
 | [Send stop signal at endpoints](#send-stop-signal-at-endpoints) | | | ✓ | | | |
 | [Wait for relay confirmation](#wait-for-relay-confirmation-before-tracking) | | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -257,8 +257,9 @@ by itself) cannot provide.
 #### Pulse time
 
 In **Pulse** mode, **Pulse time** is how long the switch is held on before it is
-turned off again. It defaults to **1 second**. The Toggle modes do not use it,
-since a toggle relay releases itself after its own brief pulse.
+turned off again; in **Single button** mode it is how long each press holds the
+button. It defaults to **1 second**. The Toggle modes do not use it, since a
+toggle relay releases itself after its own brief pulse.
 
 > [!NOTE]
 > Keep any Pulse-mode scripts short. When the pulse time elapses the integration
