@@ -136,12 +136,17 @@ BASE_DEVICE_SCHEMA = {
     vol.Required(CONF_NAME): cv.string,
 }
 
+# A zero travel, tilt or pulse time makes every move "arrive" on the first
+# tracker tick while the relay still fires; the websocket schema rejects it
+# with the same floor. Startup delays and run-on times may legitimately be 0.
+NONZERO_DURATION = vol.All(vol.Coerce(float), vol.Range(min=0.1))
+
 TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT): cv.boolean,
-    vol.Optional(CONF_TRAVELLING_TIME_DOWN): cv.positive_float,
-    vol.Optional(CONF_TRAVELLING_TIME_UP): cv.positive_float,
-    vol.Optional(CONF_TILTING_TIME_DOWN): cv.positive_float,
-    vol.Optional(CONF_TILTING_TIME_UP): cv.positive_float,
+    vol.Optional(CONF_TRAVELLING_TIME_DOWN): NONZERO_DURATION,
+    vol.Optional(CONF_TRAVELLING_TIME_UP): NONZERO_DURATION,
+    vol.Optional(CONF_TILTING_TIME_DOWN): NONZERO_DURATION,
+    vol.Optional(CONF_TILTING_TIME_UP): NONZERO_DURATION,
     vol.Optional(CONF_TRAVEL_STARTUP_DELAY): cv.positive_float,
     vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
     vol.Optional(CONF_ENDPOINT_RUNON_TIME): cv.positive_float,
@@ -158,7 +163,7 @@ SWITCH_COVER_SCHEMA = {
     vol.Optional(CONF_STOP_SWITCH_ENTITY_ID, default=None): vol.Any(cv.entity_id, None),
     vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
     vol.Optional(CONF_INPUT_MODE): vol.In(INPUT_MODE_VALUES),
-    vol.Optional(CONF_PULSE_TIME): cv.positive_float,
+    vol.Optional(CONF_PULSE_TIME): NONZERO_DURATION,
     vol.Optional(CONF_RELAY_REPORTS_OFF): cv.boolean,
     vol.Optional(CONF_SEND_ENDPOINT_STOP): cv.boolean,
     **TRAVEL_TIME_SCHEMA,
@@ -175,16 +180,16 @@ DEFAULTS_SCHEMA = vol.Schema(
         vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
         vol.Optional(CONF_INPUT_MODE): vol.In(INPUT_MODE_VALUES),
         vol.Optional(CONF_TRAVELLING_TIME_DOWN, default=None): vol.Any(
-            cv.positive_float, None
+            NONZERO_DURATION, None
         ),
         vol.Optional(CONF_TRAVELLING_TIME_UP, default=None): vol.Any(
-            cv.positive_float, None
+            NONZERO_DURATION, None
         ),
         vol.Optional(CONF_TILTING_TIME_DOWN, default=None): vol.Any(
-            cv.positive_float, None
+            NONZERO_DURATION, None
         ),
         vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(
-            cv.positive_float, None
+            NONZERO_DURATION, None
         ),
         vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
             cv.positive_float, None

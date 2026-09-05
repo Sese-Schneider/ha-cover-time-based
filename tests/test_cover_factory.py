@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+import voluptuous as vol
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -35,6 +36,8 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_TOGGLE_OPPOSITE,
     CONTROL_MODE_WRAPPED,
+    DEFAULTS_SCHEMA,
+    PLATFORM_SCHEMA,
     _create_cover_from_options,
     _resolve_tilt_strategy,
     devices_from_config,
@@ -834,3 +837,77 @@ class TestLegacyTravelMovesWithTiltMigration:
         devices = devices_from_config(config)
         cover = devices[0]
         assert cover._tilt_strategy is None
+
+
+# ===================================================================
+# YAML rejects zero travel / tilt / pulse durations
+# ===================================================================
+
+
+def _yaml_device(**timing):
+    return {
+        "platform": "cover_time_based",
+        CONF_DEVICES: {
+            "blind1": {
+                "name": "Test",
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                **timing,
+            },
+        },
+    }
+
+
+class TestYamlRejectsZeroDurations:
+    """A zero travel, tilt or pulse time makes every move "arrive" on the
+    first tracker tick while the relay still fires; the websocket schema
+    already rejects it (min 0.1), YAML must match."""
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            CONF_TRAVELLING_TIME_DOWN,
+            CONF_TRAVELLING_TIME_UP,
+            CONF_TILTING_TIME_DOWN,
+            CONF_TILTING_TIME_UP,
+            CONF_PULSE_TIME,
+        ],
+    )
+    def test_device_level_zero_rejected(self, key):
+        with pytest.raises(vol.Invalid):
+            PLATFORM_SCHEMA(_yaml_device(**{key: 0}))
+
+    def test_device_level_minimum_accepted(self):
+        validated = PLATFORM_SCHEMA(
+            _yaml_device(**{CONF_TRAVELLING_TIME_DOWN: 0.1, CONF_PULSE_TIME: 0.1})
+        )
+        device = validated[CONF_DEVICES]["blind1"]
+        assert device[CONF_TRAVELLING_TIME_DOWN] == 0.1
+        assert device[CONF_PULSE_TIME] == 0.1
+
+    def test_zero_startup_delay_still_allowed(self):
+        validated = PLATFORM_SCHEMA(_yaml_device(**{CONF_TRAVEL_STARTUP_DELAY: 0}))
+        assert validated[CONF_DEVICES]["blind1"][CONF_TRAVEL_STARTUP_DELAY] == 0.0
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            CONF_TRAVELLING_TIME_DOWN,
+            CONF_TRAVELLING_TIME_UP,
+            CONF_TILTING_TIME_DOWN,
+            CONF_TILTING_TIME_UP,
+        ],
+    )
+    def test_defaults_level_zero_rejected(self, key):
+        with pytest.raises(vol.Invalid):
+            DEFAULTS_SCHEMA({key: 0})
+
+    def test_defaults_level_none_and_minimum_accepted(self):
+        assert (
+            DEFAULTS_SCHEMA({CONF_TRAVELLING_TIME_UP: None})[CONF_TRAVELLING_TIME_UP]
+            is None
+        )
+        assert (
+            DEFAULTS_SCHEMA({CONF_TRAVELLING_TIME_UP: 0.1})[CONF_TRAVELLING_TIME_UP]
+            == 0.1
+        )
