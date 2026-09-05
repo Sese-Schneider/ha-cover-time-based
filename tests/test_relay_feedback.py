@@ -13,6 +13,7 @@ way past regressions in this echo-handling area slipped past CI.
 """
 
 import asyncio
+import contextlib
 import time
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
@@ -977,3 +978,95 @@ class TestPendingWindowNeverShrinks:
             cover._unmark_switch_pending("switch.open", 1)
             cover._mark_switch_pending("switch.open", 1, timeout=5.0)
         assert delays[-1] == 5.0
+
+
+def _use_eager_tasks():
+    """Start tasks eagerly, the way ``hass.async_create_task`` does.
+
+    Under eager start a replacement task registers its slot synchronously,
+    before the cancelled task's cleanup gets to run — the ordering that
+    unconditional cleanup clobbers.
+    """
+    asyncio.get_running_loop().set_task_factory(asyncio.eager_task_factory)
+
+
+class TestWaitSlotBelongsToItsOwner:
+    """A cancelled wait's cleanup must not clear a replacement wait that
+    registered before the cancelled task's `finally` ran (HA creates tasks
+    eagerly, so that ordering is the normal one)."""
+
+    @pytest.mark.asyncio
+    async def test_cancelled_wait_does_not_clear_the_new_wait(self, make_cover):
+        _use_eager_tasks()
+        cover = make_cover(wait_for_relay_feedback=True)
+        _stub_switches(cover)
+        first = asyncio.ensure_future(cover._wait_for_relay_echo("switch.open", 5))
+        await asyncio.sleep(0)  # first registers its slot
+        first.cancel()
+        second = asyncio.ensure_future(cover._wait_for_relay_echo("switch.close", 5))
+        await asyncio.sleep(0)  # second registers; first's finally runs
+        await asyncio.sleep(0)
+        assert cover._feedback_wait_entity == "switch.close"
+        assert (
+            cover._feedback_wait_future is not None
+            and not cover._feedback_wait_future.done()
+        )
+        second.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await second
+
+    @pytest.mark.asyncio
+    async def test_cancelled_deferred_start_does_not_null_the_new_task(
+        self, make_cover
+    ):
+        _use_eager_tasks()
+        cover = make_cover(wait_for_relay_feedback=True)
+        _stub_switches(cover)
+
+        def _park(entity_id):
+            return cover.hass.async_create_task(
+                cover._run_deferred_start(
+                    lambda: cover._await_relay_confirmation(entity_id, time.time()),
+                    MagicMock(),
+                    startup_delay=0.0,
+                )
+            )
+
+        cover._startup_delay_task = old = _park("switch.open")
+        old.cancel()
+        # A replacement move registers its own task before old's handler runs.
+        cover._startup_delay_task = new = _park("switch.close")
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert cover._startup_delay_task is new
+        cover._cancel_startup_delay_task()
+
+    @pytest.mark.asyncio
+    async def test_second_calibration_arm_cancels_the_first(self, make_cover):
+        """An overwritten calibration wait must not stay parked: it would
+        re-stamp a later phase's baseline off the wrong relay confirmation."""
+        _use_eager_tasks()
+        cover = make_cover(wait_for_relay_feedback=True)
+        _stub_switches(cover)
+        cover._calibration = CalibrationState(
+            attribute="travel_startup_delay", timeout=600
+        )
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._calibration_drive(SERVICE_OPEN_COVER)
+                cover._arm_calibration_feedback_timing("started_at")
+                first = cover._calibration.feedback_task
+                assert first is not None
+                await cover._calibration_drive(SERVICE_OPEN_COVER)
+                cover._arm_calibration_feedback_timing("continuous_start")
+                await asyncio.sleep(0)
+                await asyncio.sleep(0)
+            assert first.cancelled()
+            second = cover._calibration.feedback_task
+            assert second is not first and not second.done()
+            assert cover._feedback_wait_entity == "switch.open"
+            second.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await second
+        finally:
+            cover._calibration = None

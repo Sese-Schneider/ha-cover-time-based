@@ -184,6 +184,11 @@ class CalibrationMixin:
         entity_id = self._consume_feedback_arm()
         if entity_id is None or self._calibration is None:
             return
+        # A second drive within one calibration run must not orphan the first
+        # wait: it would still be parked on the shared feedback slot.
+        previous = self._calibration.feedback_task
+        if previous is not None and not previous.done():
+            previous.cancel()
         self._calibration.feedback_task = self.hass.async_create_task(
             self._await_calibration_feedback(entity_id, field)
         )
