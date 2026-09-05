@@ -936,12 +936,12 @@ class TestMarkSwitchPending:
 
 
 # ===================================================================
-# _execute_with_startup_delay completion
+# _run_deferred_start completion
 # ===================================================================
 
 
 class TestStartupDelayCompletion:
-    """Test that _execute_with_startup_delay completes correctly."""
+    """Test that _run_deferred_start completes correctly."""
 
     @pytest.mark.asyncio
     async def test_startup_delay_completes_and_starts_tracking(self, make_cover):

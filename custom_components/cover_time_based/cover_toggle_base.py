@@ -219,8 +219,10 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         # before that relay's ON echo can be swallowed. Wait it out first (a
         # no-op unless a feedback wait is actually pending), before ``was_active``
         # is read: the confirmation lets the parked start run, so is_opening /
-        # is_closing then reflect the motor that is genuinely running.
-        await self._await_pending_relay_confirmation()
+        # is_closing then reflect the motor that is genuinely running. An
+        # external stop sends no tap, so there is nothing to protect.
+        if not self._triggered_externally:
+            await self._await_pending_relay_confirmation()
         # Narrower than the base's _movement_in_progress (which also counts a
         # tilt tracker, a pre-step, a tilt restore and a tilt motor) and than
         # _movement_started ("did the move just commanded begin"): a toggle stop

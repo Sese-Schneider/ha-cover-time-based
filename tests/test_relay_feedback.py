@@ -60,6 +60,15 @@ def _echo_event(entity_id, old, new, last_changed=FIXED_ECHO):
     return event
 
 
+def _taps(cover):
+    """The relay taps (``turn_on``) sent through the mock service bus."""
+    return [
+        c.args
+        for c in cover.hass.services.async_call.await_args_list
+        if c.args[1] == "turn_on"
+    ]
+
+
 class TestRelayFeedbackStart:
     """The travel timer starts on the relay echo, not the queued command."""
 
@@ -712,17 +721,13 @@ class TestToggleStopWaitsForConfirmation:
     """A toggle stop is a tap on the driving relay; tapped before the relay's
     ON echo lands it can be swallowed, leaving the motor running untracked."""
 
-    @staticmethod
-    def _taps(cover):
-        """The relay taps (``turn_on``) sent through the mock service bus."""
-        return [
-            c.args
-            for c in cover.hass.services.async_call.await_args_list
-            if c.args[1] == "turn_on"
-        ]
+    @pytest.fixture
+    async def parked_toggle_cover(self, make_cover):
+        """A toggle cover parked on the open relay's not-yet-arrived ON echo.
 
-    @pytest.mark.asyncio
-    async def test_stop_during_wait_is_deferred_until_the_echo(self, make_cover):
+        ``async_write_ha_state`` stays patched for the whole test, and the
+        service mock is reset at the yield so ``_taps`` sees only the stop.
+        """
         cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
         _stub_switches(cover)
         cover.travel_calc.set_position(0)
@@ -732,29 +737,65 @@ class TestToggleStopWaitsForConfirmation:
             await asyncio.sleep(0)
             assert cover._feedback_wait_entity == "switch.open"
             cover.hass.services.async_call.reset_mock()
+            yield cover
 
-            stop = asyncio.ensure_future(cover.async_stop_cover())
-            await asyncio.sleep(0)
-            # No tap yet: the relay has not confirmed.
-            assert cover.hass.services.async_call.await_count == 0
+    @pytest.mark.asyncio
+    async def test_stop_during_wait_is_deferred_until_the_echo(
+        self, parked_toggle_cover
+    ):
+        cover = parked_toggle_cover
+        stop = asyncio.ensure_future(cover.async_stop_cover())
+        await asyncio.sleep(0)
+        # No tap yet: the relay has not confirmed.
+        assert cover.hass.services.async_call.await_count == 0
 
-            await cover._async_switch_state_changed(
-                _echo_event("switch.open", "off", "on", datetime.now(UTC))
-            )
-            await stop
+        await cover._async_switch_state_changed(
+            _echo_event("switch.open", "off", "on", datetime.now(UTC))
+        )
+        await stop
 
         # Exactly one tap, after the confirmation.
-        assert len(self._taps(cover)) == 1
+        assert len(_taps(cover)) == 1
         assert cover.travel_calc.is_traveling() is False
 
     @pytest.mark.asyncio
+    async def test_deferred_stop_releases_a_relay_reporting_on_first(
+        self, parked_toggle_cover
+    ):
+        """The deferred tap is still a real pulse: with the relay reporting ON
+        by the time the echo lands, the stop releases it first so its turn_on
+        carries the rising edge the motor acts on."""
+        cover = parked_toggle_cover
+        stop = asyncio.ensure_future(cover.async_stop_cover())
+        await asyncio.sleep(0)
+
+        _stub_switches(cover, on=("switch.open",))
+        await cover._async_switch_state_changed(
+            _echo_event("switch.open", "off", "on", datetime.now(UTC))
+        )
+        await stop
+
+        sent = [
+            (c.args[1], c.args[2]["entity_id"])
+            for c in cover.hass.services.async_call.await_args_list
+        ]
+        assert sent == [("turn_off", "switch.open"), ("turn_on", "switch.open")]
+
+    @pytest.mark.asyncio
     async def test_stop_gives_up_waiting_after_the_timeout(self, make_cover):
-        cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
+        """Opts out of the parked fixture: the shortened timeout has to bound
+        the move's own wait too, so its fallback start runs before the stop."""
+        cover = make_cover(
+            control_mode="toggle",
+            wait_for_relay_feedback=True,
+            travel_time_open=1,
+            travel_time_close=1,
+        )
         _stub_switches(cover)
         cover.travel_calc.set_position(0)
 
         with (
-            patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.02),
+            patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.05),
             patch.object(cover, "async_write_ha_state"),
         ):
             await cover.async_open_cover()
@@ -762,32 +803,45 @@ class TestToggleStopWaitsForConfirmation:
             cover.hass.services.async_call.reset_mock()
             await cover.async_stop_cover()
 
-        assert len(self._taps(cover)) == 1
+        assert len(_taps(cover)) == 1
+        # The silent relay's wait was not merely abandoned: its command-fire
+        # fallback started tracking, so the stop lands on a tracked move.
+        assert cover._startup_delay_task is None
+        assert cover.travel_calc.current_position() > 0
 
     @pytest.mark.asyncio
-    async def test_stop_with_no_pending_wait_taps_immediately(self, make_cover):
+    async def test_external_stop_does_not_wait_for_the_echo(self, parked_toggle_cover):
+        """An external press drives the motor itself and suppresses our relay
+        command, so a stop reached that way sends no tap to protect — waiting
+        would park the wall switch for the whole feedback timeout."""
+        cover = parked_toggle_cover
+        cover._triggered_externally = True
+        try:
+            await asyncio.wait_for(cover.async_stop_cover(supersede=False), 0.5)
+        finally:
+            cover._triggered_externally = False
+
+        assert _taps(cover) == []
+
+    @pytest.mark.asyncio
+    async def test_stop_with_no_pending_wait_taps_immediately(
+        self, parked_toggle_cover
+    ):
         """The deferral is confined to a live wait: with the option on but the
         relay already confirmed, the stop still goes out inline."""
-        cover = make_cover(control_mode="toggle", wait_for_relay_feedback=True)
-        _stub_switches(cover)
-        cover.travel_calc.set_position(0)
+        cover = parked_toggle_cover
+        await cover._async_switch_state_changed(
+            _echo_event("switch.open", "off", "on", datetime.now(UTC))
+        )
+        await asyncio.sleep(0)
+        assert cover._feedback_wait_future is None
 
-        with patch.object(cover, "async_write_ha_state"):
-            await cover.async_open_cover()
-            await asyncio.sleep(0)
-            await cover._async_switch_state_changed(
-                _echo_event("switch.open", "off", "on", datetime.now(UTC))
-            )
-            await asyncio.sleep(0)
-            assert cover._feedback_wait_future is None
-            cover.hass.services.async_call.reset_mock()
+        stop = asyncio.ensure_future(cover.async_stop_cover())
+        await asyncio.sleep(0)
+        assert _taps(cover)
+        await stop
 
-            stop = asyncio.ensure_future(cover.async_stop_cover())
-            await asyncio.sleep(0)
-            assert self._taps(cover)
-            await stop
-
-        assert len(self._taps(cover)) == 1
+        assert len(_taps(cover)) == 1
 
 
 class TestRelayFeedbackToggleOppositeMode:
@@ -993,8 +1047,13 @@ class TestPendingWindowNeverShrinks:
     """A later, shorter mark (a stop's default window) must not truncate the
     long window a feedback-gated move armed while its echo is outstanding."""
 
-    @pytest.mark.asyncio
-    async def test_short_remark_keeps_the_longer_remaining_window(self, make_cover):
+    @pytest.fixture
+    def marked_cover(self, make_cover):
+        """Yield ``(cover, delays)`` with the safety timers recorded, not armed.
+
+        ``delays`` collects the window each ``_mark_switch_pending`` schedules,
+        in call order.
+        """
         cover = make_cover(wait_for_relay_feedback=True)
         _stub_switches(cover)
         delays = []
@@ -1004,72 +1063,59 @@ class TestPendingWindowNeverShrinks:
             return MagicMock()
 
         with patch.object(cover_base, "async_call_later", fake_call_later):
-            cover._mark_switch_pending("switch.open", 1, timeout=12.0)
-            cover._mark_switch_pending("switch.open", 1, timeout=5.0)
+            yield cover, delays
+
+    @pytest.mark.asyncio
+    async def test_short_remark_keeps_the_longer_remaining_window(self, marked_cover):
+        cover, delays = marked_cover
+        cover._mark_switch_pending("switch.open", 1, timeout=12.0)
+        cover._mark_switch_pending("switch.open", 1, timeout=5.0)
         assert delays[0] == 12.0
         assert delays[1] == pytest.approx(12.0, abs=0.05)
 
     @pytest.mark.asyncio
-    async def test_longer_remark_extends(self, make_cover):
-        cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
-        delays = []
+    async def test_remaining_window_shrinks_by_the_time_already_elapsed(
+        self, marked_cover
+    ):
+        """The re-mark preserves the original deadline, not the original
+        duration: 4s into a 12s window the timer is re-armed for the 8s left."""
+        cover, delays = marked_cover
+        clock = {"t": 1000.0}
+        fake_time = MagicMock()
+        fake_time.monotonic = lambda: clock["t"]
 
-        def fake_call_later(hass, delay, action):
-            delays.append(delay)
-            return MagicMock()
-
-        with patch.object(cover_base, "async_call_later", fake_call_later):
-            cover._mark_switch_pending("switch.open", 1, timeout=5.0)
+        with patch.object(cover_base, "time", fake_time):
             cover._mark_switch_pending("switch.open", 1, timeout=12.0)
+            clock["t"] += 4.0
+            cover._mark_switch_pending("switch.open", 1, timeout=5.0)
+
+        assert delays[-1] == pytest.approx(8.0)
+
+    @pytest.mark.asyncio
+    async def test_longer_remark_extends(self, marked_cover):
+        cover, delays = marked_cover
+        cover._mark_switch_pending("switch.open", 1, timeout=5.0)
+        cover._mark_switch_pending("switch.open", 1, timeout=12.0)
         assert delays[1] == 12.0
 
     @pytest.mark.asyncio
-    async def test_deadline_is_dropped_once_the_echo_is_consumed(self, make_cover):
+    async def test_deadline_is_dropped_once_the_echo_is_consumed(self, marked_cover):
         """A fresh mark after the count clears starts from its own timeout —
         a stale deadline must not keep extending later, unrelated windows."""
-        cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
-        delays = []
-
-        def fake_call_later(hass, delay, action):
-            delays.append(delay)
-            return MagicMock()
-
-        with patch.object(cover_base, "async_call_later", fake_call_later):
-            cover._mark_switch_pending("switch.open", 1, timeout=12.0)
-            await cover._async_switch_state_changed(
-                _echo_event("switch.open", "off", "on")
-            )
-            assert "switch.open" not in cover._pending_switch
-            cover._mark_switch_pending("switch.open", 1, timeout=5.0)
+        cover, delays = marked_cover
+        cover._mark_switch_pending("switch.open", 1, timeout=12.0)
+        await cover._async_switch_state_changed(_echo_event("switch.open", "off", "on"))
+        assert "switch.open" not in cover._pending_switch
+        cover._mark_switch_pending("switch.open", 1, timeout=5.0)
         assert delays[-1] == 5.0
 
     @pytest.mark.asyncio
-    async def test_unmark_drops_the_deadline(self, make_cover):
-        cover = make_cover(wait_for_relay_feedback=True)
-        _stub_switches(cover)
-        delays = []
-
-        def fake_call_later(hass, delay, action):
-            delays.append(delay)
-            return MagicMock()
-
-        with patch.object(cover_base, "async_call_later", fake_call_later):
-            cover._mark_switch_pending("switch.open", 1, timeout=12.0)
-            cover._unmark_switch_pending("switch.open", 1)
-            cover._mark_switch_pending("switch.open", 1, timeout=5.0)
+    async def test_unmark_drops_the_deadline(self, marked_cover):
+        cover, delays = marked_cover
+        cover._mark_switch_pending("switch.open", 1, timeout=12.0)
+        cover._unmark_switch_pending("switch.open", 1)
+        cover._mark_switch_pending("switch.open", 1, timeout=5.0)
         assert delays[-1] == 5.0
-
-
-def _use_eager_tasks():
-    """Start tasks eagerly, the way ``hass.async_create_task`` does.
-
-    Under eager start a replacement task registers its slot synchronously,
-    before the cancelled task's cleanup gets to run — the ordering that
-    unconditional cleanup clobbers.
-    """
-    asyncio.get_running_loop().set_task_factory(asyncio.eager_task_factory)
 
 
 class TestWaitSlotBelongsToItsOwner:
@@ -1077,9 +1123,22 @@ class TestWaitSlotBelongsToItsOwner:
     registered before the cancelled task's `finally` ran (HA creates tasks
     eagerly, so that ordering is the normal one)."""
 
+    @pytest.fixture(autouse=True)
+    async def _eager_tasks(self):
+        """Start tasks eagerly, the way ``hass.async_create_task`` does.
+
+        Under eager start a replacement task registers its slot synchronously,
+        before the cancelled task's cleanup gets to run — the ordering that
+        unconditional cleanup clobbers.
+        """
+        loop = asyncio.get_running_loop()
+        previous = loop.get_task_factory()
+        loop.set_task_factory(asyncio.eager_task_factory)
+        yield
+        loop.set_task_factory(previous)
+
     @pytest.mark.asyncio
     async def test_cancelled_wait_does_not_clear_the_new_wait(self, make_cover):
-        _use_eager_tasks()
         cover = make_cover(wait_for_relay_feedback=True)
         _stub_switches(cover)
         first = asyncio.ensure_future(cover._wait_for_relay_echo("switch.open", 5))
@@ -1101,7 +1160,6 @@ class TestWaitSlotBelongsToItsOwner:
     async def test_cancelled_deferred_start_does_not_null_the_new_task(
         self, make_cover
     ):
-        _use_eager_tasks()
         cover = make_cover(wait_for_relay_feedback=True)
         _stub_switches(cover)
 
@@ -1127,7 +1185,6 @@ class TestWaitSlotBelongsToItsOwner:
     async def test_second_calibration_arm_cancels_the_first(self, make_cover):
         """An overwritten calibration wait must not stay parked: it would
         re-stamp a later phase's baseline off the wrong relay confirmation."""
-        _use_eager_tasks()
         cover = make_cover(wait_for_relay_feedback=True)
         _stub_switches(cover)
         cover._calibration = CalibrationState(

@@ -2739,17 +2739,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         return None
 
     async def _run_deferred_start(
-        self, make_waiter, start_callback, *, startup_delay=None
+        self, make_waiter, start_callback, *, startup_delay=0.0
     ):
         """Await the wait ``make_waiter`` builds, then start tracking from the
-        anchor it returns.
+        anchor it returns, offset by ``startup_delay``.
 
-        The wait is either a fixed motor startup delay or a relay-feedback wait;
-        ``startup_delay`` is None for the former (the callback takes no anchor —
-        tracking starts now) and a float for the latter, where the mechanical
-        delay is folded on top of the anchor the wait returned. It is built here
-        rather than passed in already-created so that a task cancelled before it
-        ever ran leaves no un-awaited coroutine behind.
+        The wait is either a fixed motor startup delay (no anchor — tracking
+        starts now) or a relay-feedback wait, on whose anchor the mechanical
+        delay is folded. The waiter is built here rather than passed in
+        already-created: it is then only created when the task actually runs, so
+        the command time is stamped at the call site and a task cancelled before
+        its first step owns no unstarted coroutine.
 
         Runs as ``_startup_delay_task`` so every consumer of that task —
         _movement_started, the reverse/same-direction conflict blocks and
@@ -2757,10 +2757,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         try:
             base_ts = await make_waiter()
-            if startup_delay is None:
-                start_callback()
-            else:
-                start_callback(base_timestamp=base_ts, extra_delay=startup_delay)
+            start_callback(base_timestamp=base_ts, extra_delay=startup_delay)
         except asyncio.CancelledError:
             self._log("_run_deferred_start :: cancelled")
             raise
@@ -3971,13 +3968,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         def _clear_pending(_now):
             if entity_id in self._pending_switch:
                 self._log("_mark_switch_pending :: timeout clearing %s", entity_id)
-                del self._pending_switch[entity_id]
-            self._pending_switch_timers.pop(entity_id, None)
-            self._pending_switch_deadlines.pop(entity_id, None)
+            self._clear_pending_switch(entity_id, cancel_timer=False)
 
         self._pending_switch_timers[entity_id] = async_call_later(
             self.hass, timeout, _clear_pending
         )
+
+    def _clear_pending_switch(self, entity_id, *, cancel_timer=True):
+        """Drop every trace of ``entity_id``'s pending-echo bookkeeping.
+
+        Count, deadline and safety timer are one unit: a surviving deadline
+        would keep extending a later, unrelated window, and a surviving timer
+        would clear a count it no longer owns. ``cancel_timer`` is False when
+        the safety timer itself is the caller — it is already firing.
+        """
+        self._pending_switch.pop(entity_id, None)
+        self._pending_switch_deadlines.pop(entity_id, None)
+        timer = self._pending_switch_timers.pop(entity_id, None)
+        if timer is not None and cancel_timer:
+            timer()
 
     def _resolve_relay_feedback(self, entity_id, new_val, new_state) -> None:
         """Start a parked feedback-gated move when its relay confirms.
@@ -4032,11 +4041,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def _await_relay_confirmation(self, entity_id, commanded_at):
         """Wait for ``entity_id``'s ON echo and return the tracking anchor.
 
-        On confirmation the anchor is the echo's own timestamp. On timeout it is
-        ``commanded_at``: the relay may have switched without reporting, so the
-        motor has been running since the command, exactly as it is assumed to be
-        with the option off — anchoring on the timeout instant instead would drop
-        the whole wait out of the travel.
+        On timeout the anchor is ``commanded_at``, not the instant the wait gave
+        up: the relay may have switched without reporting it, so the motor has
+        been running since the command — anchoring on the timeout would drop the
+        whole wait out of the travel.
         """
         base_ts = await self._wait_for_relay_echo(entity_id, RELAY_FEEDBACK_TIMEOUT)
         if base_ts is not None:
@@ -4078,10 +4086,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
         Used when a state-change echo we pre-counted will no longer arrive —
         e.g. a scheduled relay ``turn_off`` gets cancelled before it fires, so
-        its deferred OFF echo never happens. Mirrors the decrement in
-        ``_async_switch_state_changed`` (clamp at zero, drop the key and cancel
-        the safety timer when it reaches zero) so a stale count can never linger
-        and swallow a genuine press.
+        its deferred OFF echo never happens. Clamps at zero and tears down
+        through the same helper as the decrement in
+        ``_async_switch_state_changed``, so a stale count can never linger and
+        swallow a genuine press.
         """
         current = self._pending_switch.get(entity_id, 0)
         if current <= 0:
@@ -4090,11 +4098,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if remaining > 0:
             self._pending_switch[entity_id] = remaining
             return
-        del self._pending_switch[entity_id]
-        self._pending_switch_deadlines.pop(entity_id, None)
-        timer = self._pending_switch_timers.pop(entity_id, None)
-        if timer:
-            timer()
+        self._clear_pending_switch(entity_id)
 
     async def _async_switch_state_changed(self, event):
         """Handle state changes on monitored switch entities."""
@@ -4144,12 +4148,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._pending_switch.get(entity_id, 0) > 0:
             self._pending_switch[entity_id] -= 1
             if self._pending_switch[entity_id] <= 0:
-                del self._pending_switch[entity_id]
-                self._pending_switch_deadlines.pop(entity_id, None)
-                # Cancel the safety timeout
-                timer = self._pending_switch_timers.pop(entity_id, None)
-                if timer:
-                    timer()
+                self._clear_pending_switch(entity_id)
             self._log(
                 "_async_switch_state_changed :: echo filtered, remaining=%s",
                 self._pending_switch.get(entity_id, 0),
