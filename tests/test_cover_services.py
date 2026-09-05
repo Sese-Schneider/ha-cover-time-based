@@ -16,8 +16,10 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
     CONTROL_MODE_SWITCH,
+    POSITION_SCHEMA,
     SERVICE_START_CALIBRATION,
     SERVICE_STOP_CALIBRATION,
+    TILT_POSITION_SCHEMA,
     _admin_only,
     _create_cover_from_options,
     _register_services,
@@ -340,3 +342,49 @@ class TestServiceFieldTranslationsMatchServicesYaml:
         for service in ("start_calibration", "stop_calibration"):
             assert "entity_id" in yaml_fields[service]
             assert "entity_id" in strings_fields[service]
+
+
+# ---------------------------------------------------------------------------
+# set_known_position / set_known_tilt_position schemas
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("schema", "field"),
+    [(POSITION_SCHEMA, "position"), (TILT_POSITION_SCHEMA, "tilt_position")],
+    ids=["position", "tilt_position"],
+)
+class TestKnownPositionSchemas:
+    """Pins what both known-position services accept: any HA target kind, and
+    a percent within 0..100."""
+
+    def test_above_100_rejected(self, schema, field):
+        with pytest.raises(vol.Invalid):
+            schema({"entity_id": "cover.x", field: 150})
+
+    def test_negative_rejected(self, schema, field):
+        with pytest.raises(vol.Invalid):
+            schema({"entity_id": "cover.x", field: -1})
+
+    def test_endpoints_accepted(self, schema, field):
+        assert schema({"entity_id": "cover.x", field: 0})[field] == 0
+        assert schema({"entity_id": "cover.x", field: 100})[field] == 100
+
+    def test_string_coerced_to_int(self, schema, field):
+        assert schema({"entity_id": "cover.x", field: "50"})[field] == 50
+
+    @pytest.mark.parametrize(
+        ("key", "value"),
+        [
+            ("area_id", "kitchen"),
+            ("device_id", "abc123"),
+            ("floor_id", "ground"),
+            ("label_id", "blinds"),
+        ],
+    )
+    def test_target_kinds_accepted(self, schema, field, key, value):
+        assert schema({key: value, field: 50})[key] == [value]
+
+    def test_some_target_required(self, schema, field):
+        with pytest.raises(vol.Invalid):
+            schema({field: 50})

@@ -551,6 +551,8 @@ prevents them nudging the tracked position out of true. Movements all the way to
 ### `cover_time_based.set_known_position`
 
 Manually set a cover's tracked position, which is useful for correcting drift.
+Aim it at any entity, device, area, floor or label; every matching Cover Time
+Based cover is set.
 
 | Field | Description |
 | --- | --- |
@@ -559,6 +561,8 @@ Manually set a cover's tracked position, which is useful for correcting drift.
 ### `cover_time_based.set_known_tilt_position`
 
 Manually set a cover's tracked tilt position.
+Aim it at any entity, device, area, floor or label; every matching Cover Time
+Based cover is set.
 
 | Field | Description |
 | --- | --- |
@@ -851,16 +855,16 @@ listed here, use the card.
 | `stop_switch_entity_id` | entity | Required in pulse mode | Switch that stops the cover. May be a `script` entity in pulse mode. | None |
 | `cover_entity_id` | entity | **Required**, or the open/close switches | Existing cover entity to wrap. | |
 | `input_mode` | string | _Optional_ | Control mode for switch-based covers: `switch`, `pulse`, `toggle`, or `toggle_opposite`. | `switch` |
-| `travelling_time_down` | float | _Optional_ | Seconds to close the cover. | unset |
-| `travelling_time_up` | float | _Optional_ | Seconds to open the cover. | unset |
-| `tilting_time_down` | float | _Optional_ | Seconds to tilt the cover fully closed. | None |
-| `tilting_time_up` | float | _Optional_ | Seconds to tilt the cover fully open. | None |
+| `travelling_time_down` | float | _Optional_ | Seconds to close the cover. Minimum 0.1 s. | unset |
+| `travelling_time_up` | float | _Optional_ | Seconds to open the cover. Minimum 0.1 s. | unset |
+| `tilting_time_down` | float | _Optional_ | Seconds to tilt the cover fully closed. Minimum 0.1 s. | None |
+| `tilting_time_up` | float | _Optional_ | Seconds to tilt the cover fully open. Minimum 0.1 s. | None |
 | `travel_moves_with_tilt` | boolean | _Optional_ | Whether tilt movements also change travel proportionally. | false |
 | `endpoint_runon_time` | float | _Optional_ | Extra relay time at the endpoints. Also accepted under its old name `travel_delay_at_end`. | 2.0 |
 | `min_movement_time` | float | _Optional_ | Minimum movement duration; blocks shorter movements. | None |
 | `travel_startup_delay` | float | _Optional_ | Startup compensation for travel movements. | None |
 | `tilt_startup_delay` | float | _Optional_ | Startup compensation for tilt movements. | None |
-| `pulse_time` | float | _Optional_ | Pulse duration in pulse mode. | 1.0 |
+| `pulse_time` | float | _Optional_ | Pulse duration in pulse mode. Minimum 0.1 s. | 1.0 |
 | `relay_reports_off` | boolean | _Optional_ | Toggle mode: set `false` for pulse modules that never report their off. | true |
 | `send_endpoint_stop` | boolean | _Optional_ | Pulse mode: set `false` for auto-stop controllers that reposition on a stop received while stopped. | true |
 | `direction_change_delay` | float | _Deprecated_ | No longer configurable. Accepted and ignored; the reversing pause is fixed at 1.0s. | — |

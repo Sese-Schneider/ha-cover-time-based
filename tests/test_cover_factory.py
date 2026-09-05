@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+import voluptuous as vol
 
 from custom_components.cover_time_based.cover import (
     CONF_CLOSE_SWITCH_ENTITY_ID,
@@ -35,6 +36,8 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_TOGGLE_OPPOSITE,
     CONTROL_MODE_WRAPPED,
+    DEFAULTS_SCHEMA,
+    PLATFORM_SCHEMA,
     _create_cover_from_options,
     _resolve_tilt_strategy,
     devices_from_config,
@@ -511,11 +514,7 @@ class TestDefaultsSchemaLegacyEndpointRunonMigration:
     """
 
     def test_defaults_level_travel_delay_at_end_migrates(self):
-        from custom_components.cover_time_based.cover import (
-            CONF_TRAVEL_DELAY_AT_END,
-            DEFAULTS_SCHEMA,
-            _migrate_yaml_keys,
-        )
+        from custom_components.cover_time_based.cover import _migrate_yaml_keys
 
         validated = DEFAULTS_SCHEMA({CONF_TRAVEL_DELAY_AT_END: 5.0})
         _migrate_yaml_keys(validated)
@@ -524,10 +523,7 @@ class TestDefaultsSchemaLegacyEndpointRunonMigration:
 
     def test_defaults_level_explicit_endpoint_runon_time_untouched(self):
         """Setting the new name directly still works (no old key present)."""
-        from custom_components.cover_time_based.cover import (
-            DEFAULTS_SCHEMA,
-            _migrate_yaml_keys,
-        )
+        from custom_components.cover_time_based.cover import _migrate_yaml_keys
 
         validated = DEFAULTS_SCHEMA({CONF_ENDPOINT_RUNON_TIME: 3.0})
         _migrate_yaml_keys(validated)
@@ -540,8 +536,6 @@ class TestDefaultsSchemaLegacyEndpointRunonMigration:
         pipeline (not just the direct _create_cover_from_options .get()
         fallback that the unit-level factory tests exercise).
         """
-        from custom_components.cover_time_based.cover import PLATFORM_SCHEMA
-
         raw = {
             "platform": "cover_time_based",
             CONF_DEVICES: {
@@ -579,8 +573,6 @@ class TestInputModeSchemaValidation:
         ],
     )
     def test_switch_cover_schema_accepts_input_mode(self, value):
-        import voluptuous as vol
-
         from custom_components.cover_time_based.cover import SWITCH_COVER_SCHEMA
 
         validated = vol.Schema(SWITCH_COVER_SCHEMA)(
@@ -594,8 +586,6 @@ class TestInputModeSchemaValidation:
         assert validated["input_mode"] == value
 
     def test_switch_cover_schema_rejects_unknown_input_mode(self):
-        import voluptuous as vol
-
         from custom_components.cover_time_based.cover import SWITCH_COVER_SCHEMA
 
         with pytest.raises(vol.Invalid):
@@ -609,16 +599,12 @@ class TestInputModeSchemaValidation:
             )
 
     def test_defaults_schema_accepts_input_mode(self):
-        from custom_components.cover_time_based.cover import DEFAULTS_SCHEMA
-
         validated = DEFAULTS_SCHEMA({"input_mode": CONTROL_MODE_TOGGLE})
         assert validated["input_mode"] == CONTROL_MODE_TOGGLE
 
     def test_input_mode_reachable_through_full_platform_schema_pipeline(self):
         """End-to-end: a real YAML device with input_mode: toggle must
         actually produce a ToggleModeCover, not be rejected by PLATFORM_SCHEMA."""
-        from custom_components.cover_time_based.cover import PLATFORM_SCHEMA
-
         raw = {
             "platform": "cover_time_based",
             CONF_DEVICES: {
@@ -834,3 +820,71 @@ class TestLegacyTravelMovesWithTiltMigration:
         devices = devices_from_config(config)
         cover = devices[0]
         assert cover._tilt_strategy is None
+
+
+# ===================================================================
+# YAML rejects zero travel / tilt / pulse durations
+# ===================================================================
+
+
+def _yaml_device(**timing):
+    return {
+        "platform": "cover_time_based",
+        CONF_DEVICES: {
+            "blind1": {
+                "name": "Test",
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                **timing,
+            },
+        },
+    }
+
+
+class TestYamlRejectsZeroDurations:
+    """YAML rejects a zero travel, tilt or pulse time, like the websocket schema."""
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            CONF_TRAVELLING_TIME_DOWN,
+            CONF_TRAVELLING_TIME_UP,
+            CONF_TILTING_TIME_DOWN,
+            CONF_TILTING_TIME_UP,
+            CONF_PULSE_TIME,
+        ],
+    )
+    def test_device_level_zero_rejected(self, key):
+        with pytest.raises(vol.Invalid):
+            PLATFORM_SCHEMA(_yaml_device(**{key: 0}))
+
+    def test_device_level_minimum_accepted(self):
+        validated = PLATFORM_SCHEMA(
+            _yaml_device(**{CONF_TRAVELLING_TIME_DOWN: 0.1, CONF_PULSE_TIME: 0.1})
+        )
+        device = validated[CONF_DEVICES]["blind1"]
+        assert device[CONF_TRAVELLING_TIME_DOWN] == 0.1
+        assert device[CONF_PULSE_TIME] == 0.1
+
+    def test_zero_startup_delay_still_allowed(self):
+        validated = PLATFORM_SCHEMA(_yaml_device(**{CONF_TRAVEL_STARTUP_DELAY: 0}))
+        assert validated[CONF_DEVICES]["blind1"][CONF_TRAVEL_STARTUP_DELAY] == 0.0
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            CONF_TRAVELLING_TIME_DOWN,
+            CONF_TRAVELLING_TIME_UP,
+            CONF_TILTING_TIME_DOWN,
+            CONF_TILTING_TIME_UP,
+        ],
+    )
+    def test_defaults_level_zero_rejected(self, key):
+        with pytest.raises(vol.Invalid):
+            DEFAULTS_SCHEMA({key: 0})
+
+    def test_defaults_level_none_accepted(self):
+        assert (
+            DEFAULTS_SCHEMA({CONF_TRAVELLING_TIME_UP: None})[CONF_TRAVELLING_TIME_UP]
+            is None
+        )

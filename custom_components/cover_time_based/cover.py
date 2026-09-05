@@ -11,7 +11,6 @@ from homeassistant.components.cover import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    ATTR_ENTITY_ID,
     CONF_NAME,
 )
 from homeassistant.core import HomeAssistant, SupportsResponse
@@ -137,12 +136,19 @@ BASE_DEVICE_SCHEMA = {
     vol.Required(CONF_NAME): cv.string,
 }
 
+# The floor shared by the YAML and websocket schemas: a zero travel, tilt or
+# pulse time makes every move "arrive" on the first tracker tick while the
+# relay still fires. Startup delays and run-on times may legitimately be 0.
+MIN_DURATION = 0.1
+NONZERO_DURATION = vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION))
+NULLABLE_DURATION = vol.Any(NONZERO_DURATION, None)
+
 TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT): cv.boolean,
-    vol.Optional(CONF_TRAVELLING_TIME_DOWN): cv.positive_float,
-    vol.Optional(CONF_TRAVELLING_TIME_UP): cv.positive_float,
-    vol.Optional(CONF_TILTING_TIME_DOWN): cv.positive_float,
-    vol.Optional(CONF_TILTING_TIME_UP): cv.positive_float,
+    vol.Optional(CONF_TRAVELLING_TIME_DOWN): NONZERO_DURATION,
+    vol.Optional(CONF_TRAVELLING_TIME_UP): NONZERO_DURATION,
+    vol.Optional(CONF_TILTING_TIME_DOWN): NONZERO_DURATION,
+    vol.Optional(CONF_TILTING_TIME_UP): NONZERO_DURATION,
     vol.Optional(CONF_TRAVEL_STARTUP_DELAY): cv.positive_float,
     vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
     vol.Optional(CONF_ENDPOINT_RUNON_TIME): cv.positive_float,
@@ -159,7 +165,7 @@ SWITCH_COVER_SCHEMA = {
     vol.Optional(CONF_STOP_SWITCH_ENTITY_ID, default=None): vol.Any(cv.entity_id, None),
     vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
     vol.Optional(CONF_INPUT_MODE): vol.In(INPUT_MODE_VALUES),
-    vol.Optional(CONF_PULSE_TIME): cv.positive_float,
+    vol.Optional(CONF_PULSE_TIME): NONZERO_DURATION,
     vol.Optional(CONF_RELAY_REPORTS_OFF): cv.boolean,
     vol.Optional(CONF_SEND_ENDPOINT_STOP): cv.boolean,
     **TRAVEL_TIME_SCHEMA,
@@ -175,18 +181,10 @@ DEFAULTS_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
         vol.Optional(CONF_INPUT_MODE): vol.In(INPUT_MODE_VALUES),
-        vol.Optional(CONF_TRAVELLING_TIME_DOWN, default=None): vol.Any(
-            cv.positive_float, None
-        ),
-        vol.Optional(CONF_TRAVELLING_TIME_UP, default=None): vol.Any(
-            cv.positive_float, None
-        ),
-        vol.Optional(CONF_TILTING_TIME_DOWN, default=None): vol.Any(
-            cv.positive_float, None
-        ),
-        vol.Optional(CONF_TILTING_TIME_UP, default=None): vol.Any(
-            cv.positive_float, None
-        ),
+        vol.Optional(CONF_TRAVELLING_TIME_DOWN, default=None): NULLABLE_DURATION,
+        vol.Optional(CONF_TRAVELLING_TIME_UP, default=None): NULLABLE_DURATION,
+        vol.Optional(CONF_TILTING_TIME_DOWN, default=None): NULLABLE_DURATION,
+        vol.Optional(CONF_TILTING_TIME_UP, default=None): NULLABLE_DURATION,
         vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
             cv.positive_float, None
         ),
@@ -220,17 +218,16 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     }
 )
 
-POSITION_SCHEMA = cv.make_entity_service_schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
-        vol.Required(ATTR_POSITION): cv.positive_int,
-    }
-)
+# HA's own ATTR_POSITION range, shared with the tilt-limit percentages in the
+# websocket schema; anything above 100 would be tracked and persisted as a
+# position the calculator then travels *from*.
+PERCENT = vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
+
+# No explicit entity_id key: make_entity_service_schema supplies the optional
+# entity, device, area, floor and label targets and requires one.
+POSITION_SCHEMA = cv.make_entity_service_schema({vol.Required(ATTR_POSITION): PERCENT})
 TILT_POSITION_SCHEMA = cv.make_entity_service_schema(
-    {
-        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
-        vol.Required(ATTR_TILT_POSITION): cv.positive_int,
-    }
+    {vol.Required(ATTR_TILT_POSITION): PERCENT}
 )
 RESYNC_SCHEMA = {vol.Required("state"): vol.In(list(RESYNC_POSITIONS))}
 

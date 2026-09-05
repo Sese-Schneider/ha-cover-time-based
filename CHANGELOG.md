@@ -6,11 +6,16 @@
 - **Added an "Ignore all device reports" position-reporting profile for wrapped covers** ([#248](https://github.com/Sese-Schneider/ha-cover-time-based/issues/248)).
 - **Added a per-cover "Wait for relay confirmation before tracking" option** ([#231](https://github.com/Sese-Schneider/ha-cover-time-based/issues/231)).
 - **Serbian — Latin (`sr-Latn`) translation added.**
+- **Czech (`cs`) translation added** ([#241](https://github.com/Sese-Schneider/ha-cover-time-based/pull/241)).
 - **Added a "Single button (cycling)" control mode** ([#245](https://github.com/Sese-Schneider/ha-cover-time-based/issues/245)) for motors with one control input, where each press cycles down → stop → up → stop. Also adds a `cover_time_based.resync` action, now available in every control mode.
 
 ### Fixes
 
 - **The configuration card's backend websocket commands and the `start_calibration` / `stop_calibration` actions now require an administrator account**: they accepted any authenticated user, including read-only ones, and now return `unauthorized` for non-administrators, matching how Home Assistant itself gates configuration changes.
+- **`set_known_position` and `set_known_tilt_position` now accept area, device and label targets and reject values outside 0–100**: the action editor offered areas and devices, but only an entity target validated; and a position above 100 was accepted and tracked, so the next close ran for longer than a full travel.
+- **YAML configuration now rejects a travel, tilt or pulse time of `0`**, as the configuration card already did. A zero duration made the cover twitch while Home Assistant reported it at the endpoint.
+- **`set_known_position` and `set_known_tilt_position` now accept area, floor, device and label targets and reject values outside 0–100**: the action editor offered areas and devices, but only an entity target validated; and a position above 100 was accepted and tracked, so the next close ran for longer than a full travel.
+- **YAML configuration now rejects a travel, tilt or pulse time below 0.1 s**: the configuration card already enforced that minimum, and a zero duration made the cover twitch while Home Assistant reported it at the endpoint.
 
 ## 4.11.0 (2026-08-04)
 
