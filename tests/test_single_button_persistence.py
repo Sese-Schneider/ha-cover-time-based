@@ -141,7 +141,11 @@ async def test_single_button_removal_during_endpoint_margin_restores_parked_phas
 async def test_single_button_removal_between_nudge_presses_saves_stopped_position(
     make_cover, _mock_position_store
 ):
-    """After the nudge's stop press the physical position must survive reload."""
+    """An interrupted nudge leaves the phase exact and the position unknown.
+
+    The tracker counted the planned direction, not the nudges, so its
+    position estimate cannot be restored.
+    """
     from custom_components.cover_time_based import cover_base, travel_calculator
     from custom_components.cover_time_based.single_button_cycle import PRESS_TRANSITION
 
@@ -195,6 +199,7 @@ async def test_single_button_removal_between_nudge_presses_saves_stopped_positio
         await asyncio.sleep(0)
     data = _mock_position_store.async_save.await_args.args[1]
     print(f"between presses: physical={physical_position}; stored={data}")
+    # Preserve the exact phase, but discard the position the nudges invalidated.
     assert "position" not in data, (data, physical_position)
     assert data["phase"] == Phase.STOPPED_AFTER_DOWN.value
     _mock_position_store.async_get.return_value = data
@@ -204,3 +209,32 @@ async def test_single_button_removal_between_nudge_presses_saves_stopped_positio
     assert replacement._phase is Phase.STOPPED_AFTER_DOWN
     assert plan(replacement._phase, Action.STOP) == []
     assert plan(replacement._phase, Action.OPEN) == [Phase.MOVING_UP]
+
+
+async def test_single_button_removal_during_delayed_departure_parks_at_destination(
+    make_cover, _mock_position_store
+):
+    """An idle tracker at departure must not anchor the motor at that endpoint."""
+    cover = make_cover(
+        control_mode=CONTROL_MODE_SINGLE_BUTTON,
+        travel_time_open=10,
+        travel_time_close=10,
+        travel_startup_delay=2,
+    )
+    stub_switches(cover)
+    cover.travel_calc.set_position(100)
+    cover._phase = Phase.AT_OPEN
+
+    with patch.object(cover, "async_write_ha_state"), single_button_sleep_patch():
+        await cover.async_close_cover()
+        assert cover._press_task is not None
+        await cover._press_task
+        assert cover._phase is Phase.MOVING_DOWN
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() == 100
+        assert cover._startup_delay_task is not None
+        assert not cover._startup_delay_task.done()
+        await cover.async_will_remove_from_hass()
+
+    data = _mock_position_store.async_save.await_args.args[1]
+    assert data == {"position": 0, "phase": "at_closed"}

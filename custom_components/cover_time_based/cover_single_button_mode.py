@@ -261,14 +261,16 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             task.cancel()
         self._press_task = None
         self._cancel_settle()
-        # An arrived tracker bypasses parking, so removal must apply the
-        # endpoint phase whose settle task can no longer do so.
+        # Anchor an arrival whose settle margin removal cut short. A phase
+        # pointing away from the endpoint is a departure, not an arrival.
         endpoint = self.travel_calc.current_position()
         if (
             not self.travel_calc.is_traveling()
             and endpoint is not None
-            and endpoint in _PHASE_AT_ENDPOINT
-            and self._phase in (Phase.MOVING_UP, Phase.MOVING_DOWN)
+            and (
+                (endpoint == 100 and self._phase is Phase.MOVING_UP)
+                or (endpoint == 0 and self._phase is Phase.MOVING_DOWN)
+            )
         ):
             self._phase = _PHASE_AT_ENDPOINT[endpoint]
         if self._open_switch_entity_id:
