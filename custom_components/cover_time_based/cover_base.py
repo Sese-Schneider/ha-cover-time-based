@@ -114,6 +114,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     # poll would only rewrite unchanged state.
     _attr_should_poll = False
 
+    # Direction relay entity ids, set by the relay-driven mode mixins
+    # (CoverSwitch and its subclasses). Declared here because base methods such
+    # as _movement_target reference them; a wrapped cover sets neither and never
+    # reaches those methods.
+    _open_switch_entity_id: str | None
+    _close_switch_entity_id: str | None
+
     # Whether this control mode can drive tilt at all. A single-button cover
     # cannot choose a direction, so it sets this False (see the design spec).
     supports_tilt = True
@@ -2316,6 +2323,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             current = self.travel_calc.current_position()
             if target == current:
                 return
+            # Travel was live when we entered this branch, so the tracker holds
+            # a known position after the settle.
+            assert current is not None
 
         relay_was_on = self._cancel_delay_task()
         if relay_was_on:
@@ -3262,6 +3272,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
             if endpoint_applies and not self._moving_tilt_motor:
+                # endpoint_applies implies _at_endpoint(current_travel), which is
+                # False for None, so the position is known here.
+                assert current_travel is not None
                 self._on_endpoint_reached(int(current_travel))
             self._last_command = None
             self._moving_tilt_motor = False

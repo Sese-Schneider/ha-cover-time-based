@@ -1262,7 +1262,8 @@ class TestRelayFeedbackPulseMode:
 
         open_calls = [c for c in spy.call_args_list if c.args[0] == "switch.open"]
         assert open_calls, "open relay should have been marked pending"
-        assert open_calls[0].kwargs.get("timeout") >= 8, (
+        timeout = open_calls[0].kwargs.get("timeout")
+        assert timeout is not None and timeout >= 8, (
             "pending window must cover the 8s pulse so the completion OFF echo "
             "is still filtered as our own"
         )
@@ -1433,6 +1434,7 @@ class TestRelayFeedbackWaitSlot:
                 await asyncio.sleep(0)
             assert first.cancelled()
             second = cover._calibration.feedback_task
+            assert second is not None
             assert second is not first and not second.done()
             assert cover._feedback_wait_entity == "switch.open"
             second.cancel()
