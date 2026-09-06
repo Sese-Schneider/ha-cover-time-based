@@ -10,9 +10,10 @@ stopped.
 """
 
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.components.cover import ATTR_CURRENT_TILT_POSITION
 
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_SWITCH,
@@ -109,3 +110,88 @@ async def test_tilt_restore_no_op_branch_persists(make_cover, _mock_position_sto
     assert _mock_position_store.async_save.await_count == 1, (
         "the terminal no-op restore must persist the position it finished at"
     )
+
+
+# ---------------------------------------------------------------------------
+# Restore: travel and tilt are independent
+# ---------------------------------------------------------------------------
+#
+# _async_persist_position writes each tracker only when it knows its position,
+# and PositionStore.async_save replaces the whole record, so a tilt-capable
+# cover whose travel position was cleared (card raw open/close/stop) leaves
+# {"tilt_position": N} on disk. Restoring that record must preserve the known
+# tilt without inventing a travel position.
+
+
+@pytest.mark.asyncio
+async def test_raw_command_leaves_tilt_only_record(make_cover, _mock_position_store):
+    """A raw travel command on a tilt-capable cover persists tilt with no position."""
+    cover = make_cover(
+        tilt_time_open=2.0,
+        tilt_time_close=2.0,
+    )
+    cover.travel_calc.set_position(40)
+    cover.tilt_calc.set_position(40)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_raw_command("open")
+
+    _, data = _mock_position_store.async_save.await_args.args
+    assert data == {"tilt_position": 40}
+
+
+@pytest.mark.asyncio
+async def test_restores_tilt_from_store_without_position(
+    make_cover, _mock_position_store
+):
+    """A stored record with tilt but no position must still restore the tilt."""
+    _mock_position_store.async_get = AsyncMock(return_value={"tilt_position": 40})
+    cover = make_cover(tilt_time_open=2.0, tilt_time_close=2.0)
+
+    with patch(
+        "custom_components.cover_time_based.cover_base.async_track_state_change_event"
+    ):
+        await cover.async_added_to_hass()
+
+    assert cover.travel_calc.current_position() is None
+    assert cover.tilt_calc.current_position() == 40
+
+
+@pytest.mark.asyncio
+async def test_restores_tilt_from_last_state_without_position(make_cover):
+    """RestoreEntity fallback: tilt-only attributes must still restore tilt."""
+    cover = make_cover(tilt_time_open=2.0, tilt_time_close=2.0)
+    old_state = MagicMock()
+    old_state.attributes = {ATTR_CURRENT_TILT_POSITION: 40}
+
+    with (
+        patch.object(cover, "async_get_last_state", return_value=old_state),
+        patch(
+            "custom_components.cover_time_based.cover_base.async_track_state_change_event"
+        ),
+    ):
+        await cover.async_added_to_hass()
+
+    assert cover.travel_calc.current_position() is None
+    assert cover.tilt_calc.current_position() == 40
+
+
+@pytest.mark.asyncio
+async def test_wrapped_restores_tilt_from_store_without_position(
+    make_cover, _mock_position_store
+):
+    """Wrapped mode must also restore tilt independently of travel."""
+    _mock_position_store.async_get = AsyncMock(return_value={"tilt_position": 40})
+    cover = make_cover(
+        cover_entity_id="cover.inner", tilt_time_open=2.0, tilt_time_close=2.0
+    )
+    cover.hass.states.get = lambda eid: None
+
+    with patch(
+        "custom_components.cover_time_based.cover_wrapped.async_track_state_change_event",
+        return_value=MagicMock(),
+    ):
+        await cover.async_added_to_hass()
+
+    assert cover.travel_calc.current_position() is None
+    assert cover.tilt_calc.current_position() == 40

@@ -339,10 +339,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def async_added_to_hass(self):
         """Only cover's position and tilt matters."""
         pos, tilt_pos = await self._async_load_restored_positions()
+        # The two trackers restore independently: the store can hold a tilt
+        # with no travel position (a raw command clears one tracker only).
         if self.travel_calc is not None and pos is not None:
             self.travel_calc.set_position(int(pos))
-            if self._has_tilt_support() and tilt_pos is not None:
-                self.tilt_calc.set_position(int(tilt_pos))
+        if self._has_tilt_support() and tilt_pos is not None:
+            self.tilt_calc.set_position(int(tilt_pos))
 
         # Register state change listeners for switch entities
         for attr in self._SWITCH_TARGET_ATTRS:
