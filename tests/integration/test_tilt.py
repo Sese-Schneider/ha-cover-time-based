@@ -5,7 +5,6 @@ Tests sequential tilt constraints through real HA service calls.
 
 from __future__ import annotations
 
-import time as time_mod
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -18,21 +17,10 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
+from custom_components.cover_time_based import travel_calculator
+from tests.helpers import FakeClock
+
 from .conftest import DOMAIN
-
-
-class MockTime:
-    """Controllable time source for TravelCalculator."""
-
-    def __init__(self):
-        self._base = time_mod.time()
-        self._total_offset = 0.0
-
-    def time(self):
-        return self._base + self._total_offset
-
-    def advance(self, seconds: float):
-        self._total_offset += seconds
 
 
 def _get_cover_entity(hass: HomeAssistant):
@@ -44,7 +32,7 @@ def _get_cover_entity(hass: HomeAssistant):
 
 
 async def test_sequential_tilt_moves_before_travel(
-    hass: HomeAssistant, setup_input_booleans
+    hass: HomeAssistant, setup_input_booleans, mock_clock
 ):
     """Sequential tilt: opening from closed moves tilt to 100% before travel.
 
@@ -69,48 +57,46 @@ async def test_sequential_tilt_moves_before_travel(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    mt = MockTime()
-    with patch("time.time", mt.time):
-        cover = _get_cover_entity(hass)
+    cover = _get_cover_entity(hass)
 
-        # Start at position 0 (closed), tilt at 30%
-        await cover.set_known_position(position=0)
-        await cover.set_known_tilt_position(tilt_position=30)
-        await hass.async_block_till_done()
-        assert cover.current_cover_position == 0
-        assert cover.current_cover_tilt_position == 30
+    # Start at position 0 (closed), tilt at 30%
+    await cover.set_known_position(position=0)
+    await cover.set_known_tilt_position(tilt_position=30)
+    await hass.async_block_till_done()
+    assert cover.current_cover_position == 0
+    assert cover.current_cover_tilt_position == 30
 
-        # Open cover — sequential tilt should tilt first
-        await hass.services.async_call(
-            "cover", "open_cover", {"entity_id": "cover.test_cover"}, blocking=True
-        )
-        await hass.async_block_till_done()
+    # Open cover — sequential tilt should tilt first
+    await hass.services.async_call(
+        "cover", "open_cover", {"entity_id": "cover.test_cover"}, blocking=True
+    )
+    await hass.async_block_till_done()
 
-        # Tilt should be moving first (open switch on for tilt pre-step)
-        assert cover.is_opening
+    # Tilt should be moving first (open switch on for tilt pre-step)
+    assert cover.is_opening
 
-        # Advance past tilt time (2s for tilt + margin)
-        mt.advance(3.0)
-        async_fire_time_changed(
-            hass, dt_util.utcnow() + timedelta(seconds=3), fire_all=True
-        )
-        await hass.async_block_till_done()
+    # Advance past tilt time (2s for tilt + margin)
+    mock_clock.advance(3.0)
+    async_fire_time_changed(
+        hass, dt_util.utcnow() + timedelta(seconds=3), fire_all=True
+    )
+    await hass.async_block_till_done()
 
-        # After tilt completes, travel should begin
-        # Tilt should be at 100%, position should be increasing
-        tilt = cover.current_cover_tilt_position
-        assert tilt is not None
-        assert tilt >= 90, f"Expected tilt >= 90% after pre-step, got {tilt}%"
+    # After tilt completes, travel should begin
+    # Tilt should be at 100%, position should be increasing
+    tilt = cover.current_cover_tilt_position
+    assert tilt is not None
+    assert tilt >= 90, f"Expected tilt >= 90% after pre-step, got {tilt}%"
 
-        # Advance past travel time
-        mt.advance(12.0)
-        async_fire_time_changed(
-            hass, dt_util.utcnow() + timedelta(seconds=12), fire_all=True
-        )
-        await hass.async_block_till_done()
+    # Advance past travel time
+    mock_clock.advance(12.0)
+    async_fire_time_changed(
+        hass, dt_util.utcnow() + timedelta(seconds=12), fire_all=True
+    )
+    await hass.async_block_till_done()
 
-        # Position should be at 100%
-        assert cover.current_cover_position == 100
+    # Position should be at 100%
+    assert cover.current_cover_position == 100
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
@@ -258,7 +244,7 @@ async def test_sequential_open_tilt_open_drives_close_relay(
 
 
 async def test_same_direction_retarget_tilt_cover_does_not_reissue_command(
-    hass: HomeAssistant, setup_input_booleans
+    hass: HomeAssistant, setup_input_booleans, mock_clock
 ):
     """Same-direction retarget on a tilt cover must not re-issue travel.
 
@@ -285,56 +271,54 @@ async def test_same_direction_retarget_tilt_cover_does_not_reissue_command(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    mt = MockTime()
-    with patch("time.time", mt.time):
-        cover = _get_cover_entity(hass)
-        # Fire HA time changes off a single base with offsets matching the
-        # cumulative MockTime advance, keeping the scheduler and
-        # TravelCalculator clocks aligned.
-        now = dt_util.utcnow()
+    cover = _get_cover_entity(hass)
+    # Fire HA time changes off a single base with offsets matching the
+    # cumulative FakeClock advance, keeping the scheduler and
+    # TravelCalculator clocks aligned.
+    now = dt_util.utcnow()
 
-        await cover.set_known_position(position=100)
-        await cover.set_known_tilt_position(tilt_position=50)
+    await cover.set_known_position(position=100)
+    await cover.set_known_tilt_position(tilt_position=50)
+    await hass.async_block_till_done()
+
+    with patch.object(cover, "_send_close", wraps=cover._send_close) as send_close:
+        # Mid-position move (closing).
+        await hass.services.async_call(
+            "cover",
+            "set_cover_position",
+            {"entity_id": "cover.test_cover", "position": 60},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+        assert cover.is_closing
+        assert send_close.call_count == 1
+
+        # Let the inline tilt pre-step finish and travel get underway.
+        mock_clock.advance(2.0)
+        async_fire_time_changed(hass, now + timedelta(seconds=2), fire_all=True)
+        await hass.async_block_till_done()
+        assert cover.travel_calc.is_traveling()
+
+        # Retarget (same direction) to a lower mid-position.
+        await hass.services.async_call(
+            "cover",
+            "set_cover_position",
+            {"entity_id": "cover.test_cover", "position": 30},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+        assert cover.is_closing
+        assert send_close.call_count == 1, (
+            "same-direction retarget must not re-command a tilt cover"
+        )
+
+        # Reaches the new target and stops there.
+        mock_clock.advance(8.0)
+        async_fire_time_changed(hass, now + timedelta(seconds=10), fire_all=True)
         await hass.async_block_till_done()
 
-        with patch.object(cover, "_send_close", wraps=cover._send_close) as send_close:
-            # Mid-position move (closing).
-            await hass.services.async_call(
-                "cover",
-                "set_cover_position",
-                {"entity_id": "cover.test_cover", "position": 60},
-                blocking=True,
-            )
-            await hass.async_block_till_done()
-            assert cover.is_closing
-            assert send_close.call_count == 1
-
-            # Let the inline tilt pre-step finish and travel get underway.
-            mt.advance(2.0)
-            async_fire_time_changed(hass, now + timedelta(seconds=2), fire_all=True)
-            await hass.async_block_till_done()
-            assert cover.travel_calc.is_traveling()
-
-            # Retarget (same direction) to a lower mid-position.
-            await hass.services.async_call(
-                "cover",
-                "set_cover_position",
-                {"entity_id": "cover.test_cover", "position": 30},
-                blocking=True,
-            )
-            await hass.async_block_till_done()
-            assert cover.is_closing
-            assert send_close.call_count == 1, (
-                "same-direction retarget must not re-command a tilt cover"
-            )
-
-            # Reaches the new target and stops there.
-            mt.advance(8.0)
-            async_fire_time_changed(hass, now + timedelta(seconds=10), fire_all=True)
-            await hass.async_block_till_done()
-
-        assert not cover.is_closing
-        assert cover.current_cover_position == 30
+    assert not cover.is_closing
+    assert cover.current_cover_position == 30
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
@@ -399,7 +383,7 @@ class TestDisplacedTiltMotor:
         cover = _get_cover_entity(hass)
         await cover.set_known_position(position=50)
         await cover.set_known_tilt_position(tilt_position=100)
-        with patch("time.time", return_value=1000):
+        with patch.object(travel_calculator, "time", FakeClock(wall=1000, mono=1000)):
             await hass.services.async_call(
                 "cover",
                 "set_cover_tilt_position",
@@ -426,42 +410,40 @@ class TestDisplacedTiltMotor:
 
     @pytest.mark.parametrize("control_mode", ["toggle", "toggle_opposite"])
     async def test_noop_travel_does_not_repulse_tilt_arrived_at_endpoint(
-        self, hass, tilt_motor
+        self, hass, tilt_motor, mock_clock
     ):
         """Arrival before the auto-updater tick must leave a self-stopped motor idle."""
         cover = _get_cover_entity(hass)
         await cover.set_known_position(position=50)
         await cover.set_known_tilt_position(tilt_position=50)
-        mt = MockTime()
-        with patch("time.time", mt.time):
+        await hass.services.async_call(
+            "cover",
+            "set_cover_tilt_position",
+            {"entity_id": cover.entity_id, "tilt_position": 100},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+        assert tilt_motor.direction == "open"
+        assert cover.tilt_calc.is_traveling()
+
+        # The motor self-stops at its limit before the next updater tick.
+        mock_clock.advance(3)
+        tilt_motor.direction = None
+        assert cover.tilt_calc.current_position() == 100
+        assert not cover.tilt_calc.is_traveling()
+        assert cover._moving_tilt_motor
+        tilt_motor.calls.clear()
+
+        for _ in range(2):
             await hass.services.async_call(
                 "cover",
-                "set_cover_tilt_position",
-                {"entity_id": cover.entity_id, "tilt_position": 100},
+                "set_cover_position",
+                {"entity_id": cover.entity_id, "position": 50},
                 blocking=True,
             )
             await hass.async_block_till_done()
-            assert tilt_motor.direction == "open"
-            assert cover.tilt_calc.is_traveling()
 
-            # The motor self-stops at its limit before the next updater tick.
-            mt.advance(3)
-            tilt_motor.direction = None
-            assert cover.tilt_calc.current_position() == 100
-            assert not cover.tilt_calc.is_traveling()
-            assert cover._moving_tilt_motor
-            tilt_motor.calls.clear()
-
-            for _ in range(2):
-                await hass.services.async_call(
-                    "cover",
-                    "set_cover_position",
-                    {"entity_id": cover.entity_id, "position": 50},
-                    blocking=True,
-                )
-                await hass.async_block_till_done()
-
-            assert tilt_motor.calls == []
-            assert tilt_motor.direction is None
-            assert not cover.tilt_calc.is_traveling()
-            assert cover._last_tilt_direction is None
+        assert tilt_motor.calls == []
+        assert tilt_motor.direction is None
+        assert not cover.tilt_calc.is_traveling()
+        assert cover._last_tilt_direction is None

@@ -6,13 +6,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 from homeassistant.const import SERVICE_OPEN_COVER
 
+from custom_components.cover_time_based import travel_calculator
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_TOGGLE_OPPOSITE,
 )
-from tests.helpers import relay_calls, stub_switches
+from tests.helpers import FakeClock, relay_calls, stub_switches
 
 
 def _make_state_event(entity_id, old_state, new_state):
@@ -609,7 +610,7 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
         stub_switches(cover)
         with (
             patch.object(cover, "async_write_ha_state"),
-            patch("time.time", return_value=1000),
+            patch.object(travel_calculator, "time", FakeClock(wall=1000, mono=1000)),
         ):
             await cover.set_tilt_position(30)
             assert cover._moving_tilt_motor and cover.tilt_calc.is_traveling()

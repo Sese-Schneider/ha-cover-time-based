@@ -29,6 +29,9 @@ class TravelStatus(Enum):
 class TravelCalculator:
     """Calculate the current position of a cover based on travel time.
 
+    Timestamps are time.monotonic() readings: a wall-clock step mid-travel
+    must not move the tracker.
+
     Position convention: 0 = fully closed, 100 = fully open.
     """
 
@@ -99,7 +102,7 @@ class TravelCalculator:
     def update_position(self, position: int) -> None:
         """Update known position of cover."""
         self._last_known_position = position
-        self._last_known_position_timestamp = time.time()
+        self._last_known_position_timestamp = time.monotonic()
         if position == self._travel_to_position:
             self._position_confirmed = True
         self._log_state("update_position")
@@ -152,8 +155,9 @@ class TravelCalculator:
     def start_travel(
         self,
         _travel_to_position: int,
+        *,
         delay: float = 0.0,
-        base_timestamp: float | None = None,
+        base_monotonic: float | None = None,
     ) -> None:
         """Start traveling to position.
 
@@ -162,19 +166,16 @@ class TravelCalculator:
             delay: Seconds to wait before tracking starts. Used for
                 sequential multi-step movements where a pre-step (e.g. tilt)
                 must complete before this calculator begins progressing.
-            base_timestamp: Unix timestamp the move actually began at, instead
-                of ``time.time()``. Used for relay-feedback timing, where the
-                motor got power at the switch echo's ``last_changed`` rather
-                than when the command was queued; the Zigbee round-trip then
-                falls outside the tracked travel. A base in the past means the
-                move is already partly complete; ``delay`` is still added on
-                top (e.g. mechanical spin-up folded into the same anchor).
+            base_monotonic: A ``time.monotonic()`` reading the move actually
+                began at, instead of now. Relay-feedback timing passes the
+                relay's confirmation instant so the command-to-echo gap falls
+                outside the tracked travel.
         """
         if self._last_known_position is None:
             self.set_position(_travel_to_position)
             return
         self.stop()
-        base = time.time() if base_timestamp is None else base_timestamp
+        base = time.monotonic() if base_monotonic is None else base_monotonic
         self._last_known_position_timestamp = base + delay
         self._travel_to_position = _travel_to_position
         self._position_confirmed = False
@@ -270,7 +271,7 @@ class TravelCalculator:
         )
         if remaining_travel_time <= 0:
             return self._travel_to_position
-        now = time.time()
+        now = time.monotonic()
         if now >= self._last_known_position_timestamp + remaining_travel_time:
             return self._travel_to_position
 

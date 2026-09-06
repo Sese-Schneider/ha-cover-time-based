@@ -770,21 +770,23 @@ class WrappedCoverTimeBased(CoverTimeBased):
             target, command, already_moving_same_dir
         )
 
-    async def _call_set_cover_position(self, position: int) -> None:
+    async def _call_set_cover_position(
+        self, position: int, *, stop: bool = False
+    ) -> None:
         """Forward a set_cover_position command to the wrapped entity.
 
         The forwarded value is translated to the underlying's frame
         (100 - position when inverted); the caller works in user frame.
         """
         self._start_bounce_grace_window()
-        await self.hass.services.async_call(
+        await self._call_service(
             "cover",
             "set_cover_position",
             {
                 "entity_id": self._cover_entity_id,
                 "position": self._invert_position(position),
             },
-            False,
+            stop=stop,
         )
 
     async def _call_cover_service(self, service: str, expected: int = 1) -> None:
@@ -803,9 +805,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         }.get(service)
         self._mark_switch_pending(self._cover_entity_id, expected)
         self._start_bounce_grace_window()
-        await self.hass.services.async_call(
-            "cover", service, {"entity_id": self._cover_entity_id}, False
-        )
+        await self._call_service("cover", service, {"entity_id": self._cover_entity_id})
 
     async def _on_own_echo_consumed(self, entity_id: str, new_val: str) -> None:
         """Drain surplus wrapped echoes once the commanded moving state arrives."""
@@ -874,7 +874,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
                     "_send_stop :: no native stop; freezing via set_cover_position(%d)",
                     round(pos),
                 )
-                await self._call_set_cover_position(round(pos))
+                await self._call_set_cover_position(round(pos), stop=True)
                 return
         await self._call_cover_service("stop_cover")
 
@@ -933,11 +933,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
         opening/closing echo, and a bounce window would swallow a fast settle
         report that the tilt settle-snap needs.
         """
-        await self.hass.services.async_call(
+        await self._call_service(
             "cover",
             "set_cover_tilt_position",
             {"entity_id": self._cover_entity_id, ATTR_TILT_POSITION: position},
-            False,
         )
 
     async def _prepare_native_tilt(self) -> None:

@@ -7,7 +7,6 @@ through the real HA service calls and event bus.
 from __future__ import annotations
 
 import asyncio
-import time as time_mod
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -19,6 +18,8 @@ from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
 )
+
+from tests.helpers import FakeClock
 
 from .conftest import DOMAIN
 
@@ -44,37 +45,14 @@ def _get_cover_entity(hass: HomeAssistant):
     return entities[0]
 
 
-class MockTime:
-    """Controllable time source for TravelCalculator.
-
-    Patches time.time so the TravelCalculator sees time advancing.
-    Does NOT interfere with async_fire_time_changed which relies on
-    the real time.time for its mock_seconds_into_future calculation.
-    """
-
-    def __init__(self):
-        self._base = time_mod.time()
-        self._total_offset = 0.0
-
-    @property
-    def real_base(self):
-        return self._base
-
-    def time(self):
-        return self._base + self._total_offset
-
-    def advance(self, seconds: float):
-        self._total_offset += seconds
-
-
-async def _advance_time(hass: HomeAssistant, mock_time: MockTime, seconds: float):
-    """Advance mock time.time and fire HA timer handles.
+async def _advance_time(hass: HomeAssistant, mock_clock: FakeClock, seconds: float):
+    """Advance the calculator's clock and fire HA timer handles.
 
     Uses fire_all=True to fire ALL scheduled timer handles (regardless
     of how far in the future they're scheduled), since async_track_time_interval
     uses loop.call_at which needs this to fire in tests.
     """
-    mock_time.advance(seconds)
+    mock_clock.advance(seconds)
     # We need a future timestamp for _async_fire_time_changed to fire the
     # scheduled timer handles. fire_all=True fires all handles regardless.
     future = dt_util.utcnow() + timedelta(seconds=seconds)
@@ -82,15 +60,7 @@ async def _advance_time(hass: HomeAssistant, mock_time: MockTime, seconds: float
     await hass.async_block_till_done()
 
 
-@pytest.fixture
-def mock_time():
-    """Provide a controllable time source and patch time.time."""
-    mt = MockTime()
-    with patch("time.time", mt.time):
-        yield mt
-
-
-async def test_open_track_auto_stop(hass: HomeAssistant, setup_cover, mock_time):
+async def test_open_track_auto_stop(hass: HomeAssistant, setup_cover, mock_clock):
     """Open -> position tracks upward -> auto-stops at 100%."""
     cover = _get_cover_entity(hass)
 
@@ -106,18 +76,18 @@ async def test_open_track_auto_stop(hass: HomeAssistant, setup_cover, mock_time)
     assert hass.states.get("input_boolean.open_switch").state == "on"
 
     # Advance to ~50%
-    await _advance_time(hass, mock_time, 5.0)
+    await _advance_time(hass, mock_clock, 5.0)
     pos = cover.current_cover_position
     assert pos is not None
     assert 20 <= pos <= 80, f"Expected ~50%, got {pos}%"
 
     # Advance past full travel
-    await _advance_time(hass, mock_time, 7.0)
+    await _advance_time(hass, mock_clock, 7.0)
     assert cover.current_cover_position == 100
     assert hass.states.get("input_boolean.open_switch").state == "off"
 
 
-async def test_stop_during_movement(hass: HomeAssistant, setup_cover, mock_time):
+async def test_stop_during_movement(hass: HomeAssistant, setup_cover, mock_clock):
     """Stop during movement freezes position at intermediate value."""
     cover = _get_cover_entity(hass)
 
@@ -129,7 +99,7 @@ async def test_stop_during_movement(hass: HomeAssistant, setup_cover, mock_time)
     )
     await hass.async_block_till_done()
 
-    await _advance_time(hass, mock_time, 5.0)
+    await _advance_time(hass, mock_clock, 5.0)
 
     await hass.services.async_call(
         "cover", "stop_cover", {"entity_id": "cover.test_cover"}, blocking=True
@@ -142,7 +112,7 @@ async def test_stop_during_movement(hass: HomeAssistant, setup_cover, mock_time)
     assert hass.states.get("input_boolean.open_switch").state == "off"
 
 
-async def test_set_position_mid_range(hass: HomeAssistant, setup_cover, mock_time):
+async def test_set_position_mid_range(hass: HomeAssistant, setup_cover, mock_clock):
     """set_cover_position(50) moves to target and stops."""
     cover = _get_cover_entity(hass)
 
@@ -159,7 +129,7 @@ async def test_set_position_mid_range(hass: HomeAssistant, setup_cover, mock_tim
 
     assert hass.states.get("input_boolean.open_switch").state == "on"
 
-    await _advance_time(hass, mock_time, 7.0)
+    await _advance_time(hass, mock_clock, 7.0)
 
     pos = cover.current_cover_position
     assert pos is not None
@@ -168,7 +138,7 @@ async def test_set_position_mid_range(hass: HomeAssistant, setup_cover, mock_tim
 
 
 async def test_endpoint_resync(
-    hass: HomeAssistant, setup_input_booleans, base_options, mock_time
+    hass: HomeAssistant, setup_input_booleans, base_options, mock_clock
 ):
     """Closing when already at 0 should still fire relay + run-on."""
     options = {**base_options, "endpoint_runon_time": 2.0}
@@ -209,7 +179,7 @@ async def test_endpoint_resync(
 
 
 async def test_resync_mid_travel_releases_the_relay(
-    hass: HomeAssistant, setup_cover, mock_time
+    hass: HomeAssistant, setup_cover, mock_clock
 ):
     """Declaring a known position while we are driving the cover stops the motor.
 
@@ -219,7 +189,7 @@ async def test_resync_mid_travel_releases_the_relay(
     await hass.services.async_call(
         "cover", "open_cover", {"entity_id": "cover.test_cover"}, blocking=True
     )
-    await _advance_time(hass, mock_time, 3)
+    await _advance_time(hass, mock_clock, 3)
     assert hass.states.get("input_boolean.open_switch").state == "on"
 
     await hass.services.async_call(
@@ -236,7 +206,7 @@ async def test_resync_mid_travel_releases_the_relay(
     assert state.attributes["current_position"] == 0
 
     # Nothing keeps running: the position does not creep afterwards.
-    await _advance_time(hass, mock_time, 20)
+    await _advance_time(hass, mock_clock, 20)
     state = hass.states.get("cover.test_cover")
     assert state.state == "closed"
     assert state.attributes["current_position"] == 0

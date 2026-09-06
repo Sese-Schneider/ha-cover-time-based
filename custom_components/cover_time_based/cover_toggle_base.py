@@ -79,7 +79,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             return True
         return False
 
-    async def _pulse_relay(self, entity_id, arm_feedback=False):
+    async def _pulse_relay(self, entity_id, arm_feedback=False, *, stop: bool = False):
         """Pulse a relay ON with a guaranteed rising edge.
 
         A toggle motor controller acts on the relay's OFF→ON edge, so a plain
@@ -154,11 +154,11 @@ class ToggleBaseCover(SwitchCoverTimeBased):
                 " still on",
                 entity_id,
             )
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_on",
             {"entity_id": entity_id},
-            False,
+            stop=stop,
         )
 
     async def _turn_off_relay(self, entity_id):
@@ -177,11 +177,10 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         """
         if not self._relay_reports_off:
             return
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": entity_id},
-            False,
         )
 
     async def _release_relay(self, entity_id):

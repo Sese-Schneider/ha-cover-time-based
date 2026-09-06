@@ -19,6 +19,8 @@ from .single_button_cycle import Action, Phase, plan
 
 # The phase a self-stopping motor is in once it has reached a travel limit.
 _PHASE_AT_ENDPOINT: dict[int, Phase] = {100: Phase.AT_OPEN, 0: Phase.AT_CLOSED}
+# The limit a motor running in each direction reaches on its own.
+_LIMIT_WHILE_MOVING: dict[Phase, int] = {Phase.MOVING_UP: 100, Phase.MOVING_DOWN: 0}
 
 
 def _live(task: asyncio.Task | None) -> asyncio.Task | None:
@@ -77,11 +79,10 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
     # --- press sequencing ---------------------------------------------
     async def _release_button(self) -> None:
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._open_switch_entity_id},
-            False,
         )
 
     def _start_press_sequence(self, action: Action) -> None:
@@ -102,6 +103,8 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         armed = action is not Action.STOP and self._arm_relay_feedback(
             self._open_switch_entity_id
         )
+        if self._removed:
+            return
         self._press_task = self.hass.async_create_task(
             self._run_press_sequence(phases, armed=armed)
         )
@@ -192,8 +195,11 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
                         if confirming
                         else window,
                     )
-                await self.hass.services.async_call(
-                    "homeassistant", "turn_on", {"entity_id": entity_id}, False
+                await self._call_service(
+                    "homeassistant",
+                    "turn_on",
+                    {"entity_id": entity_id},
+                    stop=phase in (Phase.STOPPED_AFTER_UP, Phase.STOPPED_AFTER_DOWN),
                 )
                 self._phase = phase
                 self._press_active = True
@@ -257,6 +263,15 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             task.cancel()
         self._press_task = None
         self._cancel_settle()
+        # Anchor an arrival whose settle margin removal cut short. A phase
+        # pointing away from the endpoint is a departure, not an arrival.
+        position = self.travel_calc.current_position()
+        if (
+            not self.travel_calc.is_traveling()
+            and position is not None
+            and _LIMIT_WHILE_MOVING.get(self._phase) == position
+        ):
+            self._phase = _PHASE_AT_ENDPOINT[position]
         if self._open_switch_entity_id:
             await self._release_button()
 
@@ -274,6 +289,25 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         self._start_press_sequence(Action.STOP)
 
     # --- endpoint re-anchor -------------------------------------------
+    def _park_axis_at_limit(self, calc, limit: int) -> None:
+        """Park from the phase, not the tracker: the phase is exact per press.
+
+        The tracker starts at the command, but the motor only runs once the
+        final press has gone out. A MOVING phase means it is running and will
+        reach that direction's limit. Any other phase is exact, but its
+        position is unknown: an interrupted nudge can run opposite to the
+        direction the tracker counted, so that estimate must be forgotten.
+        """
+        if calc is not self.travel_calc:
+            super()._park_axis_at_limit(calc, limit)
+            return
+        running_to = _LIMIT_WHILE_MOVING.get(self._phase)
+        if running_to is None:
+            calc.clear_position()
+            return
+        super()._park_axis_at_limit(calc, running_to)
+        self._phase = _PHASE_AT_ENDPOINT[running_to]
+
     def _on_endpoint_reached(self, endpoint: int) -> None:
         """Anchor the phase at the limit the tracker just reached.
 

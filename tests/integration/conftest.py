@@ -6,13 +6,27 @@ input_boolean entities simulate physical relay switches.
 
 from __future__ import annotations
 
+import time
+from unittest.mock import patch
+
 import pytest
 from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.cover_time_based import travel_calculator
+from tests.helpers import FakeClock
+
 DOMAIN = "cover_time_based"
+
+
+@pytest.fixture
+def mock_clock():
+    """Drive the calculator's clocks without changing the event loop's clock."""
+    clock = FakeClock(wall=time.time(), mono=time.monotonic())
+    with patch.object(travel_calculator, "time", clock):
+        yield clock
 
 
 @pytest.fixture(autouse=True)

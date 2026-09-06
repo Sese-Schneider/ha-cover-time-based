@@ -329,7 +329,8 @@ class TestRemoveFromHass:
         unsub2 = MagicMock()
         cover._state_listener_unsubs = [unsub1, unsub2]
 
-        await cover.async_will_remove_from_hass()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_will_remove_from_hass()
 
         unsub1.assert_called_once()
         unsub2.assert_called_once()
@@ -341,7 +342,8 @@ class TestRemoveFromHass:
         timer = MagicMock()
         cover._pending_switch_timers = {"switch.open": timer}
 
-        await cover.async_will_remove_from_hass()
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_will_remove_from_hass()
 
         timer.assert_called_once()
         assert len(cover._pending_switch_timers) == 0

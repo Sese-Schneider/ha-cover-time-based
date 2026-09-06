@@ -7,11 +7,8 @@ survives even when Home Assistant does not persist entity state to disk
 
 from __future__ import annotations
 
-import time as time_mod
 from datetime import timedelta
-from unittest.mock import patch
 
-import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_component import DATA_INSTANCES
 from homeassistant.util import dt as dt_util
@@ -24,6 +21,7 @@ from custom_components.cover_time_based.position_storage import (
     STORAGE_KEY,
     async_get_position_store,
 )
+from tests.helpers import FakeClock
 
 from .conftest import DOMAIN
 
@@ -53,27 +51,8 @@ BASIC_OPTIONS = {
 }
 
 
-class _MockTime:
-    def __init__(self):
-        self._base = time_mod.time()
-        self._offset = 0.0
-
-    def time(self):
-        return self._base + self._offset
-
-    def advance(self, seconds: float):
-        self._offset += seconds
-
-
-@pytest.fixture
-def mock_time():
-    mt = _MockTime()
-    with patch("time.time", mt.time):
-        yield mt
-
-
-async def _advance_time(hass: HomeAssistant, mock_time: _MockTime, seconds: float):
-    mock_time.advance(seconds)
+async def _advance_time(hass: HomeAssistant, mock_clock: FakeClock, seconds: float):
+    mock_clock.advance(seconds)
     future = dt_util.utcnow() + timedelta(seconds=seconds)
     async_fire_time_changed(hass, future, fire_all=True)
     await hass.async_block_till_done()
@@ -158,7 +137,7 @@ async def test_set_known_tilt_position_writes_to_store(
 
 
 async def test_movement_completion_writes_to_store(
-    hass: HomeAssistant, hass_storage, setup_input_booleans, mock_time
+    hass: HomeAssistant, hass_storage, setup_input_booleans, mock_clock
 ):
     """When a movement finishes at an endpoint, position should be saved."""
     entry = _make_entry(BASIC_OPTIONS)
@@ -180,7 +159,7 @@ async def test_movement_completion_writes_to_store(
     await hass.async_block_till_done()
 
     # Advance past full travel — auto-stop should fire and persist.
-    await _advance_time(hass, mock_time, 11.0)
+    await _advance_time(hass, mock_clock, 11.0)
     await _flush_position_store(hass)
 
     assert cover.current_cover_position == 100
@@ -191,7 +170,7 @@ async def test_movement_completion_writes_to_store(
 
 
 async def test_mid_movement_stop_writes_to_store(
-    hass: HomeAssistant, hass_storage, setup_input_booleans, mock_time
+    hass: HomeAssistant, hass_storage, setup_input_booleans, mock_clock
 ):
     """Stopping mid-travel should save the intermediate position."""
     entry = _make_entry(BASIC_OPTIONS)
@@ -211,7 +190,7 @@ async def test_mid_movement_stop_writes_to_store(
     await cover.async_open_cover()
     await hass.async_block_till_done()
 
-    await _advance_time(hass, mock_time, 3.0)
+    await _advance_time(hass, mock_clock, 3.0)
     await cover.async_stop_cover()
     await hass.async_block_till_done()
     await _flush_position_store(hass)

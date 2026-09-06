@@ -75,11 +75,10 @@ class SwitchModeCover(SwitchCoverTimeBased):
             _LOGGER.debug("_interlock_off :: turning off %s", entity_id)
             self._mark_switch_pending(entity_id, 1)
             self._note_relay_intent(entity_id, False)
-            await self.hass.services.async_call(
+            await self._call_service(
                 "homeassistant",
                 "turn_off",
                 {"entity_id": entity_id},
-                False,
             )
 
     async def _settle_external_endpoint(self) -> None:
@@ -166,18 +165,16 @@ class SwitchModeCover(SwitchCoverTimeBased):
         if not self._switch_is_on(self._open_switch_entity_id):
             self._mark_driving_relay_pending(self._open_switch_entity_id)
         self._note_relay_intent(self._close_switch_entity_id, False)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._close_switch_entity_id},
-            False,
         )
         self._note_relay_intent(self._open_switch_entity_id, True)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_on",
             {"entity_id": self._open_switch_entity_id},
-            False,
         )
 
     async def _send_close(self) -> None:
@@ -190,18 +187,16 @@ class SwitchModeCover(SwitchCoverTimeBased):
         if not self._switch_is_on(self._close_switch_entity_id):
             self._mark_driving_relay_pending(self._close_switch_entity_id)
         self._note_relay_intent(self._open_switch_entity_id, False)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._open_switch_entity_id},
-            False,
         )
         self._note_relay_intent(self._close_switch_entity_id, True)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_on",
             {"entity_id": self._close_switch_entity_id},
-            False,
         )
 
     async def _send_stop(self) -> None:
@@ -213,16 +208,14 @@ class SwitchModeCover(SwitchCoverTimeBased):
         if self._relay_is_on(self._open_switch_entity_id):
             self._mark_switch_pending(self._open_switch_entity_id, 1)
         self._note_relay_intent(self._close_switch_entity_id, False)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._close_switch_entity_id},
-            False,
         )
         self._note_relay_intent(self._open_switch_entity_id, False)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._open_switch_entity_id},
-            False,
         )

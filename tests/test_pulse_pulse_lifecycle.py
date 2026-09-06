@@ -331,6 +331,7 @@ async def test_removal_cancels_pulses_and_turns_relays_off(make_cover):
     cover.stop_auto_updater = MagicMock()
 
     with (
+        patch.object(cover, "async_write_ha_state"),
         patch(
             "custom_components.cover_time_based.cover_pulse_mode.sleep",
             new_callable=AsyncMock,
@@ -350,5 +351,8 @@ async def test_removal_cancels_pulses_and_turns_relays_off(make_cover):
 
         # The mid-pulse relay was turned off, not left latched.
         assert hass.states.state(OPEN) == "off"
-        # The completion task was cancelled and the registry cleared.
+        # Removal's stop pulse must finish releasing its relay too.
+        await asyncio.gather(*cover._pulse_tasks.values())
+        assert hass.states.state(STOP) == "off"
+        # No pulse completion remains after the stop relay is released.
         assert cover._pulse_tasks == {}

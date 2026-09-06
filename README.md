@@ -566,6 +566,12 @@ phase settled. It is a wait, not a relay hold. If the presses that started the
 move are still being sent when the estimated arrival time passes, the wait
 starts once the last press has gone out.
 
+Saving the configuration card reloads the cover, which cuts that wait short. On
+hardware that stops itself at its limits the motor keeps running, so the reload
+records the limit it is heading for — and Single button settles its phase there
+too — rather than the position it had reached. Let the cover arrive before you
+command the reloaded entity.
+
 ### Minimum movement time
 
 This blocks relay activations too brief to physically move the cover, which
