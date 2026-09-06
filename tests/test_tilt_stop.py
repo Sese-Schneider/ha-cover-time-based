@@ -12,6 +12,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_TOGGLE_OPPOSITE,
 )
+from tests.helpers import stub_switches
 
 
 def _make_state_event(entity_id, old_state, new_state):
@@ -562,3 +563,285 @@ async def test_external_tilt_press_before_tilt_calibration_does_not_crash(
     event = _make_state_event("switch.tilt_open", "off", "on")
     with patch.object(cover, "async_write_ha_state"):
         await cover._async_switch_state_changed(event)  # must not raise
+
+
+# --- A travel command that goes nowhere still releases a running tilt motor ---
+
+# The tilt stop ``_tilt_settle`` emits mid-tilt, per control mode: switch mode
+# de-energizes its latched relays, toggle re-pulses the last tilt direction.
+_TILT_STOP_CALL = {
+    CONTROL_MODE_SWITCH: ("turn_off", "switch.tilt_close"),
+    CONTROL_MODE_TOGGLE: ("turn_on", "switch.tilt_close"),
+}
+
+
+def _tilt_state(cover):
+    return (
+        f"_moving_tilt_motor={cover._moving_tilt_motor}, "
+        f"tilt_calc.is_traveling()={cover.tilt_calc.is_traveling()}, "
+        f"tilt={cover.tilt_calc.current_position()}"
+    )
+
+
+async def _start_plain_tilt_motor_move(cover, target=0):
+    """Dual-motor cover parked fully open, tilt half way, tilt motor now running."""
+    cover.travel_calc.set_position(100)
+    cover.tilt_calc.set_position(50)
+    stub_switches(cover)
+    await cover.set_tilt_position(target)
+    assert cover._moving_tilt_motor, "precondition: dedicated tilt motor running"
+    assert ("turn_on", "switch.tilt_close") in _all_calls(cover), (
+        "precondition: tilt close relay energised"
+    )
+    return len(cover.hass.services.async_call.call_args_list)
+
+
+class TestTravelCommandReleasesDisplacedTiltMotor:
+    """A travel command displaces a running dedicated tilt motor even when the
+    travel itself is a no-op.
+
+    ``_abandon_active_lifecycle`` clears ``_moving_tilt_motor`` on entry to
+    every movement method and returns without stopping anything when no
+    multi-phase lifecycle is live, so the travel funnel and ``set_position``
+    used to run their "already at target" branches — and their no-pre-step
+    normal path — with the flag already False, leaving the tilt motor driving
+    to its limit with nothing tracking it.
+    """
+
+    @pytest.mark.parametrize(
+        "control_mode",
+        [CONTROL_MODE_SWITCH, CONTROL_MODE_TOGGLE],
+        ids=["switch", "toggle"],
+    )
+    async def test_open_at_open_endpoint_releases_running_tilt_motor(
+        self, make_cover, control_mode
+    ):
+        """open_cover while already at 100 must stop the running tilt motor."""
+        cover = make_cover(control_mode=control_mode, **DUAL)
+        with patch.object(cover, "async_write_ha_state"):
+            n = await _start_plain_tilt_motor_move(cover)
+            assert cover.tilt_calc.is_traveling()
+            await cover.async_open_cover()
+
+        tilt_calls = _tilt_switch_calls(cover, n)
+        assert _TILT_STOP_CALL[control_mode] in tilt_calls, (
+            "open_cover at the open endpoint left the tilt motor running; "
+            f"tilt-relay calls after the travel command: {tilt_calls!r} "
+            f"(all calls: {_all_calls(cover, n)!r}; {_tilt_state(cover)})"
+        )
+
+    async def test_open_at_endpoint_during_relay_feedback_wait_releases_tilt_motor(
+        self, make_cover
+    ):
+        """Same, while the tilt move is still parked waiting for its relay echo.
+
+        ``wait_for_relay_feedback`` means the tilt relay is commanded but
+        tracking has not started, so ``tilt_calc.is_traveling()`` is False and
+        the abandon also drops the arm — nothing left to ever stop the motor.
+        """
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SWITCH, wait_for_relay_feedback=True, **DUAL
+        )
+        with patch.object(cover, "async_write_ha_state"):
+            n = await _start_plain_tilt_motor_move(cover)
+            await asyncio.sleep(0)  # let the feedback task reach its await
+            assert not cover.tilt_calc.is_traveling(), (
+                "precondition: parked on the echo"
+            )
+            await cover.async_open_cover()
+
+        tilt_calls = _tilt_switch_calls(cover, n)
+        assert any(c[0] == "turn_off" for c in tilt_calls), (
+            "open_cover at the open endpoint during the relay-feedback wait left "
+            f"the tilt motor running; tilt-relay calls: {tilt_calls!r} "
+            f"(all calls: {_all_calls(cover, n)!r}; {_tilt_state(cover)})"
+        )
+
+    async def test_set_position_to_current_releases_running_tilt_motor(
+        self, make_cover
+    ):
+        """set_position(100) while already at 100 must stop the tilt motor."""
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, **DUAL)
+        with patch.object(cover, "async_write_ha_state"):
+            n = await _start_plain_tilt_motor_move(cover)
+            await cover.set_position(100)
+
+        tilt_calls = _tilt_switch_calls(cover, n)
+        assert any(c[0] == "turn_off" for c in tilt_calls), (
+            "set_position at the current position left the tilt motor running; "
+            f"tilt-relay calls: {tilt_calls!r} (all calls: {_all_calls(cover, n)!r}; "
+            f"{_tilt_state(cover)})"
+        )
+
+    @pytest.mark.parametrize(
+        "control_mode",
+        [CONTROL_MODE_SWITCH, CONTROL_MODE_TOGGLE],
+        ids=["switch", "toggle"],
+    )
+    async def test_release_lands_on_the_travel_command_not_on_auto_stop(
+        self, make_cover, control_mode
+    ):
+        """The stop belongs to the travel command; auto-stop cannot supply it.
+
+        The abandoned tilt move's own completion is no rescue: its
+        "drove the dedicated tilt motor" branch in ``auto_stop_if_necessary``
+        reads ``_moving_tilt_motor``, which the abandon already cleared, so it
+        takes the travel branch and never touches the tilt relay.
+        """
+        cover = make_cover(control_mode=control_mode, **DUAL)
+        with patch.object(cover, "async_write_ha_state"):
+            # A MID-tilt target, so no mode can plead "the motor self-stops on
+            # its limit switch": at 30% the motor has to be told to stop.
+            n = await _start_plain_tilt_motor_move(cover, target=30)
+            await cover.async_open_cover()
+            during_travel = _tilt_switch_calls(cover, n)
+            # The tilt motor's orphaned tracker eventually reaches its target.
+            cover.tilt_calc.set_position(30)
+            m = len(cover.hass.services.async_call.call_args_list)
+            await cover.auto_stop_if_necessary()
+
+        assert _TILT_STOP_CALL[control_mode] in during_travel, (
+            "the travel command did not de-energise the tilt relay; "
+            f"tilt-relay calls: {during_travel!r} ({_tilt_state(cover)})"
+        )
+        assert _tilt_switch_calls(cover, m) == [], (
+            "auto_stop_if_necessary must have nothing left to do on the tilt "
+            f"axis: {_tilt_switch_calls(cover, m)!r}"
+        )
+
+    @pytest.mark.parametrize(
+        "travel",
+        [
+            lambda cover: cover.async_open_cover(),
+            lambda cover: cover.set_position(90),
+        ],
+        ids=["open_cover", "set_position"],
+    )
+    async def test_travel_with_tilt_already_safe_releases_running_tilt_motor(
+        self, make_cover, travel
+    ):
+        """The normal path strands the motor too when no pre-step is planned.
+
+        Tilt already sits at the safe position, so ``_plan_tilt_for_travel``
+        starts nothing and there is no pre-step to take the motor over — the
+        travel relay would energise with the tilt relay still latched, and
+        ``_begin_movement`` would retarget tilt_calc as a coupled calculator
+        while the motor physically drives the other way. Both travel funnels
+        (``_async_move_to_endpoint`` and ``set_position``) reach that point.
+        """
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SWITCH, safe_tilt_position=100, **DUAL
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+        stub_switches(cover)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(0)
+            assert cover._moving_tilt_motor, "precondition: tilt motor running"
+            n = len(cover.hass.services.async_call.call_args_list)
+            await travel(cover)
+
+        calls = _all_calls(cover, n)
+        tilt_off = next(
+            i
+            for i, c in enumerate(calls)
+            if c[0] == "turn_off" and c[1].startswith("switch.tilt_")
+        )
+        travel_on = next(
+            i for i, c in enumerate(calls) if c == ("turn_on", "switch.open")
+        )
+        assert tilt_off < travel_on, (
+            f"the tilt motor must be released before the travel relay: {calls!r}"
+        )
+        assert not cover.tilt_calc.is_traveling()
+        assert cover.travel_calc.is_traveling()
+
+    async def test_open_during_feedback_wait_cancels_the_tilt_deferred_start(
+        self, make_cover
+    ):
+        """The released motor's deferred start must not resurrect its tracking.
+
+        Under ``wait_for_relay_feedback`` the displaced tilt move's start is
+        parked in ``_startup_delay_task`` awaiting its relay's ON echo. Left
+        alive, that echo would start tilt tracking against a relay the release
+        just de-energised — tracked phantom motion.
+        """
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SWITCH, wait_for_relay_feedback=True, **DUAL
+        )
+        with patch.object(cover, "async_write_ha_state"):
+            await _start_plain_tilt_motor_move(cover)
+            await asyncio.sleep(0)
+            assert cover._startup_delay_task is not None, (
+                "precondition: the tilt start is parked on its relay echo"
+            )
+            await cover.async_open_cover()
+
+            assert (
+                cover._startup_delay_task is None or cover._startup_delay_task.done()
+            ), "the displaced tilt move's deferred start outlived its release"
+
+            # The relay's ON echo finally arrives, long after the release.
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.tilt_close", "off", "on")
+            )
+            await asyncio.sleep(0)
+
+        assert not cover.tilt_calc.is_traveling(), (
+            "a late relay echo resurrected tilt tracking against a de-energised "
+            f"relay ({_tilt_state(cover)})"
+        )
+
+    async def test_external_travel_press_leaves_the_tilt_motor_running(
+        self, make_cover
+    ):
+        """The release is for commands the integration drives, not wall presses.
+
+        A press on the travel button did not de-energize the tilt relay, so the
+        tilt motor really does keep its own move (and on momentary hardware a
+        stop here would be a relay pulse).
+        """
+        cover = make_cover(control_mode=CONTROL_MODE_SWITCH, **DUAL)
+        with patch.object(cover, "async_write_ha_state"):
+            n = await _start_plain_tilt_motor_move(cover)
+            cover._triggered_externally = True
+            await cover.async_open_cover()
+
+        assert _tilt_switch_calls(cover, n) == [], (
+            f"an external travel press touched the tilt relays: "
+            f"{_tilt_switch_calls(cover, n)!r}"
+        )
+        assert cover.tilt_calc.is_traveling(), "the tilt motor keeps its own move"
+
+    async def test_open_while_a_same_direction_startup_delay_runs_releases_tilt(
+        self, make_cover
+    ):
+        """The "startup delay already active" no-op is a release site too.
+
+        A dual-motor tilt open leaves ``_last_command`` at ``open_cover`` with
+        the tilt move's deferred start still pending, so a following
+        ``open_cover`` returns from that branch — having displaced the tilt
+        motor without ever commanding travel.
+        """
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SWITCH, wait_for_relay_feedback=True, **DUAL
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(50)
+        stub_switches(cover)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(100)
+            await asyncio.sleep(0)
+            assert cover._last_command == SERVICE_OPEN_COVER
+            assert cover._startup_delay_task is not None
+            n = len(cover.hass.services.async_call.call_args_list)
+            await cover.async_open_cover()
+
+        tilt_calls = _tilt_switch_calls(cover, n)
+        assert any(c[0] == "turn_off" for c in tilt_calls), (
+            "the startup-delay no-op left the tilt motor running; "
+            f"tilt-relay calls: {tilt_calls!r} ({_tilt_state(cover)})"
+        )
+        assert ("turn_on", "switch.open") not in _all_calls(cover, n), (
+            "the branch must stay a no-op on the travel axis"
+        )

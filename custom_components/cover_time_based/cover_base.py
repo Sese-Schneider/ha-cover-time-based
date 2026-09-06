@@ -1360,6 +1360,42 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
                 await self._send_tilt_stop()
 
+    async def _release_displaced_tilt_motor(self, was_tilt_motor_move: bool) -> None:
+        """Stop a dedicated tilt motor that a travel command displaced but
+        never took over.
+
+        The travel funnels clear ``_moving_tilt_motor`` on entry (via
+        ``_abandon_active_lifecycle``), so the caller captures the flag first
+        and passes it in. A tilt-to-safe pre-step that starts takes the motor
+        over and must not call this; every other way out of a travel funnel —
+        an early return (a resync at the current position, a ``set_position``
+        to where the cover already is, a startup-delay no-op) or a travel that
+        starts with no pre-step because tilt is already safe — would otherwise
+        leave the motor running with its tracker orphaned, or retarget its
+        tracker while it drives the other way. Tilt half only: the travel relay
+        is the caller's business (a resync re-drives it on purpose).
+
+        Unlike ``_stop_displaced_movement_for_tilt`` (a tilt *reversal*), this
+        settles rather than sending a bare tilt stop, so a momentary relay is
+        not re-pulsed at a tilt endpoint; and it cancels a pending deferred
+        start, which under relay feedback is this very tilt move waiting for
+        its relay's confirmation.
+
+        Gated on ``_triggered_externally`` like ``_abandon_active_lifecycle``'s
+        own tilt stop: a wall press on the travel button did not de-energize
+        the tilt relay, so echoing a stop at it would stop a motor the user
+        left running — on momentary hardware by pulsing its relay. The
+        integration releases only a motor it is itself displacing.
+        """
+        if not was_tilt_motor_move or self._triggered_externally:
+            return
+        self._log("_release_displaced_tilt_motor :: stopping displaced tilt motor")
+        self._cancel_startup_delay_task()
+        self.tilt_calc.stop()
+        self.stop_auto_updater()
+        await self._tilt_settle()
+        self._on_tilt_motor_move_complete()
+
     async def async_stop_cover(
         self, *, supersede: bool = True, tilt_axis_reported: bool = False, **kwargs
     ):
@@ -1695,6 +1731,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self.set_tilt_position(articulated)
             return
 
+        # Capture before _abandon_active_lifecycle resets it — see
+        # _release_displaced_tilt_motor.
+        was_tilt_motor_move = self._moving_tilt_motor
         await self._abandon_active_lifecycle()
 
         closing = target == 0
@@ -1711,6 +1750,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 await self._neutralize_parked_move()
                 await self._async_handle_command(SERVICE_STOP_COVER)
                 self._last_command = None
+                await self._release_displaced_tilt_motor(was_tilt_motor_move)
                 # Silent: no travel started. _movement_started must read this
                 # as "not started" — see its docstring.
                 return
@@ -1718,6 +1758,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._log(
                     "_async_move_to_endpoint :: startup delay already active, not restarting"
                 )
+                await self._release_displaced_tilt_motor(was_tilt_motor_move)
                 # Silent: no travel started. _movement_started must read this
                 # as "not started" — see its docstring.
                 return
@@ -1754,6 +1795,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             # Silent: a relay resync fires here, but travel_calc never enters
             # "traveling" — _movement_started must still read this as "not
             # started". Not reachable from _force_full_redrive (it seeds the
@@ -1807,6 +1849,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
         if started:
             return
+
+        # No pre-step took the tilt motor over, so this travel command displaces
+        # it: release it before energising the travel relay, or _begin_movement
+        # retargets tilt_calc as a coupled calculator while the motor drives the
+        # other way.
+        await self._release_displaced_tilt_motor(was_tilt_motor_move)
 
         if not suppress_start_command:
             await self._async_handle_command(command)
@@ -2064,6 +2112,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 "set_position :: forced endpoint redrive did not start, moving directly"
             )
         self._self_initiated_movement = not self._triggered_externally
+        # Capture before _abandon_active_lifecycle resets it — see
+        # _release_displaced_tilt_motor.
+        was_tilt_motor_move = self._moving_tilt_motor
         await self._abandon_active_lifecycle()
         current = self.travel_calc.current_position()
         target = position
@@ -2084,6 +2135,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         elif target > current:
             command = SERVICE_OPEN_COVER
         else:
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return
 
         closing = command == SERVICE_CLOSE_COVER
@@ -2118,6 +2170,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 return
             current = self.travel_calc.current_position()
             if target == current:
+                await self._release_displaced_tilt_motor(was_tilt_motor_move)
                 return
 
         relay_was_on = self._cancel_delay_task()
@@ -2159,6 +2212,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
         if started:
             return
+
+        # No pre-step took the tilt motor over — see _async_move_to_endpoint's
+        # equivalent site.
+        await self._release_displaced_tilt_motor(was_tilt_motor_move)
 
         coupled_calc = self.tilt_calc if tilt_target is not None else None
 
