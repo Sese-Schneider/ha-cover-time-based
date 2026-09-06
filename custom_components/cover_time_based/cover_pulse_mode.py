@@ -34,6 +34,9 @@ class PulseModeCover(SwitchCoverTimeBased):
     the ON/OFF marks are made conditional on the relay's live state.
     """
 
+    # A pulse's deferred completion OFF follows its confirming ON.
+    _own_echoes_after_confirming_on = 1
+
     def __init__(self, pulse_time, send_endpoint_stop=True, **kwargs):
         super().__init__(**kwargs)
         self._pulse_time = pulse_time

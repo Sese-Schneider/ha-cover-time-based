@@ -802,7 +802,7 @@ class TestRelayFeedbackArming:
     motor: the last press of the plan."""
 
     @pytest.mark.asyncio
-    async def test_movement_arms_the_button_and_counts_the_final_press(self):
+    async def test_movement_arms_the_button_and_counts_every_press(self):
         cover = _make_sb_cover(feedback=True)
         stub_switches(cover)
         cover._phase = Phase.STOPPED_AFTER_UP  # OPEN = 3 presses
@@ -816,13 +816,16 @@ class TestRelayFeedbackArming:
             # _async_handle_command returns.
             assert cover._consume_feedback_arm() == "switch.button"
             await asyncio.sleep(0)  # press 1 ON edge
-            # A nudge press is not pre-counted; its echo must not resolve the wait.
-            assert cover._pending_switch.get("switch.button", 0) == 0
+            # A nudge press is pre-counted too: its echoes are filtered, and
+            # while they are outstanding the final press's ON cannot be
+            # mistaken for them (see tests/test_relay_feedback.py).
+            assert cover._pending_switch.get("switch.button", 0) == 2
             gate.set()
             await _drain(cover)
         assert len(_presses(cover)) == 3
-        # Only the final press's ON + OFF echoes are pre-counted.
-        assert cover._pending_switch.get("switch.button", 0) == 2
+        # Every press's ON + OFF echoes are pre-counted; the final press's ON
+        # is the confirmation, followed by its own OFF.
+        assert cover._pending_switch.get("switch.button", 0) == 6
 
     @pytest.mark.asyncio
     async def test_single_press_plan_counts_that_press(self):
@@ -856,7 +859,9 @@ class TestRelayFeedbackArming:
             await cover._send_stop()
             assert cover._consume_feedback_arm() is None
             await _drain(cover)
-        assert cover._pending_switch.get("switch.button", 0) == 0
+        # Its echoes are still counted, so a late one cannot be taken for the
+        # confirmation of the drive press that follows a stop.
+        assert cover._pending_switch.get("switch.button", 0) == 2
 
     @pytest.mark.asyncio
     async def test_empty_plan_does_not_arm(self):

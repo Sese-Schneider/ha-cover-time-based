@@ -31,6 +31,16 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
     supports_tilt = False
     _missing_entities_label = "button entity"
+    # A stop is another press, and the run it ends began at the press before
+    # it: the tracker has to have started on that press's ON confirmation
+    # before the movement is torn down, or the motor runs between the two
+    # presses with nothing counting it — see _await_confirmation_before_stop.
+    _stop_is_a_tap = True
+    # A press's own release OFF follows its confirming ON. The count has to be
+    # exact: a button that reports its ON but never its OFF leaves a mark per
+    # press outstanding, so a multi-press plan's confirming ON is never taken
+    # and tracking starts on the timeout fallback instead.
+    _own_echoes_after_confirming_on = 1
 
     def __init__(self, pulse_time, **kwargs):
         super().__init__(**kwargs)
@@ -93,7 +103,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             self._open_switch_entity_id
         )
         self._press_task = self.hass.async_create_task(
-            self._run_press_sequence(phases, mark_final_press=armed)
+            self._run_press_sequence(phases, armed=armed)
         )
 
     async def _supersede_active_press(self) -> None:
@@ -136,7 +146,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         await sleep(DIRECTION_CHANGE_DELAY)
 
     async def _run_press_sequence(
-        self, phases: list[Phase], *, mark_final_press: bool = False
+        self, phases: list[Phase], *, armed: bool = False
     ) -> None:
         """Press once per planned phase, gap-spaced, updating phase each time.
 
@@ -156,25 +166,31 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         cancellation, since that would race the superseding command's
         cleanup.
 
-        ``mark_final_press`` pre-counts the ON and OFF echoes of the LAST press
-        only. The base starts a parked feedback wait from the echo-filter
-        branch, so a pre-counted ON echo is what anchors tracking -- and the
-        press that actually starts the motor is the last one of the plan, not
-        a nudge before it. Uncounted echoes fall through to
-        _handle_external_state_change, which ignores them.
+        Under ``wait_for_relay_feedback`` every press pre-counts its ON and OFF
+        echoes -- a stop press too, whose sequence is never armed. The press
+        that actually starts the motor is the last one of an armed plan, not a
+        nudge or a stop before it, and the base takes a pre-counted ON as the
+        confirmation only once no earlier transition is outstanding on the
+        button: an earlier press's echoes landing late, after the last press,
+        then cannot anchor tracking (#268). When ``armed`` the last press's
+        window is widened to the feedback wait. With the option off nothing is
+        counted; the button is an output we drive, and this mode ignores its
+        state changes anyway.
         """
         entity_id = self._open_switch_entity_id
+        window = self._held_echo_window(self._pulse_time)
         try:
             for index, phase in enumerate(phases):
                 if index:
                     await sleep(DIRECTION_CHANGE_DELAY)
-                if mark_final_press and index == len(phases) - 1:
+                if self._wait_for_relay_feedback:
+                    confirming = armed and index == len(phases) - 1
                     self._mark_switch_pending(
                         entity_id,
                         2,
-                        timeout=self._armed_echo_window(
-                            self._held_echo_window(self._pulse_time)
-                        ),
+                        timeout=self._armed_echo_window(window)
+                        if confirming
+                        else window,
                     )
                 await self.hass.services.async_call(
                     "homeassistant", "turn_on", {"entity_id": entity_id}, False
@@ -252,27 +268,6 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
     async def _send_close(self) -> None:
         await self._abort_press_plan()
         self._start_press_sequence(Action.CLOSE)
-
-    async def _stop_hardware(
-        self, *, supersede: bool = True, tilt_axis_reported: bool = False
-    ) -> None:
-        """Stop the cover without publishing, once the button has confirmed.
-
-        A stop here is another press, and the run it ends began at the press
-        before it: the tracker has to have started on that press's ON
-        confirmation before the movement is torn down, or the motor runs
-        between the two presses with nothing counting it. A no-op unless a
-        feedback wait is actually pending. An external trigger presses the
-        button itself, so there is no wait of ours to protect.
-
-        See CoverTimeBased._stop_hardware for ``supersede`` and
-        ``tilt_axis_reported``.
-        """
-        if not self._triggered_externally:
-            await self._await_pending_relay_confirmation()
-        await super()._stop_hardware(
-            supersede=supersede, tilt_axis_reported=tilt_axis_reported
-        )
 
     async def _send_stop(self) -> None:
         await self._abort_press_plan()
