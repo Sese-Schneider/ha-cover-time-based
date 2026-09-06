@@ -153,6 +153,9 @@ class SwitchModeCover(SwitchCoverTimeBased):
         # a slow-reporting relay still shows the state it had before we
         # energized it, so a reversal inside that lag would pre-count nothing
         # and read the late OFF as the user releasing the switch.
+        # Intent exists only while that relay has a pending echo. Mark before
+        # noting intent; a send with no echo outstanding leaves HA authoritative
+        # and drops any leftover intent.
         # Only the driving relay turning ON confirms the motor is energized; the
         # opposite relay's turn_off is just the interlock. _mark_driving_relay_pending
         # marks that ON echo and, under feedback, arms the wait on it — the arm

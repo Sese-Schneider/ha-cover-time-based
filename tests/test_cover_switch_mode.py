@@ -392,7 +392,12 @@ class TestNonSwitchModesHaveNoInterlock:
         assert cover.hass.services.async_call.call_count == 0
 
 
-def _state_event(entity_id, old_val, new_val):
+# ---------------------------------------------------------------------------
+# Relay intent while command echoes are outstanding
+# ---------------------------------------------------------------------------
+
+
+def _make_state_event(entity_id, old_val, new_val):
     """A state_changed event for ``entity_id``, as the listener receives it."""
     event = MagicMock()
     old = MagicMock()
@@ -406,6 +411,21 @@ def _state_event(entity_id, old_val, new_val):
 class TestSwitchModeRelayIntent:
     """A slow relay's HA state lags our command, so the pre-count for the echo
     the next command will produce is decided from what we last commanded."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("leftover", [False, True])
+    async def test_idle_stop_records_no_intent_and_drops_leftovers(self, leftover):
+        """A send with no pending echo leaves HA's state authoritative."""
+        cover = _make_switch_cover()
+        stub_switches(cover)
+        if leftover:
+            cover._relay_intent = {"switch.open": False, "switch.close": False}
+
+        with patch(_CALL_LATER, return_value=MagicMock()):
+            await cover._send_stop()
+
+        assert not cover._pending_switch
+        assert not cover._relay_intent
 
     @pytest.mark.asyncio
     async def test_stop_after_lagging_open_precounts_the_off_echo(self):
@@ -443,7 +463,7 @@ class TestSwitchModeRelayIntent:
             patch.object(cover, "_entity_unavailable", return_value=False),
         ):
             await cover._async_switch_state_changed(
-                _state_event("switch.open", "on", "off")
+                _make_state_event("switch.open", "on", "off")
             )
 
         stop.assert_awaited_once()
@@ -467,7 +487,7 @@ class TestSwitchModeRelayIntent:
             patch.object(cover, "_entity_unavailable", return_value=False),
         ):
             await cover._async_switch_state_changed(
-                _state_event("switch.open", "off", "on")
+                _make_state_event("switch.open", "off", "on")
             )
 
         stop.assert_not_awaited()

@@ -1,22 +1,21 @@
-"""Tilt direction changes must be axis-aware and settle before reversing.
+"""Tilt commands stop the correct motor and settle before reversing.
 
-Three probe-confirmed defects, one coherent fix:
+Covers four aspects of tilt movement:
 
-1. Wrong-axis stop: a tilt-only direction change sent a *travel* STOP keyed off a
-   stale ``_last_command``; on toggle hardware that pulses an idle travel relay
-   (a #153-class phantom travel).
-2. No stop at all on an endpoint-funnel tilt reversal (and a
-   ``current_tilt == target`` early-return that swallowed a mid-animation press).
-3. No ``_settle_before_reversing`` gap on a tilt reversal.
-
-``DUAL`` is redefined here (same dict as ``tests/test_tilt_stop.py``'s) — the
-duplication is intentional per the plan.
+1. A tilt-only reversal leaves idle travel relays untouched.
+2. Endpoint-funnel reversals stop the motor, including when the new target
+   matches the tracker's current position.
+3. Tilt reversals wait for the motor to settle before changing direction.
+4. Commands during tilt restore preserve the axis and direction of that move
+   (TestTiltCommandMidRestore).
 """
 
 import asyncio
 from unittest.mock import patch
 
 import pytest
+
+from tests.helpers import relay_calls
 
 DUAL = {
     "tilt_time_close": 5.0,
@@ -32,11 +31,7 @@ TRAVEL_RELAYS = ("switch.open", "switch.close")
 
 def _travel_calls(cover, start=0):
     """Return travel-relay services and entity IDs after the call watermark."""
-    return [
-        (c.args[1], c.args[2].get("entity_id"))
-        for c in cover.hass.services.async_call.call_args_list[start:]
-        if c.args[2].get("entity_id") in TRAVEL_RELAYS
-    ]
+    return [c for c in relay_calls(cover, start) if c[1] in TRAVEL_RELAYS]
 
 
 @pytest.mark.asyncio

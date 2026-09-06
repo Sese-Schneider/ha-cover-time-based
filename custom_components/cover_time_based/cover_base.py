@@ -1376,9 +1376,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         takes over, every exit must release that motor: auto-stop can no longer
         identify it from the cleared flag. The caller handles the travel relay.
 
-        Settle instead of sending a bare tilt stop so a momentary relay is not
-        re-pulsed at its endpoint. Cancel any deferred start so a late relay
-        confirmation cannot restart tracking after the motor is released.
+        The tracker's travelling flag distinguishes departure from arrival,
+        not its position: a motor leaving an endpoint still needs a real stop.
+        A tracker that has arrived settles without re-pulsing a momentary
+        relay at its limit. A feedback-wait tilt whose tracker sits at an
+        endpoint also settles because tracking has not started yet. Cancel
+        any deferred start so a late relay confirmation cannot restart tracking
+        after the motor is released.
 
         External travel presses leave the independent tilt motor running, so
         ``_triggered_externally`` prevents echoing a stop to that motor, just as
@@ -1388,9 +1392,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
         self._log("_release_displaced_tilt_motor :: stopping displaced tilt motor")
         self._cancel_startup_delay_task()
+        departing = self.tilt_calc.is_traveling()
         self.tilt_calc.stop()
         self.stop_auto_updater()
-        await self._tilt_settle()
+        if departing:
+            await self._send_tilt_stop()
+        else:
+            await self._tilt_settle()
         self._on_tilt_motor_move_complete()
 
     async def async_stop_cover(
@@ -2156,8 +2164,6 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # shared_motor_tilt_traveling excludes uses_tilt_motor strategies by
         # construction, and every tilt-motor entry point stops travel_calc on
         # its way in — so was_tilt_motor_move implies neither condition holds.
-        # The release inside is kept anyway, so every exit of this funnel reads
-        # the same way.
         if is_direction_change and (
             self.travel_calc.is_traveling() or shared_motor_tilt_traveling
         ):
@@ -2168,13 +2174,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self.tilt_calc.stop()
             await self._async_handle_command(SERVICE_STOP_COVER)
             if not await self._settle_before_reversing():
-                # No tilt release: unreachable per the branch note, and once
-                # superseded the newer movement owns the hardware.
                 return
             current = self.travel_calc.current_position()
             if target == current:
-                # Defensive only — unreachable per the branch note.
-                await self._release_displaced_tilt_motor(was_tilt_motor_move)
                 return
 
         relay_was_on = self._cancel_delay_task()
@@ -3985,15 +3987,23 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         HA's state lags a slow-reporting relay by seconds, so between our
         command and its echo HA still shows the old state. A pre-count for
         the echo our next command will produce has to be decided from what
-        we last told the relay (``_relay_intent``), falling back to HA's
-        state once no command of ours is outstanding for it.
+        we last told the relay (``_relay_intent``). Intent exists only while
+        an echo is outstanding; without one, HA's state is authoritative.
         """
         intent = self._relay_intent.get(entity_id)
         return self._switch_is_on(entity_id) if intent is None else intent
 
     def _note_relay_intent(self, entity_id, on: bool) -> None:
-        """Record the state we are about to command ``entity_id`` into."""
-        self._relay_intent[entity_id] = on
+        """Record the commanded state only while this relay has an echo pending.
+
+        Intent answers whether the next command will flip the relay while
+        HA's state lags our command. A send with no outstanding echo leaves
+        HA authoritative, so it records nothing and drops any leftover intent.
+        """
+        if self._pending_switch.get(entity_id, 0) > 0:
+            self._relay_intent[entity_id] = on
+        else:
+            self._relay_intent.pop(entity_id, None)
 
     def _switch_is_optimistic(self, entity_id) -> bool:
         """Whether the underlying switch reports optimistic (assumed) state.
@@ -4174,15 +4184,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         future.set_result(base_ts)
         return True
 
-    async def _after_own_echo(self, entity_id: str, new_val: str) -> None:
+    async def _on_own_echo_consumed(self, entity_id: str, new_val: str) -> None:
         """Hook: an event just consumed one of this entity's pending echoes.
 
-        Runs after the feedback resolution, so a subclass that knows the echo
-        burst has ended (e.g. a wrapped cover seeing the state its command
-        settles into) can drop a remaining over-count before it swallows a
-        genuine report. Default: nothing.
+        Base is a no-op. Overridden by wrapped covers to drain surplus echoes
+        when the commanded moving state arrives. Runs after relay-feedback
+        resolution so dropping the surplus cannot prevent tracking from starting.
         """
-        return None
+        return
 
     async def _wait_for_relay_echo(self, entity_id, timeout):
         """Await ``entity_id``'s ON echo; return its last_changed ts, or None.
@@ -4378,7 +4387,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
             if remaining <= self._own_echoes_after_confirming_on:
                 self._resolve_relay_feedback(entity_id, new_val, new_state)
-            await self._after_own_echo(entity_id, new_val)
+            await self._on_own_echo_consumed(entity_id, new_val)
             return
 
         if old_val == "off" and self._resolve_relay_feedback(

@@ -1,6 +1,7 @@
-"""Tests for WrappedCoverTimeBased._send_open/close/stop.
+"""Wrapped-cover commands, position-reporting profiles and tilt lifecycles.
 
-Each test verifies that the correct cover.* service call is made.
+Covers native and timed movement, startup synchronization, echo filtering and
+external reports through the wrapped entity's services and state events.
 """
 
 import asyncio
@@ -17,6 +18,7 @@ from homeassistant.const import (
 )
 
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
+from tests.helpers import relay_calls
 
 # CoverEntityFeature bit values (OPEN=1, CLOSE=2, SET_POSITION=4, STOP=8,
 # SET_TILT_POSITION=128).
@@ -115,7 +117,7 @@ def _stub_updates(cover):
 
 def _services(cover):
     """Return the service names called on hass.services.async_call, in order."""
-    return [c.args[1] for c in _calls(cover.hass.services.async_call)]
+    return [service for service, _ in relay_calls(cover)]
 
 
 def _attr_event(entity_id, state):
@@ -2251,8 +2253,8 @@ class TestReversalPendingCount:
 class TestSingleTransitionReversal:
     """An underlying that reports `closing -> opening` directly (one event).
 
-    The pre-count assumes the reversal arrives as two transitions. A device
-    with its own motor controller (Shelly 2.5 in cover mode, KNX, anything
+    The pre-count allows for a reversal that may arrive as two transitions.
+    A device with its own motor controller (Shelly 2.5 in cover mode, KNX, anything
     that updates is_opening/is_closing atomically) delivers one, so the
     surplus count must be dropped at the terminal moving state instead of
     swallowing the next genuine report.

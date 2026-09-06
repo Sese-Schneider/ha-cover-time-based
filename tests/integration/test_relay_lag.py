@@ -29,6 +29,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_component import DATA_INSTANCES
 from homeassistant.util import dt as dt_util
 
+from custom_components.cover_time_based.calibration import CalibrationState
+
 OPEN_RELAY = "switch.lag_open"
 CLOSE_RELAY = "switch.lag_close"
 
@@ -289,3 +291,40 @@ async def test_lagging_off_echo_leaves_the_close_relay_latched(
         "position": 20,
         "close_contact_made": False,
     }, f"relay commands: {relays.commands}"
+
+
+@pytest.mark.parametrize("relay_lag", [0.0], indirect=True)
+async def test_idle_stop_before_calibration_does_not_hide_external_relay_on(
+    hass: HomeAssistant, setup_cover, mock_time, no_settle_sleep, lagging_relays
+):
+    """An idle stop leaves HA authoritative when a relay changes in calibration.
+
+    The next movement must count its OFF echo and keep tracking until it
+    releases the close relay at the target.
+    """
+    cover = _get_cover_entity(hass)
+    relays = lagging_relays
+    await cover.set_known_position(position=50)
+    await cover.async_stop_cover()
+    await hass.async_block_till_done()
+    assert not cover._pending_switch
+
+    cover._calibration = CalibrationState(attribute="travel_startup_delay", timeout=600)
+    relays.physical[OPEN_RELAY] = True
+    hass.states.async_set(OPEN_RELAY, "on")
+    await hass.async_block_till_done()
+    await cover.stop_calibration(cancel=True)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "cover",
+        "set_cover_position",
+        {"entity_id": cover.entity_id, "position": 20},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    await _advance(hass, cover, mock_time, relays, 0.25)
+    assert cover.is_closing
+    await _advance(hass, cover, mock_time, relays, 4)
+    assert not relays.physical[CLOSE_RELAY]
+    assert cover.current_cover_position == 20

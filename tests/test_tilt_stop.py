@@ -12,7 +12,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_TOGGLE_OPPOSITE,
 )
-from tests.helpers import stub_switches
+from tests.helpers import relay_calls, stub_switches
 
 
 def _make_state_event(entity_id, old_state, new_state):
@@ -33,11 +33,10 @@ def _make_state_event(entity_id, old_state, new_state):
 
 
 def _tilt_switch_calls(cover, start=0):
-    calls = cover.hass.services.async_call.call_args_list[start:]
     return [
-        (c[0][1], c[0][2].get("entity_id"))
-        for c in calls
-        if c[0][2].get("entity_id") in ("switch.tilt_open", "switch.tilt_close")
+        c
+        for c in relay_calls(cover, start)
+        if c[1] in ("switch.tilt_open", "switch.tilt_close")
     ]
 
 
@@ -74,13 +73,6 @@ _TRAVEL_TURN_ON = [
     ("turn_on", "switch.close"),
     ("turn_on", "switch.stop"),
 ]
-
-
-def _all_calls(cover, start=0):
-    return [
-        (c[0][1], c[0][2].get("entity_id"))
-        for c in cover.hass.services.async_call.call_args_list[start:]
-    ]
 
 
 @pytest.mark.asyncio
@@ -132,7 +124,7 @@ async def test_stop_during_plain_tilt_move_does_not_pulse_travel_relay(
         n = len(cover.hass.services.async_call.call_args_list)
         await getattr(cover, stop_method)()
 
-    calls = _all_calls(cover, n)
+    calls = relay_calls(cover, n)
     for phantom in _TRAVEL_TURN_ON:
         assert phantom not in calls, (control_mode, stop_method, calls)
     # The tilt axis is still settled: tracker stopped and its relay was actioned.
@@ -166,7 +158,7 @@ async def test_switch_mode_stop_during_plain_tilt_still_deenergizes_travel(
         n = len(cover.hass.services.async_call.call_args_list)
         await getattr(cover, stop_method)()
 
-    calls = _all_calls(cover, n)
+    calls = relay_calls(cover, n)
     # Travel relay is de-energized (never a pulse in switch mode) — unchanged.
     assert ("turn_off", "switch.open") in calls, calls
     assert ("turn_off", "switch.close") in calls, calls
@@ -487,7 +479,7 @@ async def test_plain_tilt_move_settling_at_endpoint_does_not_pulse_tilt_relay(
         await cover.auto_stop_if_necessary()  # tilt reaches 100 -> _tilt_settle
 
     assert cover.tilt_calc.current_position() == 100
-    calls = _all_calls(cover, n)
+    calls = relay_calls(cover, n)
     # No tilt relay actioned at all during the endpoint settle: the motor
     # self-stopped at its limit, so a pulse would be a phantom movement.
     assert _tilt_switch_calls(cover, n) == [], calls
@@ -590,7 +582,7 @@ async def _start_plain_tilt_motor_move(cover, target=0):
     stub_switches(cover)
     await cover.set_tilt_position(target)
     assert cover._moving_tilt_motor, "precondition: dedicated tilt motor running"
-    assert ("turn_on", "switch.tilt_close") in _all_calls(cover), (
+    assert ("turn_on", "switch.tilt_close") in relay_calls(cover), (
         "precondition: tilt close relay energised"
     )
     return len(cover.hass.services.async_call.call_args_list)
@@ -608,6 +600,28 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
     to its limit with nothing tracking it.
     """
 
+    @pytest.mark.asyncio
+    async def test_departing_endpoint_sends_tilt_stop_pulse(self, make_cover):
+        """A tracker still at its departure endpoint needs a real toggle stop."""
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE, **DUAL)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+        stub_switches(cover)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch("time.time", return_value=1000),
+        ):
+            await cover.set_tilt_position(30)
+            assert cover._moving_tilt_motor and cover.tilt_calc.is_traveling()
+            assert cover.tilt_calc.current_position() == 100
+            n = len(cover.hass.services.async_call.call_args_list)
+            await cover.set_position(50)
+
+        assert ("turn_on", "switch.tilt_close") in _tilt_switch_calls(cover, n)
+        assert not cover.tilt_calc.is_traveling()
+        assert cover._last_tilt_direction is None
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "control_mode",
         [CONTROL_MODE_SWITCH, CONTROL_MODE_TOGGLE],
@@ -627,9 +641,10 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
         assert _TILT_STOP_CALL[control_mode] in tilt_calls, (
             "open_cover at the open endpoint left the tilt motor running; "
             f"tilt-relay calls after the travel command: {tilt_calls!r} "
-            f"(all calls: {_all_calls(cover, n)!r}; {_tilt_state(cover)})"
+            f"(all calls: {relay_calls(cover, n)!r}; {_tilt_state(cover)})"
         )
 
+    @pytest.mark.asyncio
     async def test_open_at_endpoint_during_relay_feedback_wait_releases_tilt_motor(
         self, make_cover
     ):
@@ -654,9 +669,10 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
         assert any(c[0] == "turn_off" for c in tilt_calls), (
             "open_cover at the open endpoint during the relay-feedback wait left "
             f"the tilt motor running; tilt-relay calls: {tilt_calls!r} "
-            f"(all calls: {_all_calls(cover, n)!r}; {_tilt_state(cover)})"
+            f"(all calls: {relay_calls(cover, n)!r}; {_tilt_state(cover)})"
         )
 
+    @pytest.mark.asyncio
     async def test_set_position_to_current_releases_running_tilt_motor(
         self, make_cover
     ):
@@ -669,10 +685,11 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
         tilt_calls = _tilt_switch_calls(cover, n)
         assert any(c[0] == "turn_off" for c in tilt_calls), (
             "set_position at the current position left the tilt motor running; "
-            f"tilt-relay calls: {tilt_calls!r} (all calls: {_all_calls(cover, n)!r}; "
+            f"tilt-relay calls: {tilt_calls!r} (all calls: {relay_calls(cover, n)!r}; "
             f"{_tilt_state(cover)})"
         )
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "control_mode",
         [CONTROL_MODE_SWITCH, CONTROL_MODE_TOGGLE],
@@ -709,6 +726,7 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
             f"axis: {_tilt_switch_calls(cover, m)!r}"
         )
 
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "travel",
         [
@@ -740,7 +758,7 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
             n = len(cover.hass.services.async_call.call_args_list)
             await travel(cover)
 
-        calls = _all_calls(cover, n)
+        calls = relay_calls(cover, n)
         tilt_off = next(
             i
             for i, c in enumerate(calls)
@@ -755,6 +773,7 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
         assert not cover.tilt_calc.is_traveling()
         assert cover.travel_calc.is_traveling()
 
+    @pytest.mark.asyncio
     async def test_open_during_feedback_wait_cancels_the_tilt_deferred_start(
         self, make_cover
     ):
@@ -791,6 +810,7 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
             f"relay ({_tilt_state(cover)})"
         )
 
+    @pytest.mark.asyncio
     async def test_external_travel_press_leaves_the_tilt_motor_running(
         self, make_cover
     ):
@@ -813,6 +833,7 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
         )
         assert cover.tilt_calc.is_traveling(), "the tilt motor keeps its own move"
 
+    @pytest.mark.asyncio
     async def test_open_while_a_same_direction_startup_delay_runs_releases_tilt(
         self, make_cover
     ):
@@ -842,10 +863,11 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
             "the startup-delay no-op left the tilt motor running; "
             f"tilt-relay calls: {tilt_calls!r} ({_tilt_state(cover)})"
         )
-        assert ("turn_on", "switch.open") not in _all_calls(cover, n), (
+        assert ("turn_on", "switch.open") not in relay_calls(cover, n), (
             "the branch must stay a no-op on the travel axis"
         )
 
+    @pytest.mark.asyncio
     async def test_set_position_rejected_as_too_short_releases_tilt(self, make_cover):
         """A move below ``min_movement_time`` is a travel command going nowhere.
 
@@ -878,6 +900,7 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
         )
         assert not cover.tilt_calc.is_traveling()
 
+    @pytest.mark.asyncio
     async def test_set_position_while_a_same_direction_startup_delay_runs_releases_tilt(
         self, make_cover
     ):

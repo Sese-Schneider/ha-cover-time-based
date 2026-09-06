@@ -180,7 +180,7 @@ how much to believe it. Pick the profile that matches your hardware.
 | **Position unreliable — track by time** | The cover reports a position, but you cannot trust it. The reported position is ignored and everything is tracked by time, although a reported "closed" is still trusted as the fully-closed point. |
 | **No real endpoints — reports open/closed when stopped** | The cover has no real position feedback and reports "open" or "closed" whenever the motor stops anywhere, not only at the ends. Those reports are ignored, so stopping mid-travel does not snap the position to 0%. |
 | **State mirrors the last command** | The cover has no position feedback and simply echoes the last command: "open" while opening, "closed" while closing, and "unknown" when stopped, as some single-channel Tuya shutters do. Each state is read as an open, close, or stop command and tracked by time. |
-| **Ignore all device reports** | The cover reports nothing you can trust. It sends a false position as well as spurious open, closed, opening, or closing states while sitting idle, so that even _No real endpoints_ still snaps to the bogus position it believes. Every report from the device is ignored and the position is tracked purely by the timers. Home Assistant becomes the only way to move the cover, and operating it from a wall switch or remote is not tracked. The cover is driven by timed open, close and stop commands even when the device supports setting a position directly. |
+| **Ignore all device reports** | The cover reports nothing you can trust. It sends a false position as well as spurious open, closed, opening, or closing states while sitting idle, so that even _No real endpoints_ still snaps to the bogus position it believes. Every report from the device is ignored and the position is tracked purely by the timers. Home Assistant becomes the only way to move the cover, and operating it from a wall switch or remote is not tracked. Your cover is driven by timed open, close and stop commands even when the device supports setting a position directly, except that a cover with no stop service is still halted by re-issuing its current position. |
 
 <details>
 <summary><strong>Choosing between no-real-endpoints and state-mirrors-last-command</strong></summary>
@@ -751,7 +751,9 @@ the position live during the move, which is handy for covers that only report
 their position once they finish. On such a cover, the integration's **Stop** sets
 the wrapped cover to its current calculated position. To override this and always
 use timed movements, turn on
-[Force time-based positioning](#force-time-based-positioning).
+[**Force time-based positioning**](#force-time-based-positioning), or set
+[Position reporting](#position-reporting) to **State mirrors the last command**
+or **Ignore all device reports**.
 
 Tilt works similarly. The **Tilts inline with travel** and sequential modes drive
 the wrapped cover's normal open and close commands, so they work on any wrapped
@@ -760,7 +762,9 @@ tilt commands, so it is only offered when the wrapped entity reports native tilt
 support. If the wrapped cover supports `set_cover_tilt_position` and you use the
 inline mode, the integration forwards the tilt commands straight through, letting
 the device position its own slats and snapping the tilt tracker to the reported
-angle once it settles. This is auto-detected; no extra configuration is needed.
+angle once it settles. This is auto-detected unless you set **Position reporting**
+to **State mirrors the last command** or **Ignore all device reports**; those
+profiles use timed tilt movements because the reported angle cannot be trusted.
 
 </details>
 

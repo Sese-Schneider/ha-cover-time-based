@@ -317,7 +317,8 @@ class TestOppositeExternalTravel:
         On a dual-motor cover a moving tilt motor makes the cover-level
         is_opening/is_closing True. A travel-relay press must NOT be read as a
         stop because of that — the travel-axis helpers reduce to travel_calc on
-        this hardware. Regression guard for the tilt/travel conflation.
+        this hardware, except while a travel command is pending behind the
+        tilt-to-safe pre-step. Independent tilt motion alone cannot imply travel.
         """
         cover = _make_opposite_cover(
             tilt_open_switch="switch.tilt_open",
@@ -478,7 +479,9 @@ class TestSharedMotorTiltExternalPress:
 
 
 class TestDualMotorUnaffected:
-    """Dual motor keeps its current behaviour: the helpers reduce to travel_calc."""
+    """Dual-motor helpers reduce to travel_calc except while a travel command
+    is pending behind the tilt-to-safe pre-step.
+    """
 
     @pytest.mark.parametrize("relay", ["switch.open", "switch.close"])
     @pytest.mark.asyncio
@@ -486,8 +489,9 @@ class TestDualMotorUnaffected:
         self, make_cover, relay
     ):
         """A dedicated tilt motor moves independently, so a travel press starts
-        travel — and _travel_axis_* agrees with raw travel_calc here, so the
-        handler keying off the helpers changes nothing on this hardware.
+        travel. The _travel_axis_* helpers agree with raw travel_calc except
+        while a travel command is pending behind the tilt-to-safe pre-step;
+        this plain tilt move has no pending travel command.
         """
         cover = make_cover(control_mode="toggle_opposite", **DUAL_MOTOR_TILT)
         stub_switches(cover)

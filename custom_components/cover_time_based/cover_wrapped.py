@@ -73,7 +73,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._invert = invert
         self._last_self_command_time: float | None = None
         # The underlying moving state the in-flight command settles into; the
-        # echo burst ends there (see _call_cover_service / _after_own_echo).
+        # echo burst ends there (see _call_cover_service / _on_own_echo_consumed).
         # A safety timeout may leave this set: only pending echoes read it,
         # and _call_cover_service replaces it before marking the next burst.
         self._echo_terminal_state: str | None = None
@@ -108,7 +108,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # The cover may have been moved (app/remote) while HA was down; the
         # store's snapshot is then stale and the first timed move would run
         # the wrong distance in possibly the wrong direction. Trust a live
-        # reported position over the stored one at startup.
+        # reported position over the stored one at startup when the
+        # position-reporting profile lets us trust one.
         live = self._wrapped_reported_position(trust_closed=False)
         if live is not None and live != self.travel_calc.current_position():
             self._log(
@@ -246,10 +247,6 @@ class WrappedCoverTimeBased(CoverTimeBased):
             slats independently of our travel motor, so driving position
             natively is coupling-safe there.
         """
-        # A device whose every report is untrusted (ignore_all_reports) has an
-        # untrusted target scale too, and with both report channels ignored no
-        # settle-snap could ever correct a native move — so it is driven by
-        # the timers alone, exactly as the profile promises.
         if self._ignore_all_reports:
             return False
         if self._force_time_based_position:
@@ -671,6 +668,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
     ) -> int | None:
         """Return the wrapped cover's reported position, or None if unknown.
 
+        Honors ignore_all_reports, reports_command_not_endpoint and
+        ignore_reported_position. The first two reject every position source;
+        the third skips the numeric attribute but allows the closed fallback.
         Prefers the current_position attribute. Falls back to 0 for
         state=closed (unambiguous); state=open without an attribute is
         ambiguous (could be any position > 0) and returns None. Both the
@@ -793,7 +793,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # or closing→opening in one step). The prediction is bounded by the
         # terminal state: once the underlying reports the moving state this
         # command settles into, any remaining count is an over-count and is
-        # dropped in _after_own_echo, so it cannot swallow a later genuine
+        # dropped in _on_own_echo_consumed, so it cannot swallow a later genuine
         # report (a wall stop) inside the echo window. One slot serves every
         # command through here: a stop or tilt command sets it to None, which
         # disables the terminal-state drain for the previous burst.
@@ -807,7 +807,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             "cover", service, {"entity_id": self._cover_entity_id}, False
         )
 
-    async def _after_own_echo(self, entity_id: str, new_val: str) -> None:
+    async def _on_own_echo_consumed(self, entity_id: str, new_val: str) -> None:
         """Drain surplus wrapped echoes once the commanded moving state arrives."""
         if entity_id != self._cover_entity_id or self._echo_terminal_state is None:
             return
@@ -815,7 +815,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             self._echo_terminal_state = None
             if self._pending_switch.get(entity_id, 0) > 0:
                 self._log(
-                    "_after_own_echo :: %s reached, dropping %d surplus pending echo(es)",
+                    "_on_own_echo_consumed :: %s reached, dropping %d surplus pending echo(es)",
                     new_val,
                     self._pending_switch[entity_id],
                 )
@@ -836,15 +836,17 @@ class WrappedCoverTimeBased(CoverTimeBased):
             await self._send_underlying_close()
 
     async def _send_underlying_open(self) -> None:
-        # If the wrapped cover is currently closing, the open command produces
-        # two state transitions (closing→open, then open→opening).
+        # If the wrapped cover is currently closing, the open command may
+        # produce two state transitions (closing→open, then open→opening).
+        # Any surplus is drained at the terminal moving state; see _call_cover_service.
         state = self.hass.states.get(self._cover_entity_id)
         expected = 2 if state and state.state == STATE_CLOSING else 1
         await self._call_cover_service("open_cover", expected)
 
     async def _send_underlying_close(self) -> None:
-        # If the wrapped cover is currently opening, the close command produces
-        # two state transitions (opening→open, then open→closing).
+        # If the wrapped cover is currently opening, the close command may
+        # produce two state transitions (opening→open, then open→closing).
+        # Any surplus is drained at the terminal moving state; see _call_cover_service.
         state = self.hass.states.get(self._cover_entity_id)
         expected = 2 if state and state.state == STATE_OPENING else 1
         await self._call_cover_service("close_cover", expected)
