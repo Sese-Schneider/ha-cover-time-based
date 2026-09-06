@@ -278,6 +278,26 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         self._start_press_sequence(Action.STOP)
 
     # --- endpoint re-anchor -------------------------------------------
+    def _park_axis_at_limit(self, calc, limit: int) -> None:
+        """Park from the phase, not the tracker: the phase is exact per press.
+
+        The tracker starts at the command, but the motor only runs once the
+        final press has gone out. A MOVING phase means it is running and will
+        reach that direction's limit; any other phase means the last press
+        left it stopped, so the tracker stays where it is.
+        """
+        if calc is not self.travel_calc:
+            super()._park_axis_at_limit(calc, limit)
+            return
+        if self._phase is Phase.MOVING_UP:
+            super()._park_axis_at_limit(calc, 100)
+            self._phase = Phase.AT_OPEN
+        elif self._phase is Phase.MOVING_DOWN:
+            super()._park_axis_at_limit(calc, 0)
+            self._phase = Phase.AT_CLOSED
+        else:
+            calc.stop()
+
     def _on_endpoint_reached(self, endpoint: int) -> None:
         """Anchor the phase at the limit the tracker just reached.
 

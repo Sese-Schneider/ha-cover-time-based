@@ -318,7 +318,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
         await self._write_position_record()
 
-    async def _write_position_record(self) -> None:
+    async def _write_position_record(self, *, final: bool = False) -> None:
         if self._config_entry_id is None:
             return
         data: dict[str, int | str] = {}
@@ -331,8 +331,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 data["tilt_position"] = int(tilt_position)
         data.update(self._extra_persist_data())
         store = await async_get_position_store(self.hass)
-        if self._removed:
-            # Removal landed while this write was parked on the store.
+        if self._removed and not final:
+            # Removal landed while this write was parked on the store; only
+            # removal's own final record may land after the flag.
             return
         await store.async_save(self._config_entry_id, data)
 
@@ -409,14 +410,50 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_switch_timers.clear()
         self._pending_switch_deadlines.clear()
         self._relay_intent.clear()
-        # Cancel the two ghost timers: the endpoint run-on stop and the
-        # deferred-start arming. Left alive across a reload they later fire
-        # real relay commands against the reloaded entity — a late STOP that
-        # kills the new movement, or a re-armed auto-updater that persists a
-        # ghost position.
-        self._cancel_startup_delay_task()
-        self._cancel_delay_task()
+        # Capture what this entity was driving BEFORE the cancels below, on
+        # the axis it was driving: a dedicated tilt motor is owed a tilt stop,
+        # which the travel STOP never reaches; a shared-motor tilt drives the
+        # travel motor with only tilt_calc travelling.
+        tilt_axis_driving = self._has_tilt_support() and self.tilt_calc.is_traveling()
+        tilt_motor_driving = self._has_tilt_motor() and (
+            self._moving_tilt_motor or tilt_axis_driving
+        )
+        deferred = self._cancel_startup_delay_task()
+        runon = self._cancel_delay_task()
+        travel_driving = (
+            self.travel_calc.is_traveling()
+            or (tilt_axis_driving and not self._has_tilt_motor())
+            or runon
+            or (deferred and not self._moving_tilt_motor)
+        )
         await self._cancel_background_pulses()
+        # Left energised, a latched relay drives the motor past its limit with
+        # nothing tracking it. Stop only hardware that does not stop itself:
+        # on momentary hardware a stop tap to a motor already at its limit is a
+        # movement command (#153), so the motor is left to its limit switch and
+        # the axis is parked at the limit it is heading for.
+        stops_itself = self._self_stops_at_endpoints()
+        if travel_driving and not stops_itself:
+            await self._async_handle_command(SERVICE_STOP_COVER)
+            self._last_command = None
+        if tilt_motor_driving and not stops_itself:
+            await self._send_tilt_stop()
+        self._settle_axis_after_removal(
+            self.travel_calc,
+            driving=travel_driving,
+            stopped=travel_driving and not stops_itself,
+            fallback_limit=self._limit_for_last_command(),
+        )
+        if self._has_tilt_support():
+            self._settle_axis_after_removal(
+                self.tilt_calc,
+                driving=tilt_motor_driving
+                or (tilt_axis_driving and not self._has_tilt_motor()),
+                stopped=(tilt_motor_driving or tilt_axis_driving) and not stops_itself,
+                fallback_limit=None,
+            )
+        self._moving_tilt_motor = False
+        self._moving_tilt = False
         if self._calibration is not None:
             # A reload/unload mid-calibration (integration reload, HA restart,
             # config-entry unload — a card save is rejected while a calibration
@@ -437,6 +474,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     await self._calibration_stop()
             finally:
                 self._calibration = None
+        # The reload creates the replacement only after this returns, so this
+        # is the record it restores from.
+        await self._write_position_record(final=True)
 
     # -----------------------------------------------------------------------
     # Properties
@@ -2937,14 +2977,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return True
         return False
 
-    def _cancel_startup_delay_task(self):
-        """Cancel any active startup delay task."""
+    def _cancel_startup_delay_task(self) -> bool:
+        """Cancel any active startup delay task; True if one was pending."""
         if self._startup_delay_task is not None and not self._startup_delay_task.done():
             self._log(
                 "_cancel_startup_delay_task :: cancelling active startup delay task"
             )
             self._startup_delay_task.cancel()
             self._startup_delay_task = None
+            return True
+        return False
 
     def start_auto_updater(self):
         """Start the autoupdater to update HASS while cover is moving."""
@@ -3289,6 +3331,49 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         still on); otherwise the relay stays energized at the endpoint forever.
         """
         return
+
+    def _park_axis_at_limit(self, calc: TravelCalculator, limit: int) -> None:
+        """Record an axis at the limit its motor will reach on its own.
+
+        Used when this entity stops tracking a motor it cannot stop (removal
+        on hardware that self-stops at its limits). Modes that carry more
+        state than the tracker anchor it here too.
+        """
+        calc.set_position(limit)
+
+    def _settle_axis_after_removal(
+        self,
+        calc: TravelCalculator,
+        *,
+        driving: bool,
+        stopped: bool,
+        fallback_limit: int | None,
+    ) -> None:
+        """Leave one axis's tracker where the motor will actually be.
+
+        Stopped, or never driving, or a device that holds its own target: the
+        tracker's own position stands. Driving and left to its limit switch:
+        park at the limit in the direction of travel — from the tracker if it
+        is travelling, else from the last command — or forget the axis when
+        no direction is known.
+        """
+        if not driving or stopped or self._motor_stops_itself():
+            calc.stop()
+            return
+        if calc.is_traveling():
+            limit = 100 if calc.travel_direction == TravelStatus.DIRECTION_UP else 0
+            self._park_axis_at_limit(calc, limit)
+        elif fallback_limit is not None:
+            self._park_axis_at_limit(calc, fallback_limit)
+        else:
+            calc.clear_position()
+
+    def _limit_for_last_command(self) -> int | None:
+        if self._last_command == SERVICE_OPEN_COVER:
+            return 100
+        if self._last_command == SERVICE_CLOSE_COVER:
+            return 0
+        return None
 
     def _on_endpoint_reached(self, endpoint: int) -> None:
         """Hook: a self-initiated travel move terminated at 0 or 100.
@@ -4169,6 +4254,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         feedback-gated move extends it (RELAY_FEEDBACK_PENDING_TIMEOUT) so the
         awaited echo stays classifiable as our own for the full feedback wait.
         """
+        # Removal's stops still reach the motor, but its echo listener is gone:
+        # no new echo-expiry timer may outlive that listener.
+        if self._removed:
+            return
         self._pending_switch[entity_id] = (
             self._pending_switch.get(entity_id, 0) + expected_transitions
         )

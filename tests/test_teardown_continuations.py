@@ -386,6 +386,121 @@ async def test_removal_with_pending_runon_de_energizes_the_latched_relay(make_co
 
 
 @pytest.mark.asyncio
+async def test_removal_mid_travel_de_energizes_the_latched_relay(
+    make_cover, _mock_position_store
+):
+    """A plain move in progress: the relay is latched and nothing else stops it."""
+    cover = make_cover(travel_time_close=5.0, travel_time_open=5.0)
+    stub_switches(cover)
+    cover.travel_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover()
+        await asyncio.sleep(0.2)
+        assert cover.travel_calc.is_traveling()
+        mark = len(cover.hass.services.async_call.call_args_list)
+        await cover.async_will_remove_from_hass()
+
+    offs = [c for c in relay_calls(cover, mark) if c[0] == "turn_off"]
+    assert offs, f"relay left latched: {relay_calls(cover, mark)}"
+    assert not cover.travel_calc.is_traveling()
+    assert cover.travel_calc.current_position() not in (None, 0, 100)
+    _, data = _mock_position_store.async_save.await_args.args
+    assert data["position"] == cover.travel_calc.current_position()
+
+
+@pytest.mark.asyncio
+async def test_removal_during_startup_delay_de_energizes_the_latched_relay(
+    make_cover,
+):
+    """A deferred start cancelled by removal leaves the relay ON with no tracker."""
+    cover = make_cover(
+        travel_time_close=5.0, travel_time_open=5.0, travel_startup_delay=1.0
+    )
+    stub_switches(cover)
+    cover.travel_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover()
+        assert cover._startup_delay_task is not None
+        assert not cover._startup_delay_task.done()
+        mark = len(cover.hass.services.async_call.call_args_list)
+        await cover.async_will_remove_from_hass()
+
+    offs = [c for c in relay_calls(cover, mark) if c[0] == "turn_off"]
+    assert offs, f"relay left latched: {relay_calls(cover, mark)}"
+
+
+@pytest.mark.asyncio
+async def test_removal_mid_tilt_motor_move_stops_the_tilt_relays(make_cover):
+    """A dedicated tilt motor is owed a tilt stop, which the travel STOP never sends."""
+    cover = _dual_motor_cover(make_cover)
+    stub_switches(cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(80)
+        await asyncio.sleep(0.2)
+        assert cover.tilt_calc.is_traveling()
+        mark = len(cover.hass.services.async_call.call_args_list)
+        await cover.async_will_remove_from_hass()
+
+    offs = {c[1] for c in relay_calls(cover, mark) if c[0] == "turn_off"}
+    assert "switch.tilt_open" in offs, (
+        f"tilt relay left latched: {relay_calls(cover, mark)}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_removal_mid_inline_tilt_de_energizes_the_travel_relay(make_cover):
+    """Shared-motor tilt drives the travel motor with only tilt_calc travelling."""
+    cover = _inline_cover(make_cover, travel_time_close=5.0, travel_time_open=5.0)
+    stub_switches(cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(80)
+        await asyncio.sleep(0.2)
+        assert cover.tilt_calc.is_traveling()
+        assert not cover.travel_calc.is_traveling()
+        mark = len(cover.hass.services.async_call.call_args_list)
+        await cover.async_will_remove_from_hass()
+
+    offs = [c for c in relay_calls(cover, mark) if c[0] == "turn_off"]
+    assert offs, f"travel relay left latched: {relay_calls(cover, mark)}"
+
+
+@pytest.mark.asyncio
+async def test_removal_mid_travel_on_toggle_sends_nothing_and_parks_at_the_limit(
+    make_cover, _mock_position_store
+):
+    """Momentary hardware runs on to its limit; a stop tap there would be a move.
+
+    The axis is parked at the limit it is heading for, so the replacement
+    restores where the motor will actually be.
+    """
+    cover = make_cover(
+        control_mode="toggle", travel_time_close=5.0, travel_time_open=5.0
+    )
+    stub_switches(cover)
+    cover.travel_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover()
+        await asyncio.sleep(0.2)
+        assert cover.travel_calc.is_traveling()
+        mark = len(cover.hass.services.async_call.call_args_list)
+        await cover.async_will_remove_from_hass()
+
+    assert relay_calls(cover, mark) == []
+    assert cover.travel_calc.current_position() == 100
+    _, data = _mock_position_store.async_save.await_args.args
+    assert data["position"] == 100
+
+
+@pytest.mark.asyncio
 async def test_removed_entity_restore_completion_overwrites_position_store(
     make_cover, _mock_position_store
 ):
@@ -498,7 +613,7 @@ async def test_removal_between_a_switch_commands_off_and_on_refuses_the_on(
         await gate.parked()
 
         await cover.async_will_remove_from_hass()
-        mark = len(cover.hass.services.async_call.call_args_list)
+        mark = len(real_call.call_args_list)
         saves = _mock_position_store.async_save.call_count
 
         gate.proceed.set()
@@ -633,7 +748,7 @@ async def test_pulse_stop_interrupted_by_removal_still_pulses_the_stop_relay(
             task = asyncio.ensure_future(cover.auto_stop_if_necessary())
             await gate.parked()
             await cover.async_will_remove_from_hass()
-            mark = len(cover.hass.services.async_call.call_args_list)
+            mark = len(real_call.call_args_list)
             gate.proceed.set()
             await asyncio.wait_for(task, 2)
 
@@ -661,3 +776,20 @@ async def test_removed_wrapped_cover_can_stop_via_current_position():
         {"entity_id": "cover.inner", "position": 43},
         False,
     )
+
+
+@pytest.mark.asyncio
+async def test_removal_stop_does_not_leave_relay_echo_timers(make_cover):
+    """A stop still releases the motor after its echo listener is removed."""
+    cover = make_cover(travel_time_close=5.0, travel_time_open=5.0)
+    stub_switches(cover)
+    cover.travel_calc.set_position(0)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover()
+        stub_switches(cover, on=("switch.open",))
+        mark = len(cover.hass.services.async_call.call_args_list)
+        await cover.async_will_remove_from_hass()
+
+    assert ("turn_off", "switch.open") in relay_calls(cover, mark)
+    assert cover._pending_switch_timers == {}
