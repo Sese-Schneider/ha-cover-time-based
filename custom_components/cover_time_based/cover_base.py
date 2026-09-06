@@ -193,6 +193,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # Claimed by every command that supersedes an in-flight movement; read
         # across the settle gap by _settle_before_reversing.
         self._movement_epoch = 0
+        self._removed = False
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
         #   - _plan_tilt_for_travel (mid-position moves: restore prior tilt;
@@ -306,7 +307,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
     async def _async_persist_position(self) -> None:
-        """Write the current travel/tilt position to the position store."""
+        """Write the current travel/tilt position to the position store.
+
+        Refused once removed: the store keeps one shared, delay-saved record
+        per entry, so a late write from a replaced entity would overwrite
+        whatever its replacement has already recorded. Removal writes its own
+        final record through _write_position_record.
+        """
+        if self._removed:
+            return
+        await self._write_position_record()
+
+    async def _write_position_record(self) -> None:
         if self._config_entry_id is None:
             return
         data: dict[str, int | str] = {}
@@ -319,6 +331,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 data["tilt_position"] = int(tilt_position)
         data.update(self._extra_persist_data())
         store = await async_get_position_store(self.hass)
+        if self._removed:
+            # Removal landed while this write was parked on the store.
+            return
         await store.async_save(self._config_entry_id, data)
 
     # -----------------------------------------------------------------------
@@ -371,9 +386,21 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         return
 
     async def async_will_remove_from_hass(self):
-        """Clean up when entity is removed."""
+        """Clean up when entity is removed.
+
+        A removed entity may only stop. Every card save reloads the entry, so
+        this runs with continuations parked on awaits and commands mid-flight;
+        none of them may start a relay, start tracking or write the store once
+        it has run. The flag, the epoch and the multi-phase clear are set
+        before the first await so nothing that resumes during this method's
+        own yields can slip through. The auto-stop task is deliberately not
+        cancelled: a STOP it is half-way through sending must still go out,
+        which is why stops declare themselves to _call_service.
+        """
+        self._removed = True
+        self._supersede_movement()
+        self._clear_multiphase_tilt_state()
         self.stop_auto_updater()
-        await self._cancel_background_pulses()
         for unsub in self._state_listener_unsubs:
             unsub()
         self._state_listener_unsubs.clear()
@@ -383,12 +410,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_switch_deadlines.clear()
         self._relay_intent.clear()
         # Cancel the two ghost timers: the endpoint run-on stop and the
-        # startup-delay arming. Left alive across a reload (every card save
-        # reloads the entry) they later fire real relay commands against the
-        # reloaded entity — a late STOP that kills the new movement, or a
-        # re-armed auto-updater that persists a ghost position.
+        # deferred-start arming. Left alive across a reload they later fire
+        # real relay commands against the reloaded entity — a late STOP that
+        # kills the new movement, or a re-armed auto-updater that persists a
+        # ghost position.
         self._cancel_startup_delay_task()
         self._cancel_delay_task()
+        await self._cancel_background_pulses()
         if self._calibration is not None:
             # A reload/unload mid-calibration (integration reload, HA restart,
             # config-entry unload — a card save is rejected while a calibration
@@ -1289,6 +1317,39 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         entry = (asyncio.current_task(), self)
         current = _EXTERNAL_TRIGGER.get()
         _EXTERNAL_TRIGGER.set(current | {entry} if value else current - {entry})
+
+    # Services that energise a relay or start the underlying cover. After
+    # removal they are refused unless the caller declares the call a stop
+    # (a Pulse stop is a turn_on of the stop relay; a Toggle stop taps a
+    # direction relay). turn_off / stop_cover are never refused.
+    _MOTOR_STARTING_SERVICES = frozenset(
+        {
+            "turn_on",
+            "open_cover",
+            "close_cover",
+            "set_cover_position",
+            "open_cover_tilt",
+            "close_cover_tilt",
+            "set_cover_tilt_position",
+        }
+    )
+
+    async def _call_service(
+        self, domain: str, service: str, data: dict, *, stop: bool = False
+    ) -> None:
+        """The one path every relay and underlying-cover service call takes.
+
+        A removed entity may only stop: a motor-starting service is dropped
+        here, where the relay is actually switched, so no mode's override, no
+        native forward and no command parked between an OFF and an ON can
+        energise a relay after the reload. ``stop`` is the caller's word that
+        the call halts the motor; those go out so a STOP interrupted by
+        removal, and removal's own owed stops, still reach the hardware.
+        """
+        if self._removed and not stop and service in self._MOTOR_STARTING_SERVICES:
+            self._log("_call_service :: %s.%s refused, entity removed", domain, service)
+            return
+        await self.hass.services.async_call(domain, service, data, False)
 
     def _supersede_movement(self) -> None:
         """Claim the movement, cancelling any reversal waiting out its settle."""
@@ -2758,6 +2819,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         delay so its position stays put until the pre-step finishes.
         """
 
+        if self._removed:
+            self._log("_begin_movement :: refused, entity removed")
+            return
+
         def start(base_timestamp=None, extra_delay=0.0):
             self._log(
                 "_begin_movement.start :: target=%d from=%s coupled=%s base_ts=%s "
@@ -2883,6 +2948,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
 
     def start_auto_updater(self):
         """Start the autoupdater to update HASS while cover is moving."""
+        if self._removed:
+            return
         self._log("start_auto_updater")
         if self._unsubscribe_auto_updater is None:
             self._log("init _unsubscribe_auto_updater")
@@ -3454,6 +3521,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             else:
                 await self._send_tilt_open()
 
+        if self._removed:
+            return
         self.tilt_calc.start_travel(tilt_target)
         self.start_auto_updater()
 
@@ -3903,18 +3972,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if not self._switch_is_on(self._tilt_open_switch_id):
             self._mark_driving_relay_pending(self._tilt_open_switch_id)
         self._note_relay_intent(self._tilt_close_switch_id, False)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_close_switch_id},
-            False,
         )
         self._note_relay_intent(self._tilt_open_switch_id, True)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_on",
             {"entity_id": self._tilt_open_switch_id},
-            False,
         )
 
     async def _send_tilt_close(self) -> None:
@@ -3928,18 +3995,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if not self._switch_is_on(self._tilt_close_switch_id):
             self._mark_driving_relay_pending(self._tilt_close_switch_id)
         self._note_relay_intent(self._tilt_open_switch_id, False)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_open_switch_id},
-            False,
         )
         self._note_relay_intent(self._tilt_close_switch_id, True)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_on",
             {"entity_id": self._tilt_close_switch_id},
-            False,
         )
 
     async def _send_tilt_stop(self) -> None:
@@ -3952,26 +4017,24 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._relay_is_on(self._tilt_close_switch_id):
             self._mark_switch_pending(self._tilt_close_switch_id, 1)
         self._note_relay_intent(self._tilt_open_switch_id, False)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_open_switch_id},
-            False,
         )
         self._note_relay_intent(self._tilt_close_switch_id, False)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_close_switch_id},
-            False,
         )
         if self._tilt_stop_switch_id:
             self._mark_switch_pending(self._tilt_stop_switch_id, 2)
-            await self.hass.services.async_call(
+            await self._call_service(
                 "homeassistant",
                 "turn_on",
                 {"entity_id": self._tilt_stop_switch_id},
-                False,
+                stop=True,
             )
 
     # -----------------------------------------------------------------------

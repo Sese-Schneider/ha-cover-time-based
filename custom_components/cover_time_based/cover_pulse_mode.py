@@ -100,11 +100,10 @@ class PulseModeCover(SwitchCoverTimeBased):
         """Complete a relay pulse by turning OFF after pulse_time."""
         try:
             await sleep(self._pulse_time)
-            await self.hass.services.async_call(
+            await self._call_service(
                 "homeassistant",
                 "turn_off",
                 {"entity_id": entity_id},
-                False,
             )
         except asyncio.CancelledError:
             pass
@@ -153,11 +152,10 @@ class PulseModeCover(SwitchCoverTimeBased):
         for entity_id, task in pending:
             if not task.done():
                 task.cancel()
-            await self.hass.services.async_call(
+            await self._call_service(
                 "homeassistant",
                 "turn_off",
                 {"entity_id": entity_id},
-                False,
             )
 
     # --- Relay pulse helpers -----------------------------------------------
@@ -222,24 +220,21 @@ class PulseModeCover(SwitchCoverTimeBased):
             # a stop): cancel its completion and mark our own turn_off per live
             # state, else its deferred OFF orphans a pending stop echo.
             self._mark_pulse_off(self._stop_switch_entity_id)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._close_switch_entity_id},
-            False,
         )
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_on",
             {"entity_id": self._open_switch_entity_id},
-            False,
         )
         if self._stop_switch_entity_id is not None:
-            await self.hass.services.async_call(
+            await self._call_service(
                 "homeassistant",
                 "turn_off",
                 {"entity_id": self._stop_switch_entity_id},
-                False,
             )
         # Motor controller latches on ON edge; complete pulse in background
         self._schedule_pulse_completion(self._open_switch_entity_id)
@@ -253,24 +248,21 @@ class PulseModeCover(SwitchCoverTimeBased):
             # a stop): cancel its completion and mark our own turn_off per live
             # state, else its deferred OFF orphans a pending stop echo.
             self._mark_pulse_off(self._stop_switch_entity_id)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._open_switch_entity_id},
-            False,
         )
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_on",
             {"entity_id": self._close_switch_entity_id},
-            False,
         )
         if self._stop_switch_entity_id is not None:
-            await self.hass.services.async_call(
+            await self._call_service(
                 "homeassistant",
                 "turn_off",
                 {"entity_id": self._stop_switch_entity_id},
-                False,
             )
         # Motor controller latches on ON edge; complete pulse in background
         self._schedule_pulse_completion(self._close_switch_entity_id)
@@ -281,27 +273,25 @@ class PulseModeCover(SwitchCoverTimeBased):
         # turn_off against their live state.
         self._mark_pulse_off(self._close_switch_entity_id)
         self._mark_pulse_off(self._open_switch_entity_id)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._close_switch_entity_id},
-            False,
         )
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._open_switch_entity_id},
-            False,
         )
         if self._stop_switch_entity_id is not None:
             # The stop relay's own pulse: ON now + deferred OFF (or just the
             # deferred OFF on a double-stop where it is already ON).
             self._mark_pulse_on(self._stop_switch_entity_id)
-            await self.hass.services.async_call(
+            await self._call_service(
                 "homeassistant",
                 "turn_on",
                 {"entity_id": self._stop_switch_entity_id},
-                False,
+                stop=True,
             )
             # Motor stops on ON edge; complete pulse in background
             self._schedule_pulse_completion(self._stop_switch_entity_id)
@@ -312,17 +302,15 @@ class PulseModeCover(SwitchCoverTimeBased):
         self._feedback_armed_entity = None
         self._mark_pulse_off(self._tilt_close_switch_id)
         self._mark_pulse_on(self._tilt_open_switch_id, arm_feedback=True)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_close_switch_id},
-            False,
         )
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_on",
             {"entity_id": self._tilt_open_switch_id},
-            False,
         )
         self._schedule_pulse_completion(self._tilt_open_switch_id)
 
@@ -330,41 +318,37 @@ class PulseModeCover(SwitchCoverTimeBased):
         self._feedback_armed_entity = None
         self._mark_pulse_off(self._tilt_open_switch_id)
         self._mark_pulse_on(self._tilt_close_switch_id, arm_feedback=True)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_open_switch_id},
-            False,
         )
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_on",
             {"entity_id": self._tilt_close_switch_id},
-            False,
         )
         self._schedule_pulse_completion(self._tilt_close_switch_id)
 
     async def _send_tilt_stop(self) -> None:
         self._mark_pulse_off(self._tilt_open_switch_id)
         self._mark_pulse_off(self._tilt_close_switch_id)
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_open_switch_id},
-            False,
         )
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_close_switch_id},
-            False,
         )
         if self._tilt_stop_switch_id:
             self._mark_pulse_on(self._tilt_stop_switch_id)
-            await self.hass.services.async_call(
+            await self._call_service(
                 "homeassistant",
                 "turn_on",
                 {"entity_id": self._tilt_stop_switch_id},
-                False,
+                stop=True,
             )
             self._schedule_pulse_completion(self._tilt_stop_switch_id)

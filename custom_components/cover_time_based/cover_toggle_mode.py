@@ -19,17 +19,17 @@ class ToggleModeCover(ToggleBaseCover):
         # Stop re-pulses the last-used direction relay; the motor toggles off on
         # the ON edge (_pulse_relay marks its own echoes).
         if self._last_command == SERVICE_CLOSE_COVER:
-            await self._pulse_relay(self._close_switch_entity_id)
+            await self._pulse_relay(self._close_switch_entity_id, stop=True)
         elif self._last_command == SERVICE_OPEN_COVER:
-            await self._pulse_relay(self._open_switch_entity_id)
+            await self._pulse_relay(self._open_switch_entity_id, stop=True)
         else:
             self._log("_send_stop :: toggle mode with no last command, skipping")
 
     async def _send_tilt_stop(self) -> None:
         if self._last_tilt_direction == "close":
-            await self._pulse_relay(self._tilt_close_switch_id)
+            await self._pulse_relay(self._tilt_close_switch_id, stop=True)
         elif self._last_tilt_direction == "open":
-            await self._pulse_relay(self._tilt_open_switch_id)
+            await self._pulse_relay(self._tilt_open_switch_id, stop=True)
         else:
             self._log(
                 "_send_tilt_stop :: toggle mode with no last tilt direction, skipping"

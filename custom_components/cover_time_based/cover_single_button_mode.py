@@ -77,11 +77,10 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
     # --- press sequencing ---------------------------------------------
     async def _release_button(self) -> None:
-        await self.hass.services.async_call(
+        await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._open_switch_entity_id},
-            False,
         )
 
     def _start_press_sequence(self, action: Action) -> None:
@@ -102,6 +101,8 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         armed = action is not Action.STOP and self._arm_relay_feedback(
             self._open_switch_entity_id
         )
+        if self._removed:
+            return
         self._press_task = self.hass.async_create_task(
             self._run_press_sequence(phases, armed=armed)
         )
@@ -192,8 +193,11 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
                         if confirming
                         else window,
                     )
-                await self.hass.services.async_call(
-                    "homeassistant", "turn_on", {"entity_id": entity_id}, False
+                await self._call_service(
+                    "homeassistant",
+                    "turn_on",
+                    {"entity_id": entity_id},
+                    stop=phase in (Phase.STOPPED_AFTER_UP, Phase.STOPPED_AFTER_DOWN),
                 )
                 self._phase = phase
                 self._press_active = True
