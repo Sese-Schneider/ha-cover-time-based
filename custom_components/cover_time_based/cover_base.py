@@ -2863,14 +2863,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._log("_begin_movement :: refused, entity removed")
             return
 
-        def start(base_timestamp=None, extra_delay=0.0):
+        def start(base_monotonic=None, extra_delay=0.0):
             self._log(
-                "_begin_movement.start :: target=%d from=%s coupled=%s base_ts=%s "
+                "_begin_movement.start :: target=%d from=%s coupled=%s base_mono=%s "
                 "extra_delay=%s self_initiated=%s external=%s",
                 target,
                 primary_calc.current_position(),
                 coupled_target,
-                base_timestamp,
+                base_monotonic,
                 extra_delay,
                 self._self_initiated_movement,
                 self._triggered_externally,
@@ -2878,7 +2878,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             primary_calc.start_travel(
                 target,
                 delay=pre_step_delay + extra_delay,
-                base_timestamp=base_timestamp,
+                base_monotonic=base_monotonic,
             )
             if coupled_target is not None:
                 # extra_delay (the mechanical startup delay) applies to the
@@ -2887,7 +2887,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 coupled_calc.start_travel(
                     int(coupled_target),
                     delay=extra_delay,
-                    base_timestamp=base_timestamp,
+                    base_monotonic=base_monotonic,
                 )
             self.start_auto_updater()
 
@@ -2899,8 +2899,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if feedback_entity is not None:
             # Stamped here rather than inside the wait: the fallback anchor is
             # the moment the relay was commanded, not the moment the waiting
-            # coroutine happened to run.
-            commanded_at = time.time()
+            # coroutine happened to run. Monotonic, like everything the tracker reads.
+            commanded_at = time.monotonic()
             self._startup_delay_task = self.hass.async_create_task(
                 self._run_deferred_start(
                     lambda: self._await_relay_confirmation(
@@ -2957,8 +2957,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         _cancel_startup_delay_task — treats both deferrals alike.
         """
         try:
-            base_ts = await make_waiter()
-            start_callback(base_timestamp=base_ts, extra_delay=startup_delay)
+            anchor = await make_waiter()
+            start_callback(base_monotonic=anchor, extra_delay=startup_delay)
         except asyncio.CancelledError:
             self._log("_run_deferred_start :: cancelled")
             raise
@@ -4317,8 +4317,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         whichever transition on it is offered here — our own filtered echo or a
         rising edge nothing pre-counted; _async_switch_state_changed decides
         which are. Resolves the waiting future with the echo's ``last_changed``
-        timestamp so tracking starts from when the relay actually switched, not
-        when the listener ran. Returns whether the wait was resolved.
+        timestamp (wall-clock; the wait converts it) so tracking starts from when
+        the relay actually switched, not when the listener ran. Returns whether
+        the wait was resolved.
         """
         future = self._feedback_wait_future
         if (
@@ -4347,18 +4348,27 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         return
 
-    async def _wait_for_relay_echo(self, entity_id, timeout):
-        """Await ``entity_id``'s ON echo; return its last_changed ts, or None.
+    async def _wait_for_relay_echo(self, entity_id, timeout, *, since=None):
+        """Await ``entity_id``'s ON echo; return a monotonic anchor, or None.
 
-        Returns None on timeout (relay never confirmed) so the caller falls back
-        to a command-fire timeline. Uses the running loop's future — the mock
-        hass in unit tests has no real ``hass.loop``.
+        The echo carries the relay's wall-clock ``last_changed``; the tracker
+        runs on the monotonic clock. The stamp is converted by its age,
+        bounded to the interval this wait has been open (``since``, a
+        monotonic reading, defaults to now): a device clock ahead of ours
+        cannot anchor in the future, and a wall-clock step landing between
+        the echo and the listener cannot backdate the anchor past the
+        command. None on timeout (relay never confirmed) or when the echo
+        carried no timestamp, so the caller falls back to a command-fire
+        timeline. Uses the running loop's future — the mock hass in unit
+        tests has no real ``hass.loop``.
         """
+        if since is None:
+            since = time.monotonic()
         future = asyncio.get_running_loop().create_future()
         self._feedback_wait_entity = entity_id
         self._feedback_wait_future = future
         try:
-            return await asyncio.wait_for(future, timeout)
+            stamp = await asyncio.wait_for(future, timeout)
         except TimeoutError:
             self._log(
                 "_wait_for_relay_echo :: %s did not confirm within %ss",
@@ -4372,24 +4382,31 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             if self._feedback_wait_future is future:
                 self._feedback_wait_entity = None
                 self._feedback_wait_future = None
+        if stamp is None:
+            return None
+        now = time.monotonic()
+        age = min(max(time.time() - stamp, 0.0), max(now - since, 0.0))
+        return now - age
 
     async def _await_relay_confirmation(self, entity_id, commanded_at):
-        """Wait for ``entity_id``'s ON echo and return the tracking anchor.
+        """Wait for ``entity_id``'s ON echo and return the tracking anchor (a monotonic reading).
 
         On timeout the anchor is ``commanded_at``, not the instant the wait gave
         up: the relay may have switched without reporting it, so the motor has
         been running since the command — anchoring on the timeout would drop the
         whole wait out of the travel.
         """
-        base_ts = await self._wait_for_relay_echo(entity_id, RELAY_FEEDBACK_TIMEOUT)
-        if base_ts is not None:
+        anchor = await self._wait_for_relay_echo(
+            entity_id, RELAY_FEEDBACK_TIMEOUT, since=commanded_at
+        )
+        if anchor is not None:
             self._log(
-                "_await_relay_confirmation :: %s confirmed (base_ts=%s)"
+                "_await_relay_confirmation :: %s confirmed (anchor=%s)"
                 " -> starting tracking",
                 entity_id,
-                base_ts,
+                anchor,
             )
-            return base_ts
+            return anchor
         self._log(
             "_await_relay_confirmation :: %s did NOT confirm within timeout"
             " -> command-fire start",

@@ -3,6 +3,34 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
+class FakeClock:
+    """A wall clock and a monotonic clock that normally advance together.
+
+    ``step_wall`` moves the wall clock alone, exactly as an NTP correction does:
+    monotonic time is unaffected by it, so a tracker reading monotonic keeps
+    counting real elapsed travel.
+    """
+
+    def __init__(self, wall: float = 1_700_000_000.0, mono: float = 5_000.0) -> None:
+        self._wall = wall
+        self._mono = mono
+
+    def time(self) -> float:
+        return self._wall
+
+    def monotonic(self) -> float:
+        return self._mono
+
+    def advance(self, seconds: float) -> None:
+        """Real time passes: both clocks move."""
+        self._wall += seconds
+        self._mono += seconds
+
+    def step_wall(self, seconds: float) -> None:
+        """The wall clock is corrected; monotonic time is untouched."""
+        self._wall += seconds
+
+
 def stub_switches(cover, *, on=(), optimistic=()):
     """Make ``hass.states.get`` deterministic for the feedback guards.
 

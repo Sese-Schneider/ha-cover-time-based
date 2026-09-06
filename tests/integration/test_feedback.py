@@ -7,7 +7,7 @@ movement).
 
 from __future__ import annotations
 
-import time as time_mod
+import time
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -16,19 +16,8 @@ from homeassistant.helpers.entity_component import DATA_INSTANCES
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
-
-class MockTime:
-    """Controllable time source for TravelCalculator."""
-
-    def __init__(self):
-        self._base = time_mod.time()
-        self._total_offset = 0.0
-
-    def time(self):
-        return self._base + self._total_offset
-
-    def advance(self, seconds: float):
-        self._total_offset += seconds
+from custom_components.cover_time_based import travel_calculator
+from tests.helpers import FakeClock
 
 
 def _get_cover_entity(hass: HomeAssistant):
@@ -46,8 +35,8 @@ async def test_echo_filtering(hass: HomeAssistant, setup_cover):
     state_changed event should be filtered by echo detection, not
     interpreted as an external button press (which would cause double-start).
     """
-    mt = MockTime()
-    with patch("time.time", mt.time):
+    mt = FakeClock(wall=time.time(), mono=time.monotonic())
+    with patch.object(travel_calculator, "time", mt):
         cover = _get_cover_entity(hass)
 
         await cover.set_known_position(position=50)
@@ -84,8 +73,8 @@ async def test_external_button_press(hass: HomeAssistant, setup_cover):
     Turning on the open switch without going through the cover service
     should trigger the cover to start tracking movement.
     """
-    mt = MockTime()
-    with patch("time.time", mt.time):
+    mt = FakeClock(wall=time.time(), mono=time.monotonic())
+    with patch.object(travel_calculator, "time", mt):
         cover = _get_cover_entity(hass)
 
         await cover.set_known_position(position=50)

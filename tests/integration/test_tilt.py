@@ -5,7 +5,7 @@ Tests sequential tilt constraints through real HA service calls.
 
 from __future__ import annotations
 
-import time as time_mod
+import time
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -18,21 +18,10 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
+from custom_components.cover_time_based import travel_calculator
+from tests.helpers import FakeClock
+
 from .conftest import DOMAIN
-
-
-class MockTime:
-    """Controllable time source for TravelCalculator."""
-
-    def __init__(self):
-        self._base = time_mod.time()
-        self._total_offset = 0.0
-
-    def time(self):
-        return self._base + self._total_offset
-
-    def advance(self, seconds: float):
-        self._total_offset += seconds
 
 
 def _get_cover_entity(hass: HomeAssistant):
@@ -69,8 +58,8 @@ async def test_sequential_tilt_moves_before_travel(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    mt = MockTime()
-    with patch("time.time", mt.time):
+    mt = FakeClock(wall=time.time(), mono=time.monotonic())
+    with patch.object(travel_calculator, "time", mt):
         cover = _get_cover_entity(hass)
 
         # Start at position 0 (closed), tilt at 30%
@@ -285,11 +274,11 @@ async def test_same_direction_retarget_tilt_cover_does_not_reissue_command(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    mt = MockTime()
-    with patch("time.time", mt.time):
+    mt = FakeClock(wall=time.time(), mono=time.monotonic())
+    with patch.object(travel_calculator, "time", mt):
         cover = _get_cover_entity(hass)
         # Fire HA time changes off a single base with offsets matching the
-        # cumulative MockTime advance, keeping the scheduler and
+        # cumulative FakeClock advance, keeping the scheduler and
         # TravelCalculator clocks aligned.
         now = dt_util.utcnow()
 
@@ -399,7 +388,7 @@ class TestDisplacedTiltMotor:
         cover = _get_cover_entity(hass)
         await cover.set_known_position(position=50)
         await cover.set_known_tilt_position(tilt_position=100)
-        with patch("time.time", return_value=1000):
+        with patch.object(travel_calculator, "time", FakeClock(wall=1000, mono=1000)):
             await hass.services.async_call(
                 "cover",
                 "set_cover_tilt_position",
@@ -432,8 +421,8 @@ class TestDisplacedTiltMotor:
         cover = _get_cover_entity(hass)
         await cover.set_known_position(position=50)
         await cover.set_known_tilt_position(tilt_position=50)
-        mt = MockTime()
-        with patch("time.time", mt.time):
+        mt = FakeClock(wall=time.time(), mono=time.monotonic())
+        with patch.object(travel_calculator, "time", mt):
             await hass.services.async_call(
                 "cover",
                 "set_cover_tilt_position",

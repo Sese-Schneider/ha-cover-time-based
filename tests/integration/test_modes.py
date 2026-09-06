@@ -5,7 +5,7 @@ Tests toggle mode stop-before-reverse and pulse mode relay pulsing.
 
 from __future__ import annotations
 
-import time as time_mod
+import time
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -18,21 +18,10 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
+from custom_components.cover_time_based import travel_calculator
+from tests.helpers import FakeClock
+
 from .conftest import DOMAIN
-
-
-class MockTime:
-    """Controllable time source for TravelCalculator."""
-
-    def __init__(self):
-        self._base = time_mod.time()
-        self._total_offset = 0.0
-
-    def time(self):
-        return self._base + self._total_offset
-
-    def advance(self, seconds: float):
-        self._total_offset += seconds
 
 
 def _get_cover_entity(hass: HomeAssistant):
@@ -65,8 +54,8 @@ async def test_toggle_in_motion_close_stops(hass: HomeAssistant, setup_input_boo
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    mt = MockTime()
-    with patch("time.time", mt.time):
+    mt = FakeClock(wall=time.time(), mono=time.monotonic())
+    with patch.object(travel_calculator, "time", mt):
         cover = _get_cover_entity(hass)
 
         await cover.set_known_position(position=50)
@@ -130,11 +119,11 @@ async def test_toggle_same_direction_retarget_does_not_repulse(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    mt = MockTime()
-    with patch("time.time", mt.time):
+    mt = FakeClock(wall=time.time(), mono=time.monotonic())
+    with patch.object(travel_calculator, "time", mt):
         cover = _get_cover_entity(hass)
         # Fire HA time changes off a single base, with offsets that match the
-        # cumulative MockTime advance, so the scheduler and TravelCalculator
+        # cumulative FakeClock advance, so the scheduler and TravelCalculator
         # clocks stay aligned.
         now = dt_util.utcnow()
 
@@ -208,8 +197,8 @@ async def test_pulse_mode_relay_pulsing(hass: HomeAssistant, setup_input_boolean
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    mt = MockTime()
-    with patch("time.time", mt.time):
+    mt = FakeClock(wall=time.time(), mono=time.monotonic())
+    with patch.object(travel_calculator, "time", mt):
         cover = _get_cover_entity(hass)
 
         await cover.set_known_position(position=50)
@@ -285,8 +274,8 @@ async def test_same_direction_retarget_does_not_repulse(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    mt = MockTime()
-    with patch("time.time", mt.time):
+    mt = FakeClock(wall=time.time(), mono=time.monotonic())
+    with patch.object(travel_calculator, "time", mt):
         cover = _get_cover_entity(hass)
         now = dt_util.utcnow()
 

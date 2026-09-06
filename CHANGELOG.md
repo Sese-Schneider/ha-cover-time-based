@@ -34,6 +34,8 @@
 - **Saving the configuration card while a cover is between moves no longer lets the old entity drive the relays**: a card save reloads the cover, and a tilt restore, a "fully open first" second leg, a dual-motor pre-step or a reversal that was waiting out the motor settle gap carried on after the reload — reversing the motor, starting the tilt motor or running the second leg on an entity Home Assistant had already replaced, restarting its position updates alongside the new one and overwriting the saved position. A removed cover now refuses every relay command except a stop.
 - **Switch (latching) and Pulse covers: saving the configuration card while the motor is running no longer leaves the relay energised**: the reload cancelled the pending stop, or the pending start of tracking, and unsubscribed the position updates, without sending a stop of its own, so the relay stayed latched and the motor ran on to its limit untracked. Removal now stops the motor first and saves the position it stopped at. Toggle, Toggle (opposite button), Single button and Pulse covers without the endpoint stop are left to their own limit switches, as during a calibration, and are saved at the limit the motor is running to — let it arrive before sending the reloaded cover its next command.
 
+- **Position tracking no longer jumps when the system clock is corrected mid-travel**: travel timing was measured on the wall clock, so a time sync landing while a cover was moving (a Raspberry Pi picking up NTP shortly after a reboot, say) made the move finish instantly or never finish. Timing now runs on a clock that cannot step, and a relay confirmation under "Wait for relay confirmation" is never read as older than the command that caused it.
+
 ## 4.11.0 (2026-08-04)
 
 ### Features

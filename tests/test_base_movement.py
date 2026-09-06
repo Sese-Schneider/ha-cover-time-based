@@ -1491,7 +1491,7 @@ class TestSequentialPreStepDelay:
 
         import time
 
-        before = time.time()
+        before = time.monotonic()
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()
 
@@ -1518,7 +1518,7 @@ class TestSequentialPreStepDelay:
 
         import time
 
-        before = time.time()
+        before = time.monotonic()
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()
 
@@ -1539,7 +1539,7 @@ class TestSequentialPreStepDelay:
 
         import time
 
-        before = time.time()
+        before = time.monotonic()
         with patch.object(cover, "async_write_ha_state"):
             await cover.set_position(10)
 
@@ -1562,7 +1562,7 @@ class TestSequentialPreStepDelay:
 
         import time
 
-        before = time.time()
+        before = time.monotonic()
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_close_cover_tilt()
 
