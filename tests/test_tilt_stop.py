@@ -845,3 +845,71 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
         assert ("turn_on", "switch.open") not in _all_calls(cover, n), (
             "the branch must stay a no-op on the travel axis"
         )
+
+    async def test_set_position_rejected_as_too_short_releases_tilt(self, make_cover):
+        """A move below ``min_movement_time`` is a travel command going nowhere.
+
+        It never reaches the tilt planner, so nothing downstream takes the
+        displaced motor over.
+        """
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SWITCH,
+            travel_time_open=30,
+            travel_time_close=30,
+            min_movement_time=5.0,
+            **DUAL,
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        stub_switches(cover)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(0)
+            assert cover._moving_tilt_motor, "precondition: tilt motor running"
+            n = len(cover.hass.services.async_call.call_args_list)
+            await cover.set_position(51)  # 0.3s of travel, rejected as too short
+
+        assert not cover.travel_calc.is_traveling(), (
+            "precondition: the move really was rejected"
+        )
+        tilt_calls = _tilt_switch_calls(cover, n)
+        assert any(c[0] == "turn_off" for c in tilt_calls), (
+            "a rejected set_position left the tilt motor running; "
+            f"tilt-relay calls: {tilt_calls!r} ({_tilt_state(cover)})"
+        )
+        assert not cover.tilt_calc.is_traveling()
+
+    async def test_set_position_while_a_same_direction_startup_delay_runs_releases_tilt(
+        self, make_cover
+    ):
+        """``set_position``'s own "startup delay active, skipping" no-op.
+
+        ``_handle_pre_movement_checks`` refuses to restart a same-direction move
+        while a startup delay is pending — here the displaced tilt move's own
+        deferred start.
+        """
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SWITCH,
+            wait_for_relay_feedback=True,
+            travel_time_open=30,
+            travel_time_close=30,
+            **DUAL,
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        stub_switches(cover)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_tilt_position(100)
+            await asyncio.sleep(0)
+            assert cover._last_command == SERVICE_OPEN_COVER
+            assert cover._startup_delay_task is not None
+            n = len(cover.hass.services.async_call.call_args_list)
+            await cover.set_position(90)  # same direction, so not restarted
+
+        assert not cover.travel_calc.is_traveling(), (
+            "precondition: the move really was skipped"
+        )
+        tilt_calls = _tilt_switch_calls(cover, n)
+        assert any(c[0] == "turn_off" for c in tilt_calls), (
+            "the startup-delay no-op left the tilt motor running; "
+            f"tilt-relay calls: {tilt_calls!r} ({_tilt_state(cover)})"
+        )

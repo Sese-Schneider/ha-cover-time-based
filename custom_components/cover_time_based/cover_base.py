@@ -1369,11 +1369,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         and passes it in. A tilt-to-safe pre-step that starts takes the motor
         over and must not call this; every other way out of a travel funnel —
         an early return (a resync at the current position, a ``set_position``
-        to where the cover already is, a startup-delay no-op) or a travel that
-        starts with no pre-step because tilt is already safe — would otherwise
-        leave the motor running with its tracker orphaned, or retarget its
-        tracker while it drives the other way. Tilt half only: the travel relay
-        is the caller's business (a resync re-drives it on purpose).
+        to where the cover already is or one rejected as too short, a
+        startup-delay no-op) or a travel that starts with no pre-step because
+        tilt is already safe — would otherwise leave the motor running with its
+        tracker orphaned, or retarget its tracker while it drives the other
+        way. Tilt half only: the travel relay is the caller's business (a
+        resync re-drives it on purpose).
 
         Unlike ``_stop_displaced_movement_for_tilt`` (a tilt *reversal*), this
         settles rather than sending a bare tilt stop, so a momentary relay is
@@ -2144,6 +2145,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             command
         )
         if not should_proceed:
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return
 
         # A shared-motor (inline/sequential) tilt move drives the same physical
@@ -2157,6 +2159,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             and self.tilt_calc.is_traveling()
         )
 
+        # A running dedicated tilt motor never reaches this branch:
+        # shared_motor_tilt_traveling excludes uses_tilt_motor strategies by
+        # construction, and every tilt-motor entry point stops travel_calc on
+        # its way in — so was_tilt_motor_move implies neither condition holds.
         if is_direction_change and (
             self.travel_calc.is_traveling() or shared_motor_tilt_traveling
         ):
@@ -2167,9 +2173,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self.tilt_calc.stop()
             await self._async_handle_command(SERVICE_STOP_COVER)
             if not await self._settle_before_reversing():
+                # No tilt release: unreachable per the branch note, and once
+                # superseded the newer movement owns the hardware.
                 return
             current = self.travel_calc.current_position()
             if target == current:
+                # Defensive only — unreachable per the branch note.
                 await self._release_displaced_tilt_motor(was_tilt_motor_move)
                 return
 
@@ -2187,6 +2196,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             "set_position",
             is_recalibrated_leg=not recalibrate,
         ):
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return
 
         self._last_command = command
