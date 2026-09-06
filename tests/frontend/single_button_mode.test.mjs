@@ -1,7 +1,7 @@
 /**
  * single_button control mode — one cycling button (down/stop/up/stop), #245.
  *
- * The card labels the reused open_switch_entity_id slot "Button", hides
+ * The card labels the reused open_switch_entity_id slot "Button or script", hides
  * close_switch, stop_switch and every tilt field (the backend has no tilt
  * support at all in this mode), and surfaces a Resync control that lets the
  * user re-anchor the tracked phase/position after the physical button or an
@@ -59,7 +59,7 @@ test("single_button mode: its option has the selected attribute", async () => {
   expect(selectedOpt?.value).toBe("single_button");
 });
 
-test("single_button mode: field-label reads 'Button' and exactly one entity picker (the button) is shown besides the top device picker", async () => {
+test("single_button mode: field-label reads 'Button or script' and exactly one entity picker (the button) is shown besides the top device picker", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: singleButtonCfg(),
@@ -68,12 +68,15 @@ test("single_button mode: field-label reads 'Button' and exactly one entity pick
   const labels = [...card.shadowRoot.querySelectorAll(".field-label")].map((n) =>
     n.textContent.trim(),
   );
-  expect(labels).toContain("Button");
+  // The single-button slot accepts a script as well as a switch/button
+  // entity (README + #271), so the label matches the pulse-mode "… or
+  // script" phrasing rather than the bare "Button".
+  expect(labels).toContain("Button or script");
 
   const pickers = card.shadowRoot.querySelectorAll("ha-entity-picker");
   // top device picker + the single button picker = 2
   expect(pickers.length).toBe(2);
-  expect(pickers[1].getAttribute("label")).toBe("Button");
+  expect(pickers[1].getAttribute("label")).toBe("Button or script");
   expect(pickers[1].value).toBe("switch.button");
 });
 

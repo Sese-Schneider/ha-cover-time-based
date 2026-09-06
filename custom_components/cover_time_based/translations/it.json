@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Timeout",
-          "description": "Timeout di sicurezza in secondi — il motore si fermerà automaticamente se stop_calibration non viene chiamato"
+          "description": "Timeout di sicurezza in secondi. Se stop_calibration non viene chiamato in tempo, la calibrazione viene annullata. L'hardware che continua a funzionare finché non gli viene ordinato di fermarsi viene fermato; l'hardware che si ferma da solo non riceve alcun comando di arresto."
         },
         "direction": {
           "name": "Direzione",

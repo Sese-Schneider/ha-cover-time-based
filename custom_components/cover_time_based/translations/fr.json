@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Délai d'expiration",
-          "description": "Délai d'expiration de sécurité en secondes — le moteur s'arrête automatiquement si stop_calibration n'est pas appelé"
+          "description": "Délai d'expiration de sécurité en secondes. Si stop_calibration n'est pas appelé à temps, l'étalonnage est annulé. Le matériel qui fonctionne jusqu'à ce qu'on lui demande de s'arrêter est également arrêté ; le matériel qui s'arrête de lui-même ne reçoit aucune commande d'arrêt."
         },
         "direction": {
           "name": "Direction",

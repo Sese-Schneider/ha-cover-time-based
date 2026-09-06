@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Zeitüberschreitung",
-          "description": "Sicherheits-Zeitüberschreitung in Sekunden — der Motor stoppt automatisch, wenn stop_calibration nicht aufgerufen wird"
+          "description": "Sicherheits-Zeitüberschreitung in Sekunden. Wird stop_calibration nicht rechtzeitig aufgerufen, wird die Kalibrierung abgebrochen. Hardware, die läuft, bis sie zum Stoppen aufgefordert wird, wird ebenfalls gestoppt; Hardware, die von selbst stoppt, erhält keinen Stoppbefehl."
         },
         "direction": {
           "name": "Richtung",

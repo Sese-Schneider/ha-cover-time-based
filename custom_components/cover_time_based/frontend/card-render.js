@@ -399,7 +399,7 @@ export function renderInputEntities(card, c) {
     <div class="section">
       <div class="field-label">${
         isSingleButton
-          ? card._t("entities.button")
+          ? card._t("entities.button_or_script")
           : card._switchLabel("entities.switch_entities", c.control_mode)
       }</div>
       <div class="entity-grid">
@@ -409,7 +409,7 @@ export function renderInputEntities(card, c) {
           .includeDomains=${switchPickerDomains(c.control_mode)}
           label=${
             isSingleButton
-              ? card._t("entities.button")
+              ? card._t("entities.button_or_script")
               : card._switchLabel("entities.open_switch", c.control_mode)
           }
           @value-changed=${(e) => card._onSwitchEntityChange("open_switch_entity_id", e)}

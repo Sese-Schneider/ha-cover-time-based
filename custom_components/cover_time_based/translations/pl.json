@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Limit czasu",
-          "description": "Limit bezpieczeństwa w sekundach — silnik zatrzyma się automatycznie, jeśli stop_calibration nie zostanie wywołane"
+          "description": "Limit bezpieczeństwa w sekundach. Jeśli stop_calibration nie zostanie wywołane na czas, kalibracja zostaje anulowana. Sprzęt, który pracuje, dopóki nie otrzyma polecenia zatrzymania, również zostaje zatrzymany; sprzęt, który zatrzymuje się sam, nie otrzymuje polecenia zatrzymania."
         },
         "direction": {
           "name": "Kierunek",

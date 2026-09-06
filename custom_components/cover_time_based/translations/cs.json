@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Časový limit",
-          "description": "Bezpečnostní časový limit v sekundách — motor se automaticky zastaví, pokud není zavolána stop_calibration"
+          "description": "Bezpečnostní časový limit v sekundách. Pokud není stop_calibration včas zavolána, kalibrace se zruší. Hardware, který běží, dokud nedostane příkaz k zastavení, se také zastaví; hardware, který se zastaví sám, žádný příkaz k zastavení nedostane."
         },
         "direction": {
           "name": "Směr",

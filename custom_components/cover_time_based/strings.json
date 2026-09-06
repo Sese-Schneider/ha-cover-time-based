@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Timeout",
-          "description": "Safety timeout in seconds — motor will auto-stop if stop_calibration is not called"
+          "description": "Safety timeout in seconds. If stop_calibration is not called in time, the calibration is cancelled. Hardware that runs until it is told to stop is stopped; hardware that stops itself is sent no stop."
         },
         "direction": {
           "name": "Direction",

@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Temps màxim d'espera",
-          "description": "Temps màxim d'espera de seguretat en segons: el motor s'aturarà automàticament si no es crida stop_calibration"
+          "description": "Temps màxim d'espera de seguretat en segons. Si no es crida stop_calibration a temps, es cancel·la la calibració. El maquinari que funciona fins que se li ordena aturar-se també s'atura; el maquinari que s'atura per si sol no rep cap ordre d'aturada."
         },
         "direction": {
           "name": "Direcció",

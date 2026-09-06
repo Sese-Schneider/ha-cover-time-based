@@ -141,7 +141,7 @@ detail. A blank cell means the option is not shown for that mode.
 | [Cover entity](#wrapping-an-existing-cover) | ✓ | | | | | |
 | [Open and Close switch](#controlling-a-cover-with-switches) | | ✓ | ✓ | ✓ | ✓ | |
 | [Stop switch](#controlling-a-cover-with-switches) | | | ✓ | | | |
-| [Button](#controlling-a-cover-with-a-single-button) | | | | | | ✓ |
+| [Button or script](#controlling-a-cover-with-a-single-button) | | | | | | ✓ |
 | [Position reporting](#position-reporting) | ✓ | | | | | |
 | [Force time-based positioning](#force-time-based-positioning) | ✓ | | | | | |
 | [Invert position](#invert-position) | ✓ | | | | | |
@@ -250,7 +250,7 @@ mode.
 
 In Pulse mode these entities may be `script` entities as well as switches, which
 suits IR-controlled covers where each script fires an open, close, or stop
-command. So may the **Button** in
+command. So may the **Button or script** slot in
 [Single button mode](#controlling-a-cover-with-a-single-button). The other modes
 need real `switch` entities, because they rely on the switch reporting a held,
 latched on-state that a script (which returns to `off` by itself) cannot
@@ -324,7 +324,7 @@ endpoints.
 
 Choose **Single button (cycling)** for a motor with only one control input — no
 separate open and close relays, just one line to pulse. Select the switch or
-`script` entity that drives it as the **Button**. Each press advances a fixed
+`script` entity that drives it as the **Button or script**. Each press advances a fixed
 cycle, and the motor stops itself at its physical limits:
 
 | The cover is... | The next press... |
@@ -864,7 +864,8 @@ the details.
 
 > [!NOTE]
 > YAML configuration is deprecated and will be removed in a future version.
-> Please use the card instead. Existing YAML keeps working, and a deprecation
+> Please use the card instead. Existing YAML keeps working, though values above
+> the timing limits (which match the card) are now rejected, and a deprecation
 > notice appears in the Home Assistant repairs panel.
 
 <details>
@@ -899,20 +900,20 @@ listed here, use the card.
 | --- | --- | --- | --- | --- |
 | `name` | string | **Required** | Name of the created entity. | |
 | `open_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that opens the cover, or the button in single button mode. May be a `script` entity in pulse and single button modes. | |
-| `close_switch_entity_id` | entity | **Required**, or `cover_entity_id` | Switch that closes the cover. May be a `script` entity in pulse mode. | |
+| `close_switch_entity_id` | entity | **Required** for switch, pulse and toggle modes, or `cover_entity_id`; not used in single button mode | Switch that closes the cover. May be a `script` entity in pulse mode. | |
 | `stop_switch_entity_id` | entity | Required in pulse mode | Switch that stops the cover. May be a `script` entity in pulse mode. | None |
 | `cover_entity_id` | entity | **Required**, or the open/close switches | Existing cover entity to wrap. | |
 | `input_mode` | string | _Optional_ | Control mode for switch-based covers: `switch`, `pulse`, `toggle`, `toggle_opposite`, or `single_button`. | `switch` |
-| `travelling_time_down` | float | _Optional_ | Seconds to close the cover. Minimum 0.1 s. | unset |
-| `travelling_time_up` | float | _Optional_ | Seconds to open the cover. Minimum 0.1 s. | unset |
-| `tilting_time_down` | float | _Optional_ | Seconds to tilt the cover fully closed. Minimum 0.1 s. | None |
-| `tilting_time_up` | float | _Optional_ | Seconds to tilt the cover fully open. Minimum 0.1 s. | None |
+| `travelling_time_down` | float | _Optional_ | Seconds to close the cover. 0.1–600 s. | unset |
+| `travelling_time_up` | float | _Optional_ | Seconds to open the cover. 0.1–600 s. | unset |
+| `tilting_time_down` | float | _Optional_ | Seconds to tilt the cover fully closed. 0.1–600 s. | None |
+| `tilting_time_up` | float | _Optional_ | Seconds to tilt the cover fully open. 0.1–600 s. | None |
 | `travel_moves_with_tilt` | boolean | _Optional_ | Whether tilt movements also change travel proportionally. | false |
-| `endpoint_runon_time` | float | _Optional_ | Extra relay time at the endpoints (in Single button mode, a settle wait instead). Also accepted under its old name `travel_delay_at_end`. | 2.0 |
-| `min_movement_time` | float | _Optional_ | Minimum movement duration; blocks shorter movements. | None |
-| `travel_startup_delay` | float | _Optional_ | Startup compensation for travel movements. | None |
-| `tilt_startup_delay` | float | _Optional_ | Startup compensation for tilt movements. | None |
-| `pulse_time` | float | _Optional_ | Pulse duration in pulse mode; press duration in single button mode. Minimum 0.1 s. | 1.0 |
+| `endpoint_runon_time` | float | _Optional_ | Extra relay time at the endpoints (in Single button mode, a settle wait instead). Also accepted under its old name `travel_delay_at_end`. 0–600 s. | 2.0 |
+| `min_movement_time` | float | _Optional_ | Minimum movement duration; blocks shorter movements. 0–600 s. | None |
+| `travel_startup_delay` | float | _Optional_ | Startup compensation for travel movements. 0–600 s. | None |
+| `tilt_startup_delay` | float | _Optional_ | Startup compensation for tilt movements. 0–600 s. | None |
+| `pulse_time` | float | _Optional_ | Pulse duration in pulse mode; press duration in single button mode. 0.1–10 s. | 1.0 |
 | `relay_reports_off` | boolean | _Optional_ | Toggle mode: set `false` for pulse modules that never report their off. | true |
 | `send_endpoint_stop` | boolean | _Optional_ | Pulse mode: set `false` for auto-stop controllers that reposition on a stop received while stopped. | true |
 | `direction_change_delay` | float | _Deprecated_ | No longer configurable. Accepted and ignored; the reversing pause is fixed at 1.0s. | — |
