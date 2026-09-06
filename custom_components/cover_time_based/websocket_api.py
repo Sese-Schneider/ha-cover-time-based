@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any, NamedTuple
+from dataclasses import dataclass
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
@@ -68,8 +69,10 @@ from .cover import (
     DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
     DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
-    MIN_DURATION,
     PERCENT,
+    POSITIVE_DURATION,
+    PULSE_DURATION,
+    TRAVEL_DURATION,
 )
 from .cover_base import RawCommandNotSupported
 from .helpers import resolve_entity_or_none
@@ -78,11 +81,15 @@ _LOGGER = logging.getLogger(__name__)
 
 
 # Single source of truth for every configurable field the card exchanges over
-# the websocket. Each descriptor drives all three derived structures below —
+# the websocket. Each descriptor drives all three websocket structures below —
 # the ws-key→conf-key map (`_FIELD_MAP`), the `get_config` response defaults,
-# and the `update_config` voluptuous schema — so a new option is added in one
-# place, not four. Adding a row here is the whole wiring change.
-class _ConfigField(NamedTuple):
+# and the `update_config` voluptuous schema — which previously drifted apart
+# field by field because they were maintained separately. A new field is one
+# row here. (A genuinely new *option* still also needs its `CONF_`/`DEFAULT_`
+# constants in const.py, the card, and translations — this table covers only
+# the websocket layer, not the factory in cover.py.)
+@dataclass(frozen=True)
+class _ConfigField:
     ws_key: str  # the key the card sends and receives
     conf_key: str | None  # config-entry option key; None = validated but never
     # persisted or returned (a legacy knob a cached card still sends)
@@ -102,17 +109,14 @@ def _normalize_tilt_mode(value: Any) -> Any:
 
 
 # Validators shared across fields of the same shape. `None` is always accepted
-# (a cleared field), matching HA's own optional-value convention.
+# (a cleared field), matching HA's own optional-value convention. The duration
+# bounds live once in cover.py; reuse them rather than restating the limits.
 _BOOL = vol.Any(None, bool)
 _ENTITY = vol.Any(str, None)
 _PERCENT_OR_NONE = vol.Any(None, PERCENT)
-_PULSE_TIME = vol.Any(
-    None, vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION, max=10))
-)
-_TRAVEL_TIME = vol.Any(
-    None, vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION, max=600))
-)
-_DELAY = vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600)))
+_PULSE_TIME = vol.Any(None, PULSE_DURATION)
+_TRAVEL_TIME = vol.Any(None, TRAVEL_DURATION)
+_DELAY = vol.Any(None, POSITIVE_DURATION)
 
 _CONFIG_FIELDS: tuple[_ConfigField, ...] = (
     _ConfigField(
@@ -352,9 +356,8 @@ async def ws_get_config(
 
     options = config_entry.options
     # Every persisted field, read through the shared table so the response can
-    # never drift from what update_config accepts. Fields carrying a normalize
-    # hook (e.g. the legacy "sequential" tilt mode) are canonicalised here so
-    # the card always sees the current name, whatever escaped migration.
+    # never drift from what update_config accepts; normalize hooks canonicalise
+    # the value (see _normalize_tilt_mode) on the way out.
     result: dict[str, Any] = {"entry_id": config_entry.entry_id}
     for field in _CONFIG_FIELDS:
         if field.conf_key is None:
@@ -420,9 +423,8 @@ async def ws_update_config(
         if value is None:
             new_options.pop(field.conf_key, None)
         else:
-            # A field's normalize hook (e.g. the legacy "sequential" tilt mode)
-            # canonicalises the value so persisted options never carry a name
-            # the frontend can no longer render.
+            # normalize hooks canonicalise on the way in too (see
+            # _normalize_tilt_mode), so a save never persists a legacy name.
             if field.normalize is not None:
                 value = field.normalize(value)
             new_options[field.conf_key] = value

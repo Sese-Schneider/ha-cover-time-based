@@ -49,8 +49,7 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
 )
-
-from .test_websocket_api import (
+from tests.test_websocket_api import (
     ENTITY_ID,
     ENTRY_ID,
     _make_connection,
@@ -134,17 +133,11 @@ EXPECTED_FIELD_MAP = {
     "assumed_state": CONF_ASSUMED_STATE,
 }
 
-# The complete set of keys the update_config schema declares (the fixed frame
-# plus every optional field, including the accepted-and-ignored legacy knob).
-# ``id`` is injected by @websocket_command for every WS message.
+# The complete set of keys the update_config schema declares: the fixed frame
+# (``id`` is injected by @websocket_command), every persisted field, and the
+# one accepted-but-ignored legacy knob a cached card may still send.
 EXPECTED_SCHEMA_KEYS = (
-    {"id", "type", "entity_id"}
-    | set(EXPECTED_FIELD_MAP)
-    | {
-        "safe_tilt_position",
-        "max_tilt_allowed_position",
-        "direction_change_delay",
-    }
+    {"id", "type", "entity_id"} | set(EXPECTED_FIELD_MAP) | {"direction_change_delay"}
 )
 
 
@@ -168,59 +161,6 @@ async def _get_config(options):
     return conn.send_result.call_args[0][1]
 
 
-# ---------------------------------------------------------------------------
-# _FIELD_MAP
-# ---------------------------------------------------------------------------
-
-
-def test_field_map_is_exact():
-    assert websocket_api._FIELD_MAP == EXPECTED_FIELD_MAP
-
-
-# ---------------------------------------------------------------------------
-# get_config response
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_get_config_default_output_is_exact():
-    result = await _get_config({})
-    assert result.pop("entry_id") == ENTRY_ID
-    assert result == EXPECTED_DEFAULT_CONFIG
-
-
-@pytest.mark.asyncio
-async def test_get_config_echoes_every_stored_value():
-    # A non-default value for every persisted field, so a dropped or
-    # mis-keyed field in the derived response shows up here.
-    stored = {
-        conf_key: f"stored::{ws_key}" for ws_key, conf_key in EXPECTED_FIELD_MAP.items()
-    }
-    result = await _get_config(stored)
-    result.pop("entry_id")
-    for ws_key, conf_key in EXPECTED_FIELD_MAP.items():
-        assert result[ws_key] == stored[conf_key], ws_key
-
-
-@pytest.mark.asyncio
-async def test_get_config_normalizes_legacy_sequential_tilt_mode_on_read():
-    result = await _get_config({CONF_TILT_MODE: "sequential"})
-    assert result["tilt_mode"] == "sequential_close"
-
-
-# ---------------------------------------------------------------------------
-# update_config schema
-# ---------------------------------------------------------------------------
-
-
-def test_update_schema_declares_exactly_the_expected_keys():
-    assert _schema_keys() == EXPECTED_SCHEMA_KEYS
-
-
-def test_every_field_map_key_is_in_the_update_schema():
-    assert set(EXPECTED_FIELD_MAP) - _schema_keys() == set()
-
-
 def _frame(**fields):
     return {
         "id": 1,
@@ -230,35 +170,8 @@ def _frame(**fields):
     }
 
 
-def test_update_schema_rejects_pulse_time_above_ten():
-    schema = websocket_api.ws_update_config._ws_schema
-    schema(_frame(pulse_time=5))
-    with pytest.raises(vol.Invalid):
-        schema(_frame(pulse_time=11))
-
-
-def test_update_schema_rejects_travel_time_above_six_hundred():
-    schema = websocket_api.ws_update_config._ws_schema
-    schema(_frame(travel_time_open=600))
-    with pytest.raises(vol.Invalid):
-        schema(_frame(travel_time_open=601))
-
-
-def test_update_schema_accepts_but_never_persists_direction_change_delay():
-    # In the schema (a cached old card still sends it) but absent from
-    # _FIELD_MAP, so it is validated and dropped, never written.
-    assert "direction_change_delay" in _schema_keys()
-    assert CONF_DIRECTION_CHANGE_DELAY not in websocket_api._FIELD_MAP.values()
-
-
-# ---------------------------------------------------------------------------
-# update_config persistence
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_update_persists_mapped_fields_and_drops_direction_change_delay():
-    hass, _config_entry, entity_reg = _make_hass(options={})
+async def _update(msg_fields):
+    hass, _, entity_reg = _make_hass(options=msg_fields.pop("_options", {}))
     conn = _make_connection()
     with (
         patch(
@@ -270,75 +183,88 @@ async def test_update_persists_mapped_fields_and_drops_direction_change_delay():
             return_value=None,
         ),
     ):
-        await _ws_update_config(
-            hass,
-            conn,
-            {
-                "id": 1,
-                "type": "cover_time_based/update_config",
-                "entity_id": ENTITY_ID,
-                "travel_time_open": 12.5,
-                "invert": True,
-                "direction_change_delay": 3.0,
-            },
+        await _ws_update_config(hass, conn, _frame(**msg_fields))
+    return hass.config_entries.async_update_entry.call_args.kwargs["options"]
+
+
+class TestFieldMap:
+    """_FIELD_MAP is derived from the table but must stay ws_key -> conf_key."""
+
+    def test_field_map_is_exact(self):
+        assert websocket_api._FIELD_MAP == EXPECTED_FIELD_MAP
+
+
+class TestGetConfigResponse:
+    """get_config returns every field's stored value or its default."""
+
+    @pytest.mark.asyncio
+    async def test_default_output_is_exact(self):
+        result = await _get_config({})
+        assert result.pop("entry_id") == ENTRY_ID
+        assert result == EXPECTED_DEFAULT_CONFIG
+
+    @pytest.mark.asyncio
+    async def test_echoes_every_stored_value(self):
+        # A non-default value for every persisted field, so a dropped or
+        # mis-keyed field in the derived response shows up here.
+        stored = {
+            conf_key: f"stored::{ws_key}"
+            for ws_key, conf_key in EXPECTED_FIELD_MAP.items()
+        }
+        result = await _get_config(stored)
+        result.pop("entry_id")
+        for ws_key, conf_key in EXPECTED_FIELD_MAP.items():
+            assert result[ws_key] == stored[conf_key], ws_key
+
+    @pytest.mark.asyncio
+    async def test_normalizes_legacy_sequential_tilt_mode_on_read(self):
+        result = await _get_config({CONF_TILT_MODE: "sequential"})
+        assert result["tilt_mode"] == "sequential_close"
+
+
+class TestUpdateSchema:
+    """The update_config voluptuous schema accepts exactly the wired fields."""
+
+    def test_declares_exactly_the_expected_keys(self):
+        assert _schema_keys() == EXPECTED_SCHEMA_KEYS
+
+    def test_rejects_pulse_time_above_ten(self):
+        schema = websocket_api.ws_update_config._ws_schema
+        schema(_frame(pulse_time=5))
+        with pytest.raises(vol.Invalid):
+            schema(_frame(pulse_time=11))
+
+    def test_rejects_travel_time_above_six_hundred(self):
+        schema = websocket_api.ws_update_config._ws_schema
+        schema(_frame(travel_time_open=600))
+        with pytest.raises(vol.Invalid):
+            schema(_frame(travel_time_open=601))
+
+    def test_accepts_but_never_persists_direction_change_delay(self):
+        # In the schema (a cached old card still sends it) but absent from
+        # _FIELD_MAP, so it is validated and dropped, never written.
+        assert "direction_change_delay" in _schema_keys()
+        assert CONF_DIRECTION_CHANGE_DELAY not in websocket_api._FIELD_MAP.values()
+
+
+class TestUpdatePersistence:
+    """update_config writes mapped fields and honours the None/legacy rules."""
+
+    @pytest.mark.asyncio
+    async def test_persists_mapped_fields_and_drops_direction_change_delay(self):
+        saved = await _update(
+            {"travel_time_open": 12.5, "invert": True, "direction_change_delay": 3.0}
         )
-    saved = hass.config_entries.async_update_entry.call_args.kwargs["options"]
-    assert saved[CONF_TRAVEL_TIME_OPEN] == 12.5
-    assert saved[CONF_INVERT] is True
-    assert CONF_DIRECTION_CHANGE_DELAY not in saved
+        assert saved[CONF_TRAVEL_TIME_OPEN] == 12.5
+        assert saved[CONF_INVERT] is True
+        assert CONF_DIRECTION_CHANGE_DELAY not in saved
 
+    @pytest.mark.asyncio
+    async def test_normalizes_legacy_sequential_tilt_mode_on_write(self):
+        saved = await _update({"tilt_mode": "sequential"})
+        assert saved[CONF_TILT_MODE] == "sequential_close"
 
-@pytest.mark.asyncio
-async def test_update_normalizes_legacy_sequential_tilt_mode_on_write():
-    hass, _config_entry, entity_reg = _make_hass(options={})
-    conn = _make_connection()
-    with (
-        patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ),
-        patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=None,
-        ),
-    ):
-        await _ws_update_config(
-            hass,
-            conn,
-            {
-                "id": 1,
-                "type": "cover_time_based/update_config",
-                "entity_id": ENTITY_ID,
-                "tilt_mode": "sequential",
-            },
-        )
-    saved = hass.config_entries.async_update_entry.call_args.kwargs["options"]
-    assert saved[CONF_TILT_MODE] == "sequential_close"
-
-
-@pytest.mark.asyncio
-async def test_update_removes_a_field_set_to_none():
-    hass, _config_entry, entity_reg = _make_hass(options={CONF_INVERT: True})
-    conn = _make_connection()
-    with (
-        patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ),
-        patch(
-            "custom_components.cover_time_based.websocket_api.resolve_entity_or_none",
-            return_value=None,
-        ),
-    ):
-        await _ws_update_config(
-            hass,
-            conn,
-            {
-                "id": 1,
-                "type": "cover_time_based/update_config",
-                "entity_id": ENTITY_ID,
-                "invert": None,
-            },
-        )
-    saved = hass.config_entries.async_update_entry.call_args.kwargs["options"]
-    assert CONF_INVERT not in saved
+    @pytest.mark.asyncio
+    async def test_removes_a_field_set_to_none(self):
+        saved = await _update({"_options": {CONF_INVERT: True}, "invert": None})
+        assert CONF_INVERT not in saved
