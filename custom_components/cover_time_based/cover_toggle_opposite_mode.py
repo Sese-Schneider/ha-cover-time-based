@@ -41,6 +41,30 @@ class ToggleOppositeModeCover(ToggleBaseCover):
             )
         self._last_tilt_direction = None
 
+    def _motor_opening(self) -> bool:
+        """Whether the travel MOTOR is physically running in the open direction.
+
+        Opposite-button presses are judged on motor motion alone: a press
+        against a running motor halts it, while a press with the motor
+        stationary starts it and must be tracked as a move. Shared-motor tilt
+        (inline/sequential) drives the travel motor off ``tilt_calc``, which
+        ``_travel_axis_opening`` folds in. On dual-motor that helper also
+        reports a *pending* travel direction while the tilt-to-safe pre-step
+        runs — right for the base reversal guard, which is deciding what a new
+        command must supersede, but wrong here: the travel motor is idle
+        during the pre-step, so a press that starts it would be mistracked as
+        a stop.
+        """
+        if self._has_tilt_motor():
+            return self.travel_calc.is_opening()
+        return self._travel_axis_opening()
+
+    def _motor_closing(self) -> bool:
+        """Travel-motor counterpart of :meth:`_motor_opening`."""
+        if self._has_tilt_motor():
+            return self.travel_calc.is_closing()
+        return self._travel_axis_closing()
+
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
         """Opposite-button: an opposite-direction press while moving stops.
 
@@ -48,14 +72,12 @@ class ToggleOppositeModeCover(ToggleBaseCover):
         (the hardware keeps moving), so it is a no-op. From idle, a press starts
         the movement in that direction.
 
-        Decisions key off ``_travel_axis_opening``/``_travel_axis_closing``
-        (as ToggleModeCover does), not the raw ``travel_calc``: on a
+        Decisions key off ``_motor_opening``/``_motor_closing`` — whether the
+        travel motor is physically running — not the raw ``travel_calc``: on a
         shared-motor tilt strategy the tilt phase runs the travel motor while
         ``travel_calc`` sits idle, and an opposite press there halts that
-        motor — it must read as a stop, not as a new move. On dual-motor the
-        helpers reduce to ``travel_calc`` alone, so a moving tilt relay never
-        makes a travel-relay press read as a stop; the tilt handler below
-        keys off ``tilt_calc`` for the same reason.
+        motor, so it must read as a stop, not as a new move. The tilt handler
+        below keys off ``tilt_calc`` for the same reason.
         """
         if self._ignore_external_toggle_edge(
             entity_id, new_val, "_handle_external_state_change"
@@ -63,22 +85,22 @@ class ToggleOppositeModeCover(ToggleBaseCover):
             return
 
         if entity_id == self._open_switch_entity_id:
-            if self._travel_axis_closing():
+            if self._motor_closing():
                 self._log(
                     "_handle_external_state_change :: open press while closing, stopping"
                 )
                 await self.async_stop_cover(supersede=False)
-            elif not self._travel_axis_opening():
+            elif not self._motor_opening():
                 self._log("_handle_external_state_change :: external open press")
                 await self.async_open_cover()
             # else already opening -> continuation, no-op
         elif entity_id == self._close_switch_entity_id:
-            if self._travel_axis_opening():
+            if self._motor_opening():
                 self._log(
                     "_handle_external_state_change :: close press while opening, stopping"
                 )
                 await self.async_stop_cover(supersede=False)
-            elif not self._travel_axis_closing():
+            elif not self._motor_closing():
                 self._log("_handle_external_state_change :: external close press")
                 await self.async_close_cover()
             # else already closing -> continuation, no-op

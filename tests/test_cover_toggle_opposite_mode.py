@@ -536,6 +536,58 @@ class TestDualMotorUnaffected:
         )
         assert cover.tilt_calc.is_traveling(), "the tilt motor keeps its own move"
 
+    @pytest.mark.asyncio
+    async def test_press_during_tilt_to_safe_pre_step_starts_travel(
+        self, make_cover, caplog
+    ):
+        """A press during the tilt-to-safe pre-step starts the idle travel motor.
+
+        The pre-step runs the tilt motor while a travel command sits pending,
+        so the travel motor is stationary — and on opposite-button hardware a
+        press against a stationary motor STARTS it. Reading the pending travel
+        direction as motion would track a stop for a press that is really a
+        move (the base ``_travel_axis_*`` helpers do fold that pending
+        direction in, which is why this handler must not use them here).
+
+        The pressed direction lands as a re-planned pending travel rather than
+        as travel_calc motion: a dual-motor cover parks its slats at the safe
+        position before travelling, so the reversal re-queues the pre-step.
+        The stop path is unmistakably different — it clears the pending travel
+        and halts tilt tracking.
+        """
+        caplog.set_level(logging.DEBUG)
+        cover = make_cover(control_mode="toggle_opposite", **DUAL_MOTOR_TILT)
+        stub_switches(cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)  # off the safe position -> pre-step planned
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(0)  # close, behind a tilt-to-safe pre-step
+            assert cover._pending_travel_target == 0
+            assert not cover.travel_calc.is_traveling(), "travel motor idle"
+            assert cover.tilt_calc.is_traveling(), "the tilt motor runs the pre-step"
+            # The base helper reports the pending close; the motor is not moving.
+            assert cover._travel_axis_closing()
+            assert not cover._motor_closing()
+
+            caplog.clear()
+            with _no_settle():
+                await cover._async_switch_state_changed(_press("switch.open"))
+
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("external open press" in m for m in messages), messages
+        assert not any("open press while closing, stopping" in m for m in messages), (
+            messages
+        )
+        assert cover._pending_travel_target == 100, (
+            "the press started the stationary motor; the open move must be tracked, "
+            "not discarded by a stop"
+        )
+        assert cover._pending_travel_command == SERVICE_OPEN_COVER
+        assert cover.tilt_calc.is_traveling(), (
+            "the tilt-to-safe pre-step is re-planned, not halted as it is on a stop"
+        )
+
 
 class TestToggleModeContrast:
     """ToggleModeCover already keys off the travel axis."""
