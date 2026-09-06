@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.const import SERVICE_OPEN_COVER
+from homeassistant.core import State
 
 from custom_components.cover_time_based.calibration import CalibrationState
 from custom_components.cover_time_based.cover_base import CoverTimeBased
@@ -768,3 +769,149 @@ async def test_removal_stop_does_not_leave_relay_echo_timers(make_cover):
 
     assert ("turn_off", "switch.open") in relay_calls(cover, mark)
     assert cover._pending_switch_timers == {}
+
+
+@pytest.mark.parametrize("direction", ["open", "close"])
+@pytest.mark.parametrize("axis", ["travel", "inline", "dual_motor"])
+async def test_removal_inside_latched_turn_on_releases_relay(
+    make_cover, direction, axis
+):
+    """An ON already delivered must be stopped even before tracking is armed."""
+    options = {}
+    if axis != "travel":
+        options.update(tilt_mode=axis, tilt_time_open=10, tilt_time_close=10)
+    if axis == "dual_motor":
+        options.update(
+            tilt_open_switch="switch.tilt_open", tilt_close_switch="switch.tilt_close"
+        )
+    cover = make_cover(**options)
+    cover.travel_calc.set_position(50)
+    if axis != "travel":
+        cover.tilt_calc.set_position(50)
+    states = {}
+    events = []
+    gate = Gate()
+
+    def get_state(entity):
+        return State(entity, states.get(entity, "off"))
+
+    cover.hass.states.get = get_state
+
+    async def service(domain, name, data, *_args):
+        entity = data["entity_id"]
+        events.append((name, entity))
+        states[entity] = "on" if name == "turn_on" else "off"
+        if name == "turn_on":
+            await gate()
+
+    cover.hass.services.async_call.side_effect = service
+    command = getattr(
+        cover, f"async_{direction}_cover" + ("_tilt" if axis != "travel" else "")
+    )
+    with patch.object(cover, "async_write_ha_state"):
+        task = asyncio.create_task(command())
+        try:
+            await gate.parked()
+            await cover.async_will_remove_from_hass()
+            at_removal = dict(states)
+        finally:
+            gate.proceed.set()
+            await asyncio.wait_for(task, 2)
+    print(f"{axis}/{direction}: removal={at_removal}; final={states}; calls={events}")
+    assert "on" not in at_removal.values(), (
+        f"removal returned with relay ON: {at_removal}; calls={events}"
+    )
+    assert "on" not in states.values()
+    assert cover._unsubscribe_auto_updater is None
+
+
+@pytest.mark.parametrize("mode", ["pulse", "wrapped_echo"])
+@pytest.mark.parametrize("direction", ["open", "close"])
+async def test_removal_inside_nonself_start_stops_motor(make_cover, mode, direction):
+    """A pulse latch or an endstop-less wrapped motor needs its removal stop."""
+    from tests.test_cover_wrapped import _set_wrapped_features
+
+    if mode == "pulse":
+        cover = make_cover(
+            control_mode="pulse", stop_switch="switch.stop", pulse_time=0.01
+        )
+        stub_switches(cover)
+    else:
+        cover = make_cover(
+            cover_entity_id="cover.inner", reports_command_not_endpoint=True
+        )
+        _set_wrapped_features(cover, 11)
+    cover.travel_calc.set_position(50)
+    gate = Gate()
+    running = False
+    events = []
+
+    async def service(domain, name, data, *_):
+        nonlocal running
+        events.append((name, data["entity_id"]))
+        if name == "stop_cover" or (
+            name == "turn_on" and data["entity_id"] == "switch.stop"
+        ):
+            running = False
+        elif name in ("open_cover", "close_cover", "turn_on"):
+            running = True
+            await gate()
+
+    cover.hass.services.async_call.side_effect = service
+    with patch.object(cover, "async_write_ha_state"):
+        task = asyncio.create_task(getattr(cover, f"async_{direction}_cover")())
+        try:
+            await gate.parked()
+            await cover.async_will_remove_from_hass()
+            running_at_removal = running
+        finally:
+            gate.proceed.set()
+            await asyncio.wait_for(task, 2)
+    print(
+        f"{mode}/{direction}: motor running at removal={running_at_removal}; calls={events}"
+    )
+    assert not running_at_removal
+
+
+async def test_removal_at_pending_travel_start_releases_travel_relay(make_cover):
+    """The tilt-to-safe continuation must own its new travel relay before yielding."""
+    cover = make_cover(
+        tilt_mode="dual_motor",
+        tilt_time_open=10,
+        tilt_time_close=10,
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+    )
+    stub_switches(cover)
+    cover.travel_calc.set_position(30)
+    cover.tilt_calc.set_position(100)
+    cover._self_initiated_movement = True
+    cover._pending_travel_target = 20
+    cover._pending_travel_command = "close_cover"
+    cover._moving_tilt_motor = True
+    states = {}
+
+    async def service(domain, name, data, *_):
+        states[data["entity_id"]] = "on" if name == "turn_on" else "off"
+
+    cover.hass.services.async_call.side_effect = service
+    original = cover._async_handle_command
+    gate = Gate()
+
+    async def command(*args):
+        await original(*args)
+        await gate()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", new=command),
+    ):
+        task = asyncio.create_task(cover.auto_stop_if_necessary())
+        try:
+            await gate.parked()
+            await cover.async_will_remove_from_hass()
+        finally:
+            gate.proceed.set()
+            await asyncio.wait_for(task, 2)
+    print(f"pending travel: final relays={states}")
+    assert states["switch.close"] == "off"

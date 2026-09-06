@@ -261,6 +261,16 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             task.cancel()
         self._press_task = None
         self._cancel_settle()
+        # An arrived tracker bypasses parking, so removal must apply the
+        # endpoint phase whose settle task can no longer do so.
+        endpoint = self.travel_calc.current_position()
+        if (
+            not self.travel_calc.is_traveling()
+            and endpoint is not None
+            and endpoint in _PHASE_AT_ENDPOINT
+            and self._phase in (Phase.MOVING_UP, Phase.MOVING_DOWN)
+        ):
+            self._phase = _PHASE_AT_ENDPOINT[endpoint]
         if self._open_switch_entity_id:
             await self._release_button()
 
@@ -283,8 +293,9 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
         The tracker starts at the command, but the motor only runs once the
         final press has gone out. A MOVING phase means it is running and will
-        reach that direction's limit; any other phase means the last press
-        left it stopped, so the tracker stays where it is.
+        reach that direction's limit. Any other phase is exact, but its
+        position is unknown: an interrupted nudge can run opposite to the
+        direction the tracker counted, so that estimate must be forgotten.
         """
         if calc is not self.travel_calc:
             super()._park_axis_at_limit(calc, limit)
@@ -296,7 +307,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             super()._park_axis_at_limit(calc, 0)
             self._phase = Phase.AT_CLOSED
         else:
-            calc.stop()
+            calc.clear_position()
 
     def _on_endpoint_reached(self, endpoint: int) -> None:
         """Anchor the phase at the limit the tracker just reached.

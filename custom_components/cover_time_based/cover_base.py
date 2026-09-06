@@ -389,6 +389,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     async def async_will_remove_from_hass(self):
         """Clean up when entity is removed.
 
+        Removal leaves the relays of hardware that cannot stop itself
+        de-energised, whether or not it knew of a move.
+
         A removed entity may only stop. Every card save reloads the entry, so
         this runs with continuations parked on awaits and commands mid-flight;
         none of them may start a relay, start tracking or write the store once
@@ -410,10 +413,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._pending_switch_timers.clear()
         self._pending_switch_deadlines.clear()
         self._relay_intent.clear()
-        # Capture what this entity was driving BEFORE the cancels below, on
-        # the axis it was driving: a dedicated tilt motor is owed a tilt stop,
-        # which the travel STOP never reaches; a shared-motor tilt drives the
-        # travel motor with only tilt_calc travelling.
+        # Capture movement before cancelling its timers so each tracker can
+        # settle independently; shared-motor tilt drives the travel motor
+        # with only tilt_calc travelling.
         tilt_axis_driving = self._has_tilt_support() and self.tilt_calc.is_traveling()
         tilt_motor_driving = self._has_tilt_motor() and (
             self._moving_tilt_motor or tilt_axis_driving
@@ -427,19 +429,17 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             or (deferred and not self._moving_tilt_motor)
         )
         await self._cancel_background_pulses()
-        # Left energised, a latched relay drives the motor past its limit with
-        # nothing tracking it. Stop only hardware that does not stop itself:
-        # on momentary hardware a stop tap to a motor already at its limit is a
-        # movement command (#153), so the motor is left to its limit switch and
-        # the axis is parked at the limit it is heading for.
+        # A start may have reached the relay before its tracker was armed, so
+        # hardware that cannot stop itself always receives a stop. On hardware
+        # that self-stops, a stop tap at the limit is a movement command (#153);
+        # leave that motor to its limit switch and park its tracker there.
         stops_itself = self._self_stops_at_endpoints()
         fallback_limit = self._limit_for_last_command()
         # Calibration owns its motor stop, including tracked overhead steps.
         if self._calibration is None and not stops_itself:
-            if travel_driving:
-                await self._async_handle_command(SERVICE_STOP_COVER)
-                self._last_command = None
-            if tilt_motor_driving:
+            await self._async_handle_command(SERVICE_STOP_COVER)
+            self._last_command = None
+            if self._has_tilt_motor():
                 await self._send_tilt_stop()
         self._settle_axis_after_removal(
             self.travel_calc,
