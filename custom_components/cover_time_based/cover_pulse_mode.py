@@ -113,13 +113,19 @@ class PulseModeCover(SwitchCoverTimeBased):
             if self._pulse_tasks.get(entity_id) is asyncio.current_task():
                 self._pulse_tasks.pop(entity_id, None)
 
-    def _schedule_pulse_completion(self, entity_id) -> None:
+    def _schedule_pulse_completion(self, entity_id, stop=False) -> None:
         """Schedule the deferred ``turn_off`` for a relay we just pulsed ON.
 
         Supersedes any in-flight completion for the same relay (its ``turn_off``
         would otherwise land twice / on an already-off relay), then tracks the
         new task so it can be cancelled on stop, re-press or removal.
         """
+        # A removed entity's driving ``turn_on`` was refused by ``_call_service``
+        # (motor-starting, not a stop) — the relay is never ON, so scheduling its
+        # deferred OFF would leave a dangling task on a relay being torn down.
+        # A stop pulse is exempt from that refusal and still needs releasing.
+        if self._removed and not stop:
+            return
         self._cancel_pulse_completion(entity_id)
         self._pulse_tasks[entity_id] = self.hass.async_create_task(
             self._complete_pulse(entity_id)
@@ -294,7 +300,7 @@ class PulseModeCover(SwitchCoverTimeBased):
                 stop=True,
             )
             # Motor stops on ON edge; complete pulse in background
-            self._schedule_pulse_completion(self._stop_switch_entity_id)
+            self._schedule_pulse_completion(self._stop_switch_entity_id, stop=True)
 
     # --- Tilt motor relay commands ---
 
@@ -351,4 +357,4 @@ class PulseModeCover(SwitchCoverTimeBased):
                 {"entity_id": self._tilt_stop_switch_id},
                 stop=True,
             )
-            self._schedule_pulse_completion(self._tilt_stop_switch_id)
+            self._schedule_pulse_completion(self._tilt_stop_switch_id, stop=True)

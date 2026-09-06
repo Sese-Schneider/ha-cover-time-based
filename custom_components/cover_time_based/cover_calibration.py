@@ -523,6 +523,20 @@ class CalibrationMixin:
         self.async_write_ha_state()
         return result
 
+    def _calibration_endpoint(self, calibration=None) -> int | None:
+        """The endpoint the given (or running) calibration drives its axis to.
+
+        Travel/tilt time and startup-delay tests reach the limit in their
+        command's direction. min_movement_time only nudges, and a test with no
+        recorded command commits to no direction, so both return None.
+        """
+        calibration = calibration if calibration is not None else self._calibration
+        assert calibration is not None
+        move_command = calibration.move_command
+        if not move_command or calibration.attribute == "min_movement_time":
+            return None
+        return 0 if move_command == SERVICE_CLOSE_COVER else 100
+
     def _set_position_after_calibration(self, calibration):
         """Update tracked position after successful calibration.
 
@@ -530,17 +544,14 @@ class CalibrationMixin:
         reached an endpoint. For min_movement_time the cover only nudged
         slightly so we leave the tracked position unchanged.
         """
-        move_command = calibration.move_command
-        if not move_command or calibration.attribute == "min_movement_time":
+        endpoint = self._calibration_endpoint(calibration)
+        if endpoint is None:
             return
 
         is_tilt = "tilt" in calibration.attribute
         if is_tilt and not hasattr(self, "tilt_calc"):
             return
         calc = self.tilt_calc if is_tilt else self.travel_calc
-
-        # Cover ended at the endpoint in the direction of travel
-        endpoint = 0 if move_command == SERVICE_CLOSE_COVER else 100
 
         _LOGGER.debug(
             "calibration: resetting %s position to %d",

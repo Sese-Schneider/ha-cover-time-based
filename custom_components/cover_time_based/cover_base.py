@@ -429,10 +429,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # read off that flag would settle the travel axis at the tilt's limit
         # and leave the slats recorded where they no longer are.
         deferred_tilt = deferred and self._moving_tilt
+        # A calibration time test (or an overhead test's final step) drives the
+        # motor continuously toward an endpoint with no live tracker — the
+        # calibration owns the motor and bypasses it. Self-stopping hardware
+        # still reaches that limit after removal, so treat the calibrated axis
+        # as driving to park its tracker there. A stepped/pulsed test that has
+        # not reached its final continuous phase drives only short bursts, so it
+        # is excluded (an overhead step that does run the tracker is caught by
+        # the axis's own is_traveling above).
+        calibration = self._calibration
+        calibration_tilt = False
+        calibration_travel = False
+        if calibration is not None and self._driven_continuously_to_endpoint():
+            calibration_tilt = calibration.uses_tilt_motor
+            calibration_travel = not calibration.uses_tilt_motor
         tilt_driving = (
             tilt_axis_driving
             or (self._has_tilt_motor() and self._moving_tilt_motor)
             or deferred_tilt
+            or calibration_tilt
         )
         # A shared-motor tilt runs the travel motor, so it drives both axes.
         travel_driving = (
@@ -440,6 +455,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             or ((tilt_axis_driving or deferred_tilt) and not self._has_tilt_motor())
             or runon
             or (deferred and not self._moving_tilt)
+            or calibration_travel
         )
         await self._cancel_background_pulses()
         # A start may have reached the relay before its tracker was armed, so
@@ -449,6 +465,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         stops_itself = self._self_stops_at_endpoints()
         fallback_limit = self._limit_for_last_command()
         tilt_fallback_limit = self._tilt_limit_for_last_command()
+        # A calibration drives its axis to the endpoint named by its own command,
+        # not by _last_command — a dedicated-tilt or overhead calibration never
+        # records the travel _last_command — so park the calibrated axis there.
+        if calibration_tilt:
+            tilt_fallback_limit = self._calibration_endpoint()
+        elif calibration_travel:
+            fallback_limit = self._calibration_endpoint()
         # Calibration owns its motor stop, including tracked overhead steps.
         if self._calibration is None and not stops_itself:
             await self._async_handle_command(SERVICE_STOP_COVER)
@@ -588,8 +611,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         travel motor running — so the cover-level property is retained there to
         keep settle-before-reverse.
 
-        Opposite-button handlers must judge physical motion without this pending
-        direction: see ``ToggleOppositeModeCover._motor_opening``.
+        External-toggle handlers must judge physical motion without this pending
+        direction: see ``ToggleBaseCover._motor_opening``.
         """
         if not self._has_tilt_motor():
             return self.is_opening
@@ -1485,10 +1508,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         The tracker's travelling flag distinguishes departure from arrival,
         not its position: a motor leaving an endpoint still needs a real stop.
         A tracker that has arrived settles without re-pulsing a momentary
-        relay at its limit. A feedback-wait tilt whose tracker sits at an
-        endpoint also settles because tracking has not started yet. Cancel
-        any deferred start so a late relay confirmation cannot restart tracking
-        after the motor is released.
+        relay at its limit. A deferred start still pending (a feedback-wait or
+        startup-delay tilt) means the relay is energized but tracking has not
+        begun, so the motor is departing and must get a real stop — settling it
+        would let an endpoint self-stop skip swallow a motor leaving its limit.
+        Cancelling the deferred start also stops a late relay confirmation from
+        restarting tracking after the motor is released.
 
         External travel presses leave the independent tilt motor running, so
         ``_triggered_externally`` prevents echoing a stop to that motor, just as
@@ -1497,8 +1522,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if not was_tilt_motor_move or self._triggered_externally:
             return
         self._log("_release_displaced_tilt_motor :: stopping displaced tilt motor")
-        self._cancel_startup_delay_task()
-        departing = self.tilt_calc.is_traveling()
+        deferred = self._cancel_startup_delay_task()
+        departing = self.tilt_calc.is_traveling() or deferred
         self.tilt_calc.stop()
         self.stop_auto_updater()
         if departing:
@@ -2475,6 +2500,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         elif target > current:
             closing = False
         else:
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return
 
         if self._tilt_strategy is not None:
@@ -2486,6 +2512,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             command
         )
         if not should_proceed:
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return
 
         if is_direction_change:
@@ -2546,6 +2573,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             "set_tilt_position",
             is_recalibrated_leg=not recalibrate,
         ):
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return
 
         self._require_movement_target_available(self._tilt_movement_target(command))
@@ -4203,6 +4231,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         command-fire start used everywhere today. Called from the ``_send_*``
         method that flips the relay, and consumed by ``_begin_movement``.
         """
+        # A removed entity's drive is refused by _call_service, so nothing may
+        # be left armed for an ON echo its listener is gone to hear.
+        if self._removed:
+            return False
         self._feedback_armed_entity = None
         if not self._wait_for_relay_feedback:
             return False

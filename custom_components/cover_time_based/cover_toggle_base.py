@@ -48,6 +48,28 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         self._last_external_toggle_time = {}
         self._last_tilt_direction = None
 
+    def _motor_opening(self) -> bool:
+        """Whether the travel MOTOR is physically running in the open direction.
+
+        External-toggle decisions key off physical motor motion. Shared-motor
+        tilt (inline/sequential) drives the travel motor off ``tilt_calc``,
+        which ``_travel_axis_opening`` folds in. On dual-motor that helper also
+        reports a *pending* travel direction while the tilt-to-safe pre-step
+        runs — right for the base reversal guard, which decides what a new
+        command must supersede, but wrong here: the travel motor is idle during
+        the pre-step, so keying off ``travel_calc`` keeps a press against the
+        idle motor from being mis-read as motion.
+        """
+        if self._has_tilt_motor():
+            return self.travel_calc.is_opening()
+        return self._travel_axis_opening()
+
+    def _motor_closing(self) -> bool:
+        """Travel-motor counterpart of :meth:`_motor_opening`."""
+        if self._has_tilt_motor():
+            return self.travel_calc.is_closing()
+        return self._travel_axis_closing()
+
     def _debounce_external_toggle(self, entity_id) -> bool:
         """Return True if this rising edge should be dropped as contact bounce.
 

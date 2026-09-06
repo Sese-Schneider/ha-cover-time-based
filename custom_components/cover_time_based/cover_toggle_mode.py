@@ -37,14 +37,12 @@ class ToggleModeCover(ToggleBaseCover):
         self._last_tilt_direction = None
 
     async def _handle_external_state_change(self, entity_id, old_val, new_val):
-        """Same-button: a same-direction press while moving stops the motor.
+        """Same-button: a same-direction press while moving stops the motor;
+        from idle it starts the movement that way.
 
-        Decisions key off the travel axis (``_travel_axis_opening`` /
-        ``_travel_axis_closing``) rather than the cover-level
-        ``is_opening``/``is_closing`` properties, which OR in tilt motion: on a
-        dual-motor cover a moving tilt relay must not make a travel-relay press
-        read as a stop (the tilt handler keys off ``tilt_calc``). Shared-motor
-        tilt is unchanged — its tilt phase is the travel motor running.
+        Decisions key off the physical-motion helpers
+        ``_motor_opening``/``_motor_closing`` (see ``ToggleBaseCover._motor_opening``
+        for why physical motion, not the cover-level direction).
         """
         if self._ignore_external_toggle_edge(
             entity_id, new_val, "_handle_external_state_change"
@@ -52,7 +50,7 @@ class ToggleModeCover(ToggleBaseCover):
             return
 
         if entity_id == self._open_switch_entity_id:
-            if self._travel_axis_opening():
+            if self._motor_opening():
                 self._log(
                     "_handle_external_state_change :: open toggle while opening, stopping"
                 )
@@ -63,7 +61,7 @@ class ToggleModeCover(ToggleBaseCover):
                 )
                 await self.async_open_cover()
         elif entity_id == self._close_switch_entity_id:
-            if self._travel_axis_closing():
+            if self._motor_closing():
                 self._log(
                     "_handle_external_state_change :: close toggle while closing, stopping"
                 )
