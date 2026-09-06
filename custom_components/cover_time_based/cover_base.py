@@ -4075,6 +4075,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         future.set_result(base_ts)
         return True
 
+    async def _after_own_echo(self, entity_id: str, new_val: str) -> None:
+        """Hook: an event just consumed one of this entity's pending echoes.
+
+        Runs after the feedback resolution, so a subclass that knows the echo
+        burst has ended (e.g. a wrapped cover seeing the state its command
+        settles into) can drop a remaining over-count before it swallows a
+        genuine report. Default: nothing.
+        """
+        return None
+
     async def _wait_for_relay_echo(self, entity_id, timeout):
         """Await ``entity_id``'s ON echo; return its last_changed ts, or None.
 
@@ -4269,6 +4279,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
             if remaining <= self._own_echoes_after_confirming_on:
                 self._resolve_relay_feedback(entity_id, new_val, new_state)
+            await self._after_own_echo(entity_id, new_val)
             return
 
         if old_val == "off" and self._resolve_relay_feedback(

@@ -72,6 +72,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._ignore_all_reports = ignore_all_reports
         self._invert = invert
         self._last_self_command_time: float | None = None
+        # The underlying moving state the in-flight command settles into; the
+        # echo burst ends there (see _call_cover_service / _after_own_echo).
+        self._echo_terminal_state: str | None = None
         # Set while a command-echo cover is mid-reconnect, so the retained
         # state landing after the stop hop is not replayed as a command
         # (see _is_stale_reappearance).
@@ -785,11 +788,37 @@ class WrappedCoverTimeBased(CoverTimeBased):
         )
 
     async def _call_cover_service(self, service: str, expected: int = 1) -> None:
+        # ``expected`` predicts how many state transitions the underlying will
+        # report for this command (a reversal may report closing→open→opening,
+        # or closing→opening in one step). The prediction is bounded by the
+        # terminal state: once the underlying reports the moving state this
+        # command settles into, any remaining count is an over-count and is
+        # dropped in _after_own_echo, so it cannot swallow a later genuine
+        # report (a wall stop) inside the echo window. One slot serves every
+        # command through here: a stop or tilt command sets it to None, which
+        # merely disables the drop (today's behaviour) for the previous burst.
+        self._echo_terminal_state = {
+            "open_cover": STATE_OPENING,
+            "close_cover": STATE_CLOSING,
+        }.get(service)
         self._mark_switch_pending(self._cover_entity_id, expected)
         self._start_bounce_grace_window()
         await self.hass.services.async_call(
             "cover", service, {"entity_id": self._cover_entity_id}, False
         )
+
+    async def _after_own_echo(self, entity_id: str, new_val: str) -> None:
+        if entity_id != self._cover_entity_id or self._echo_terminal_state is None:
+            return
+        if new_val == self._echo_terminal_state:
+            self._echo_terminal_state = None
+            if self._pending_switch.get(entity_id, 0) > 0:
+                self._log(
+                    "_after_own_echo :: %s reached, dropping %d surplus pending echo(es)",
+                    new_val,
+                    self._pending_switch[entity_id],
+                )
+                self._clear_pending_switch(entity_id)
 
     async def _send_open(self) -> None:
         """User-intent open. When inverted, drives the underlying close."""

@@ -4,11 +4,17 @@ Each test verifies that the correct cover.* service call is made.
 """
 
 import asyncio
+import time
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from homeassistant.components.cover import ATTR_CURRENT_POSITION
-from homeassistant.const import STATE_CLOSED, STATE_UNAVAILABLE
+from homeassistant.const import (
+    SERVICE_CLOSE_COVER,
+    SERVICE_OPEN_COVER,
+    STATE_CLOSED,
+    STATE_UNAVAILABLE,
+)
 
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
 
@@ -109,6 +115,19 @@ def _attr_event(entity_id, state):
     """An attribute-change event carrying `state` as the entity's new state."""
     event = MagicMock()
     event.data = {"entity_id": entity_id, "new_state": state}
+    return event
+
+
+def _state_event(entity_id, old_val, new_val, *, position=None):
+    """A state-change event as HA fires it, with fake old/new State objects."""
+    old_s = MagicMock()
+    old_s.state = old_val
+    old_s.attributes = {}
+    new_s = MagicMock()
+    new_s.state = new_val
+    new_s.attributes = {} if position is None else {ATTR_CURRENT_POSITION: position}
+    event = MagicMock()
+    event.data = {"entity_id": entity_id, "old_state": old_s, "new_state": new_s}
     return event
 
 
@@ -2238,3 +2257,256 @@ class TestWrappedDecisionCost:
                 _attr_event("cover.inner", event_state)
             )
         snap.assert_awaited_once_with(position=55, supersede=False)
+
+
+# ---------------------------------------------------------------------------
+# Reversal echo counting
+# ---------------------------------------------------------------------------
+
+
+def _make_reversing_cover():
+    """A plain wrapped cover with a mid-close underlying, ready to reverse.
+
+    Features are OPEN|CLOSE|STOP but NOT SET_POSITION, so the timed driver
+    (and therefore _send_underlying_open/close) drives the move.
+    """
+    cover = _make_wrapped_cover()
+    cover.start_auto_updater = MagicMock()
+    cover.async_write_ha_state = MagicMock()
+    cover.async_schedule_update_ha_state = MagicMock()
+    st = _set_wrapped_features(
+        cover, _F_OPEN | _F_CLOSE | _F_STOP, state="closing", current_position=60
+    )
+    return cover, st
+
+
+async def _open_while_underlying_closing(cover):
+    """Issue our open command while the underlying still reports `closing`."""
+    cover.travel_calc.set_position(60)
+    await cover.async_open_cover()
+    assert cover._last_command == SERVICE_OPEN_COVER
+    assert cover.travel_calc.is_traveling() is True
+    return cover._pending_switch.get("cover.inner", 0)
+
+
+class TestReversalPendingCount:
+    """What `_send_underlying_open` pre-counts, and how long it lives."""
+
+    @pytest.mark.asyncio
+    async def test_open_while_underlying_closing_marks_two_pending(self):
+        cover, _ = _make_reversing_cover()
+
+        assert await _open_while_underlying_closing(cover) == 2
+
+    @pytest.mark.asyncio
+    async def test_pending_safety_window_is_five_seconds(self):
+        cover, _ = _make_reversing_cover()
+
+        before = time.monotonic()
+        await _open_while_underlying_closing(cover)
+        deadline = cover._pending_switch_deadlines["cover.inner"]
+
+        assert 4.9 <= deadline - before <= 5.1
+
+
+class TestSingleTransitionReversal:
+    """An underlying that reports `closing -> opening` directly (one event).
+
+    The pre-count assumes the reversal arrives as two transitions. A device
+    with its own motor controller (Shelly 2.5 in cover mode, KNX, anything
+    that updates is_opening/is_closing atomically) delivers one, so the
+    surplus count must be dropped at the terminal moving state instead of
+    swallowing the next genuine report.
+    """
+
+    @pytest.mark.asyncio
+    async def test_single_transition_reversal_leaves_no_orphan_pending_count(self):
+        cover, st = _make_reversing_cover()
+
+        await _open_while_underlying_closing(cover)
+
+        st.state = "opening"
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "closing", "opening", position=60)
+        )
+
+        orphan = cover._pending_switch.get("cover.inner", 0)
+        assert orphan == 0, f"orphaned pending echo count left over: {orphan}"
+
+    @pytest.mark.asyncio
+    async def test_wall_stop_after_single_transition_reversal_is_honoured(self):
+        """The genuine wall stop must snap the tracker to the reported 37%."""
+        cover, st = _make_reversing_cover()
+
+        await _open_while_underlying_closing(cover)
+
+        st.state = "opening"
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "closing", "opening", position=60)
+        )
+
+        # ~1s later the user hits the wall STOP. Past the 0.5s bounce grace
+        # window, so this is a report the cover is supposed to honour.
+        cover._last_self_command_time = time.monotonic() - 1.0
+        st.state = "open"
+        st.attributes[ATTR_CURRENT_POSITION] = 37
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "opening", "open", position=37)
+        )
+
+        assert cover.travel_calc.is_traveling() is False, (
+            "wall stop swallowed as an echo: tracker still running toward "
+            f"{cover.travel_calc._travel_to_position}"
+        )
+        assert cover.travel_calc.current_position() == 37
+
+    @pytest.mark.asyncio
+    async def test_wall_stop_honoured_late_in_the_five_second_window(self):
+        """The old loss window ran to the pending deadline, not the bounce one."""
+        cover, st = _make_reversing_cover()
+
+        await _open_while_underlying_closing(cover)
+
+        st.state = "opening"
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "closing", "opening", position=60)
+        )
+
+        # 4.9s after the command — still inside ECHO_PENDING_WINDOW.
+        cover._last_self_command_time = time.monotonic() - 4.9
+        st.state = "open"
+        st.attributes[ATTR_CURRENT_POSITION] = 37
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "opening", "open", position=37)
+        )
+
+        assert cover.travel_calc.current_position() == 37
+
+
+class TestTwoTransitionReversal:
+    """The device the pre-count was written for still drains exactly."""
+
+    @pytest.mark.asyncio
+    async def test_two_transition_reversal_leaves_no_orphan(self):
+        cover, st = _make_reversing_cover()
+
+        await _open_while_underlying_closing(cover)
+
+        # closing -> open ...
+        st.state = "open"
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "closing", "open", position=60)
+        )
+        # ... then open -> opening.
+        st.state = "opening"
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "open", "opening", position=60)
+        )
+
+        assert cover._pending_switch.get("cover.inner", 0) == 0
+
+        # The wall stop that follows is honoured.
+        cover._last_self_command_time = time.monotonic() - 1.0
+        st.state = "open"
+        st.attributes[ATTR_CURRENT_POSITION] = 37
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "opening", "open", position=37)
+        )
+
+        assert cover.travel_calc.current_position() == 37
+        assert cover.travel_calc.is_traveling() is False
+
+
+class TestBounceGraceWindowInterplay:
+    """Inside the 0.5s bounce window the report is dropped anyway."""
+
+    @pytest.mark.asyncio
+    async def test_report_inside_bounce_window_is_dropped_even_without_orphan(self):
+        cover, st = _make_reversing_cover()
+
+        await _open_while_underlying_closing(cover)
+
+        # Drain the pending count entirely, isolating the bounce window.
+        cover._clear_pending_switch("cover.inner")
+
+        st.state = "open"
+        st.attributes[ATTR_CURRENT_POSITION] = 37
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "opening", "open", position=37)
+        )
+
+        # Still traveling: the bounce grace window (0.5s) discarded it.
+        assert cover.travel_calc.is_traveling() is True
+
+
+class TestReversalViaSetPosition:
+    """The stop-then-reverse path over-counts even on a two-transition device.
+
+    `set_position` across the direction sends `stop_cover` (marks 1) and then,
+    after the settle gap, `open_cover` — whose `_send_underlying_open` re-reads
+    a wrapped state still stuck on `closing` and marks 2 more. Three pending
+    against the two transitions the device actually emits.
+    """
+
+    @pytest.mark.asyncio
+    async def test_stop_then_reverse_leaves_no_orphan_with_two_transitions(self):
+        cover, st = _make_reversing_cover()
+        cover.travel_calc.set_position(60)
+        cover.travel_calc.start_travel(0)
+        cover._last_command = SERVICE_CLOSE_COVER
+        cover._self_initiated_movement = True
+
+        with patch(
+            "custom_components.cover_time_based.cover_base.sleep",
+            new_callable=AsyncMock,
+        ):
+            await cover.set_position(90)
+
+        assert _services(cover) == ["stop_cover", "open_cover"]
+
+        # The device does exactly what the `expected = 2` prediction describes.
+        st.state = "open"
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "closing", "open", position=60)
+        )
+        st.state = "opening"
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "open", "opening", position=60)
+        )
+
+        orphan = cover._pending_switch.get("cover.inner", 0)
+        assert orphan == 0, f"orphaned pending echo count left over: {orphan}"
+
+
+class TestNoAttributeChannelRescue:
+    """A following attribute-only report cannot undo a swallowed stop.
+
+    `_handle_external_attribute_change` ignores position reports arriving
+    mid-timed-move, so if the state event were eaten nothing would correct the
+    tracker until it reached its own target — the stop has to be honoured on
+    the state channel.
+    """
+
+    @pytest.mark.asyncio
+    async def test_stop_stands_without_help_from_the_attribute_channel(self):
+        cover, st = _make_reversing_cover()
+
+        await _open_while_underlying_closing(cover)
+
+        st.state = "opening"
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "closing", "opening", position=60)
+        )
+
+        cover._last_self_command_time = time.monotonic() - 1.0
+        st.state = "open"
+        st.attributes[ATTR_CURRENT_POSITION] = 37
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "opening", "open", position=37)
+        )
+        # The device re-reports 37% as an attribute-only update (same state).
+        await cover._async_switch_state_changed(
+            _state_event("cover.inner", "open", "open", position=37)
+        )
+
+        assert cover.travel_calc.current_position() == 37
