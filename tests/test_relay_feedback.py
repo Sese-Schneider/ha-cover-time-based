@@ -45,13 +45,13 @@ def _echo_event(entity_id, old, new, last_changed=FIXED_ECHO):
     return event
 
 
-def _expected_anchor(echo_time) -> float:
+def _expected_anchor(echo_time, clock=time) -> float:
     """The monotonic anchor a wall-clock echo at ``echo_time`` converts to.
 
     Only for an echo stamped AFTER the command that produced it (the age is
     then inside the wait's own interval, so production applies no clamp).
     """
-    return time.monotonic() - (time.time() - echo_time.timestamp())
+    return clock.monotonic() - (clock.time() - echo_time.timestamp())
 
 
 def _ha(service, entity_id):
@@ -178,7 +178,9 @@ class TestRelayFeedbackStart:
         assert cover._feedback_wait_entity is None
 
     @pytest.mark.asyncio
-    async def test_echo_anchor_is_converted_to_monotonic(self, make_cover):
+    async def test_echo_anchor_is_converted_to_monotonic(
+        self, make_cover, feedback_clock
+    ):
         """A 3 s old echo anchors tracking 3 s ago on the monotonic clock."""
         cover = make_cover(wait_for_relay_feedback=True)
         stub_switches(cover)
@@ -187,15 +189,15 @@ class TestRelayFeedbackStart:
         with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()
             await asyncio.sleep(0)
-            await asyncio.sleep(3.1)  # the wait must be older than the echo
-            echo_time = datetime.now(UTC) - timedelta(seconds=3)
+            feedback_clock.advance(3.1)  # the wait must be older than the echo
+            echo_time = datetime.fromtimestamp(feedback_clock.time() - 3, UTC)
             await cover._async_switch_state_changed(
                 _echo_event("switch.open", "off", "on", echo_time)
             )
             await asyncio.sleep(0)
 
         assert cover.travel_calc._last_known_position_timestamp == pytest.approx(
-            _expected_anchor(echo_time), abs=0.05
+            _expected_anchor(echo_time, feedback_clock), abs=0.05
         )
 
     @pytest.mark.asyncio
@@ -241,18 +243,16 @@ class TestRelayFeedbackStart:
         assert anchor == pytest.approx(commanded, abs=0.05)
 
     @pytest.mark.asyncio
-    async def test_command_to_echo_gap_is_not_counted_as_travel(self, make_cover):
+    async def test_command_to_echo_gap_is_not_counted_as_travel(
+        self, make_cover, feedback_clock
+    ):
         """The variable Zigbee round-trip falls outside tracked travel."""
-        clock = FakeClock(wall=1_700_000_000.0, mono=5_000.0)
+        clock = feedback_clock
         cover = make_cover(wait_for_relay_feedback=True)
         stub_switches(cover)
         cover.travel_calc.set_position(0)
 
-        with (
-            patch.object(cover_base, "time", clock),
-            patch.object(travel_calculator, "time", clock),
-            patch.object(cover, "async_write_ha_state"),
-        ):
+        with patch.object(cover, "async_write_ha_state"):
             await cover.async_open_cover()  # commanded at mono 5000
             await asyncio.sleep(0)
             clock.advance(3)  # the round trip
@@ -1560,7 +1560,12 @@ class TestRelayFeedbackToggleReversal:
             # The stop is a tap on the opposite (close) relay.
             assert _taps(cover, "switch.close")
             await cover._async_switch_state_changed(
-                _echo_event("switch.close", "off", "on", datetime.now(UTC))
+                _echo_event(
+                    "switch.close",
+                    "off",
+                    "on",
+                    datetime.fromtimestamp(feedback_clock.time(), UTC),
+                )
             )
             await asyncio.wait_for(reversal, 1.0)
 
@@ -1733,7 +1738,7 @@ class TestRelayFeedbackSameRelayEchoes:
     (issue #268).
     """
 
-    async def _reverse_opposite(self, make_cover):
+    async def _reverse_opposite(self, make_cover, clock=time):
         cover = await _park_open(
             make_cover,
             "toggle_opposite",
@@ -1744,50 +1749,50 @@ class TestRelayFeedbackSameRelayEchoes:
         reversal = asyncio.ensure_future(cover.set_position(20))
         await _turns()
         await cover._async_switch_state_changed(
-            _echo_event("switch.open", "off", "on", datetime.now(UTC))
+            _echo_event(
+                "switch.open", "off", "on", datetime.fromtimestamp(clock.time(), UTC)
+            )
         )
         return cover, reversal
 
     @pytest.mark.asyncio
-    async def test_a_late_stop_tap_echo_does_not_confirm_the_drive(self, make_cover):
-        clock = FakeClock(wall=1_700_000_000.0, mono=5_000.0)
-        with (
-            patch.object(cover_base, "time", clock),
-            patch.object(travel_calculator, "time", clock),
-        ):
-            with patch.object(cover_base, "DIRECTION_CHANGE_DELAY", 0.0):
-                cover, reversal = await self._reverse_opposite(make_cover)
-                await asyncio.wait_for(reversal, 1.0)
-            # Stop tap, release of the open relay, drive tap: the drive is parked
-            # on the close relay's confirmation.
-            assert len(_taps(cover, "switch.close")) == 2
-            assert cover._feedback_wait_entity == "switch.close"
+    async def test_a_late_stop_tap_echo_does_not_confirm_the_drive(
+        self, make_cover, feedback_clock
+    ):
+        clock = feedback_clock
+        with patch.object(cover_base, "DIRECTION_CHANGE_DELAY", 0.0):
+            cover, reversal = await self._reverse_opposite(make_cover, clock)
+            await asyncio.wait_for(reversal, 1.0)
+        # Stop tap, release of the open relay, drive tap: the drive is parked
+        # on the close relay's confirmation.
+        assert len(_taps(cover, "switch.close")) == 2
+        assert cover._feedback_wait_entity == "switch.close"
 
-            # The stop tap's ON and self-release OFF arrive only now.
-            stop_echo = datetime.fromtimestamp(clock.time() - 3, UTC)
-            await cover._async_switch_state_changed(
-                _echo_event("switch.close", "off", "on", stop_echo)
-            )
-            await asyncio.sleep(0)
-            assert _parked(cover, "switch.close")
-            assert cover.travel_calc.is_traveling() is False
-            await cover._async_switch_state_changed(
-                _echo_event("switch.close", "on", "off", stop_echo)
-            )
-            await asyncio.sleep(0)
-            assert _parked(cover, "switch.close")
+        # The stop tap's ON and self-release OFF arrive only now.
+        stop_echo = datetime.fromtimestamp(clock.time() - 3, UTC)
+        await cover._async_switch_state_changed(
+            _echo_event("switch.close", "off", "on", stop_echo)
+        )
+        await asyncio.sleep(0)
+        assert _parked(cover, "switch.close")
+        assert cover.travel_calc.is_traveling() is False
+        await cover._async_switch_state_changed(
+            _echo_event("switch.close", "on", "off", stop_echo)
+        )
+        await asyncio.sleep(0)
+        assert _parked(cover, "switch.close")
 
-            # The drive's own ON is the confirmation, and anchors tracking.
-            clock.advance(1)
-            drive_echo = datetime.fromtimestamp(clock.time(), UTC)
-            drive_anchor = clock.monotonic()
-            clock.advance(1)  # delivery one second after the drive echo was stamped
-            await cover._async_switch_state_changed(
-                _echo_event("switch.close", "off", "on", drive_echo)
-            )
-            await asyncio.sleep(0)
-            assert cover.travel_calc.is_traveling() is True
-            assert cover.travel_calc._last_known_position_timestamp == drive_anchor
+        # The drive's own ON is the confirmation, and anchors tracking.
+        clock.advance(1)
+        drive_echo = datetime.fromtimestamp(clock.time(), UTC)
+        drive_anchor = clock.monotonic()
+        clock.advance(1)  # delivery one second after the drive echo was stamped
+        await cover._async_switch_state_changed(
+            _echo_event("switch.close", "off", "on", drive_echo)
+        )
+        await asyncio.sleep(0)
+        assert cover.travel_calc.is_traveling() is True
+        assert cover.travel_calc._last_known_position_timestamp == drive_anchor
 
     @pytest.mark.asyncio
     async def test_a_prompt_stop_tap_echo_is_filtered_and_the_drive_confirms(
@@ -1823,53 +1828,47 @@ class TestRelayFeedbackSameRelayEchoes:
 
     @pytest.mark.asyncio
     async def test_single_button_confirms_on_the_last_press_not_a_late_nudge(
-        self, make_cover
+        self, make_cover, feedback_clock
     ):
         """A reversal needs a stop press and a drive press on the one button;
         the stop press's late echoes must not anchor tracking."""
-        clock = FakeClock(wall=1_700_000_000.0, mono=5_000.0)
-        with (
-            patch.object(cover_base, "time", clock),
-            patch.object(travel_calculator, "time", clock),
-        ):
-            cover = _stub(
-                _make_single_button(
-                    make_cover, travel_time_open=10, travel_time_close=10
-                )
-            )
-            cover.travel_calc.set_position(50)
-            cover._phase = Phase.MOVING_UP
-            with single_button_sleep_patch():
-                await cover.async_close_cover()
-                await _turns()
-            # Both presses are out; the move is parked on the button's confirmation.
-            assert len(_taps(cover, "switch.button")) == 2
-            assert cover._feedback_wait_entity == "switch.button"
+        clock = feedback_clock
+        cover = _stub(
+            _make_single_button(make_cover, travel_time_open=10, travel_time_close=10)
+        )
+        cover.travel_calc.set_position(50)
+        cover._phase = Phase.MOVING_UP
+        with single_button_sleep_patch():
+            await cover.async_close_cover()
+            await _turns()
+        # Both presses are out; the move is parked on the button's confirmation.
+        assert len(_taps(cover, "switch.button")) == 2
+        assert cover._feedback_wait_entity == "switch.button"
 
-            # The stop press's echoes arrive late, after the drive press.
-            stop_echo = datetime.fromtimestamp(clock.time() - 3, UTC)
-            await cover._async_switch_state_changed(
-                _echo_event("switch.button", "off", "on", stop_echo)
-            )
-            await asyncio.sleep(0)
-            assert _parked(cover, "switch.button")
-            await cover._async_switch_state_changed(
-                _echo_event("switch.button", "on", "off", stop_echo)
-            )
-            await asyncio.sleep(0)
-            assert _parked(cover, "switch.button")
-            assert cover.travel_calc.is_traveling() is False
+        # The stop press's echoes arrive late, after the drive press.
+        stop_echo = datetime.fromtimestamp(clock.time() - 3, UTC)
+        await cover._async_switch_state_changed(
+            _echo_event("switch.button", "off", "on", stop_echo)
+        )
+        await asyncio.sleep(0)
+        assert _parked(cover, "switch.button")
+        await cover._async_switch_state_changed(
+            _echo_event("switch.button", "on", "off", stop_echo)
+        )
+        await asyncio.sleep(0)
+        assert _parked(cover, "switch.button")
+        assert cover.travel_calc.is_traveling() is False
 
-            clock.advance(1)
-            drive_echo = datetime.fromtimestamp(clock.time(), UTC)
-            drive_anchor = clock.monotonic()
-            clock.advance(1)  # delivery one second after the drive echo was stamped
-            await cover._async_switch_state_changed(
-                _echo_event("switch.button", "off", "on", drive_echo)
-            )
-            await asyncio.sleep(0)
-            assert cover.travel_calc.is_traveling() is True
-            assert cover.travel_calc._last_known_position_timestamp == drive_anchor
+        clock.advance(1)
+        drive_echo = datetime.fromtimestamp(clock.time(), UTC)
+        drive_anchor = clock.monotonic()
+        clock.advance(1)  # delivery one second after the drive echo was stamped
+        await cover._async_switch_state_changed(
+            _echo_event("switch.button", "off", "on", drive_echo)
+        )
+        await asyncio.sleep(0)
+        assert cover.travel_calc.is_traveling() is True
+        assert cover.travel_calc._last_known_position_timestamp == drive_anchor
 
     @pytest.mark.asyncio
     async def test_single_button_that_never_reports_off_stays_parked(self, make_cover):

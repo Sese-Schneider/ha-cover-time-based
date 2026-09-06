@@ -433,16 +433,19 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # movement command (#153), so the motor is left to its limit switch and
         # the axis is parked at the limit it is heading for.
         stops_itself = self._self_stops_at_endpoints()
-        if travel_driving and not stops_itself:
-            await self._async_handle_command(SERVICE_STOP_COVER)
-            self._last_command = None
-        if tilt_motor_driving and not stops_itself:
-            await self._send_tilt_stop()
+        fallback_limit = self._limit_for_last_command()
+        # Calibration owns its motor stop, including tracked overhead steps.
+        if self._calibration is None and not stops_itself:
+            if travel_driving:
+                await self._async_handle_command(SERVICE_STOP_COVER)
+                self._last_command = None
+            if tilt_motor_driving:
+                await self._send_tilt_stop()
         self._settle_axis_after_removal(
             self.travel_calc,
             driving=travel_driving,
             stopped=travel_driving and not stops_itself,
-            fallback_limit=self._limit_for_last_command(),
+            fallback_limit=fallback_limit,
         )
         if self._has_tilt_support():
             self._settle_axis_after_removal(
@@ -455,18 +458,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._moving_tilt_motor = False
         self._moving_tilt = False
         if self._calibration is not None:
-            # A reload/unload mid-calibration (integration reload, HA restart,
-            # config-entry unload — a card save is rejected while a calibration
-            # runs) would otherwise cancel the calibration's safety timeout AND
-            # leave the motor running with nothing left to stop it. Calibration
-            # was driving the motor, so a stop here is a stop of our own
-            # movement — but only on hardware that does NOT self-stop at its
-            # endpoints. Switch mode (False) always stops, de-energizing the
-            # latched relay (the real bug). Momentary hardware (toggle/pulse)
-            # has already self-stopped at its limit, and a "stop" there is
-            # itself a movement command (#153/#133), so it is skipped — the
-            # same idempotency rule as _calibration_timeout / stop_calibration
-            # (Tasks 8/10).
+            # Calibration may drive without a live tracker. Cancelling its
+            # safety timeout therefore also requires a stop, unless the motor
+            # stops itself at its limit and a stop tap could restart it (#153).
             self._restore_calibration_startup_delay()
             self._cancel_calibration_tasks()
             try:
@@ -4330,13 +4324,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         ):
             return False
         last_changed = getattr(new_state, "last_changed", None)
-        base_ts = last_changed.timestamp() if last_changed is not None else None
+        stamp = last_changed.timestamp() if last_changed is not None else None
         self._log(
-            "_resolve_relay_feedback :: %s confirmed on (base_ts=%s)",
+            "_resolve_relay_feedback :: %s confirmed on (stamp=%s)",
             entity_id,
-            base_ts,
+            stamp,
         )
-        future.set_result(base_ts)
+        future.set_result(stamp)
         return True
 
     async def _on_own_echo_consumed(self, entity_id: str, new_val: str) -> None:

@@ -1,27 +1,19 @@
-"""Entity removal must silence the parked continuation coroutines (item 3.19).
+"""Removal must silence continuations waiting between movement phases.
 
-``async_will_remove_from_hass`` cancels the two ghost *timers* (the endpoint
-run-on stop and the startup-delay arming) but nothing cancels or supersedes the
-continuations that run on the auto-updater's fire-and-forget task
-(``hass.async_create_task(self.auto_stop_if_necessary())``, never retained) or
-inside a plain service-call coroutine:
-
-* ``_start_tilt_restore`` parked in its settle sleep / travel stop,
-* ``_maybe_start_recalibrated_leg`` parked in ``asyncio.wait({delay_task})`` or
-  in ``_settle_before_reversing``,
-* ``_settle_before_reversing`` itself, inside a reversal.
-
-Every card save reloads the config entry, which removes and re-creates the
-entity. A continuation that resumes after removal drives the physical relays,
-re-arms the auto-updater and persists a position on behalf of an entity Home
-Assistant has already thrown away.
+Every card save reloads the entry and replaces its entity. A tilt restore,
+recalibrated second leg, pre-step or reversal that resumes after removal must
+leave the relays, trackers and replacement's saved position alone. Stops
+already in flight must still reach the hardware.
 """
 
 import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.const import SERVICE_OPEN_COVER
 
+from custom_components.cover_time_based.calibration import CalibrationState
+from custom_components.cover_time_based.cover_base import CoverTimeBased
 from tests.helpers import relay_calls, stub_switches
 
 
@@ -50,29 +42,17 @@ class Gate:
         await asyncio.wait_for(self.entered.wait(), 2)
 
 
-def assert_quiescent(cover, store, mark, saves, *, tracking=True, what=""):
-    """Every way a removed entity can still act, reported together.
+def assert_quiescent(cover, store, mark, saves, *, what=""):
+    """Report every forbidden effect of a resumed continuation together.
 
-    Only motor-starting relay calls are flagged; cleanup stops remain permitted.
-
-    One assert per symptom would stop at the first, hiding whether the others
-    also fire — and the point of these tests is the full blast radius of one
-    resumed continuation.
+    Checking all symptoms in one assertion shows whether it started a motor,
+    restarted tracking, armed a timer or overwrote the replacement's record.
     """
     problems = []
     after = [
         call
         for call in relay_calls(cover, mark)
-        if call[0]
-        in {
-            "turn_on",
-            "open_cover",
-            "close_cover",
-            "set_cover_position",
-            "open_cover_tilt",
-            "close_cover_tilt",
-            "set_cover_tilt_position",
-        }
+        if call[0] in CoverTimeBased._MOTOR_STARTING_SERVICES
     ]
     if after:
         problems.append(f"drove the relays: {after}")
@@ -82,9 +62,8 @@ def assert_quiescent(cover, store, mark, saves, *, tracking=True, what=""):
         problems.append("armed a new endpoint run-on stop")
     if store.async_save.call_count != saves:
         problems.append("wrote the position store")
-    if tracking and (
-        cover.travel_calc.is_traveling()
-        or (cover._has_tilt_support() and cover.tilt_calc.is_traveling())
+    if cover.travel_calc.is_traveling() or (
+        cover._has_tilt_support() and cover.tilt_calc.is_traveling()
     ):
         problems.append("restarted position tracking")
     assert not problems, f"removed entity {what}: " + "; ".join(problems)
@@ -115,13 +94,10 @@ def _dual_motor_cover(make_cover, **kw):
 async def test_removal_during_inline_tilt_restore_settle_is_silent(
     make_cover, _mock_position_store
 ):
-    """Removal mid-settle must not let the old entity reverse the motor.
+    """Removal during the restore's settle gap must prevent its reversal.
 
-    The restore has already sent its STOP and is asleep in
-    ``_direction_change_delay``. Nothing in removal touches
-    ``_tilt_restore_active``/``_tilt_restore_epoch``, so the post-sleep
-    ``_tilt_restore_superseded`` check passes and the dead entity energizes the
-    travel relay and re-subscribes the auto-updater.
+    The restore has sent STOP before waiting in _direction_change_delay;
+    removal must invalidate that restore before the wait resumes.
     """
     cover = _inline_cover(make_cover)
     stub_switches(cover)
@@ -160,12 +136,7 @@ async def test_removal_during_inline_tilt_restore_settle_is_silent(
 async def test_removal_during_dual_motor_restore_does_not_start_tilt_motor(
     make_cover, _mock_position_store
 ):
-    """Same hole on the dedicated-tilt-motor branch.
-
-    The dual-motor restore's await is ``_stop_travel_relay_if_needed`` (a real
-    relay service call). Removal landing there leaves the epoch untouched, so
-    the removed entity goes on to energize the tilt relay.
-    """
+    """Removal during the travel stop must prevent the dedicated tilt start."""
     cover = _dual_motor_cover(make_cover)
     stub_switches(cover)
     cover.travel_calc.set_position(30)
@@ -201,13 +172,10 @@ async def test_removal_during_dual_motor_restore_does_not_start_tilt_motor(
 async def test_removal_during_recalibrated_runon_wait_does_not_run_leg_b(
     make_cover, _mock_position_store
 ):
-    """Removal cancels ``_delay_task``, which *releases* the run-on wait.
+    """Cancelling the run-on stop must invalidate the waiting second leg.
 
-    ``_maybe_start_recalibrated_leg`` parks in ``asyncio.wait({delay_task})``
-    precisely so a cancellation of its own task cannot kill the pending
-    ``_delayed_stop``. Removal cancels that stop directly, so the wait returns
-    immediately, the epoch is unchanged, and leg B drives the relays on an
-    entity that no longer exists.
+    asyncio.wait releases when removal cancels the stop task, so the second
+    leg must check ownership before it can command the motor.
     """
     cover = make_cover(recalibrate_before_position=True, endpoint_runon_time=5.0)
     stub_switches(cover)
@@ -273,13 +241,7 @@ async def test_removal_during_recalibrated_settle_does_not_run_leg_b(
 async def test_removal_during_reversal_settle_does_not_energize_the_relay(
     make_cover, _mock_position_store
 ):
-    """A ``set_position`` reversal is parked in ``_settle_before_reversing``.
-
-    ``_settle_before_reversing`` compares ``_movement_epoch`` across its own
-    sleep. Removal never bumps that epoch, so the reversal resumes and turns
-    the open relay on for a removed entity — on switch mode a latched relay
-    with nothing left to switch it off.
-    """
+    """Removal must invalidate a set_position reversal waiting for the motor."""
     cover = make_cover()  # switch mode
     stub_switches(cover)
     cover.travel_calc.set_position(50)
@@ -309,14 +271,10 @@ async def test_removal_during_reversal_settle_does_not_energize_the_relay(
 async def test_removal_during_external_open_reversal_arms_no_new_ghost_timer(
     make_cover,
 ):
-    """The external variant of the same await, where the relay stays silent.
+    """An external reversal must not arm a run-on stop after removal.
 
-    An external open-while-closing takes the reversal through
-    ``_settle_before_reversing`` too, but the relay command is swallowed by the
-    external-trigger echo suppression — so the visible damage is different, not
-    absent: the resumed reversal arms a *fresh* ``_delay_task`` on the removed
-    entity, after removal has already cancelled the one it knew about. Nothing
-    will ever cancel that one.
+    External-trigger suppression keeps the relay silent, but the resumed
+    command must also leave the removed entity's timers inactive.
     """
     cover = make_cover()  # switch mode
     stub_switches(cover)
@@ -347,19 +305,16 @@ async def test_removal_during_external_open_reversal_arms_no_new_ghost_timer(
 
 
 # ---------------------------------------------------------------------------
-# (e) the run-on stop that removal cancels never de-energizes the relay
+# (e) removal owns the stop when it cancels the endpoint run-on
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_removal_with_pending_runon_de_energizes_the_latched_relay(make_cover):
-    """A latched relay whose only scheduled stop is cancelled stays ON.
+    """Removal must stop a latched relay when it cancels the scheduled stop.
 
-    ``_delayed_stop`` is the sole thing that will ever take the endpoint run-on
-    relay down. ``async_will_remove_from_hass`` cancels it (correctly — a late
-    stop would hit the *reloaded* entity), but sends no stop of its own, so
-    switch-mode hardware is left energized and drives past its endpoint. This
-    is the same hazard the mid-calibration branch of removal already handles.
+    The relay needs an immediate release because a delayed stop could stop
+    the replacement entity's movement.
     """
     cover = make_cover(
         travel_time_close=0.2, travel_time_open=0.2, endpoint_runon_time=5.0
@@ -383,6 +338,34 @@ async def test_removal_with_pending_runon_de_energizes_the_latched_relay(make_co
         "removal cancelled the only pending stop and left the relay latched ON: "
         f"{relay_calls(cover, mark)}"
     )
+
+
+@pytest.mark.asyncio
+async def test_removal_mid_overhead_calibration_sends_one_pulse_stop(make_cover):
+    """Calibration owns the stop even while its stepped move has a live tracker."""
+    cover = make_cover(
+        control_mode="pulse",
+        stop_switch="switch.stop",
+        send_endpoint_stop=True,
+    )
+    stub_switches(cover)
+    cover._calibration = CalibrationState(
+        attribute="travel_startup_delay",
+        timeout=600,
+        move_command=SERVICE_OPEN_COVER,
+    )
+    cover.travel_calc.set_position(0)
+    cover.travel_calc.start_travel(10)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover._calibration_drive(SERVICE_OPEN_COVER)
+        assert cover.travel_calc.is_traveling()
+        mark = len(cover.hass.services.async_call.call_args_list)
+
+        await cover.async_will_remove_from_hass()
+
+    assert relay_calls(cover, mark).count(("turn_on", "switch.stop")) == 1
+    assert cover._calibration is None
+    assert not cover.travel_calc.is_traveling()
 
 
 @pytest.mark.asyncio
@@ -504,14 +487,7 @@ async def test_removal_mid_travel_on_toggle_sends_nothing_and_parks_at_the_limit
 async def test_removed_entity_restore_completion_overwrites_position_store(
     make_cover, _mock_position_store
 ):
-    """The store write is downstream of the re-armed auto-updater.
-
-    The other tests catch the removed entity re-subscribing the auto-updater
-    and restarting the tracker; this pins what that costs. The next tick
-    reaching the target runs ``auto_stop_if_necessary`` again, whose
-    tilt-restore-complete branch persists — a ghost entity writing the position
-    key the *reloaded* entity restores from.
-    """
+    """A restore completing after removal must not overwrite the saved position."""
     cover = _inline_cover(make_cover)
     stub_switches(cover)
     cover.travel_calc.set_position(80)
@@ -531,8 +507,8 @@ async def test_removed_entity_restore_completion_overwrites_position_store(
             gate.proceed.set()
             await asyncio.wait_for(task, 2)
 
-        # The restore the removed entity started now reaches its target — in
-        # production this is its own re-armed auto-updater tick.
+        # A stale updater tick may still report the restore target after removal;
+        # it must not persist that position.
         cover.tilt_calc.set_position(100)
         await cover.auto_stop_if_necessary()
 
@@ -550,11 +526,10 @@ async def test_removed_entity_restore_completion_overwrites_position_store(
 async def test_removal_during_pre_step_tilt_stop_does_not_start_travel(
     make_cover, _mock_position_store
 ):
-    """Dual-motor pre-step: tilt reached safe, travel is about to be sent.
+    """Removal during a dual-motor pre-step's tilt stop must prevent travel.
 
-    ``_start_pending_travel`` captured its target before awaiting the tilt
-    stop and checks nothing after it, so the travel relay went out and
-    tracking started on the removed entity.
+    The continuation already captured its travel target before the await;
+    clearing the pending target alone cannot prevent the resumed start.
     """
     cover = _dual_motor_cover(make_cover, travel_time_close=5.0, travel_time_open=5.0)
     stub_switches(cover)
