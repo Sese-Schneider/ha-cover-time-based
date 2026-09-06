@@ -48,18 +48,14 @@ class ToggleOppositeModeCover(ToggleBaseCover):
         (the hardware keeps moving), so it is a no-op. From idle, a press starts
         the movement in that direction.
 
-        Decisions key off the travel tracker directly (``travel_calc``) rather
-        than the cover-level ``is_opening``/``is_closing`` properties, which OR
-        in tilt motion: on a dual-motor cover a moving tilt relay must not make a
-        travel-relay press read as a stop (the tilt handler mirrors this with
-        ``tilt_calc``).
-
-        The base reversal guards and the same-button handler factor this same
-        axis check into ``_travel_axis_opening``/``_travel_axis_closing`` (which
-        additionally fold in shared-motor tilt and the dual-motor tilt-to-safe
-        pre-step). The raw ``travel_calc`` check suffices here because these
-        branches route to ``async_open_cover``/``async_close_cover``, whose base
-        reversal guard applies those cases downstream.
+        Decisions key off ``_travel_axis_opening``/``_travel_axis_closing``
+        (as ToggleModeCover does), not the raw ``travel_calc``: on a
+        shared-motor tilt strategy the tilt phase runs the travel motor while
+        ``travel_calc`` sits idle, and an opposite press there halts that
+        motor — it must read as a stop, not as a new move. On dual-motor the
+        helpers reduce to ``travel_calc`` alone, so a moving tilt relay never
+        makes a travel-relay press read as a stop; the tilt handler below
+        keys off ``tilt_calc`` for the same reason.
         """
         if self._ignore_external_toggle_edge(
             entity_id, new_val, "_handle_external_state_change"
@@ -67,22 +63,22 @@ class ToggleOppositeModeCover(ToggleBaseCover):
             return
 
         if entity_id == self._open_switch_entity_id:
-            if self.travel_calc.is_closing():
+            if self._travel_axis_closing():
                 self._log(
                     "_handle_external_state_change :: open press while closing, stopping"
                 )
                 await self.async_stop_cover(supersede=False)
-            elif not self.travel_calc.is_opening():
+            elif not self._travel_axis_opening():
                 self._log("_handle_external_state_change :: external open press")
                 await self.async_open_cover()
             # else already opening -> continuation, no-op
         elif entity_id == self._close_switch_entity_id:
-            if self.travel_calc.is_opening():
+            if self._travel_axis_opening():
                 self._log(
                     "_handle_external_state_change :: close press while opening, stopping"
                 )
                 await self.async_stop_cover(supersede=False)
-            elif not self.travel_calc.is_closing():
+            elif not self._travel_axis_closing():
                 self._log("_handle_external_state_change :: external close press")
                 await self.async_close_cover()
             # else already closing -> continuation, no-op
