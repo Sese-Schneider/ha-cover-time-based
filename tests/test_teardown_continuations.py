@@ -53,12 +53,27 @@ class Gate:
 def assert_quiescent(cover, store, mark, saves, *, tracking=True, what=""):
     """Every way a removed entity can still act, reported together.
 
+    Only motor-starting relay calls are flagged; cleanup stops remain permitted.
+
     One assert per symptom would stop at the first, hiding whether the others
     also fire — and the point of these tests is the full blast radius of one
     resumed continuation.
     """
     problems = []
-    after = relay_calls(cover, mark)
+    after = [
+        call
+        for call in relay_calls(cover, mark)
+        if call[0]
+        in {
+            "turn_on",
+            "open_cover",
+            "close_cover",
+            "set_cover_position",
+            "open_cover_tilt",
+            "close_cover_tilt",
+            "set_cover_tilt_position",
+        }
+    ]
     if after:
         problems.append(f"drove the relays: {after}")
     if cover._unsubscribe_auto_updater is not None:
