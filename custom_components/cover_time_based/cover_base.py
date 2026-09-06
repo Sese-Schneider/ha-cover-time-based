@@ -3566,6 +3566,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # travel motor self-stopped if travel just reached an endpoint, so
             # gate the stop (a pulse there re-opens the cover untracked — #153).
             await self._stop_travel_relay_if_needed(travel_was_running=True)
+            # The travel phase is over and its relay handled above (which is
+            # why the clear comes after it: the stop helper picks the relay
+            # from _last_command). From here the tilt motor is the only thing
+            # moving; a stale travel command would make a tilt command
+            # mid-restore read as a direction change and pulse a parked travel
+            # relay (#153).
+            self._last_command = None
             if self._tilt_restore_superseded(epoch):
                 self._log("_start_tilt_restore :: cancelled before tilt motor start")
                 return
