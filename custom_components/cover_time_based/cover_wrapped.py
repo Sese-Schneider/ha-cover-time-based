@@ -72,6 +72,11 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._ignore_all_reports = ignore_all_reports
         self._invert = invert
         self._last_self_command_time: float | None = None
+        # The underlying moving state the in-flight command settles into; the
+        # echo burst ends there (see _call_cover_service / _on_own_echo_consumed).
+        # A safety timeout may leave this set: only pending echoes read it,
+        # and _call_cover_service replaces it before marking the next burst.
+        self._echo_terminal_state: str | None = None
         # Set while a command-echo cover is mid-reconnect, so the retained
         # state landing after the stop hop is not replayed as a command
         # (see _is_stale_reappearance).
@@ -103,7 +108,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # The cover may have been moved (app/remote) while HA was down; the
         # store's snapshot is then stale and the first timed move would run
         # the wrong distance in possibly the wrong direction. Trust a live
-        # reported position over the stored one at startup.
+        # reported position over the stored one at startup when the
+        # position-reporting profile lets us trust one.
         live = self._wrapped_reported_position(trust_closed=False)
         if live is not None and live != self.travel_calc.current_position():
             self._log(
@@ -184,9 +190,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
         Restricted to InlineTilt: the device positions its own slats, so the
         inline strategy's no-op snap_trackers_to_physical leaves our
         natively-set tilt intact. Dual-motor/sequential strategies re-derive
-        tilt from travel and keep the timed path. Command-echo covers report
-        nothing trustworthy to snap back from, so they keep the timed path too.
+        tilt from travel and keep the timed path. Command-echo and ignore-all
+        covers report nothing trustworthy to snap back from, so they keep the
+        timed path too.
         """
+        if self._ignore_all_reports:
+            return False
         if self._reports_command_not_endpoint:
             return False
         if not self._has_tilt_support():
@@ -219,8 +228,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
     def _use_native_set_position(self, *, features: int | None = None) -> bool:
         """Return True if set_cover_position should be forwarded natively.
 
-        Auto-detected from the wrapped entity's SET_POSITION support, with three
+        Auto-detected from the wrapped entity's SET_POSITION support, with four
         opt-outs:
+          - ignore_all_reports (the device's every report is untrusted, so its
+            position scale is too),
           - the force_time_based_position override (always legacy tracking),
           - reports_command_not_endpoint (the wrapped entity's state/position is
             a command echo, so it's tracked purely by time — never forward a
@@ -236,6 +247,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
             slats independently of our travel motor, so driving position
             natively is coupling-safe there.
         """
+        if self._ignore_all_reports:
+            return False
         if self._force_time_based_position:
             return False
         if self._reports_command_not_endpoint:
@@ -655,6 +668,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
     ) -> int | None:
         """Return the wrapped cover's reported position, or None if unknown.
 
+        Honors ignore_all_reports, reports_command_not_endpoint and
+        ignore_reported_position. The first two reject every position source;
+        the third skips the numeric attribute but allows the closed fallback.
         Prefers the current_position attribute. Falls back to 0 for
         state=closed (unambiguous); state=open without an attribute is
         ambiguous (could be any position > 0) and returns None. Both the
@@ -668,11 +684,19 @@ class WrappedCoverTimeBased(CoverTimeBased):
         drops it too, for a cover whose open/closed states fire when the motor
         merely stops mid-travel rather than only at the physical endpoints
         (issue #238) — there a `closed` proves nothing about position.
+
+        A command-echo cover reports no usable position at all, so this
+        returns None for it regardless of the other flags.
         """
         # A device whose every report is ignored (issue #248) reports no usable
         # position, so the startup live-sync and any other consumer fall back to
         # the time-based tracker rather than a value we do not trust.
         if self._ignore_all_reports:
+            return None
+        # A command-echo cover's state and position are echoes of the last
+        # command, not measurements: neither report channel trusts them, and
+        # the startup live-sync must not either.
+        if self._reports_command_not_endpoint:
             return None
         state = self.hass.states.get(self._cover_entity_id) if state is None else state
         if state is None:
@@ -698,11 +722,13 @@ class WrappedCoverTimeBased(CoverTimeBased):
     ) -> int | None:
         """Return the wrapped cover's reported tilt position, or None.
 
-        Honors ignore_reported_position — a device whose reported values are
-        untrustworthy is untrustworthy on both axes. Unlike
+        Honors ignore_reported_position and ignore_all_reports — a device whose
+        reported values are untrustworthy is untrustworthy on both axes. Unlike
         _wrapped_reported_position there is no closed-state fallback: a closed
         cover implies nothing unambiguous about its slat angle.
         """
+        if self._ignore_all_reports:
+            return None
         if self._ignore_reported_position:
             return None
         state = self.hass.states.get(self._cover_entity_id) if state is None else state
@@ -762,11 +788,38 @@ class WrappedCoverTimeBased(CoverTimeBased):
         )
 
     async def _call_cover_service(self, service: str, expected: int = 1) -> None:
+        # ``expected`` predicts how many state transitions the underlying will
+        # report for this command (a reversal may report closing→open→opening,
+        # or closing→opening in one step). The prediction is bounded by the
+        # terminal state: once the underlying reports the moving state this
+        # command settles into, any remaining count is an over-count and is
+        # dropped in _on_own_echo_consumed, so it cannot swallow a later genuine
+        # report (a wall stop) inside the echo window. One slot serves every
+        # command through here: a stop or tilt command sets it to None, which
+        # disables the terminal-state drain for the previous burst.
+        self._echo_terminal_state = {
+            "open_cover": STATE_OPENING,
+            "close_cover": STATE_CLOSING,
+        }.get(service)
         self._mark_switch_pending(self._cover_entity_id, expected)
         self._start_bounce_grace_window()
         await self.hass.services.async_call(
             "cover", service, {"entity_id": self._cover_entity_id}, False
         )
+
+    async def _on_own_echo_consumed(self, entity_id: str, new_val: str) -> None:
+        """Drain surplus wrapped echoes once the commanded moving state arrives."""
+        if entity_id != self._cover_entity_id or self._echo_terminal_state is None:
+            return
+        if new_val == self._echo_terminal_state:
+            self._echo_terminal_state = None
+            if self._pending_switch.get(entity_id, 0) > 0:
+                self._log(
+                    "_on_own_echo_consumed :: %s reached, dropping %d surplus pending echo(es)",
+                    new_val,
+                    self._pending_switch[entity_id],
+                )
+                self._clear_pending_switch(entity_id)
 
     async def _send_open(self) -> None:
         """User-intent open. When inverted, drives the underlying close."""
@@ -783,15 +836,17 @@ class WrappedCoverTimeBased(CoverTimeBased):
             await self._send_underlying_close()
 
     async def _send_underlying_open(self) -> None:
-        # If the wrapped cover is currently closing, the open command produces
-        # two state transitions (closing→open, then open→opening).
+        # If the wrapped cover is currently closing, the open command may
+        # produce two state transitions (closing→open, then open→opening).
+        # Any surplus is drained at the terminal moving state; see _call_cover_service.
         state = self.hass.states.get(self._cover_entity_id)
         expected = 2 if state and state.state == STATE_CLOSING else 1
         await self._call_cover_service("open_cover", expected)
 
     async def _send_underlying_close(self) -> None:
-        # If the wrapped cover is currently opening, the close command produces
-        # two state transitions (opening→open, then open→closing).
+        # If the wrapped cover is currently opening, the close command may
+        # produce two state transitions (opening→open, then open→closing).
+        # Any surplus is drained at the terminal moving state; see _call_cover_service.
         state = self.hass.states.get(self._cover_entity_id)
         expected = 2 if state and state.state == STATE_OPENING else 1
         await self._call_cover_service("close_cover", expected)
@@ -802,7 +857,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # target: the device runs to where it already is and halts there. Only
         # do this when we positively know stop is unsupported and set position
         # is — otherwise keep the legacy stop_cover (covers an entity whose
-        # capabilities are momentarily unknown, e.g. while unavailable).
+        # capabilities are momentarily unknown, e.g. while unavailable). This is
+        # also the only stop available under ignore_all_reports: the frozen
+        # target is issued in the device's scale because no other command exists.
         features = self._wrapped_features()
         supports_stop = features is not None and bool(
             features & CoverEntityFeature.STOP

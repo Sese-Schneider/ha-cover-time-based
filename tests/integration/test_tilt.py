@@ -9,6 +9,7 @@ import time as time_mod
 from datetime import timedelta
 from unittest.mock import patch
 
+import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_component import DATA_INSTANCES
 from homeassistant.util import dt as dt_util
@@ -337,3 +338,130 @@ async def test_same_direction_retarget_tilt_cover_does_not_reissue_command(
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+
+
+class TiltMotor:
+    """Physical tilt direction driven by latching or momentary relay commands."""
+
+    def __init__(self, mode):
+        self.mode = mode
+        self.direction = None
+        self.calls = []
+
+    async def handle(self, call):
+        entity = call.data["entity_id"]
+        self.calls.append((call.service, entity))
+        if entity not in ("input_boolean.tilt_open", "input_boolean.tilt_close"):
+            return
+        direction = "open" if entity.endswith("tilt_open") else "close"
+        if self.mode == "switch":
+            if call.service == "turn_on":
+                self.direction = direction
+            elif self.direction == direction:
+                self.direction = None
+        elif call.service == "turn_on":
+            if self.direction is None:
+                self.direction = direction
+            elif (self.mode == "toggle" and self.direction == direction) or (
+                self.mode == "toggle_opposite" and self.direction != direction
+            ):
+                self.direction = None
+
+
+class TestDisplacedTiltMotor:
+    """Travel displacement stops a departing motor without restarting an arrival."""
+
+    @pytest.fixture
+    def base_options(self, control_mode):
+        return {
+            "control_mode": control_mode,
+            "open_switch_entity_id": "input_boolean.open_switch",
+            "close_switch_entity_id": "input_boolean.close_switch",
+            "travel_time_open": 30.0,
+            "travel_time_close": 30.0,
+            "tilt_mode": "dual_motor",
+            "tilt_time_open": 5.0,
+            "tilt_time_close": 5.0,
+            "tilt_open_switch": "input_boolean.tilt_open",
+            "tilt_close_switch": "input_boolean.tilt_close",
+        }
+
+    @pytest.fixture
+    def tilt_motor(self, hass, setup_cover, control_mode):
+        motor = TiltMotor(control_mode)
+        hass.services.async_register("homeassistant", "turn_on", motor.handle)
+        hass.services.async_register("homeassistant", "turn_off", motor.handle)
+        return motor
+
+    @pytest.mark.parametrize("control_mode", ["toggle", "toggle_opposite", "switch"])
+    async def test_noop_travel_stops_tilt_departing_endpoint(self, hass, tilt_motor):
+        """A tilt move just leaving 100 must stop even while its tracker reads 100."""
+        cover = _get_cover_entity(hass)
+        await cover.set_known_position(position=50)
+        await cover.set_known_tilt_position(tilt_position=100)
+        with patch("time.time", return_value=1000):
+            await hass.services.async_call(
+                "cover",
+                "set_cover_tilt_position",
+                {"entity_id": cover.entity_id, "tilt_position": 30},
+                blocking=True,
+            )
+            await hass.async_block_till_done()
+            assert tilt_motor.direction == "close"
+            assert cover.tilt_calc.is_traveling()
+            assert cover.tilt_calc.current_position() == 100
+            tilt_motor.calls.clear()
+
+            await hass.services.async_call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": cover.entity_id, "position": 50},
+                blocking=True,
+            )
+            await hass.async_block_till_done()
+            assert tilt_motor.direction is None, tilt_motor.calls
+            assert not cover.tilt_calc.is_traveling()
+            if tilt_motor.mode != "switch":
+                assert cover._last_tilt_direction is None
+
+    @pytest.mark.parametrize("control_mode", ["toggle", "toggle_opposite"])
+    async def test_noop_travel_does_not_repulse_tilt_arrived_at_endpoint(
+        self, hass, tilt_motor
+    ):
+        """Arrival before the auto-updater tick must leave a self-stopped motor idle."""
+        cover = _get_cover_entity(hass)
+        await cover.set_known_position(position=50)
+        await cover.set_known_tilt_position(tilt_position=50)
+        mt = MockTime()
+        with patch("time.time", mt.time):
+            await hass.services.async_call(
+                "cover",
+                "set_cover_tilt_position",
+                {"entity_id": cover.entity_id, "tilt_position": 100},
+                blocking=True,
+            )
+            await hass.async_block_till_done()
+            assert tilt_motor.direction == "open"
+            assert cover.tilt_calc.is_traveling()
+
+            # The motor self-stops at its limit before the next updater tick.
+            mt.advance(3)
+            tilt_motor.direction = None
+            assert cover.tilt_calc.current_position() == 100
+            assert not cover.tilt_calc.is_traveling()
+            assert cover._moving_tilt_motor
+            tilt_motor.calls.clear()
+
+            for _ in range(2):
+                await hass.services.async_call(
+                    "cover",
+                    "set_cover_position",
+                    {"entity_id": cover.entity_id, "position": 50},
+                    blocking=True,
+                )
+                await hass.async_block_till_done()
+
+            assert tilt_motor.calls == []
+            assert tilt_motor.direction is None
+            assert not cover.tilt_calc.is_traveling()
+            assert cover._last_tilt_direction is None

@@ -1,22 +1,21 @@
-"""Tilt direction changes must be axis-aware and settle before reversing.
+"""Tilt commands stop the correct motor and settle before reversing.
 
-Three probe-confirmed defects, one coherent fix:
+Covers four aspects of tilt movement:
 
-1. Wrong-axis stop: a tilt-only direction change sent a *travel* STOP keyed off a
-   stale ``_last_command``; on toggle hardware that pulses an idle travel relay
-   (a #153-class phantom travel).
-2. No stop at all on an endpoint-funnel tilt reversal (and a
-   ``current_tilt == target`` early-return that swallowed a mid-animation press).
-3. No ``_settle_before_reversing`` gap on a tilt reversal.
-
-``DUAL`` is redefined here (same dict as ``tests/test_tilt_stop.py``'s) — the
-duplication is intentional per the plan.
+1. A tilt-only reversal leaves idle travel relays untouched.
+2. Endpoint-funnel reversals stop the motor, including when the new target
+   matches the tracker's current position.
+3. Tilt reversals wait for the motor to settle before changing direction.
+4. Commands during tilt restore preserve the axis and direction of that move
+   (TestTiltCommandMidRestore).
 """
 
 import asyncio
 from unittest.mock import patch
 
 import pytest
+
+from tests.helpers import relay_calls
 
 DUAL = {
     "tilt_time_close": 5.0,
@@ -25,6 +24,14 @@ DUAL = {
     "tilt_open_switch": "switch.tilt_open",
     "tilt_close_switch": "switch.tilt_close",
 }
+
+
+TRAVEL_RELAYS = ("switch.open", "switch.close")
+
+
+def _travel_calls(cover, start=0):
+    """Return travel-relay services and entity IDs after the call watermark."""
+    return [c for c in relay_calls(cover, start) if c[1] in TRAVEL_RELAYS]
 
 
 @pytest.mark.asyncio
@@ -52,12 +59,7 @@ async def test_toggle_opposite_tilt_direction_change_pulses_idle_travel_relay(
         # 2. user drags tilt slider the other way -> direction change
         await cover.set_tilt_position(100)
 
-    travel_pulses = [
-        c
-        for c in cover.hass.services.async_call.call_args_list[n:]
-        if c.args[1] == "turn_on"
-        and c.args[2].get("entity_id") in ("switch.open", "switch.close")
-    ]
+    travel_pulses = [c for c in _travel_calls(cover, n) if c[0] == "turn_on"]
     assert travel_pulses == [], (
         f"BUG: travel relay pulsed during tilt-only direction change: {travel_pulses}"
     )
@@ -137,10 +139,7 @@ async def test_set_position_during_shared_motor_tilt_does_not_repulse(make_cover
         assert cover.tilt_calc.is_traveling()
         n = len(cover.hass.services.async_call.call_args_list)
         await cover.set_position(80)  # same direction
-    calls = [
-        (c[0][1], c[0][2].get("entity_id"))
-        for c in cover.hass.services.async_call.call_args_list[n:]
-    ]
+    calls = _travel_calls(cover, n)
     assert ("turn_on", "switch.open") not in calls, calls
     assert cover.travel_calc.is_traveling()  # retargeted, not re-pulsed
 
@@ -188,12 +187,7 @@ async def test_tilt_restore_at_endpoint_sends_no_travel_pulse(make_cover):
                 and not cover.tilt_calc.is_traveling()
             ):
                 break
-    travel_pulses = [
-        (c[0][1], c[0][2].get("entity_id"))
-        for c in cover.hass.services.async_call.call_args_list
-        if c[0][1] == "turn_on"
-        and c[0][2].get("entity_id") in ("switch.open", "switch.close")
-    ]
+    travel_pulses = [c for c in _travel_calls(cover) if c[0] == "turn_on"]
     # exactly the initial close pulse — no restore-boundary stop pulse
     assert travel_pulses == [("turn_on", "switch.close")], travel_pulses
 
@@ -209,9 +203,100 @@ async def test_abandon_tilt_prestep_sends_no_travel_pulse(make_cover):
         assert not cover.travel_calc.is_traveling()  # travel motor idle
         n = len(cover.hass.services.async_call.call_args_list)
         await cover.set_position(70)  # abandons the pre-step
-    calls = [
-        (c[0][1], c[0][2].get("entity_id"))
-        for c in cover.hass.services.async_call.call_args_list[n:]
-    ]
+    calls = _travel_calls(cover, n)
     unexpected = [c for c in calls if c == ("turn_on", "switch.open")]
     assert not unexpected, calls
+
+
+# ---------------------------------------------------------------------------
+# A dual-motor tilt restore drives only the tilt motor, so the finished travel
+# command must not stay on record: it would make a mid-restore tilt command read
+# as a direction change and stop the wrong axis.
+# ---------------------------------------------------------------------------
+
+
+async def _drive_to_restore(cover):
+    """Park a dual-motor cover mid tilt-restore.
+
+    pos 20 / tilt 50 -> set_position(80):
+      1. dual-motor pre-step drives tilt 50 -> 100 (safe position),
+      2. travel runs 20 -> 80 (OPEN), restore target = the original tilt 50,
+      3. travel completes -> _start_tilt_restore drives the tilt motor 100 -> 50.
+    """
+    cover.travel_calc.set_position(20)
+    cover.tilt_calc.set_position(50)
+
+    await cover.set_position(80)
+    assert cover._pending_travel_target == 80, "expected the dual-motor tilt pre-step"
+
+    cover.tilt_calc.set_position(100)  # pre-step reaches the safe position
+    await cover.auto_stop_if_necessary()  # -> _start_pending_travel
+    assert cover._tilt_restore_target == 50
+    assert cover.travel_calc.is_traveling()
+
+    cover.travel_calc.set_position(80)  # travel reaches its target
+    await cover.auto_stop_if_necessary()  # -> _start_tilt_restore
+    assert cover._tilt_restore_active, "restore phase should be live"
+    assert cover.tilt_calc.is_traveling(), "tilt motor should be running the restore"
+
+
+class TestTiltCommandMidRestore:
+    """A tilt command arriving while the dual-motor tilt restore runs."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("control_mode", ["toggle_opposite", "toggle"])
+    async def test_tilt_command_mid_restore_does_not_pulse_travel_relay(
+        self, make_cover, control_mode
+    ):
+        """A tilt command during the restore must not touch a TRAVEL relay.
+
+        The restore is driving tilt 100 -> 50; the user then asks for tilt 20 — the
+        SAME direction (closing), not a reversal of anything.  Nothing about that
+        involves the travel motor, which is parked at 80%.
+        """
+        cover = make_cover(control_mode=control_mode, **DUAL)
+        with patch.object(cover, "async_write_ha_state"):
+            await _drive_to_restore(cover)
+
+            # The restore phase owns the tilt motor alone; the travel command is
+            # finished and must no longer be on record.
+            assert cover._last_command is None
+
+            n = len(cover.hass.services.async_call.call_args_list)
+            await cover.set_tilt_position(20)  # same direction as the running restore
+
+        pulses = [c for c in _travel_calls(cover, n) if c[0] == "turn_on"]
+        assert pulses == [], (
+            f"travel relay pulsed by a tilt command mid-restore: {pulses}"
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("control_mode", ["toggle", "toggle_opposite", "switch"])
+    async def test_tilt_command_mid_restore_is_not_a_direction_change(
+        self, make_cover, control_mode
+    ):
+        """A same-direction tilt move mid-restore must not read as a reversal.
+
+        Mode-independent: ``_is_direction_change`` compares the tilt command
+        against ``_last_command``, so a stale travel command there turns a
+        continuation into a reversal.
+        """
+        cover = make_cover(control_mode=control_mode, **DUAL)
+        seen = {}
+        orig = cover._stop_displaced_movement_for_tilt
+
+        async def spy(was_tilt_motor_move):
+            seen["called"] = True
+            seen["was_tilt_motor_move"] = was_tilt_motor_move
+            await orig(was_tilt_motor_move)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await _drive_to_restore(cover)
+            with patch.object(cover, "_stop_displaced_movement_for_tilt", spy):
+                await cover.set_tilt_position(20)
+
+        assert not seen.get("called"), (
+            "tilt 100->50 restore + tilt->20 (same direction) took the "
+            "direction-change branch; _stop_displaced_movement_for_tilt called with "
+            f"was_tilt_motor_move={seen.get('was_tilt_motor_move')}"
+        )

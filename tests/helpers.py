@@ -27,3 +27,11 @@ def single_button_sleep_patch(**kwargs):
         "custom_components.cover_time_based.cover_single_button_mode.sleep",
         **(kwargs or {"new_callable": AsyncMock}),
     )
+
+
+def relay_calls(cover, start=0) -> list[tuple[str, str]]:
+    """Return service names and entity IDs in call order after the watermark."""
+    return [
+        (c.args[1], c.args[2].get("entity_id"))
+        for c in cover.hass.services.async_call.call_args_list[start:]
+    ]

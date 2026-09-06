@@ -173,3 +173,100 @@ test("selecting reliable clears every report-interpretation flag", async () => {
     ignore_all_reports: false,
   });
 });
+
+// ---------------------------------------------------------------------------
+// Legacy entries written before the dropdown replaced the four independent
+// booleans can carry both `ignore_reported_position` and
+// `reports_command_not_endpoint`. The dropdown shows them as command_echo, and
+// writing that profile clears the other flag — lossless, because a command-echo
+// cover ignores the reported position on every channel anyway.
+// ---------------------------------------------------------------------------
+
+const legacyCombinedCfg = (over = {}) =>
+  wrappedCfg({
+    ignore_reported_position: true,
+    reports_command_not_endpoint: true,
+    ignore_endpoint_states: false,
+    ignore_all_reports: false,
+    travel_time_open: 20,
+    travel_time_close: 20,
+    ...over,
+  });
+
+const mountLegacy = (hass = makeHass(), over = {}) =>
+  mountCard(hass, {
+    selectedEntity: "cover.x",
+    config: legacyCombinedCfg(over),
+    activeTab: "device",
+  });
+
+test("both legacy flags render as command_echo", async () => {
+  card = await mountLegacy();
+  expect(selectedValue(select(card))).toBe("command_echo");
+  // There is deliberately no option expressing "command echo AND position
+  // unreliable": command_echo already implies it.
+  expect([...select(card).options].map((o) => o.value)).toEqual([
+    "reliable",
+    "unreliable",
+    "no_endpoints",
+    "command_echo",
+    "ignore_all",
+  ]);
+});
+
+test("mounting the card does not rewrite the booleans", async () => {
+  const hass = makeHass();
+  card = await mountLegacy(hass);
+  expect(card._config.ignore_reported_position).toBe(true);
+  expect(card._config.reports_command_not_endpoint).toBe(true);
+  expect(hass.callWS).not.toHaveBeenCalledWith(
+    expect.objectContaining({ type: "cover_time_based/update_config" }),
+  );
+});
+
+test("saving an unrelated field round-trips both legacy flags intact", async () => {
+  const hass = makeHass();
+  card = await mountLegacy(hass);
+
+  card._updateLocal({ travel_time_open: 25 }); // an unrelated edit
+  await card._autoSave();
+
+  expect(hass.callWS).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "cover_time_based/update_config",
+      travel_time_open: 25,
+      ignore_reported_position: true,
+      reports_command_not_endpoint: true,
+    }),
+  );
+});
+
+test("re-selecting command_echo on a legacy entry drops ignore_reported_position", async () => {
+  const hass = makeHass();
+  card = await mountLegacy(hass);
+  const sel = select(card);
+  sel.value = "command_echo"; // the profile already shown
+  sel.dispatchEvent(new Event("change"));
+  await card.updateComplete;
+  await card._autoSave();
+
+  // Intentional: the backend treats command-echo as a superset of "position
+  // unreliable" — it ignores a reported position on both live channels and at
+  // startup — so normalising the pair to the single profile loses nothing.
+  expect(hass.callWS).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "cover_time_based/update_config",
+      reports_command_not_endpoint: true,
+      ignore_reported_position: false,
+    }),
+  );
+});
+
+test("ignore_endpoint_states + ignore_reported_position collapses to no_endpoints", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg({ ignore_endpoint_states: true, ignore_reported_position: true }),
+    activeTab: "device",
+  });
+  expect(selectedValue(select(card))).toBe("no_endpoints");
+});

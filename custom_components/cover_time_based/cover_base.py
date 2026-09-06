@@ -231,6 +231,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._moving_tilt = False
         self._state = True
         self._pending_switch = {}
+        # What we last commanded a latching relay to be, held only while that
+        # command's echo is still outstanding (see _relay_is_on).
+        self._relay_intent: dict[str, bool] = {}
         self._pending_switch_timers = {}
         # Absolute monotonic expiry per entity, so a re-mark can never shorten
         # an outstanding window (see _mark_switch_pending).
@@ -376,6 +379,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             timer()
         self._pending_switch_timers.clear()
         self._pending_switch_deadlines.clear()
+        self._relay_intent.clear()
         # Cancel the two ghost timers: the endpoint run-on stop and the
         # startup-delay arming. Left alive across a reload (every card save
         # reloads the entry) they later fire real relay commands against the
@@ -510,6 +514,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt (inline/sequential) has no separate motor — its tilt phase IS the
         travel motor running — so the cover-level property is retained there to
         keep settle-before-reverse.
+
+        Opposite-button handlers must judge physical motion without this pending
+        direction: see ``ToggleOppositeModeCover._motor_opening``.
         """
         if not self._has_tilt_motor():
             return self.is_opening
@@ -1360,6 +1367,40 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             if self._tilt_strategy is not None and self._tilt_strategy.uses_tilt_motor:
                 await self._send_tilt_stop()
 
+    async def _release_displaced_tilt_motor(self, was_tilt_motor_move: bool) -> None:
+        """Stop a dedicated tilt motor that a travel command displaced but
+        never took over.
+
+        The caller captures ``_moving_tilt_motor`` before
+        ``_abandon_active_lifecycle`` clears it. Unless a tilt-to-safe pre-step
+        takes over, every exit must release that motor: auto-stop can no longer
+        identify it from the cleared flag. The caller handles the travel relay.
+
+        The tracker's travelling flag distinguishes departure from arrival,
+        not its position: a motor leaving an endpoint still needs a real stop.
+        A tracker that has arrived settles without re-pulsing a momentary
+        relay at its limit. A feedback-wait tilt whose tracker sits at an
+        endpoint also settles because tracking has not started yet. Cancel
+        any deferred start so a late relay confirmation cannot restart tracking
+        after the motor is released.
+
+        External travel presses leave the independent tilt motor running, so
+        ``_triggered_externally`` prevents echoing a stop to that motor, just as
+        it does in ``_abandon_active_lifecycle``.
+        """
+        if not was_tilt_motor_move or self._triggered_externally:
+            return
+        self._log("_release_displaced_tilt_motor :: stopping displaced tilt motor")
+        self._cancel_startup_delay_task()
+        departing = self.tilt_calc.is_traveling()
+        self.tilt_calc.stop()
+        self.stop_auto_updater()
+        if departing:
+            await self._send_tilt_stop()
+        else:
+            await self._tilt_settle()
+        self._on_tilt_motor_move_complete()
+
     async def async_stop_cover(
         self, *, supersede: bool = True, tilt_axis_reported: bool = False, **kwargs
     ):
@@ -1695,6 +1736,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             await self.set_tilt_position(articulated)
             return
 
+        # Capture before _abandon_active_lifecycle resets it — see
+        # _release_displaced_tilt_motor.
+        was_tilt_motor_move = self._moving_tilt_motor
         await self._abandon_active_lifecycle()
 
         closing = target == 0
@@ -1711,6 +1755,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 await self._neutralize_parked_move()
                 await self._async_handle_command(SERVICE_STOP_COVER)
                 self._last_command = None
+                await self._release_displaced_tilt_motor(was_tilt_motor_move)
                 # Silent: no travel started. _movement_started must read this
                 # as "not started" — see its docstring.
                 return
@@ -1718,6 +1763,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 self._log(
                     "_async_move_to_endpoint :: startup delay already active, not restarting"
                 )
+                await self._release_displaced_tilt_motor(was_tilt_motor_move)
                 # Silent: no travel started. _movement_started must read this
                 # as "not started" — see its docstring.
                 return
@@ -1754,6 +1800,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 )
             else:
                 await self._async_handle_command(SERVICE_STOP_COVER)
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             # Silent: a relay resync fires here, but travel_calc never enters
             # "traveling" — _movement_started must still read this as "not
             # started". Not reachable from _force_full_redrive (it seeds the
@@ -1807,6 +1854,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
         if started:
             return
+
+        # No pre-step took over: release tilt before energising the travel relay.
+        await self._release_displaced_tilt_motor(was_tilt_motor_move)
 
         if not suppress_start_command:
             await self._async_handle_command(command)
@@ -2064,6 +2114,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 "set_position :: forced endpoint redrive did not start, moving directly"
             )
         self._self_initiated_movement = not self._triggered_externally
+        # Capture before _abandon_active_lifecycle resets it — see
+        # _release_displaced_tilt_motor.
+        was_tilt_motor_move = self._moving_tilt_motor
         await self._abandon_active_lifecycle()
         current = self.travel_calc.current_position()
         target = position
@@ -2084,6 +2137,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         elif target > current:
             command = SERVICE_OPEN_COVER
         else:
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return
 
         closing = command == SERVICE_CLOSE_COVER
@@ -2092,6 +2146,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             command
         )
         if not should_proceed:
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return
 
         # A shared-motor (inline/sequential) tilt move drives the same physical
@@ -2105,6 +2160,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             and self.tilt_calc.is_traveling()
         )
 
+        # A running dedicated tilt motor never reaches this branch:
+        # shared_motor_tilt_traveling excludes uses_tilt_motor strategies by
+        # construction, and every tilt-motor entry point stops travel_calc on
+        # its way in — so was_tilt_motor_move implies neither condition holds.
         if is_direction_change and (
             self.travel_calc.is_traveling() or shared_motor_tilt_traveling
         ):
@@ -2134,6 +2193,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             "set_position",
             is_recalibrated_leg=not recalibrate,
         ):
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return
 
         self._last_command = command
@@ -2159,6 +2219,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
         if started:
             return
+
+        # No pre-step took the tilt motor over — see _async_move_to_endpoint's
+        # equivalent site.
+        await self._release_displaced_tilt_motor(was_tilt_motor_move)
 
         coupled_calc = self.tilt_calc if tilt_target is not None else None
 
@@ -3566,6 +3630,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # travel motor self-stopped if travel just reached an endpoint, so
             # gate the stop (a pulse there re-opens the cover untracked — #153).
             await self._stop_travel_relay_if_needed(travel_was_running=True)
+            # Clear only after the stop helper uses _last_command to pick its
+            # relay. Tilt now owns the motion; a stale travel command would
+            # make a mid-restore tilt command pulse the parked travel motor.
+            self._last_command = None
             if self._tilt_restore_superseded(epoch):
                 self._log("_start_tilt_restore :: cancelled before tilt motor start")
                 return
@@ -3821,18 +3889,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         already in the target state. Mark pending=1 per expected echo,
         and only when the relay call will actually flip state. Otherwise
         the orphan pending count consumes the next real state change.
+
+        Whether the turn_off will flip is judged from our own last command
+        while its echo is outstanding (``_relay_is_on``), because HA's state
+        lags a slow relay. The driving relay's ON decision stays on HA's
+        state: it also arms relay feedback for this command.
         """
         self._feedback_armed_entity = None
-        if self._switch_is_on(self._tilt_close_switch_id):
+        if self._relay_is_on(self._tilt_close_switch_id):
             self._mark_switch_pending(self._tilt_close_switch_id, 1)
         if not self._switch_is_on(self._tilt_open_switch_id):
             self._mark_driving_relay_pending(self._tilt_open_switch_id)
+        self._note_relay_intent(self._tilt_close_switch_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_close_switch_id},
             False,
         )
+        self._note_relay_intent(self._tilt_open_switch_id, True)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_on",
@@ -3846,16 +3921,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         See _send_tilt_open for the pending-count rationale.
         """
         self._feedback_armed_entity = None
-        if self._switch_is_on(self._tilt_open_switch_id):
+        if self._relay_is_on(self._tilt_open_switch_id):
             self._mark_switch_pending(self._tilt_open_switch_id, 1)
         if not self._switch_is_on(self._tilt_close_switch_id):
             self._mark_driving_relay_pending(self._tilt_close_switch_id)
+        self._note_relay_intent(self._tilt_open_switch_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_open_switch_id},
             False,
         )
+        self._note_relay_intent(self._tilt_close_switch_id, True)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_on",
@@ -3864,17 +3941,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
     async def _send_tilt_stop(self) -> None:
-        """Send stop to the tilt motor (bypasses position tracker)."""
-        if self._switch_is_on(self._tilt_open_switch_id):
+        """Send stop to the tilt motor (bypasses position tracker).
+
+        See _send_tilt_open for the pending-count rationale.
+        """
+        if self._relay_is_on(self._tilt_open_switch_id):
             self._mark_switch_pending(self._tilt_open_switch_id, 1)
-        if self._switch_is_on(self._tilt_close_switch_id):
+        if self._relay_is_on(self._tilt_close_switch_id):
             self._mark_switch_pending(self._tilt_close_switch_id, 1)
+        self._note_relay_intent(self._tilt_open_switch_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_open_switch_id},
             False,
         )
+        self._note_relay_intent(self._tilt_close_switch_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -3898,6 +3980,30 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Check if a switch entity is currently on."""
         state = self.hass.states.get(entity_id)
         return state is not None and state.state == "on"
+
+    def _relay_is_on(self, entity_id) -> bool:
+        """Whether a latching relay is ON as far as we can tell.
+
+        HA's state lags a slow-reporting relay by seconds, so between our
+        command and its echo HA still shows the old state. A pre-count for
+        the echo our next command will produce has to be decided from what
+        we last told the relay (``_relay_intent``). Intent exists only while
+        an echo is outstanding; without one, HA's state is authoritative.
+        """
+        intent = self._relay_intent.get(entity_id)
+        return self._switch_is_on(entity_id) if intent is None else intent
+
+    def _note_relay_intent(self, entity_id, on: bool) -> None:
+        """Record the commanded state only while this relay has an echo pending.
+
+        Intent answers whether the next command will flip the relay while
+        HA's state lags our command. A send with no outstanding echo leaves
+        HA authoritative, so it records nothing and drops any leftover intent.
+        """
+        if self._pending_switch.get(entity_id, 0) > 0:
+            self._relay_intent[entity_id] = on
+        else:
+            self._relay_intent.pop(entity_id, None)
 
     def _switch_is_optimistic(self, entity_id) -> bool:
         """Whether the underlying switch reports optimistic (assumed) state.
@@ -4043,6 +4149,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         self._pending_switch.pop(entity_id, None)
         self._pending_switch_deadlines.pop(entity_id, None)
+        # No echo outstanding — consumed or timed out — so HA's state is
+        # current again and the recorded intent has done its job.
+        self._relay_intent.pop(entity_id, None)
         timer = self._pending_switch_timers.pop(entity_id, None)
         if timer is not None and cancel_timer:
             timer()
@@ -4074,6 +4183,15 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
         future.set_result(base_ts)
         return True
+
+    async def _on_own_echo_consumed(self, entity_id: str, new_val: str) -> None:
+        """Hook: an event just consumed one of this entity's pending echoes.
+
+        Base is a no-op. Overridden by wrapped covers to drain surplus echoes
+        when the commanded moving state arrives. Runs after relay-feedback
+        resolution so dropping the surplus cannot prevent tracking from starting.
+        """
+        return
 
     async def _wait_for_relay_echo(self, entity_id, timeout):
         """Await ``entity_id``'s ON echo; return its last_changed ts, or None.
@@ -4269,6 +4387,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             )
             if remaining <= self._own_echoes_after_confirming_on:
                 self._resolve_relay_feedback(entity_id, new_val, new_state)
+            await self._on_own_echo_consumed(entity_id, new_val)
             return
 
         if old_val == "off" and self._resolve_relay_feedback(
@@ -4303,6 +4422,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 new_val,
             )
             return
+
+        # Not our echo: someone else moved this relay, so our recorded intent
+        # is stale. Dropped only here — after the calibration and stale-
+        # reappearance guards, both of which mean "this is NOT someone moving
+        # the relay" and must not let a stale retained ``on`` clobber a
+        # correct intent of ours.
+        self._relay_intent.pop(entity_id, None)
 
         # External state change (physical button / remote / HA button).
         # Delegate to mode-specific handlers which start/stop position
