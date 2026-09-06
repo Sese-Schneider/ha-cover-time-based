@@ -36,6 +36,8 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
     # before the movement is torn down, or the motor runs between the two
     # presses with nothing counting it — see _await_confirmation_before_stop.
     _stop_is_a_tap = True
+    # A press's own release OFF follows its confirming ON.
+    _own_echoes_after_confirming_on = 1
 
     def __init__(self, pulse_time, **kwargs):
         super().__init__(**kwargs)
@@ -178,16 +180,13 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             for index, phase in enumerate(phases):
                 if index:
                     await sleep(DIRECTION_CHANGE_DELAY)
-                final = index == len(phases) - 1
-                if armed and final:
-                    # The press's own OFF follows its confirming ON.
-                    self._feedback_own_echoes_after_on = 1
                 if self._wait_for_relay_feedback:
+                    confirming = armed and index == len(phases) - 1
                     self._mark_switch_pending(
                         entity_id,
                         2,
                         timeout=self._armed_echo_window(window)
-                        if armed and final
+                        if confirming
                         else window,
                     )
                 await self.hass.services.async_call(

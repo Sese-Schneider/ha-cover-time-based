@@ -820,14 +820,12 @@ class TestRelayFeedbackArming:
             # while they are outstanding the final press's ON cannot be
             # mistaken for them (see tests/test_relay_feedback.py).
             assert cover._pending_switch.get("switch.button", 0) == 2
-            assert cover._feedback_own_echoes_after_on == 0
             gate.set()
             await _drain(cover)
         assert len(_presses(cover)) == 3
         # Every press's ON + OFF echoes are pre-counted; the final press's ON
         # is the confirmation, followed by its own OFF.
         assert cover._pending_switch.get("switch.button", 0) == 6
-        assert cover._feedback_own_echoes_after_on == 1
 
     @pytest.mark.asyncio
     async def test_single_press_plan_counts_that_press(self):
