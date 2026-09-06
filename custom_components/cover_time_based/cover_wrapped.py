@@ -74,6 +74,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
         self._last_self_command_time: float | None = None
         # The underlying moving state the in-flight command settles into; the
         # echo burst ends there (see _call_cover_service / _after_own_echo).
+        # A safety timeout may leave this set: only pending echoes read it,
+        # and _call_cover_service replaces it before marking the next burst.
         self._echo_terminal_state: str | None = None
         # Set while a command-echo cover is mid-reconnect, so the retained
         # state landing after the stop hop is not replayed as a command
@@ -693,9 +695,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return None
         # A command-echo cover's state and position are echoes of the last
         # command, not measurements: neither report channel trusts them, and
-        # the startup live-sync must not either. This is also what lets the
-        # card's single position-reporting profile stand in for the older
-        # "position unreliable" flag without losing anything.
+        # the startup live-sync must not either.
         if self._reports_command_not_endpoint:
             return None
         state = self.hass.states.get(self._cover_entity_id) if state is None else state
@@ -796,7 +796,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # dropped in _after_own_echo, so it cannot swallow a later genuine
         # report (a wall stop) inside the echo window. One slot serves every
         # command through here: a stop or tilt command sets it to None, which
-        # merely disables the drop (today's behaviour) for the previous burst.
+        # disables the terminal-state drain for the previous burst.
         self._echo_terminal_state = {
             "open_cover": STATE_OPENING,
             "close_cover": STATE_CLOSING,
@@ -808,6 +808,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         )
 
     async def _after_own_echo(self, entity_id: str, new_val: str) -> None:
+        """Drain surplus wrapped echoes once the commanded moving state arrives."""
         if entity_id != self._cover_entity_id or self._echo_terminal_state is None:
             return
         if new_val == self._echo_terminal_state:

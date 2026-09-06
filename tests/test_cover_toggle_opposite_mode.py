@@ -139,13 +139,6 @@ def _no_settle():
     )
 
 
-def _relay_calls(cover, start=0):
-    return [
-        (c[0][1], c[0][2].get("entity_id"))
-        for c in cover.hass.services.async_call.call_args_list[start:]
-    ]
-
-
 async def _start_shared_motor_tilt_close(cover):
     """Drive a tilt-close on a shared motor and return the relay-call watermark.
 
@@ -416,14 +409,18 @@ class TestSharedMotorTiltExternalPress:
     """
 
     @pytest.mark.asyncio
-    async def test_opposite_press_during_shared_motor_tilt_stops(self, make_cover):
+    async def test_opposite_press_during_shared_motor_tilt_stops(
+        self, make_cover, caplog
+    ):
         """The OPPOSITE button halts the motor — it must not start a travel move.
 
         Hardware: the cover is mid tilt-close, driven by the travel motor via
         the close relay. Pressing OPEN pulses the opposite relay, which on
         opposite-button hardware STOPS the motor. The integration must stop
-        tracking and start nothing.
+        tracking and start nothing. Routing through async_open_cover's reversal
+        guard would track a new move against the motor the press already halted.
         """
+        caplog.set_level(logging.DEBUG)
         cover = make_cover(control_mode="toggle_opposite", **SHARED_MOTOR_TILT)
         stub_switches(cover)
         assert not cover._has_tilt_motor()
@@ -435,10 +432,11 @@ class TestSharedMotorTiltExternalPress:
             assert not cover.travel_calc.is_closing()
             assert cover._travel_axis_closing()
 
+            caplog.clear()
             with _no_settle():
                 await cover._async_switch_state_changed(_press("switch.open"))
 
-        assert _relay_calls(cover, watermark) == [], (
+        assert _calls(cover.hass.services.async_call)[watermark:] == [], (
             "no relay should fire: the hardware already acted"
         )
         assert not cover.tilt_calc.is_traveling(), "tilt tracking must stop"
@@ -446,6 +444,12 @@ class TestSharedMotorTiltExternalPress:
             "the motor was halted by the press; the integration must not animate "
             f"a travel move to {cover.travel_calc._travel_to_position}"
         )
+
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("open press while closing, stopping" in m for m in messages), (
+            messages
+        )
+        assert not any("external open press" in m for m in messages), messages
 
     @pytest.mark.asyncio
     async def test_same_direction_press_during_shared_motor_tilt_continues(
@@ -465,40 +469,12 @@ class TestSharedMotorTiltExternalPress:
             with _no_settle():
                 await cover._async_switch_state_changed(_press("switch.close"))
 
-        assert _relay_calls(cover, watermark) == []
+        assert _calls(cover.hass.services.async_call)[watermark:] == []
         assert not cover.travel_calc.is_traveling(), (
             "a same-direction press is a continuation; travel must not start "
             f"(travelling to {cover.travel_calc._travel_to_position})"
         )
         assert cover.tilt_calc.is_traveling(), "the tilt phase keeps running"
-
-    @pytest.mark.asyncio
-    async def test_opposite_press_during_shared_motor_tilt_takes_the_stop_path(
-        self, make_cover, caplog
-    ):
-        """The press is routed to the stop branch, not through the reversal guard.
-
-        Reaching ``async_open_cover`` and relying on the base reversal guard is
-        not equivalent: that guard turns the press into stop-settle-reverse and
-        suppresses the relay command (the trigger is external), leaving the
-        motor stationary while travel_calc animates 50 -> 100.
-        """
-        caplog.set_level(logging.DEBUG)
-        cover = make_cover(control_mode="toggle_opposite", **SHARED_MOTOR_TILT)
-        stub_switches(cover)
-
-        with patch.object(cover, "async_write_ha_state"):
-            await _start_shared_motor_tilt_close(cover)
-            caplog.clear()
-            with _no_settle():
-                await cover._async_switch_state_changed(_press("switch.open"))
-
-        messages = [r.getMessage() for r in caplog.records]
-        assert any("open press while closing, stopping" in m for m in messages), (
-            messages
-        )
-        assert not any("external open press" in m for m in messages), messages
-        assert not cover.travel_calc.is_traveling()
 
 
 class TestDualMotorUnaffected:
@@ -607,6 +583,6 @@ class TestToggleModeContrast:
             with _no_settle():
                 await cover._async_switch_state_changed(_press("switch.close"))
 
-        assert _relay_calls(cover, watermark) == []
+        assert _calls(cover.hass.services.async_call)[watermark:] == []
         assert not cover.tilt_calc.is_traveling()
         assert not cover.travel_calc.is_traveling()

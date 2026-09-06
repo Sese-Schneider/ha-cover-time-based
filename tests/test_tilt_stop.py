@@ -803,8 +803,9 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
         cover = make_cover(control_mode=CONTROL_MODE_SWITCH, **DUAL)
         with patch.object(cover, "async_write_ha_state"):
             n = await _start_plain_tilt_motor_move(cover)
-            cover._triggered_externally = True
-            await cover.async_open_cover()
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.open", "off", "on")
+            )
 
         assert _tilt_switch_calls(cover, n) == [], (
             f"an external travel press touched the tilt relays: "

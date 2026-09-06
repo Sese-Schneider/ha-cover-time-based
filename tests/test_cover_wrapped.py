@@ -106,6 +106,13 @@ def _calls(mock: AsyncMock):
     return mock.call_args_list
 
 
+def _stub_updates(cover):
+    """Keep mock HA from scheduling an auto-updater or publishing state."""
+    cover.start_auto_updater = MagicMock()
+    cover.async_write_ha_state = MagicMock()
+    cover.async_schedule_update_ha_state = MagicMock()
+
+
 def _services(cover):
     """Return the service names called on hass.services.async_call, in order."""
     return [c.args[1] for c in _calls(cover.hass.services.async_call)]
@@ -260,10 +267,7 @@ class TestWrappedSameDirectionRetarget:
     @pytest.mark.asyncio
     async def test_retarget_same_direction_does_not_reissue_command(self):
         cover = _make_wrapped_cover(cover_entity_id="cover.inner")
-        # Avoid scheduling a real auto-updater / writing state on the mock hass.
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)  # fully open
 
         with patch.object(cover, "_send_close", wraps=cover._send_close) as send_close:
@@ -353,17 +357,11 @@ class TestWrappedNativeSetPosition:
     time-based tracker still animates so the integration reports live motion.
     """
 
-    def _prep(self, cover):
-        # Avoid scheduling a real auto-updater / writing state on the mock hass.
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     @pytest.mark.asyncio
     async def test_forwards_set_cover_position_directly(self):
         cover = _make_wrapped_cover()
         _set_wrapped_features(cover, 7)  # OPEN|CLOSE|SET_POSITION, no STOP
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
 
         await cover.set_position(60)
@@ -383,7 +381,7 @@ class TestWrappedNativeSetPosition:
     async def test_does_not_call_open_close_or_stop(self):
         cover = _make_wrapped_cover()
         _set_wrapped_features(cover, 7)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
 
         with (
@@ -401,12 +399,12 @@ class TestWrappedNativeSetPosition:
     async def test_force_time_based_uses_legacy_path(self):
         cover = _make_wrapped_cover(force_time_based_position=True)
         _set_wrapped_features(cover, 7)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
 
         await cover.set_position(60)
 
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert "set_cover_position" not in services
         assert "close_cover" in services
 
@@ -414,12 +412,12 @@ class TestWrappedNativeSetPosition:
     async def test_no_native_support_uses_legacy_path(self):
         cover = _make_wrapped_cover()
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
 
         await cover.set_position(60)
 
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert "set_cover_position" not in services
         assert "close_cover" in services
 
@@ -427,16 +425,11 @@ class TestWrappedNativeSetPosition:
 class TestInvertOutboundSetPosition:
     """Inverted covers forward set_cover_position(100 - p) to the underlying."""
 
-    def _prep(self, cover):
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     @pytest.mark.asyncio
     async def test_native_set_position_is_inverted(self):
         cover = _make_wrapped_cover(invert=True)
         _set_wrapped_features(cover, 7)  # OPEN|CLOSE|SET_POSITION
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
 
         await cover.set_position(30)  # user target 30
@@ -475,7 +468,7 @@ class TestInvertOutboundSetPosition:
     async def test_native_set_position_unchanged_when_invert_off(self):
         cover = _make_wrapped_cover(invert=False)
         _set_wrapped_features(cover, 7)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
 
         await cover.set_position(30)
@@ -721,11 +714,6 @@ class TestIgnoreAllReportsTimedPath:
     ignored no settle-snap is left to reconcile the result.
     """
 
-    def _prep(self, cover):
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     def test_use_native_set_position_is_disabled(self):
         cover = _make_wrapped_cover(ignore_all_reports=True)
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
@@ -749,26 +737,28 @@ class TestIgnoreAllReportsTimedPath:
     async def test_set_position_uses_timed_open_not_native_forward(self):
         cover = _make_wrapped_cover(ignore_all_reports=True)
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
 
         await cover.async_set_cover_position(position=50)
 
-        assert "set_cover_position" not in _services(cover), _services(cover)
-        assert "open_cover" in _services(cover)
+        services = _services(cover)
+        assert "set_cover_position" not in services, services
+        assert "open_cover" in services
 
     @pytest.mark.asyncio
     async def test_force_time_based_control_takes_the_timed_path(self):
         # Control: the sibling option on the identical underlying.
         cover = _make_wrapped_cover(force_time_based_position=True)
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
 
         await cover.async_set_cover_position(position=50)
 
-        assert "set_cover_position" not in _services(cover)
-        assert "open_cover" in _services(cover)
+        services = _services(cover)
+        assert "set_cover_position" not in services
+        assert "open_cover" in services
 
     @pytest.mark.asyncio
     async def test_we_stop_the_move_ourselves_and_reports_never_correct_it(self):
@@ -777,7 +767,7 @@ class TestIgnoreAllReportsTimedPath:
         # changes nothing.
         cover = _make_wrapped_cover(ignore_all_reports=True)
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
 
         await cover.async_set_cover_position(position=50)
@@ -829,12 +819,12 @@ class TestIgnoreAllReportsTimedPath:
             tilt_mode="inline",
         )
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_TILT)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.tilt_calc.set_position(0)
 
         await cover.async_set_cover_tilt_position(tilt_position=50)
 
-        assert "set_cover_tilt_position" not in _services(cover), _services(cover)
+        assert _services(cover) == ["open_cover"]
 
     def test_reported_tilt_is_not_trusted(self):
         cover = _make_wrapped_cover(
@@ -908,10 +898,7 @@ class TestInvertEndToEndOpenClose:
     """
 
     def _prep(self, cover):
-        # Avoid scheduling a real auto-updater / writing state on the mock hass.
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
+        _stub_updates(cover)
         # No native SET_POSITION -> open/close use the timed _send_open/
         # _send_close path (see TestInvertOutboundOpenClose), while the
         # target stays "available" so movement isn't rejected.
@@ -953,16 +940,11 @@ class TestWrappedNativeMoveNoHijack:
     tracker is idle, a genuine external opening/closing is honored again.
     """
 
-    def _prep(self, cover):
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     @pytest.mark.asyncio
     async def test_opening_during_native_move_is_not_hijacked(self):
         cover = _make_wrapped_cover()
         _set_wrapped_features(cover, 7)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
         await cover.set_position(60)  # native; tracker now travelling up
         assert cover.travel_calc.is_traveling()
@@ -981,7 +963,7 @@ class TestWrappedNativeMoveNoHijack:
     async def test_opening_when_idle_is_honored(self):
         cover = _make_wrapped_cover()
         _set_wrapped_features(cover, 7)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)  # idle, not travelling
         cover._last_self_command_time = None
 
@@ -1008,16 +990,11 @@ class TestWrappedTimedMoveNoHijack:
     idle it is honored too (an external press).
     """
 
-    def _prep(self, cover):
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     @pytest.mark.asyncio
     async def test_opening_during_timed_partial_move_is_not_hijacked(self):
         cover = _make_wrapped_cover(force_time_based_position=True)
         _set_wrapped_features(cover, 15, state="closed")
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
         await cover.set_position(4)  # timed; tracker now travelling up to 4%
         assert cover.travel_calc.is_traveling()
@@ -1035,7 +1012,7 @@ class TestWrappedTimedMoveNoHijack:
     async def test_closing_reversal_during_timed_move_is_honored(self):
         cover = _make_wrapped_cover(force_time_based_position=True)
         _set_wrapped_features(cover, 15, state="closed")
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
         await cover.set_position(60)  # timed; travelling up
         assert cover.travel_calc.is_opening()
@@ -1056,7 +1033,7 @@ class TestWrappedTimedMoveNoHijack:
         # report "closing"; that echo must not hijack the move to 0%.
         cover = _make_wrapped_cover(force_time_based_position=True)
         _set_wrapped_features(cover, 15, state="open")
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
         await cover.set_position(96)  # timed; tracker now travelling down to 96%
         assert cover.travel_calc.is_closing()
@@ -1073,7 +1050,7 @@ class TestWrappedTimedMoveNoHijack:
     async def test_opening_when_idle_timed_is_honored(self):
         cover = _make_wrapped_cover(force_time_based_position=True)
         _set_wrapped_features(cover, 15, state="closed")
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)  # idle, not travelling
         cover._last_self_command_time = None
 
@@ -1091,7 +1068,7 @@ class TestWrappedTimedMoveNoHijack:
         # must be suppressed, not drive us to the open endpoint.
         cover = _make_wrapped_cover(force_time_based_position=True, invert=True)
         _set_wrapped_features(cover, 15, state="open")
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
         await cover.set_position(4)  # our-frame up; underlying driven closed
         assert cover.travel_calc.is_opening()
@@ -1174,22 +1151,17 @@ class TestWrappedNativeInheritsBaseCeremony:
     tilt strategy) so tilt covers keep the full tilt-aware time-based path.
     """
 
-    def _prep(self, cover):
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     @pytest.mark.asyncio
     async def test_min_movement_time_suppresses_tiny_native_move(self):
         cover = _make_wrapped_cover()
         _set_wrapped_features(cover, 7)
-        self._prep(cover)
+        _stub_updates(cover)
         cover._min_movement_time = 2.0
         cover.travel_calc.set_position(100)
 
         await cover.set_position(99)  # 1% * 30s = 0.3s < 2s → suppressed
 
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert "set_cover_position" not in services
         assert not cover.travel_calc.is_traveling()
 
@@ -1205,7 +1177,7 @@ class TestWrappedNativeInheritsBaseCeremony:
         await cover.set_position(60)  # forwards once, startup-delay task pending
         await cover.set_position(60)  # same dir while pending → base skips
 
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert services.count("set_cover_position") == 1
         cover._cancel_startup_delay_task()
 
@@ -1246,14 +1218,14 @@ class TestWrappedNativeInheritsBaseCeremony:
     async def test_auto_stop_sends_no_relay_stop_for_native(self):
         cover = _make_wrapped_cover()
         _set_wrapped_features(cover, 7)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
         await cover.set_position(60)  # one set_cover_position so far
         # Tracker arrives at target; auto-stop must not re-command the device.
         cover.travel_calc.set_position(60)
         await cover.auto_stop_if_necessary()
 
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert services == ["set_cover_position"]  # no extra stop_cover / re-set
 
 
@@ -1466,17 +1438,12 @@ class TestNativeTiltForwarding:
     """Native tilt covers forward set_cover_tilt_position and animate tilt_calc,
     and the auto-updater issues no relay stop when the tilt move completes."""
 
-    def _prep(self, cover):
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     def _native_tilt_cover(self):
         cover = _make_wrapped_cover(
             tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
         )
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_TILT)
-        self._prep(cover)
+        _stub_updates(cover)
         return cover
 
     @pytest.mark.asyncio
@@ -1504,7 +1471,7 @@ class TestNativeTiltForwarding:
 
         await cover.async_open_cover_tilt()
 
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert "set_cover_tilt_position" in services
         assert "open_cover_tilt" not in services  # not the dual-motor relay path
 
@@ -1536,7 +1503,7 @@ class TestNativeTiltForwarding:
         cover.tilt_calc.set_position(30)
         await cover.auto_stop_if_necessary()
 
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert "stop_cover" not in services
         assert "close_cover" not in services
 
@@ -1544,11 +1511,6 @@ class TestNativeTiltForwarding:
 class TestTiltSettleSnap:
     """On settle, a native-tilt cover snaps tilt_calc to the device's reported
     current_tilt_position; non-native strategies do not."""
-
-    def _prep(self, cover):
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
 
     @pytest.mark.asyncio
     async def test_snaps_tilt_to_reported_on_settle(self):
@@ -1560,7 +1522,7 @@ class TestTiltSettleSnap:
         )
         st.attributes["current_position"] = 100
         st.attributes["current_tilt_position"] = 45
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(60)  # optimistic/stale
 
@@ -1578,7 +1540,7 @@ class TestTiltSettleSnap:
         )
         st.attributes["current_position"] = 100
         st.attributes["current_tilt_position"] = 45
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
         # SequentialCloseTilt's own (pre-existing, unrelated) snap_trackers_to_
         # physical forces tilt to 100 whenever travel is not at 0 — set tilt to
@@ -1601,7 +1563,7 @@ class TestTiltSettleSnap:
         )
         st.attributes["current_position"] = 100
         st.attributes["current_tilt_position"] = 0
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(50)
 
@@ -1669,11 +1631,6 @@ class TestNativePositionWithNativeTilt:
     """A native-both-inline cover drives position natively too (symmetry);
     timed-tilt strategies keep the timed position path."""
 
-    def _prep(self, cover):
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     def test_native_position_enabled_for_native_both_inline(self):
         cover = _make_wrapped_cover(
             tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
@@ -1703,13 +1660,13 @@ class TestNativePositionWithNativeTilt:
             tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
         )
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_SET_TILT)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(50)
 
         await cover.set_position(60)
 
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert "set_cover_position" in services
         assert "close_cover" not in services and "open_cover" not in services
 
@@ -1718,17 +1675,12 @@ class TestNativeTiltSweep:
     """During a position travel, a native cover's tilt display sweeps to the
     direction endpoint (0 closing, 100 opening); no physical tilt command."""
 
-    def _prep(self, cover):
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     def _native_cover(self):
         cover = _make_wrapped_cover(
             tilt_time_close=5, tilt_time_open=5, tilt_mode="inline"
         )
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_SET_TILT)
-        self._prep(cover)
+        _stub_updates(cover)
         return cover
 
     @pytest.mark.asyncio
@@ -1769,7 +1721,7 @@ class TestNativeTiltSweep:
         assert cover.tilt_calc.is_traveling()
         assert cover.tilt_calc._travel_to_position == 0
         # ...and no physical tilt command was sent (device owns its slats).
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert "set_cover_tilt_position" not in services
         assert "close_cover_tilt" not in services
         assert "open_cover_tilt" not in services
@@ -1782,7 +1734,7 @@ class TestNativeTiltSweep:
         st = _set_wrapped_features(
             cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_SET_TILT
         )
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(100)
         cover.tilt_calc.set_position(80)
 
@@ -1920,12 +1872,6 @@ class TestStartupDelayEchoDoesNotHijackTimedMove:
     commits the move's own bookkeeping only once it starts acting (flag move).
     """
 
-    def _prep(self, cover):
-        # Avoid scheduling a real auto-updater / writing state on the mock hass.
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     @pytest.mark.asyncio
     async def test_echo_during_startup_delay_keeps_flag_and_sends_stop(self):
         # features = 15 == OPEN|CLOSE|SET_POSITION|STOP; force_time_based keeps
@@ -1934,7 +1880,7 @@ class TestStartupDelayEchoDoesNotHijackTimedMove:
             force_time_based_position=True, travel_startup_delay=0.05
         )
         _set_wrapped_features(cover, 15, state="closed")
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
 
         await cover.set_position(50)  # timed partial move, startup delay pending
@@ -1964,7 +1910,7 @@ class TestStartupDelayEchoDoesNotHijackTimedMove:
         # underlying is halted at 50 rather than running on to the endpoint.
         cover.travel_calc.update_position(50)
         await cover.auto_stop_if_necessary()
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert "stop_cover" in services
 
     @pytest.mark.asyncio
@@ -1974,7 +1920,7 @@ class TestStartupDelayEchoDoesNotHijackTimedMove:
             force_time_based_position=True, travel_startup_delay=0.05
         )
         _set_wrapped_features(cover, 15, state="closed")
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
 
         await cover.set_position(50)
@@ -1983,7 +1929,7 @@ class TestStartupDelayEchoDoesNotHijackTimedMove:
 
         cover.travel_calc.update_position(50)
         await cover.auto_stop_if_necessary()
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert "stop_cover" in services
 
     @pytest.mark.asyncio
@@ -1999,7 +1945,7 @@ class TestStartupDelayEchoDoesNotHijackTimedMove:
             force_time_based_position=True, travel_startup_delay=0.05
         )
         _set_wrapped_features(cover, 15, state="closed")
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
 
         await cover.set_position(50)  # self-initiated open, startup delay pending
@@ -2032,11 +1978,6 @@ class TestRedundantReportDuringStartupDelay:
     original target — the cover runs on instead of stopping.
     """
 
-    def _prep(self, cover):
-        cover.start_auto_updater = MagicMock()
-        cover.async_write_ha_state = MagicMock()
-        cover.async_schedule_update_ha_state = MagicMock()
-
     @pytest.mark.asyncio
     async def test_reversal_survives_redundant_report_in_startup_window(self):
         # features = 15 == OPEN|CLOSE|SET_POSITION|STOP; force_time_based keeps
@@ -2045,7 +1986,7 @@ class TestRedundantReportDuringStartupDelay:
             force_time_based_position=True, travel_startup_delay=1.5
         )
         st = _set_wrapped_features(cover, 15, state="closed", current_position=0)
-        self._prep(cover)
+        _stub_updates(cover)
         cover.travel_calc.set_position(0)
 
         await cover.async_set_cover_position(position=40)
@@ -2061,7 +2002,7 @@ class TestRedundantReportDuringStartupDelay:
         cover.hass.services.async_call.reset_mock()
         await cover.async_close_cover()
 
-        services = [c.args[1] for c in _calls(cover.hass.services.async_call)]
+        services = _services(cover)
         assert "stop_cover" in services
         assert cover._startup_delay_task is None or cover._startup_delay_task.done()
 
@@ -2271,9 +2212,7 @@ def _make_reversing_cover():
     (and therefore _send_underlying_open/close) drives the move.
     """
     cover = _make_wrapped_cover()
-    cover.start_auto_updater = MagicMock()
-    cover.async_write_ha_state = MagicMock()
-    cover.async_schedule_update_ha_state = MagicMock()
+    _stub_updates(cover)
     st = _set_wrapped_features(
         cover, _F_OPEN | _F_CLOSE | _F_STOP, state="closing", current_position=60
     )

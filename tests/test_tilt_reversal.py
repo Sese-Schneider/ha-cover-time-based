@@ -27,6 +27,18 @@ DUAL = {
 }
 
 
+TRAVEL_RELAYS = ("switch.open", "switch.close")
+
+
+def _travel_calls(cover, start=0):
+    """Return travel-relay services and entity IDs after the call watermark."""
+    return [
+        (c.args[1], c.args[2].get("entity_id"))
+        for c in cover.hass.services.async_call.call_args_list[start:]
+        if c.args[2].get("entity_id") in TRAVEL_RELAYS
+    ]
+
+
 @pytest.mark.asyncio
 async def test_toggle_opposite_tilt_direction_change_pulses_idle_travel_relay(
     make_cover,
@@ -52,12 +64,7 @@ async def test_toggle_opposite_tilt_direction_change_pulses_idle_travel_relay(
         # 2. user drags tilt slider the other way -> direction change
         await cover.set_tilt_position(100)
 
-    travel_pulses = [
-        c
-        for c in cover.hass.services.async_call.call_args_list[n:]
-        if c.args[1] == "turn_on"
-        and c.args[2].get("entity_id") in ("switch.open", "switch.close")
-    ]
+    travel_pulses = [c for c in _travel_calls(cover, n) if c[0] == "turn_on"]
     assert travel_pulses == [], (
         f"BUG: travel relay pulsed during tilt-only direction change: {travel_pulses}"
     )
@@ -137,10 +144,7 @@ async def test_set_position_during_shared_motor_tilt_does_not_repulse(make_cover
         assert cover.tilt_calc.is_traveling()
         n = len(cover.hass.services.async_call.call_args_list)
         await cover.set_position(80)  # same direction
-    calls = [
-        (c[0][1], c[0][2].get("entity_id"))
-        for c in cover.hass.services.async_call.call_args_list[n:]
-    ]
+    calls = _travel_calls(cover, n)
     assert ("turn_on", "switch.open") not in calls, calls
     assert cover.travel_calc.is_traveling()  # retargeted, not re-pulsed
 
@@ -188,12 +192,7 @@ async def test_tilt_restore_at_endpoint_sends_no_travel_pulse(make_cover):
                 and not cover.tilt_calc.is_traveling()
             ):
                 break
-    travel_pulses = [
-        (c[0][1], c[0][2].get("entity_id"))
-        for c in cover.hass.services.async_call.call_args_list
-        if c[0][1] == "turn_on"
-        and c[0][2].get("entity_id") in ("switch.open", "switch.close")
-    ]
+    travel_pulses = [c for c in _travel_calls(cover) if c[0] == "turn_on"]
     # exactly the initial close pulse — no restore-boundary stop pulse
     assert travel_pulses == [("turn_on", "switch.close")], travel_pulses
 
@@ -209,10 +208,7 @@ async def test_abandon_tilt_prestep_sends_no_travel_pulse(make_cover):
         assert not cover.travel_calc.is_traveling()  # travel motor idle
         n = len(cover.hass.services.async_call.call_args_list)
         await cover.set_position(70)  # abandons the pre-step
-    calls = [
-        (c[0][1], c[0][2].get("entity_id"))
-        for c in cover.hass.services.async_call.call_args_list[n:]
-    ]
+    calls = _travel_calls(cover, n)
     unexpected = [c for c in calls if c == ("turn_on", "switch.open")]
     assert not unexpected, calls
 
@@ -222,17 +218,6 @@ async def test_abandon_tilt_prestep_sends_no_travel_pulse(make_cover):
 # command must not stay on record: it would make a mid-restore tilt command read
 # as a direction change and stop the wrong axis.
 # ---------------------------------------------------------------------------
-
-
-TRAVEL_RELAYS = ("switch.open", "switch.close")
-
-
-def _travel_calls(cover, start=0):
-    return [
-        (c.args[1], c.args[2].get("entity_id"))
-        for c in cover.hass.services.async_call.call_args_list[start:]
-        if c.args[2].get("entity_id") in TRAVEL_RELAYS
-    ]
 
 
 async def _drive_to_restore(cover):
@@ -264,15 +249,9 @@ class TestTiltCommandMidRestore:
     """A tilt command arriving while the dual-motor tilt restore runs."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "control_mode,expected_pulse",
-        [
-            ("toggle_opposite", ("turn_on", "switch.close")),
-            ("toggle", ("turn_on", "switch.open")),
-        ],
-    )
+    @pytest.mark.parametrize("control_mode", ["toggle_opposite", "toggle"])
     async def test_tilt_command_mid_restore_does_not_pulse_travel_relay(
-        self, make_cover, control_mode, expected_pulse
+        self, make_cover, control_mode
     ):
         """A tilt command during the restore must not touch a TRAVEL relay.
 
@@ -293,8 +272,7 @@ class TestTiltCommandMidRestore:
 
         pulses = [c for c in _travel_calls(cover, n) if c[0] == "turn_on"]
         assert pulses == [], (
-            f"travel relay pulsed by a tilt command mid-restore: {pulses} "
-            f"(the phantom would be {expected_pulse})"
+            f"travel relay pulsed by a tilt command mid-restore: {pulses}"
         )
 
     @pytest.mark.asyncio

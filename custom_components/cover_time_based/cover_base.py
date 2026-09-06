@@ -514,6 +514,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         tilt (inline/sequential) has no separate motor — its tilt phase IS the
         travel motor running — so the cover-level property is retained there to
         keep settle-before-reverse.
+
+        Opposite-button handlers must judge physical motion without this pending
+        direction: see ``ToggleOppositeModeCover._motor_opening``.
         """
         if not self._has_tilt_motor():
             return self.is_opening
@@ -1368,31 +1371,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Stop a dedicated tilt motor that a travel command displaced but
         never took over.
 
-        The travel funnels clear ``_moving_tilt_motor`` on entry (via
-        ``_abandon_active_lifecycle``), so the caller captures the flag first
-        and passes it in. A tilt-to-safe pre-step that starts takes the motor
-        over and must not call this; every other way out of a travel funnel —
-        an early return (a resync at the current position, a ``set_position``
-        to where the cover already is or one rejected as too short, a
-        startup-delay no-op) or a travel that starts with no pre-step because
-        tilt is already safe — would otherwise leave the tilt relay latched
-        with nothing left to stop it: ``auto_stop_if_necessary`` decides on
-        ``_moving_tilt_motor``, already cleared, so it takes the travel branch
-        and the orphaned tilt move never gets its relay de-energized. Tilt half
-        only: the travel relay is the caller's business (a resync re-drives it
-        on purpose).
+        The caller captures ``_moving_tilt_motor`` before
+        ``_abandon_active_lifecycle`` clears it. Unless a tilt-to-safe pre-step
+        takes over, every exit must release that motor: auto-stop can no longer
+        identify it from the cleared flag. The caller handles the travel relay.
 
-        Unlike ``_stop_displaced_movement_for_tilt`` (a tilt *reversal*), this
-        settles rather than sending a bare tilt stop, so a momentary relay is
-        not re-pulsed at a tilt endpoint; and it cancels a pending deferred
-        start, which under relay feedback is this very tilt move waiting for
-        its relay's confirmation.
+        Settle instead of sending a bare tilt stop so a momentary relay is not
+        re-pulsed at its endpoint. Cancel any deferred start so a late relay
+        confirmation cannot restart tracking after the motor is released.
 
-        Gated on ``_triggered_externally`` like ``_abandon_active_lifecycle``'s
-        own tilt stop: a wall press on the travel button did not de-energize
-        the tilt relay, so echoing a stop at it would stop a motor the user
-        left running — on momentary hardware by pulsing its relay. The
-        integration releases only a motor it is itself displacing.
+        External travel presses leave the independent tilt motor running, so
+        ``_triggered_externally`` prevents echoing a stop to that motor, just as
+        it does in ``_abandon_active_lifecycle``.
         """
         if not was_tilt_motor_move or self._triggered_externally:
             return
@@ -1857,11 +1847,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if started:
             return
 
-        # No pre-step took the tilt motor over, so this travel command displaces
-        # it: release it before energising the travel relay, or the tilt relay
-        # stays latched right through the travel with nothing left to stop it —
-        # auto_stop_if_necessary reads the already-cleared _moving_tilt_motor
-        # and takes the travel branch.
+        # No pre-step took over: release tilt before energising the travel relay.
         await self._release_displaced_tilt_motor(was_tilt_motor_move)
 
         if not suppress_start_command:
@@ -3642,12 +3628,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             # travel motor self-stopped if travel just reached an endpoint, so
             # gate the stop (a pulse there re-opens the cover untracked — #153).
             await self._stop_travel_relay_if_needed(travel_was_running=True)
-            # The travel phase is over and its relay handled above (which is
-            # why the clear comes after it: the stop helper picks the relay
-            # from _last_command). From here the tilt motor is the only thing
-            # moving; a stale travel command would make a tilt command
-            # mid-restore read as a direction change and pulse a parked travel
-            # relay (#153).
+            # Clear only after the stop helper uses _last_command to pick its
+            # relay. Tilt now owns the motion; a stale travel command would
+            # make a mid-restore tilt command pulse the parked travel motor.
             self._last_command = None
             if self._tilt_restore_superseded(epoch):
                 self._log("_start_tilt_restore :: cancelled before tilt motor start")
