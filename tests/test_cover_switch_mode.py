@@ -14,6 +14,7 @@ from custom_components.cover_time_based.cover import (
     CONTROL_MODE_TOGGLE,
 )
 from custom_components.cover_time_based.cover_switch_mode import SwitchModeCover
+from tests.helpers import stub_switches
 
 # ---------------------------------------------------------------------------
 # Factory
@@ -389,3 +390,92 @@ class TestNonSwitchModesHaveNoInterlock:
             await cover._handle_external_state_change("switch.open", "off", "on")
 
         assert cover.hass.services.async_call.call_count == 0
+
+
+def _state_event(entity_id, old_val, new_val):
+    """A state_changed event for ``entity_id``, as the listener receives it."""
+    event = MagicMock()
+    old = MagicMock()
+    old.state = old_val
+    new = MagicMock()
+    new.state = new_val
+    event.data = {"entity_id": entity_id, "old_state": old, "new_state": new}
+    return event
+
+
+class TestSwitchModeRelayIntent:
+    """A slow relay's HA state lags our command, so the pre-count for the echo
+    the next command will produce is decided from what we last commanded."""
+
+    @pytest.mark.asyncio
+    async def test_stop_after_lagging_open_precounts_the_off_echo(self):
+        """HA still shows both relays OFF when the stop lands, but the open
+        relay is physically ON because we energized it, so its OFF echo must
+        be pre-counted — otherwise it dispatches as a wall-switch release."""
+        cover = _make_switch_cover()
+        stub_switches(cover)
+
+        with patch(_CALL_LATER, return_value=MagicMock()):
+            await cover._send_open()
+            await cover._send_stop()
+
+        assert cover._pending_switch["switch.open"] == 2
+        assert cover._pending_switch.get("switch.close", 0) == 0
+
+    @pytest.mark.asyncio
+    async def test_external_relay_event_clears_intent(self):
+        """Someone else moved the relay: what we last commanded says nothing
+        about its state any more."""
+        cover = _make_switch_cover()
+        stub_switches(cover)
+
+        with patch(_CALL_LATER, return_value=MagicMock()):
+            await cover._send_open()
+        assert cover._relay_intent["switch.open"] is True
+
+        # Drop the echo count without _clear_pending_switch, which drops the
+        # intent too: this test is about the external path doing it.
+        cover._pending_switch.pop("switch.open", None)
+
+        with (
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_entity_unavailable", return_value=False),
+        ):
+            await cover._async_switch_state_changed(
+                _state_event("switch.open", "on", "off")
+            )
+
+        stop.assert_awaited_once()
+        assert "switch.open" not in cover._relay_intent
+
+    @pytest.mark.asyncio
+    async def test_consumed_echo_clears_intent(self):
+        """Once the relay has confirmed, HA's state is current again and the
+        next pre-count is decided from it."""
+        cover = _make_switch_cover()
+        stub_switches(cover)
+
+        with patch(_CALL_LATER, return_value=MagicMock()):
+            await cover._send_open()
+        assert cover._pending_switch["switch.open"] == 1
+        assert cover._relay_intent["switch.open"] is True
+
+        with (
+            patch.object(cover, "async_stop_cover", new_callable=AsyncMock) as stop,
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_entity_unavailable", return_value=False),
+        ):
+            await cover._async_switch_state_changed(
+                _state_event("switch.open", "off", "on")
+            )
+
+        stop.assert_not_awaited()
+        assert "switch.open" not in cover._pending_switch
+        assert "switch.open" not in cover._relay_intent
+
+        stub_switches(cover, on={"switch.open"})
+        with patch(_CALL_LATER, return_value=MagicMock()):
+            await cover._send_stop()
+
+        assert cover._pending_switch["switch.open"] == 1

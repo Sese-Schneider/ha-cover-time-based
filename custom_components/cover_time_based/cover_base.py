@@ -231,6 +231,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._moving_tilt = False
         self._state = True
         self._pending_switch = {}
+        # What we last commanded a latching relay to be, held only while that
+        # command's echo is still outstanding (see _relay_is_on).
+        self._relay_intent: dict[str, bool] = {}
         self._pending_switch_timers = {}
         # Absolute monotonic expiry per entity, so a re-mark can never shorten
         # an outstanding window (see _mark_switch_pending).
@@ -376,6 +379,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             timer()
         self._pending_switch_timers.clear()
         self._pending_switch_deadlines.clear()
+        self._relay_intent.clear()
         # Cancel the two ghost timers: the endpoint run-on stop and the
         # startup-delay arming. Left alive across a reload (every card save
         # reloads the entry) they later fire real relay commands against the
@@ -3895,18 +3899,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         already in the target state. Mark pending=1 per expected echo,
         and only when the relay call will actually flip state. Otherwise
         the orphan pending count consumes the next real state change.
+
+        Whether the turn_off will flip is judged from our own last command
+        while its echo is outstanding (``_relay_is_on``), because HA's state
+        lags a slow relay. The driving relay's ON decision stays on HA's
+        state: it also arms relay feedback for this command.
         """
         self._feedback_armed_entity = None
-        if self._switch_is_on(self._tilt_close_switch_id):
+        if self._relay_is_on(self._tilt_close_switch_id):
             self._mark_switch_pending(self._tilt_close_switch_id, 1)
         if not self._switch_is_on(self._tilt_open_switch_id):
             self._mark_driving_relay_pending(self._tilt_open_switch_id)
+        self._note_relay_intent(self._tilt_close_switch_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_close_switch_id},
             False,
         )
+        self._note_relay_intent(self._tilt_open_switch_id, True)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_on",
@@ -3920,16 +3931,18 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         See _send_tilt_open for the pending-count rationale.
         """
         self._feedback_armed_entity = None
-        if self._switch_is_on(self._tilt_open_switch_id):
+        if self._relay_is_on(self._tilt_open_switch_id):
             self._mark_switch_pending(self._tilt_open_switch_id, 1)
         if not self._switch_is_on(self._tilt_close_switch_id):
             self._mark_driving_relay_pending(self._tilt_close_switch_id)
+        self._note_relay_intent(self._tilt_open_switch_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_open_switch_id},
             False,
         )
+        self._note_relay_intent(self._tilt_close_switch_id, True)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_on",
@@ -3938,17 +3951,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         )
 
     async def _send_tilt_stop(self) -> None:
-        """Send stop to the tilt motor (bypasses position tracker)."""
-        if self._switch_is_on(self._tilt_open_switch_id):
+        """Send stop to the tilt motor (bypasses position tracker).
+
+        See _send_tilt_open for the pending-count rationale.
+        """
+        if self._relay_is_on(self._tilt_open_switch_id):
             self._mark_switch_pending(self._tilt_open_switch_id, 1)
-        if self._switch_is_on(self._tilt_close_switch_id):
+        if self._relay_is_on(self._tilt_close_switch_id):
             self._mark_switch_pending(self._tilt_close_switch_id, 1)
+        self._note_relay_intent(self._tilt_open_switch_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._tilt_open_switch_id},
             False,
         )
+        self._note_relay_intent(self._tilt_close_switch_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
@@ -3972,6 +3990,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """Check if a switch entity is currently on."""
         state = self.hass.states.get(entity_id)
         return state is not None and state.state == "on"
+
+    def _relay_is_on(self, entity_id) -> bool:
+        """Whether a latching relay is ON as far as we can tell.
+
+        HA's state lags a slow-reporting relay by seconds, so between our
+        command and its echo HA still shows the old state. A pre-count for
+        the echo our next command will produce has to be decided from what
+        we last told the relay (``_relay_intent``), falling back to HA's
+        state once no command of ours is outstanding for it.
+        """
+        intent = self._relay_intent.get(entity_id)
+        return self._switch_is_on(entity_id) if intent is None else intent
+
+    def _note_relay_intent(self, entity_id, on: bool) -> None:
+        """Record the state we are about to command ``entity_id`` into."""
+        self._relay_intent[entity_id] = on
 
     def _switch_is_optimistic(self, entity_id) -> bool:
         """Whether the underlying switch reports optimistic (assumed) state.
@@ -4117,6 +4151,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         """
         self._pending_switch.pop(entity_id, None)
         self._pending_switch_deadlines.pop(entity_id, None)
+        # No echo outstanding — consumed or timed out — so HA's state is
+        # current again and the recorded intent has done its job.
+        self._relay_intent.pop(entity_id, None)
         timer = self._pending_switch_timers.pop(entity_id, None)
         if timer is not None and cancel_timer:
             timer()
@@ -4388,6 +4425,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                 new_val,
             )
             return
+
+        # Not our echo: someone else moved this relay, so our recorded intent
+        # is stale. Dropped only here — after the calibration and stale-
+        # reappearance guards, both of which mean "this is NOT someone moving
+        # the relay" and must not let a stale retained ``on`` clobber a
+        # correct intent of ours.
+        self._relay_intent.pop(entity_id, None)
 
         # External state change (physical button / remote / HA button).
         # Delegate to mode-specific handlers which start/stop position

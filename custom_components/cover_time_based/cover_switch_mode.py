@@ -62,16 +62,19 @@ class SwitchModeCover(SwitchCoverTimeBased):
     async def _interlock_off(self, entity_id) -> None:
         """Turn the opposite direction relay OFF (software interlock).
 
-        Only writes when the relay is actually ON — there is nothing to
-        interlock otherwise, and the passive observe path should not produce
-        needless relay writes. Marks the resulting state-change event as a
+        Only writes when the relay is ON as far as we can tell — there is
+        nothing to interlock otherwise, and the passive observe path should not
+        produce needless relay writes. "As far as we can tell" is our own last
+        command while its echo is outstanding (``_relay_is_on``), because HA's
+        state lags a slow relay. Marks the resulting state-change event as a
         pending echo so _async_switch_state_changed does not misread our own
         turn_off as the user releasing that switch (which would call
         async_stop_cover and cancel the move we just started).
         """
-        if self._switch_is_on(entity_id):
+        if self._relay_is_on(entity_id):
             _LOGGER.debug("_interlock_off :: turning off %s", entity_id)
             self._mark_switch_pending(entity_id, 1)
+            self._note_relay_intent(entity_id, False)
             await self.hass.services.async_call(
                 "homeassistant",
                 "turn_off",
@@ -145,20 +148,28 @@ class SwitchModeCover(SwitchCoverTimeBased):
         # when the relay is already ON — e.g. a continuation re-driving the
         # user's still-latched relay — and that orphan then swallows the next
         # real event (such as the user switching it off to stop).
+        # Whether the turn_off will flip is judged from our own last command
+        # while its echo is outstanding (_relay_is_on), not from HA's state:
+        # a slow-reporting relay still shows the state it had before we
+        # energized it, so a reversal inside that lag would pre-count nothing
+        # and read the late OFF as the user releasing the switch.
         # Only the driving relay turning ON confirms the motor is energized; the
         # opposite relay's turn_off is just the interlock. _mark_driving_relay_pending
-        # marks that ON echo and, under feedback, arms the wait on it.
+        # marks that ON echo and, under feedback, arms the wait on it — the arm
+        # is about this command, so that decision stays on HA's state.
         self._feedback_armed_entity = None
-        if self._switch_is_on(self._close_switch_entity_id):
+        if self._relay_is_on(self._close_switch_entity_id):
             self._mark_switch_pending(self._close_switch_entity_id, 1)
         if not self._switch_is_on(self._open_switch_entity_id):
             self._mark_driving_relay_pending(self._open_switch_entity_id)
+        self._note_relay_intent(self._close_switch_entity_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._close_switch_entity_id},
             False,
         )
+        self._note_relay_intent(self._open_switch_entity_id, True)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_on",
@@ -167,18 +178,22 @@ class SwitchModeCover(SwitchCoverTimeBased):
         )
 
     async def _send_close(self) -> None:
-        # See _send_open: mark only when the relay will actually flip state.
+        # See _send_open: mark only when the relay will actually flip state,
+        # judging the turn_off from our own last command and the driving
+        # relay's turn_on from HA's state.
         self._feedback_armed_entity = None
-        if self._switch_is_on(self._open_switch_entity_id):
+        if self._relay_is_on(self._open_switch_entity_id):
             self._mark_switch_pending(self._open_switch_entity_id, 1)
         if not self._switch_is_on(self._close_switch_entity_id):
             self._mark_driving_relay_pending(self._close_switch_entity_id)
+        self._note_relay_intent(self._open_switch_entity_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._open_switch_entity_id},
             False,
         )
+        self._note_relay_intent(self._close_switch_entity_id, True)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_on",
@@ -187,16 +202,21 @@ class SwitchModeCover(SwitchCoverTimeBased):
         )
 
     async def _send_stop(self) -> None:
-        if self._switch_is_on(self._close_switch_entity_id):
+        # See _send_open: both releases are pre-counted from our own last
+        # command while its echo is outstanding, so a stop issued inside a
+        # slow relay's reporting lag still owns the OFF echo it causes.
+        if self._relay_is_on(self._close_switch_entity_id):
             self._mark_switch_pending(self._close_switch_entity_id, 1)
-        if self._switch_is_on(self._open_switch_entity_id):
+        if self._relay_is_on(self._open_switch_entity_id):
             self._mark_switch_pending(self._open_switch_entity_id, 1)
+        self._note_relay_intent(self._close_switch_entity_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
             {"entity_id": self._close_switch_entity_id},
             False,
         )
+        self._note_relay_intent(self._open_switch_entity_id, False)
         await self.hass.services.async_call(
             "homeassistant",
             "turn_off",
