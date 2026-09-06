@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Time-out",
-          "description": "Veiligheids-time-out in seconden — de motor stopt automatisch als stop_calibration niet wordt aangeroepen"
+          "description": "Veiligheids-time-out in seconden. Als stop_calibration niet op tijd wordt aangeroepen, wordt de kalibratie geannuleerd. Hardware die blijft lopen tot ze een stopopdracht krijgt, wordt ook gestopt; hardware die zichzelf stopt, krijgt geen stopopdracht."
         },
         "direction": {
           "name": "Richting",

@@ -136,36 +136,60 @@ BASE_DEVICE_SCHEMA = {
     vol.Required(CONF_NAME): cv.string,
 }
 
-# The floor shared by the YAML and websocket schemas: a zero travel, tilt or
-# pulse time makes every move "arrive" on the first tracker tick while the
-# relay still fires. Startup delays and run-on times may legitimately be 0.
+# The floor and ceiling shared by the YAML and websocket schemas: a zero
+# travel, tilt or pulse time makes every move "arrive" on the first tracker
+# tick while the relay still fires, and an unbounded value would be tracked
+# and persisted as a runaway duration. Startup delays and run-on times may
+# legitimately be 0. Caps mirror websocket_api.py: travel/tilt 0.1..600,
+# pulse 0.1..10, and the >=0 delays 0..600. The deprecated
+# direction_change_delay is deliberately left uncapped: it is accepted and
+# ignored (the reversing pause is a fixed 1.0s constant), so an existing
+# config that set any value must keep loading rather than be rejected.
 MIN_DURATION = 0.1
-NONZERO_DURATION = vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION))
-NULLABLE_DURATION = vol.Any(NONZERO_DURATION, None)
+MAX_DURATION = 600
+MAX_PULSE_DURATION = 10
+# 0.1..600 — travel and tilt times.
+TRAVEL_DURATION = vol.All(
+    vol.Coerce(float), vol.Range(min=MIN_DURATION, max=MAX_DURATION)
+)
+# 0.1..10 — pulse time.
+PULSE_DURATION = vol.All(
+    vol.Coerce(float), vol.Range(min=MIN_DURATION, max=MAX_PULSE_DURATION)
+)
+# 0..600 — startup delays, run-on and min-movement times, which may be 0.
+POSITIVE_DURATION = vol.All(vol.Coerce(float), vol.Range(min=0, max=MAX_DURATION))
+NULLABLE_DURATION = vol.Any(TRAVEL_DURATION, None)
 
 TRAVEL_TIME_SCHEMA = {
     vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT): cv.boolean,
-    vol.Optional(CONF_TRAVELLING_TIME_DOWN): NONZERO_DURATION,
-    vol.Optional(CONF_TRAVELLING_TIME_UP): NONZERO_DURATION,
-    vol.Optional(CONF_TILTING_TIME_DOWN): NONZERO_DURATION,
-    vol.Optional(CONF_TILTING_TIME_UP): NONZERO_DURATION,
-    vol.Optional(CONF_TRAVEL_STARTUP_DELAY): cv.positive_float,
-    vol.Optional(CONF_TILT_STARTUP_DELAY): cv.positive_float,
-    vol.Optional(CONF_ENDPOINT_RUNON_TIME): cv.positive_float,
-    vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
-    vol.Optional(CONF_MIN_MOVEMENT_TIME): cv.positive_float,
-    # Accepted and ignored — see DIRECTION_CHANGE_DELAY in const.py.
+    vol.Optional(CONF_TRAVELLING_TIME_DOWN): TRAVEL_DURATION,
+    vol.Optional(CONF_TRAVELLING_TIME_UP): TRAVEL_DURATION,
+    vol.Optional(CONF_TILTING_TIME_DOWN): TRAVEL_DURATION,
+    vol.Optional(CONF_TILTING_TIME_UP): TRAVEL_DURATION,
+    vol.Optional(CONF_TRAVEL_STARTUP_DELAY): POSITIVE_DURATION,
+    vol.Optional(CONF_TILT_STARTUP_DELAY): POSITIVE_DURATION,
+    vol.Optional(CONF_ENDPOINT_RUNON_TIME): POSITIVE_DURATION,
+    vol.Optional(CONF_TRAVEL_DELAY_AT_END): POSITIVE_DURATION,
+    vol.Optional(CONF_MIN_MOVEMENT_TIME): POSITIVE_DURATION,
+    # Accepted and ignored — see DIRECTION_CHANGE_DELAY in const.py. Left
+    # uncapped for backward compatibility (the value is never used).
     vol.Optional(CONF_DIRECTION_CHANGE_DELAY): cv.positive_float,
 }
 
 SWITCH_COVER_SCHEMA = {
     **BASE_DEVICE_SCHEMA,
     vol.Required(CONF_OPEN_SWITCH_ENTITY_ID): cv.entity_id,
-    vol.Required(CONF_CLOSE_SWITCH_ENTITY_ID): cv.entity_id,
+    # Optional here (not Required): input_mode may come from the defaults block,
+    # so single_button (one button, no close relay) can't be told apart from the
+    # two-relay modes at schema time. devices_from_config enforces the real
+    # per-mode relay requirement once the mode is resolved.
+    vol.Optional(CONF_CLOSE_SWITCH_ENTITY_ID, default=None): vol.Any(
+        cv.entity_id, None
+    ),
     vol.Optional(CONF_STOP_SWITCH_ENTITY_ID, default=None): vol.Any(cv.entity_id, None),
     vol.Optional(CONF_IS_BUTTON, default=False): cv.boolean,
     vol.Optional(CONF_INPUT_MODE): vol.In(INPUT_MODE_VALUES),
-    vol.Optional(CONF_PULSE_TIME): NONZERO_DURATION,
+    vol.Optional(CONF_PULSE_TIME): PULSE_DURATION,
     vol.Optional(CONF_RELAY_REPORTS_OFF): cv.boolean,
     vol.Optional(CONF_SEND_ENDPOINT_STOP): cv.boolean,
     **TRAVEL_TIME_SCHEMA,
@@ -186,10 +210,10 @@ DEFAULTS_SCHEMA = vol.Schema(
         vol.Optional(CONF_TILTING_TIME_DOWN, default=None): NULLABLE_DURATION,
         vol.Optional(CONF_TILTING_TIME_UP, default=None): NULLABLE_DURATION,
         vol.Optional(CONF_TRAVEL_STARTUP_DELAY, default=None): vol.Any(
-            cv.positive_float, None
+            POSITIVE_DURATION, None
         ),
         vol.Optional(CONF_TILT_STARTUP_DELAY, default=None): vol.Any(
-            cv.positive_float, None
+            POSITIVE_DURATION, None
         ),
         # No materialized default here (unlike a naive default=None): voluptuous
         # would still pre-populate the key with None, which is indistinguishable
@@ -198,13 +222,14 @@ DEFAULTS_SCHEMA = vol.Schema(
         # Leaving the key genuinely absent when unset lets the migration run,
         # and _TIMING_DEFAULTS still supplies the DEFAULT_ENDPOINT_RUNON_TIME
         # (2.0s) fallback further down the pipeline.
-        vol.Optional(CONF_ENDPOINT_RUNON_TIME): vol.Any(cv.positive_float, None),
-        vol.Optional(CONF_TRAVEL_DELAY_AT_END): cv.positive_float,
+        vol.Optional(CONF_ENDPOINT_RUNON_TIME): vol.Any(POSITIVE_DURATION, None),
+        vol.Optional(CONF_TRAVEL_DELAY_AT_END): POSITIVE_DURATION,
         vol.Optional(CONF_MIN_MOVEMENT_TIME, default=None): vol.Any(
-            cv.positive_float, None
+            POSITIVE_DURATION, None
         ),
         # Accepted and ignored: keeps configs written against the 4.9.0
         # release candidates loading (strict schema would reject the key).
+        # Uncapped for backward compatibility (the value is never used).
         vol.Optional(CONF_DIRECTION_CHANGE_DELAY): vol.Any(cv.positive_float, None),
     }
 )
@@ -480,6 +505,25 @@ def devices_from_config(domain_config):
 
         # Control mode (handles is_button deprecation)
         control_mode = _resolve_control_mode(config, defaults, bool(cover_entity_id))
+
+        # Per-mode entity requirement lives here, not in SWITCH_COVER_SCHEMA:
+        # input_mode may arrive from the defaults block, so the mode is unknown
+        # at schema-validation time. wrapped's cover_entity_id is already
+        # enforced by ENTITY_COVER_SCHEMA.
+        if control_mode == CONTROL_MODE_SINGLE_BUTTON:
+            if not open_switch:
+                raise vol.Invalid(
+                    f"open_switch_entity_id required for {control_mode} cover "
+                    f"'{device_id}'"
+                )
+        elif control_mode != CONTROL_MODE_WRAPPED and not (
+            open_switch and close_switch
+        ):
+            raise vol.Invalid(
+                f"open_switch_entity_id and close_switch_entity_id required for "
+                f"{control_mode} cover '{device_id}'"
+            )
+
         pulse_time = _get_value(CONF_PULSE_TIME, config, defaults, DEFAULT_PULSE_TIME)
         config.pop(CONF_PULSE_TIME, None)
         relay_reports_off = _get_value(

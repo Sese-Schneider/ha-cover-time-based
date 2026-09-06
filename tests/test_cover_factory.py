@@ -11,7 +11,9 @@ from custom_components.cover_time_based.cover import (
     CONF_COVER_ENTITY_ID,
     CONF_DEFAULTS,
     CONF_DEVICES,
+    CONF_DIRECTION_CHANGE_DELAY,
     CONF_ENDPOINT_RUNON_TIME,
+    CONF_INPUT_MODE,
     CONF_IS_BUTTON,
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
@@ -32,6 +34,7 @@ from custom_components.cover_time_based.cover import (
     CONF_TRAVELLING_TIME_UP,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
     CONTROL_MODE_PULSE,
+    CONTROL_MODE_SINGLE_BUTTON,
     CONTROL_MODE_SWITCH,
     CONTROL_MODE_TOGGLE,
     CONTROL_MODE_TOGGLE_OPPOSITE,
@@ -43,6 +46,9 @@ from custom_components.cover_time_based.cover import (
     devices_from_config,
 )
 from custom_components.cover_time_based.cover_pulse_mode import PulseModeCover
+from custom_components.cover_time_based.cover_single_button_mode import (
+    SingleButtonModeCover,
+)
 from custom_components.cover_time_based.cover_switch_mode import SwitchModeCover
 from custom_components.cover_time_based.cover_toggle_mode import ToggleModeCover
 from custom_components.cover_time_based.cover_toggle_opposite_mode import (
@@ -888,3 +894,134 @@ class TestYamlRejectsZeroDurations:
             DEFAULTS_SCHEMA({CONF_TRAVELLING_TIME_UP: None})[CONF_TRAVELLING_TIME_UP]
             is None
         )
+
+
+# ===================================================================
+# YAML rejects oversized travel / tilt / pulse / delay durations
+# ===================================================================
+
+
+class TestYamlRejectsOversizedDurations:
+    """YAML caps travel/tilt at 600s and pulse at 10s, like the websocket schema."""
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            CONF_TRAVELLING_TIME_DOWN,
+            CONF_TRAVELLING_TIME_UP,
+            CONF_TILTING_TIME_DOWN,
+            CONF_TILTING_TIME_UP,
+        ],
+    )
+    def test_travel_tilt_over_600_rejected(self, key):
+        with pytest.raises(vol.Invalid):
+            PLATFORM_SCHEMA(_yaml_device(**{key: 601}))
+
+    def test_pulse_over_10_rejected(self):
+        with pytest.raises(vol.Invalid):
+            PLATFORM_SCHEMA(_yaml_device(**{CONF_PULSE_TIME: 11}))
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            CONF_TRAVEL_STARTUP_DELAY,
+            CONF_TILT_STARTUP_DELAY,
+            CONF_ENDPOINT_RUNON_TIME,
+            CONF_MIN_MOVEMENT_TIME,
+            CONF_TRAVEL_DELAY_AT_END,
+        ],
+    )
+    def test_positive_delay_over_600_rejected(self, key):
+        with pytest.raises(vol.Invalid):
+            PLATFORM_SCHEMA(_yaml_device(**{key: 601}))
+
+    def test_travel_600_boundary_accepted(self):
+        validated = PLATFORM_SCHEMA(_yaml_device(**{CONF_TRAVELLING_TIME_DOWN: 600}))
+        assert validated[CONF_DEVICES]["blind1"][CONF_TRAVELLING_TIME_DOWN] == 600
+
+    def test_pulse_10_boundary_accepted(self):
+        validated = PLATFORM_SCHEMA(_yaml_device(**{CONF_PULSE_TIME: 10}))
+        assert validated[CONF_DEVICES]["blind1"][CONF_PULSE_TIME] == 10
+
+    def test_startup_600_boundary_accepted(self):
+        validated = PLATFORM_SCHEMA(_yaml_device(**{CONF_TRAVEL_STARTUP_DELAY: 600}))
+        assert validated[CONF_DEVICES]["blind1"][CONF_TRAVEL_STARTUP_DELAY] == 600
+
+    def test_defaults_travel_over_600_rejected(self):
+        with pytest.raises(vol.Invalid):
+            DEFAULTS_SCHEMA({CONF_TRAVELLING_TIME_DOWN: 601})
+
+    def test_deprecated_direction_change_delay_uncapped(self):
+        """direction_change_delay is accepted-and-ignored, and stays uncapped:
+        an existing config that set a large value must keep loading (the value
+        is never used — the reversing pause is a fixed 1.0s constant)."""
+        validated = PLATFORM_SCHEMA(_yaml_device(**{CONF_DIRECTION_CHANGE_DELAY: 601}))
+        assert validated[CONF_DEVICES]["blind1"][CONF_DIRECTION_CHANGE_DELAY] == 601
+        assert (
+            DEFAULTS_SCHEMA({CONF_DIRECTION_CHANGE_DELAY: 601})[
+                CONF_DIRECTION_CHANGE_DELAY
+            ]
+            == 601
+        )
+
+
+# ===================================================================
+# single_button YAML needs no dummy close switch
+# ===================================================================
+
+
+def _yaml_single_open(input_mode=None, in_defaults=False, **device):
+    """Domain config for one device with only an open switch."""
+    dev = {"name": "Test", CONF_OPEN_SWITCH_ENTITY_ID: "switch.button", **device}
+    defaults = {}
+    if input_mode is not None:
+        (defaults if in_defaults else dev)[CONF_INPUT_MODE] = input_mode
+    return {
+        "platform": "cover_time_based",
+        CONF_DEFAULTS: defaults,
+        CONF_DEVICES: {"blind1": dev},
+    }
+
+
+class TestSingleButtonYamlRelayRequirement:
+    """single_button needs only its one button; two-relay modes still need close."""
+
+    def test_single_button_device_needs_only_open(self):
+        config = PLATFORM_SCHEMA(
+            _yaml_single_open(input_mode=CONTROL_MODE_SINGLE_BUTTON)
+        )
+        devices = devices_from_config(config)
+        assert isinstance(devices[0], SingleButtonModeCover)
+
+    def test_single_button_via_defaults_needs_only_open(self):
+        config = PLATFORM_SCHEMA(
+            _yaml_single_open(input_mode=CONTROL_MODE_SINGLE_BUTTON, in_defaults=True)
+        )
+        devices = devices_from_config(config)
+        assert isinstance(devices[0], SingleButtonModeCover)
+
+    @pytest.mark.parametrize(
+        "mode",
+        [
+            CONTROL_MODE_SWITCH,
+            CONTROL_MODE_TOGGLE,
+            CONTROL_MODE_PULSE,
+            CONTROL_MODE_TOGGLE_OPPOSITE,
+        ],
+    )
+    def test_two_relay_mode_requires_close(self, mode):
+        config = PLATFORM_SCHEMA(_yaml_single_open(input_mode=mode))
+        with pytest.raises(vol.Invalid):
+            devices_from_config(config)
+
+    def test_wrapped_unaffected(self):
+        config = PLATFORM_SCHEMA(
+            {
+                "platform": "cover_time_based",
+                CONF_DEVICES: {
+                    "blind1": {"name": "Test", CONF_COVER_ENTITY_ID: "cover.inner"},
+                },
+            }
+        )
+        devices = devices_from_config(config)
+        assert isinstance(devices[0], WrappedCoverTimeBased)

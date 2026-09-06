@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Vremensko ograničenje",
-          "description": "Bezbednosno vremensko ograničenje u sekundama — motor će se automatski zaustaviti ako se stop_calibration ne pozove"
+          "description": "Bezbednosno vremensko ograničenje u sekundama. Ako se stop_calibration ne pozove na vreme, kalibracija se otkazuje. Hardver koji radi dok mu se ne naredi da stane takođe se zaustavlja; hardver koji se sam zaustavlja ne prima nikakvu naredbu za zaustavljanje."
         },
         "direction": {
           "name": "Smer",

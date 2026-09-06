@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Tempo limite",
-          "description": "Tempo limite de segurança em segundos — o motor para automaticamente se stop_calibration não for chamado"
+          "description": "Tempo limite de segurança em segundos. Se stop_calibration não for chamado a tempo, a calibração é cancelada. O hardware que funciona até receber ordem para parar também é parado; o hardware que para sozinho não recebe qualquer ordem para parar."
         },
         "direction": {
           "name": "Direção",

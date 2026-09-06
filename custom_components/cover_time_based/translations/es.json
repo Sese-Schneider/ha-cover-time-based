@@ -55,7 +55,7 @@
         },
         "timeout": {
           "name": "Tiempo de espera",
-          "description": "Tiempo de espera de seguridad en segundos: el motor se detendrá automáticamente si no se llama a stop_calibration"
+          "description": "Tiempo de espera de seguridad en segundos. Si no se llama a stop_calibration a tiempo, se cancela la calibración. El hardware que funciona hasta que se le indica que se detenga también se detiene; el hardware que se detiene por sí solo no recibe ninguna orden de parada."
         },
         "direction": {
           "name": "Dirección",

@@ -110,6 +110,10 @@ class RecalibrationPlan(Enum):
 class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
     """Time-based cover with position tracking."""
 
+    # Push-based: the auto-updater writes state; there is no async_update, so a
+    # poll would only rewrite unchanged state.
+    _attr_should_poll = False
+
     # Whether this control mode can drive tilt at all. A single-button cover
     # cannot choose a direction, so it sets this False (see the design spec).
     supports_tilt = True
