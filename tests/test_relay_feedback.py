@@ -588,6 +588,40 @@ class TestRelayFeedbackGuards:
         assert cover._feedback_wait_entity is None
 
     @pytest.mark.asyncio
+    async def test_travel_leg_after_tilt_pre_step_does_not_inherit_tilt_arm(
+        self, make_cover
+    ):
+        """A dual-motor tilt-to-safe pre-step arms the tilt relay's feedback wait
+        then starts tilt_calc directly, never reaching _begin_movement, so the
+        arm is stranded on the tilt relay. When the deferred travel leg begins
+        with its own relay already energised — so its _send_* re-arms nothing —
+        the travel move must start inline, not inherit the stranded tilt arm and
+        park on the tilt relay's ON echo (a wait its already-latched travel relay
+        would never satisfy). Same movement epoch as the pre-step throughout."""
+        cover = _make_dual_motor(make_cover, safe_tilt_position=0)
+        stub_switches(cover)
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.set_position(80)  # open; tilt-to-safe (→0) pre-step first
+            await _turns()
+            # The pre-step armed the tilt-close relay and stranded it.
+            assert cover._pending_travel_target == 80
+            assert cover._feedback_armed_entity == "switch.tilt_close"
+
+            # The travel (open) relay is already energised when the pre-step
+            # completes, so the travel _send_open flips nothing and re-arms nothing.
+            stub_switches(cover, on=("switch.open",))
+            await cover._start_pending_travel()
+            await _turns()
+
+        # Travel already running: no ON echo is coming, so it starts inline. The
+        # move must NOT be parked on the stranded tilt relay's echo.
+        assert cover._feedback_wait_entity != "switch.tilt_close"
+        assert cover.travel_calc.is_traveling() is True
+
+    @pytest.mark.asyncio
     async def test_direction_relay_already_on_starts_inline(self, make_cover):
         cover = make_cover(wait_for_relay_feedback=True)
         stub_switches(cover, on=("switch.open",))

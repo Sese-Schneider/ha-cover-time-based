@@ -249,6 +249,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         #   _feedback_armed_entity — set by the _send_* that just energized a
         #     relay OFF->ON; read and cleared by _begin_movement to decide
         #     whether to defer tracking. Never outlives the send->begin hop.
+        #     Each _send_* clears this first, and that eager per-send clear is
+        #     load-bearing, not redundant: _movement_epoch is too coarse to
+        #     reject a stale arm centrally (a tilt-to-safe pre-step and its
+        #     deferred travel leg share one epoch yet drive different relays,
+        #     and the command dispatchers do not bump it), so an arm stranded by
+        #     one phase would otherwise be consumed by the next on the wrong
+        #     relay — see test_travel_leg_after_tilt_pre_step_does_not_inherit_tilt_arm.
         #   _feedback_wait_entity / _feedback_wait_future — the relay whose ON
         #     echo the deferred move (or a feedback-timed calibration drive) is
         #     waiting on, and the future its confirming echo resolves. Live only
