@@ -33,6 +33,10 @@ class ToggleBaseCover(SwitchCoverTimeBased):
     # (>= 200ms) so legitimate rapid toggles ("start then stop") are not dropped.
     _EXTERNAL_TOGGLE_DEBOUNCE = 0.1
 
+    # A toggle stop is a tap on the driving relay, and a tap that lands before
+    # that relay's ON echo can be swallowed — see _await_confirmation_before_stop.
+    _stop_is_a_tap = True
+
     def __init__(self, relay_reports_off=True, **kwargs):
         super().__init__(**kwargs)
         self._relay_reports_off = relay_reports_off
@@ -215,14 +219,10 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         See CoverTimeBased._stop_hardware for ``supersede`` and
         ``tilt_axis_reported``.
         """
-        # A toggle stop is a tap on the driving relay, and a tap that lands
-        # before that relay's ON echo can be swallowed. Wait it out first (a
-        # no-op unless a feedback wait is actually pending), before ``was_active``
-        # is read: the confirmation lets the parked start run, so is_opening /
-        # is_closing then reflect the motor that is genuinely running. An
-        # external stop sends no tap, so there is nothing to protect.
-        if not self._triggered_externally:
-            await self._await_pending_relay_confirmation()
+        # Before ``was_active`` is read: the confirmation lets the parked start
+        # run, so is_opening / is_closing then reflect the motor that is
+        # genuinely running.
+        await self._await_confirmation_before_stop()
         # Narrower than the base's _movement_in_progress (which also counts a
         # tilt tracker, a pre-step, a tilt restore and a tilt motor) and than
         # _movement_started ("did the move just commanded begin"): a toggle stop

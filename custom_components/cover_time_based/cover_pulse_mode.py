@@ -192,6 +192,7 @@ class PulseModeCover(SwitchCoverTimeBased):
                 expected_transitions=2,
                 arm=arm_feedback,
                 base_timeout=pulse_window,
+                own_echoes_after_on=1,
             )
 
     def _mark_pulse_off(self, entity_id) -> None:

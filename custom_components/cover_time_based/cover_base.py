@@ -235,6 +235,11 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         self._feedback_armed_entity: str | None = None
         self._feedback_wait_entity: str | None = None
         self._feedback_wait_future: asyncio.Future | None = None
+        # How many of the armed drive's own echoes follow its confirming ON on
+        # the same relay (a pulse's deferred OFF, a press's release). A filtered
+        # ON is the confirmation only when it leaves no more than that many
+        # transitions outstanding — anything more is an earlier tap's echo.
+        self._feedback_own_echoes_after_on = 0
 
         self.travel_calc = TravelCalculator(
             self._travel_time_close,
@@ -319,6 +324,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         "_tilt_close_switch_id",
         "_tilt_stop_switch_id",
     )
+
+    # Whether a stop on this hardware is a tap on the driving relay (toggle,
+    # single button) rather than a de-energise. A tap that lands before that
+    # relay's ON echo can be swallowed, so a stop or reversal waits the
+    # confirmation out first — see _await_confirmation_before_stop.
+    _stop_is_a_tap = False
 
     async def async_added_to_hass(self):
         """Only cover's position and tilt matters."""
@@ -1379,6 +1390,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         so a stop must not be echoed back at it — see _should_stop_tilt_motor.
         """
         self._require_configured()
+        await self._await_confirmation_before_stop()
         tilt_restore_was_active = self._tilt_restore_active
         tilt_pre_step_was_active = (
             self._pending_travel_target is not None
@@ -1692,9 +1704,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._startup_delay_task and not self._startup_delay_task.done():
             if self._last_command == opposite_command:
                 self._log(
-                    "_async_move_to_endpoint :: direction change, cancelling startup delay"
+                    "_async_move_to_endpoint :: direction change, stopping the parked move"
                 )
-                self._cancel_startup_delay_task()
+                await self._settle_parked_start_before_stop()
                 await self._async_handle_command(SERVICE_STOP_COVER)
                 self._last_command = None
                 # Silent: no travel started. _movement_started must read this
@@ -1837,15 +1849,14 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if self._startup_delay_task and not self._startup_delay_task.done():
             if self._last_command == opposite_command:
                 self._log(
-                    "_async_move_tilt_to_endpoint :: direction change, cancelling startup delay"
+                    "_async_move_tilt_to_endpoint :: direction change, stopping the parked move"
                 )
-                self._cancel_startup_delay_task()
-                # Mirror the travel counterpart: cancelling a pending
-                # startup-delay move on a direction change stops the axis and
-                # returns — a second press then drives the new direction. Route
-                # the stop through the axis-aware helper so a dedicated tilt
-                # motor is not stopped via a travel STOP off a stale
-                # _last_command (#153).
+                await self._settle_parked_start_before_stop()
+                # Mirror the travel counterpart: a direction change at a parked
+                # move stops the axis and returns — a second press then drives
+                # the new direction. Route the stop through the axis-aware
+                # helper so a dedicated tilt motor is not stopped via a travel
+                # STOP off a stale _last_command (#153).
                 await self._stop_displaced_movement_for_tilt(was_tilt_motor_move)
                 self._last_command = None
                 # Silent: no tilt drive started. _movement_started must read
@@ -2479,11 +2490,23 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
                     "_handle_pre_movement_checks :: startup delay active, skipping"
                 )
                 return False, is_direction_change
-            self._log(
-                "_handle_pre_movement_checks :: direction change, cancelling startup delay"
-            )
-            self._cancel_startup_delay_task()
-            await self._async_handle_command(SERVICE_STOP_COVER)
+            # On tap hardware the stop waits the relay confirmation out, and
+            # the confirmation runs the parked start: the move is then in
+            # motion, and the caller's own in-motion direction-change block
+            # stops it, settles, and drives the other way. Only a start that is
+            # still parked afterwards is cancelled unrun and stopped here.
+            await self._await_confirmation_before_stop()
+            if self._startup_delay_task and not self._startup_delay_task.done():
+                self._log(
+                    "_handle_pre_movement_checks :: direction change, cancelling startup delay"
+                )
+                self._cancel_startup_delay_task()
+                await self._async_handle_command(SERVICE_STOP_COVER)
+            else:
+                self._log(
+                    "_handle_pre_movement_checks :: direction change, the confirmed"
+                    " move is reversed in motion"
+                )
 
         return True, is_direction_change
 
@@ -3893,6 +3916,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         method that flips the relay, and consumed by ``_begin_movement``.
         """
         self._feedback_armed_entity = None
+        self._feedback_own_echoes_after_on = 0
         if not self._wait_for_relay_feedback:
             return False
         if entity_id is None or self._switch_is_optimistic(entity_id):
@@ -3933,6 +3957,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         expected_transitions=1,
         arm=True,
         base_timeout=ECHO_PENDING_WINDOW,
+        own_echoes_after_on=0,
     ):
         """Mark the direction relay a move is energizing OFF->ON as pending.
 
@@ -3949,8 +3974,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         pending window used when not armed — pulse mode passes its pulse
         duration so the deferred completion OFF echo stays filtered even when
         the pulse is longer than the default window.
+
+        ``own_echoes_after_on`` is how many of ``expected_transitions`` follow
+        the ON edge (a pulse's deferred OFF) — see
+        ``_feedback_own_echoes_after_on``.
         """
         if arm and self._arm_relay_feedback(entity_id):
+            self._feedback_own_echoes_after_on = own_echoes_after_on
             self._mark_switch_pending(
                 entity_id,
                 expected_transitions,
@@ -4018,29 +4048,33 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         if timer is not None and cancel_timer:
             timer()
 
-    def _resolve_relay_feedback(self, entity_id, new_val, new_state) -> None:
+    def _resolve_relay_feedback(self, entity_id, new_val, new_state) -> bool:
         """Start a parked feedback-gated move when its relay confirms.
 
-        Called from the echo-filter branch of _async_switch_state_changed: the
-        relay reporting ON *is* the "motor now energized" signal. Resolves the
-        waiting future with the echo's ``last_changed`` timestamp so tracking
-        starts from when the relay actually switched, not when the listener ran.
+        The awaited relay reporting ON *is* the "motor now energized" signal.
+        Resolves the waiting future with the echo's ``last_changed`` timestamp
+        so tracking starts from when the relay actually switched, not when the
+        listener ran. Returns whether this transition was taken as the
+        confirmation; _async_switch_state_changed decides which transitions
+        are offered.
         """
         future = self._feedback_wait_future
         if (
-            future is not None
-            and not future.done()
-            and entity_id == self._feedback_wait_entity
-            and new_val == "on"
+            future is None
+            or future.done()
+            or entity_id != self._feedback_wait_entity
+            or new_val != "on"
         ):
-            last_changed = getattr(new_state, "last_changed", None)
-            base_ts = last_changed.timestamp() if last_changed is not None else None
-            self._log(
-                "_resolve_relay_feedback :: %s confirmed on (base_ts=%s)",
-                entity_id,
-                base_ts,
-            )
-            future.set_result(base_ts)
+            return False
+        last_changed = getattr(new_state, "last_changed", None)
+        base_ts = last_changed.timestamp() if last_changed is not None else None
+        self._log(
+            "_resolve_relay_feedback :: %s confirmed on (base_ts=%s)",
+            entity_id,
+            base_ts,
+        )
+        future.set_result(base_ts)
+        return True
 
     async def _wait_for_relay_echo(self, entity_id, timeout):
         """Await ``entity_id``'s ON echo; return its last_changed ts, or None.
@@ -4091,6 +4125,34 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             entity_id,
         )
         return commanded_at
+
+    async def _await_confirmation_before_stop(self) -> None:
+        """Wait out a pending relay confirmation before stopping tap hardware.
+
+        A toggle stop is a tap on the driving relay and a single-button stop is
+        another press: sent before that relay's ON echo lands it can be
+        swallowed, leaving the motor running while tracking is torn down. The
+        confirmation runs the parked start first, so the run the motor makes
+        between it and the tap is counted rather than lost. A no-op on hardware
+        whose stop de-energises (switch, pulse, wrapped) and for an external
+        trigger: that path sends no tap, so there is nothing to protect and a
+        wall-switch press must not park for the feedback timeout.
+        """
+        if self._stop_is_a_tap and not self._triggered_externally:
+            await self._await_pending_relay_confirmation()
+
+    async def _settle_parked_start_before_stop(self) -> None:
+        """Take a parked deferred start off the board ahead of a relay stop.
+
+        Waits the relay confirmation out where the stop is a tap
+        (_await_confirmation_before_stop); the confirmation runs the parked
+        start, so what is then neutralised is a tracked move and its position
+        holds the run between the confirmation and the stop. Elsewhere — a
+        fixed startup delay, a de-energising stop — the start is cancelled
+        unrun, as before.
+        """
+        await self._await_confirmation_before_stop()
+        self._neutralize_tracked_movement()
 
     async def _await_pending_relay_confirmation(self) -> None:
         """Block until a pending relay-feedback wait has been acted on.
@@ -4190,16 +4252,35 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # Echo filtering: if this switch has pending echoes, decrement and skip
         if self._pending_switch.get(entity_id, 0) > 0:
             self._pending_switch[entity_id] -= 1
-            if self._pending_switch[entity_id] <= 0:
+            remaining = self._pending_switch[entity_id]
+            if remaining <= 0:
                 self._clear_pending_switch(entity_id)
             self._log(
                 "_async_switch_state_changed :: echo filtered, remaining=%s",
-                self._pending_switch.get(entity_id, 0),
+                remaining,
             )
             # This own-echo is also the relay confirming it switched: if a
             # feedback-gated move is parked on this relay's ON transition, start
-            # its tracking now (issue #231). Harmless no-op otherwise.
-            self._resolve_relay_feedback(entity_id, new_val, new_state)
+            # its tracking now (issue #231). Only the drive's own ON counts —
+            # a reversal taps the same relay for its stop and its drive, and
+            # the stop's echo can land after the drive armed (#268): an ON
+            # that still leaves earlier transitions outstanding is that echo,
+            # not the confirmation.
+            if remaining <= self._feedback_own_echoes_after_on:
+                self._resolve_relay_feedback(entity_id, new_val, new_state)
+            return
+
+        # An unmarked rising edge on the relay a move is parked on is its
+        # confirmation with the mark spent: a toggle relay's self-release OFF is
+        # not pre-counted, and when it lands late it consumes the drive's mark
+        # (#268). Whoever raised the relay, the motor is driven from here.
+        if old_val == "off" and self._resolve_relay_feedback(
+            entity_id, new_val, new_state
+        ):
+            self._log(
+                "_async_switch_state_changed :: unmarked ON on the awaited relay"
+                " taken as its confirmation"
+            )
             return
 
         # Skip external state handling during calibration — calibration drives

@@ -16,14 +16,15 @@ import asyncio
 import contextlib
 import time
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
-from homeassistant.const import SERVICE_OPEN_COVER
+from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
 from custom_components.cover_time_based import cover_base
 from custom_components.cover_time_based.calibration import CalibrationState
 from custom_components.cover_time_based.cover import CONTROL_MODE_SINGLE_BUTTON
+from custom_components.cover_time_based.single_button_cycle import Phase
 from tests.helpers import single_button_sleep_patch, stub_switches
 
 # A fixed, timezone-aware moment used as the relay echo's ``last_changed``.
@@ -53,6 +54,16 @@ def _taps(cover, entity_id):
     """The taps (``turn_on``) sent to ``entity_id`` on the mock service bus."""
     tap = _ha("turn_on", entity_id)
     return [c for c in cover.hass.services.async_call.call_args_list if c == tap]
+
+
+def _parked(cover, entity_id):
+    """Whether a feedback wait on ``entity_id`` is still unresolved."""
+    future = cover._feedback_wait_future
+    return (
+        cover._feedback_wait_entity == entity_id
+        and future is not None
+        and not future.done()
+    )
 
 
 class TestRelayFeedbackStart:
@@ -1321,3 +1332,414 @@ class TestSingleButtonFeedback:
 
         assert len(_taps(cover, "switch.button")) == 2
         assert cover.travel_calc.current_position() > 0
+
+
+class TestRelayFeedbackToggleReversal:
+    """A reversal sent while the driving relay is unconfirmed (issue #268).
+
+    The stop a reversal issues is a tap on toggle hardware, so it is held back
+    until the relay confirms — the deferral a plain stop already gets — and only
+    then is the parked move torn down and tapped out. The run between the
+    confirmation and the tap is counted, not lost.
+    """
+
+    async def _park_open(self, make_cover, control_mode="toggle", **kwargs):
+        cover = make_cover(
+            control_mode=control_mode,
+            wait_for_relay_feedback=True,
+            travel_time_open=10,
+            travel_time_close=10,
+            **kwargs,
+        )
+        stub_switches(cover)
+        cover.async_write_ha_state = MagicMock()
+        cover.travel_calc.set_position(50)
+        await cover.async_open_cover()
+        await asyncio.sleep(0)
+        assert cover._feedback_wait_entity == "switch.open"
+        cover.hass.services.async_call.reset_mock()
+        return cover
+
+    @staticmethod
+    async def _turns(n=5):
+        for _ in range(n):
+            await asyncio.sleep(0)
+
+    @pytest.mark.asyncio
+    async def test_set_position_reversal_holds_the_stop_tap_until_the_echo(
+        self, make_cover
+    ):
+        cover = await self._park_open(make_cover)
+        with patch.object(cover, "_direction_change_delay", new_callable=AsyncMock):
+            reversal = asyncio.ensure_future(cover.set_position(20))
+            await self._turns()
+            # Nothing tapped while the open relay is unconfirmed.
+            assert cover.hass.services.async_call.await_count == 0
+            assert not reversal.done()
+
+            await cover._async_switch_state_changed(
+                _echo_event(
+                    "switch.open",
+                    "off",
+                    "on",
+                    datetime.now(UTC) - timedelta(seconds=3),
+                )
+            )
+            await asyncio.wait_for(reversal, 1.0)
+
+        # The stop tap on the confirmed relay, then the close drive (which
+        # releases the open relay before pulsing close, as every drive does).
+        assert cover.hass.services.async_call.call_args_list == [
+            _ha("turn_on", "switch.open"),
+            _ha("turn_off", "switch.open"),
+            _ha("turn_on", "switch.close"),
+        ]
+        # The three seconds the motor ran between the confirmation and the
+        # stop were counted: the close starts from there, not from 50.
+        assert cover.travel_calc.current_position() > 50
+        assert cover._last_command == SERVICE_CLOSE_COVER
+        assert cover._feedback_wait_entity == "switch.close"
+
+    @pytest.mark.asyncio
+    async def test_opposite_button_reversal_holds_the_stop_tap_until_the_echo(
+        self, make_cover
+    ):
+        cover = await self._park_open(make_cover, "toggle_opposite")
+        with patch.object(cover, "_direction_change_delay", new_callable=AsyncMock):
+            reversal = asyncio.ensure_future(cover.set_position(20))
+            await self._turns()
+            assert cover.hass.services.async_call.await_count == 0
+
+            await cover._async_switch_state_changed(
+                _echo_event(
+                    "switch.open",
+                    "off",
+                    "on",
+                    datetime.now(UTC) - timedelta(seconds=3),
+                )
+            )
+            await self._turns()
+            # The stop is a tap on the opposite (close) relay.
+            assert _taps(cover, "switch.close")
+            await cover._async_switch_state_changed(
+                _echo_event("switch.close", "off", "on", datetime.now(UTC))
+            )
+            await asyncio.wait_for(reversal, 1.0)
+
+        assert cover.hass.services.async_call.call_args_list == [
+            _ha("turn_on", "switch.close"),
+            _ha("turn_off", "switch.open"),
+            _ha("turn_on", "switch.close"),
+        ]
+        assert cover.travel_calc.current_position() > 50
+
+    @pytest.mark.asyncio
+    async def test_close_during_the_wait_holds_the_stop_tap_until_the_echo(
+        self, make_cover
+    ):
+        """An endpoint command the other way stops the parked move (a second
+        press then drives it) — and that stop is deferred like any other."""
+        cover = await self._park_open(make_cover)
+        reversal = asyncio.ensure_future(cover.async_close_cover())
+        await self._turns()
+        assert cover.hass.services.async_call.await_count == 0
+        assert not reversal.done()
+
+        await cover._async_switch_state_changed(
+            _echo_event(
+                "switch.open", "off", "on", datetime.now(UTC) - timedelta(seconds=3)
+            )
+        )
+        await asyncio.wait_for(reversal, 1.0)
+
+        assert cover.hass.services.async_call.call_args_list == [
+            _ha("turn_on", "switch.open")
+        ]
+        assert cover.travel_calc.is_traveling() is False
+        assert cover.travel_calc.current_position() > 50
+        assert cover._last_command is None
+        assert cover._startup_delay_task is None
+        assert cover._feedback_wait_entity is None
+
+    @pytest.mark.asyncio
+    async def test_tilt_reversal_holds_the_tilt_stop_tap_until_the_echo(
+        self, make_cover
+    ):
+        cover = make_cover(
+            control_mode="toggle",
+            wait_for_relay_feedback=True,
+            tilt_mode="dual_motor",
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            tilt_time_open=10,
+            tilt_time_close=10,
+        )
+        stub_switches(cover)
+        cover.async_write_ha_state = MagicMock()
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        await cover.async_open_cover_tilt()
+        await asyncio.sleep(0)
+        assert cover._feedback_wait_entity == "switch.tilt_open"
+        cover.hass.services.async_call.reset_mock()
+
+        reversal = asyncio.ensure_future(cover.async_close_cover_tilt())
+        await self._turns()
+        assert cover.hass.services.async_call.await_count == 0
+        assert not reversal.done()
+
+        await cover._async_switch_state_changed(
+            _echo_event(
+                "switch.tilt_open",
+                "off",
+                "on",
+                datetime.now(UTC) - timedelta(seconds=3),
+            )
+        )
+        await asyncio.wait_for(reversal, 1.0)
+
+        # The tilt stop is a tap on the tilt relay that was driving.
+        assert cover.hass.services.async_call.call_args_list == [
+            _ha("turn_on", "switch.tilt_open")
+        ]
+        assert cover.tilt_calc.is_traveling() is False
+        assert cover.tilt_calc.current_position() > 50
+        assert cover._startup_delay_task is None
+
+    @pytest.mark.asyncio
+    async def test_external_reversal_does_not_wait_for_the_echo(self, make_cover):
+        """A wall-switch reversal sends no tap of ours, so there is nothing to
+        hold back; the handler must not park for the feedback timeout."""
+        cover = await self._park_open(make_cover, "toggle_opposite")
+        cover._triggered_externally = True
+        try:
+            await asyncio.wait_for(cover.async_close_cover(), 0.5)
+        finally:
+            cover._triggered_externally = False
+
+        assert cover.hass.services.async_call.await_count == 0
+        assert cover._startup_delay_task is None
+
+    @pytest.mark.asyncio
+    async def test_reversal_proceeds_after_the_timeout(self, make_cover):
+        """A silent relay must not hold the reversal for ever: the move's own
+        timeout fallback runs, and the reversal proceeds behind it."""
+        cover = make_cover(
+            control_mode="toggle",
+            wait_for_relay_feedback=True,
+            travel_time_open=10,
+            travel_time_close=10,
+        )
+        stub_switches(cover)
+        cover.async_write_ha_state = MagicMock()
+        cover.travel_calc.set_position(50)
+        with (
+            patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.05),
+            patch.object(cover, "_direction_change_delay", new_callable=AsyncMock),
+        ):
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+            cover.hass.services.async_call.reset_mock()
+            await asyncio.wait_for(cover.set_position(20), 1.0)
+
+        assert cover.hass.services.async_call.call_args_list == [
+            _ha("turn_on", "switch.open"),
+            _ha("turn_off", "switch.open"),
+            _ha("turn_on", "switch.close"),
+        ]
+        assert cover._last_command == SERVICE_CLOSE_COVER
+
+    @pytest.mark.asyncio
+    async def test_single_button_reversal_holds_the_stop_press_until_the_echo(
+        self, make_cover
+    ):
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SINGLE_BUTTON,
+            open_switch="switch.button",
+            close_switch=None,
+            wait_for_relay_feedback=True,
+            travel_time_open=10,
+            travel_time_close=10,
+        )
+        stub_switches(cover)
+        cover.async_write_ha_state = MagicMock()
+        cover.travel_calc.set_position(50)
+        with (
+            single_button_sleep_patch(),
+            patch.object(cover, "_direction_change_delay", new_callable=AsyncMock),
+        ):
+            await cover.async_open_cover()
+            await self._turns()
+            assert cover._feedback_wait_entity == "switch.button"
+            cover.hass.services.async_call.reset_mock()
+
+            reversal = asyncio.ensure_future(cover.set_position(20))
+            await self._turns()
+            # No press while the button is unconfirmed.
+            assert _taps(cover, "switch.button") == []
+            assert not reversal.done()
+
+            await cover._async_switch_state_changed(
+                _echo_event(
+                    "switch.button",
+                    "off",
+                    "on",
+                    datetime.now(UTC) - timedelta(seconds=3),
+                )
+            )
+            await asyncio.wait_for(reversal, 1.0)
+            await self._turns()
+
+        # A stop press, then the press that drives the other way.
+        assert len(_taps(cover, "switch.button")) == 2
+        assert cover.travel_calc.current_position() > 50
+
+
+class TestRelayFeedbackSameRelayEchoes:
+    """The confirmation is the drive's own ON echo, not an earlier tap's.
+
+    A reversal on opposite-button hardware taps the same relay twice — the
+    stop, then the drive — and on a mesh slower than the settle gap the stop
+    tap's echoes land after the drive has armed its wait. Its ON must not be
+    read as the drive's confirmation, and its self-release OFF must not cost
+    the drive its confirmation either (issue #268).
+    """
+
+    async def _reverse_opposite(self, make_cover):
+        cover = make_cover(
+            control_mode="toggle_opposite",
+            wait_for_relay_feedback=True,
+            travel_time_open=10,
+            travel_time_close=10,
+        )
+        stub_switches(cover)
+        cover.async_write_ha_state = MagicMock()
+        cover.travel_calc.set_position(50)
+        await cover.async_open_cover()
+        await asyncio.sleep(0)
+        cover.hass.services.async_call.reset_mock()
+        reversal = asyncio.ensure_future(cover.set_position(20))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        await cover._async_switch_state_changed(
+            _echo_event("switch.open", "off", "on", datetime.now(UTC))
+        )
+        return cover, reversal
+
+    @pytest.mark.asyncio
+    async def test_a_late_stop_tap_echo_does_not_confirm_the_drive(self, make_cover):
+        with patch.object(cover_base, "DIRECTION_CHANGE_DELAY", 0.0):
+            cover, reversal = await self._reverse_opposite(make_cover)
+            await asyncio.wait_for(reversal, 1.0)
+        # Stop tap, release of the open relay, drive tap: the drive is parked
+        # on the close relay's confirmation.
+        assert len(_taps(cover, "switch.close")) == 2
+        assert cover._feedback_wait_entity == "switch.close"
+
+        # The stop tap's ON and self-release OFF arrive only now.
+        stop_echo = datetime.now(UTC) - timedelta(seconds=3)
+        await cover._async_switch_state_changed(
+            _echo_event("switch.close", "off", "on", stop_echo)
+        )
+        await asyncio.sleep(0)
+        assert _parked(cover, "switch.close")
+        assert cover.travel_calc.is_traveling() is False
+        await cover._async_switch_state_changed(
+            _echo_event("switch.close", "on", "off", stop_echo)
+        )
+        await asyncio.sleep(0)
+        assert _parked(cover, "switch.close")
+
+        # The drive's own ON is the confirmation, and anchors tracking.
+        drive_echo = datetime.now(UTC) - timedelta(seconds=1)
+        await cover._async_switch_state_changed(
+            _echo_event("switch.close", "off", "on", drive_echo)
+        )
+        await asyncio.sleep(0)
+        assert cover.travel_calc.is_traveling() is True
+        assert (
+            cover.travel_calc._last_known_position_timestamp == drive_echo.timestamp()
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_prompt_stop_tap_echo_is_filtered_and_the_drive_confirms(
+        self, make_cover
+    ):
+        """The fast-mesh ordering: the stop tap's echoes land inside the settle
+        gap, before the drive taps, and the drive's own echo then confirms."""
+        with patch.object(cover_base, "DIRECTION_CHANGE_DELAY", 0.05):
+            cover, reversal = await self._reverse_opposite(make_cover)
+            for _ in range(5):
+                await asyncio.sleep(0)
+            assert len(_taps(cover, "switch.close")) == 1
+            stop_echo = datetime.now(UTC)
+            await cover._async_switch_state_changed(
+                _echo_event("switch.close", "off", "on", stop_echo)
+            )
+            await cover._async_switch_state_changed(
+                _echo_event("switch.close", "on", "off", stop_echo)
+            )
+            await asyncio.wait_for(reversal, 1.0)
+        assert len(_taps(cover, "switch.close")) == 2
+        assert _parked(cover, "switch.close")
+        assert cover.travel_calc.is_traveling() is False
+
+        drive_echo = datetime.now(UTC)
+        await cover._async_switch_state_changed(
+            _echo_event("switch.close", "off", "on", drive_echo)
+        )
+        await asyncio.sleep(0)
+        assert cover.travel_calc.is_traveling() is True
+        assert (
+            cover.travel_calc._last_known_position_timestamp == drive_echo.timestamp()
+        )
+
+    @pytest.mark.asyncio
+    async def test_single_button_confirms_on_the_last_press_not_a_late_nudge(
+        self, make_cover
+    ):
+        """A reversal needs a stop press and a drive press on the one button;
+        the stop press's late echoes must not anchor tracking."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_SINGLE_BUTTON,
+            open_switch="switch.button",
+            close_switch=None,
+            wait_for_relay_feedback=True,
+            travel_time_open=10,
+            travel_time_close=10,
+        )
+        stub_switches(cover)
+        cover.async_write_ha_state = MagicMock()
+        cover.travel_calc.set_position(50)
+        cover._phase = Phase.MOVING_UP
+        with single_button_sleep_patch():
+            await cover.async_close_cover()
+            for _ in range(5):
+                await asyncio.sleep(0)
+        # Both presses are out; the move is parked on the button's confirmation.
+        assert len(_taps(cover, "switch.button")) == 2
+        assert cover._feedback_wait_entity == "switch.button"
+
+        # The stop press's echoes arrive late, after the drive press.
+        stop_echo = datetime.now(UTC) - timedelta(seconds=3)
+        await cover._async_switch_state_changed(
+            _echo_event("switch.button", "off", "on", stop_echo)
+        )
+        await asyncio.sleep(0)
+        assert _parked(cover, "switch.button")
+        await cover._async_switch_state_changed(
+            _echo_event("switch.button", "on", "off", stop_echo)
+        )
+        await asyncio.sleep(0)
+        assert _parked(cover, "switch.button")
+        assert cover.travel_calc.is_traveling() is False
+
+        drive_echo = datetime.now(UTC) - timedelta(seconds=1)
+        await cover._async_switch_state_changed(
+            _echo_event("switch.button", "off", "on", drive_echo)
+        )
+        await asyncio.sleep(0)
+        assert cover.travel_calc.is_traveling() is True
+        assert (
+            cover.travel_calc._last_known_position_timestamp == drive_echo.timestamp()
+        )
