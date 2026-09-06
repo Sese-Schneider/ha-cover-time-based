@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from collections.abc import Callable
+from typing import Any, NamedTuple
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
@@ -75,41 +76,187 @@ from .helpers import resolve_entity_or_none
 
 _LOGGER = logging.getLogger(__name__)
 
-# Map from WS field names to config entry option keys
-_FIELD_MAP = {
-    "control_mode": CONF_CONTROL_MODE,
-    "pulse_time": CONF_PULSE_TIME,
-    "relay_reports_off": CONF_RELAY_REPORTS_OFF,
-    "send_endpoint_stop": CONF_SEND_ENDPOINT_STOP,
-    "force_endpoint_redrive": CONF_FORCE_ENDPOINT_REDRIVE,
-    "wait_for_relay_feedback": CONF_WAIT_FOR_RELAY_FEEDBACK,
-    "recalibrate_before_position": CONF_RECALIBRATE_BEFORE_POSITION,
-    "open_switch_entity_id": CONF_OPEN_SWITCH_ENTITY_ID,
-    "close_switch_entity_id": CONF_CLOSE_SWITCH_ENTITY_ID,
-    "stop_switch_entity_id": CONF_STOP_SWITCH_ENTITY_ID,
-    "cover_entity_id": CONF_COVER_ENTITY_ID,
-    "ignore_reported_position": CONF_IGNORE_REPORTED_POSITION,
-    "force_time_based_position": CONF_FORCE_TIME_BASED_POSITION,
-    "reports_command_not_endpoint": CONF_REPORTS_COMMAND_NOT_ENDPOINT,
-    "ignore_endpoint_states": CONF_IGNORE_ENDPOINT_STATES,
-    "ignore_all_reports": CONF_IGNORE_ALL_REPORTS,
-    "invert": CONF_INVERT,
-    "tilt_mode": CONF_TILT_MODE,
-    "travel_time_close": CONF_TRAVEL_TIME_CLOSE,
-    "travel_time_open": CONF_TRAVEL_TIME_OPEN,
-    "tilt_time_close": CONF_TILT_TIME_CLOSE,
-    "tilt_time_open": CONF_TILT_TIME_OPEN,
-    "travel_startup_delay": CONF_TRAVEL_STARTUP_DELAY,
-    "tilt_startup_delay": CONF_TILT_STARTUP_DELAY,
-    "endpoint_runon_time": CONF_ENDPOINT_RUNON_TIME,
-    "min_movement_time": CONF_MIN_MOVEMENT_TIME,
-    "safe_tilt_position": CONF_SAFE_TILT_POSITION,
-    "max_tilt_allowed_position": CONF_MAX_TILT_ALLOWED_POSITION,
-    "tilt_open_switch": CONF_TILT_OPEN_SWITCH,
-    "tilt_close_switch": CONF_TILT_CLOSE_SWITCH,
-    "tilt_stop_switch": CONF_TILT_STOP_SWITCH,
-    "close_includes_tilt": CONF_CLOSE_INCLUDES_TILT,
-    "assumed_state": CONF_ASSUMED_STATE,
+
+# Single source of truth for every configurable field the card exchanges over
+# the websocket. Each descriptor drives all three derived structures below —
+# the ws-key→conf-key map (`_FIELD_MAP`), the `get_config` response defaults,
+# and the `update_config` voluptuous schema — so a new option is added in one
+# place, not four. Adding a row here is the whole wiring change.
+class _ConfigField(NamedTuple):
+    ws_key: str  # the key the card sends and receives
+    conf_key: str | None  # config-entry option key; None = validated but never
+    # persisted or returned (a legacy knob a cached card still sends)
+    validator: Any  # voluptuous validator for the update_config schema
+    default: Any = None  # get_config fallback when the option is absent
+    normalize: Callable[[Any], Any] | None = None  # applied on read and write
+
+
+def _normalize_tilt_mode(value: Any) -> Any:
+    """Map the legacy "sequential" tilt mode to its canonical name.
+
+    The frontend no longer has dropdown/hint keys for the bare "sequential"
+    string; the migration and resolver alias handle behaviour, and this keeps
+    the read and write paths consistent for any entry that escapes migration.
+    """
+    return "sequential_close" if value == "sequential" else value
+
+
+# Validators shared across fields of the same shape. `None` is always accepted
+# (a cleared field), matching HA's own optional-value convention.
+_BOOL = vol.Any(None, bool)
+_ENTITY = vol.Any(str, None)
+_PERCENT_OR_NONE = vol.Any(None, PERCENT)
+_PULSE_TIME = vol.Any(
+    None, vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION, max=10))
+)
+_TRAVEL_TIME = vol.Any(
+    None, vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION, max=600))
+)
+_DELAY = vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600)))
+
+_CONFIG_FIELDS: tuple[_ConfigField, ...] = (
+    _ConfigField(
+        "control_mode",
+        CONF_CONTROL_MODE,
+        vol.In(
+            [
+                CONTROL_MODE_WRAPPED,
+                CONTROL_MODE_SWITCH,
+                CONTROL_MODE_PULSE,
+                CONTROL_MODE_TOGGLE,
+                CONTROL_MODE_TOGGLE_OPPOSITE,
+                CONTROL_MODE_SINGLE_BUTTON,
+            ]
+        ),
+        default=CONTROL_MODE_SWITCH,
+    ),
+    _ConfigField(
+        "pulse_time", CONF_PULSE_TIME, _PULSE_TIME, default=DEFAULT_PULSE_TIME
+    ),
+    _ConfigField(
+        "relay_reports_off",
+        CONF_RELAY_REPORTS_OFF,
+        _BOOL,
+        default=DEFAULT_RELAY_REPORTS_OFF,
+    ),
+    _ConfigField(
+        "send_endpoint_stop",
+        CONF_SEND_ENDPOINT_STOP,
+        _BOOL,
+        default=DEFAULT_SEND_ENDPOINT_STOP,
+    ),
+    _ConfigField(
+        "force_endpoint_redrive",
+        CONF_FORCE_ENDPOINT_REDRIVE,
+        _BOOL,
+        default=DEFAULT_FORCE_ENDPOINT_REDRIVE,
+    ),
+    _ConfigField(
+        "wait_for_relay_feedback",
+        CONF_WAIT_FOR_RELAY_FEEDBACK,
+        _BOOL,
+        default=DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
+    ),
+    _ConfigField(
+        "recalibrate_before_position",
+        CONF_RECALIBRATE_BEFORE_POSITION,
+        _BOOL,
+        default=DEFAULT_RECALIBRATE_BEFORE_POSITION,
+    ),
+    _ConfigField("open_switch_entity_id", CONF_OPEN_SWITCH_ENTITY_ID, _ENTITY),
+    _ConfigField("close_switch_entity_id", CONF_CLOSE_SWITCH_ENTITY_ID, _ENTITY),
+    _ConfigField("stop_switch_entity_id", CONF_STOP_SWITCH_ENTITY_ID, _ENTITY),
+    _ConfigField("cover_entity_id", CONF_COVER_ENTITY_ID, _ENTITY),
+    _ConfigField(
+        "ignore_reported_position",
+        CONF_IGNORE_REPORTED_POSITION,
+        _BOOL,
+        default=DEFAULT_IGNORE_REPORTED_POSITION,
+    ),
+    _ConfigField(
+        "force_time_based_position",
+        CONF_FORCE_TIME_BASED_POSITION,
+        _BOOL,
+        default=DEFAULT_FORCE_TIME_BASED_POSITION,
+    ),
+    _ConfigField(
+        "reports_command_not_endpoint",
+        CONF_REPORTS_COMMAND_NOT_ENDPOINT,
+        _BOOL,
+        default=DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
+    ),
+    _ConfigField(
+        "ignore_endpoint_states",
+        CONF_IGNORE_ENDPOINT_STATES,
+        _BOOL,
+        default=DEFAULT_IGNORE_ENDPOINT_STATES,
+    ),
+    _ConfigField(
+        "ignore_all_reports",
+        CONF_IGNORE_ALL_REPORTS,
+        _BOOL,
+        default=DEFAULT_IGNORE_ALL_REPORTS,
+    ),
+    _ConfigField("invert", CONF_INVERT, _BOOL, default=DEFAULT_INVERT),
+    _ConfigField(
+        "tilt_mode",
+        CONF_TILT_MODE,
+        vol.In(
+            [
+                "none",
+                "sequential_close",
+                "sequential_open",
+                "sequential",
+                "dual_motor",
+                "inline",
+            ]
+        ),
+        default="none",
+        normalize=_normalize_tilt_mode,
+    ),
+    _ConfigField("travel_time_close", CONF_TRAVEL_TIME_CLOSE, _TRAVEL_TIME),
+    _ConfigField("travel_time_open", CONF_TRAVEL_TIME_OPEN, _TRAVEL_TIME),
+    _ConfigField("tilt_time_close", CONF_TILT_TIME_CLOSE, _TRAVEL_TIME),
+    _ConfigField("tilt_time_open", CONF_TILT_TIME_OPEN, _TRAVEL_TIME),
+    _ConfigField("travel_startup_delay", CONF_TRAVEL_STARTUP_DELAY, _DELAY),
+    _ConfigField("tilt_startup_delay", CONF_TILT_STARTUP_DELAY, _DELAY),
+    _ConfigField(
+        "endpoint_runon_time",
+        CONF_ENDPOINT_RUNON_TIME,
+        _DELAY,
+        default=DEFAULT_ENDPOINT_RUNON_TIME,
+    ),
+    _ConfigField("min_movement_time", CONF_MIN_MOVEMENT_TIME, _DELAY),
+    # Accepted and ignored (conf_key None, so never persisted or returned): a
+    # browser holding a cached copy of the old card still sends it.
+    _ConfigField("direction_change_delay", None, _DELAY),
+    _ConfigField(
+        "safe_tilt_position", CONF_SAFE_TILT_POSITION, _PERCENT_OR_NONE, default=100
+    ),
+    _ConfigField(
+        "max_tilt_allowed_position", CONF_MAX_TILT_ALLOWED_POSITION, _PERCENT_OR_NONE
+    ),
+    _ConfigField("tilt_open_switch", CONF_TILT_OPEN_SWITCH, _ENTITY),
+    _ConfigField("tilt_close_switch", CONF_TILT_CLOSE_SWITCH, _ENTITY),
+    _ConfigField("tilt_stop_switch", CONF_TILT_STOP_SWITCH, _ENTITY),
+    _ConfigField(
+        "close_includes_tilt",
+        CONF_CLOSE_INCLUDES_TILT,
+        _BOOL,
+        default=DEFAULT_CLOSE_INCLUDES_TILT,
+    ),
+    _ConfigField(
+        "assumed_state", CONF_ASSUMED_STATE, _BOOL, default=DEFAULT_ASSUMED_STATE
+    ),
+)
+
+# Map from WS field names to config entry option keys, for the fields that
+# persist. Derived so it can never drift from the table above.
+_FIELD_MAP = {f.ws_key: f.conf_key for f in _CONFIG_FIELDS if f.conf_key is not None}
+
+# The update_config field validators, keyed by the WS key that carries them.
+_UPDATE_CONFIG_FIELD_SCHEMA = {
+    vol.Optional(f.ws_key): f.validator for f in _CONFIG_FIELDS
 }
 
 
@@ -204,77 +351,19 @@ async def ws_get_config(
         return
 
     options = config_entry.options
-    # Normalize the legacy "sequential" string in the GET response so the
-    # frontend always sees the current canonical name. The migration and
-    # resolver alias handle behavior; this guard keeps the UI consistent
-    # for any entry that somehow escapes migration.
-    tilt_mode = options.get(CONF_TILT_MODE, "none")
-    if tilt_mode == "sequential":
-        tilt_mode = "sequential_close"
-    connection.send_result(
-        msg["id"],
-        {
-            "entry_id": config_entry.entry_id,
-            "control_mode": options.get(CONF_CONTROL_MODE, CONTROL_MODE_SWITCH),
-            "pulse_time": options.get(CONF_PULSE_TIME, DEFAULT_PULSE_TIME),
-            "relay_reports_off": options.get(
-                CONF_RELAY_REPORTS_OFF, DEFAULT_RELAY_REPORTS_OFF
-            ),
-            "send_endpoint_stop": options.get(
-                CONF_SEND_ENDPOINT_STOP, DEFAULT_SEND_ENDPOINT_STOP
-            ),
-            "open_switch_entity_id": options.get(CONF_OPEN_SWITCH_ENTITY_ID),
-            "close_switch_entity_id": options.get(CONF_CLOSE_SWITCH_ENTITY_ID),
-            "stop_switch_entity_id": options.get(CONF_STOP_SWITCH_ENTITY_ID),
-            "cover_entity_id": options.get(CONF_COVER_ENTITY_ID),
-            "ignore_reported_position": options.get(
-                CONF_IGNORE_REPORTED_POSITION, DEFAULT_IGNORE_REPORTED_POSITION
-            ),
-            "force_time_based_position": options.get(
-                CONF_FORCE_TIME_BASED_POSITION, DEFAULT_FORCE_TIME_BASED_POSITION
-            ),
-            "reports_command_not_endpoint": options.get(
-                CONF_REPORTS_COMMAND_NOT_ENDPOINT,
-                DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
-            ),
-            "ignore_endpoint_states": options.get(
-                CONF_IGNORE_ENDPOINT_STATES, DEFAULT_IGNORE_ENDPOINT_STATES
-            ),
-            "ignore_all_reports": options.get(
-                CONF_IGNORE_ALL_REPORTS, DEFAULT_IGNORE_ALL_REPORTS
-            ),
-            "invert": options.get(CONF_INVERT, DEFAULT_INVERT),
-            "tilt_mode": tilt_mode,
-            "travel_time_close": options.get(CONF_TRAVEL_TIME_CLOSE),
-            "travel_time_open": options.get(CONF_TRAVEL_TIME_OPEN),
-            "tilt_time_close": options.get(CONF_TILT_TIME_CLOSE),
-            "tilt_time_open": options.get(CONF_TILT_TIME_OPEN),
-            "travel_startup_delay": options.get(CONF_TRAVEL_STARTUP_DELAY),
-            "tilt_startup_delay": options.get(CONF_TILT_STARTUP_DELAY),
-            "endpoint_runon_time": options.get(
-                CONF_ENDPOINT_RUNON_TIME, DEFAULT_ENDPOINT_RUNON_TIME
-            ),
-            "min_movement_time": options.get(CONF_MIN_MOVEMENT_TIME),
-            "safe_tilt_position": options.get(CONF_SAFE_TILT_POSITION, 100),
-            "max_tilt_allowed_position": options.get(CONF_MAX_TILT_ALLOWED_POSITION),
-            "tilt_open_switch": options.get(CONF_TILT_OPEN_SWITCH),
-            "tilt_close_switch": options.get(CONF_TILT_CLOSE_SWITCH),
-            "tilt_stop_switch": options.get(CONF_TILT_STOP_SWITCH),
-            "close_includes_tilt": options.get(
-                CONF_CLOSE_INCLUDES_TILT, DEFAULT_CLOSE_INCLUDES_TILT
-            ),
-            "assumed_state": options.get(CONF_ASSUMED_STATE, DEFAULT_ASSUMED_STATE),
-            "force_endpoint_redrive": options.get(
-                CONF_FORCE_ENDPOINT_REDRIVE, DEFAULT_FORCE_ENDPOINT_REDRIVE
-            ),
-            "wait_for_relay_feedback": options.get(
-                CONF_WAIT_FOR_RELAY_FEEDBACK, DEFAULT_WAIT_FOR_RELAY_FEEDBACK
-            ),
-            "recalibrate_before_position": options.get(
-                CONF_RECALIBRATE_BEFORE_POSITION, DEFAULT_RECALIBRATE_BEFORE_POSITION
-            ),
-        },
-    )
+    # Every persisted field, read through the shared table so the response can
+    # never drift from what update_config accepts. Fields carrying a normalize
+    # hook (e.g. the legacy "sequential" tilt mode) are canonicalised here so
+    # the card always sees the current name, whatever escaped migration.
+    result: dict[str, Any] = {"entry_id": config_entry.entry_id}
+    for field in _CONFIG_FIELDS:
+        if field.conf_key is None:
+            continue
+        value = options.get(field.conf_key, field.default)
+        if field.normalize is not None:
+            value = field.normalize(value)
+        result[field.ws_key] = value
+    connection.send_result(msg["id"], result)
 
 
 @websocket_api.require_admin
@@ -282,80 +371,7 @@ async def ws_get_config(
     {
         "type": "cover_time_based/update_config",
         vol.Required("entity_id"): str,
-        vol.Optional("control_mode"): vol.In(
-            [
-                CONTROL_MODE_WRAPPED,
-                CONTROL_MODE_SWITCH,
-                CONTROL_MODE_PULSE,
-                CONTROL_MODE_TOGGLE,
-                CONTROL_MODE_TOGGLE_OPPOSITE,
-                CONTROL_MODE_SINGLE_BUTTON,
-            ]
-        ),
-        vol.Optional("pulse_time"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION, max=10))
-        ),
-        vol.Optional("relay_reports_off"): vol.Any(None, bool),
-        vol.Optional("send_endpoint_stop"): vol.Any(None, bool),
-        vol.Optional("force_endpoint_redrive"): vol.Any(None, bool),
-        vol.Optional("wait_for_relay_feedback"): vol.Any(None, bool),
-        vol.Optional("recalibrate_before_position"): vol.Any(None, bool),
-        vol.Optional("open_switch_entity_id"): vol.Any(str, None),
-        vol.Optional("close_switch_entity_id"): vol.Any(str, None),
-        vol.Optional("stop_switch_entity_id"): vol.Any(str, None),
-        vol.Optional("cover_entity_id"): vol.Any(str, None),
-        vol.Optional("ignore_reported_position"): vol.Any(None, bool),
-        vol.Optional("force_time_based_position"): vol.Any(None, bool),
-        vol.Optional("reports_command_not_endpoint"): vol.Any(None, bool),
-        vol.Optional("ignore_endpoint_states"): vol.Any(None, bool),
-        vol.Optional("ignore_all_reports"): vol.Any(None, bool),
-        vol.Optional("invert"): vol.Any(None, bool),
-        vol.Optional("assumed_state"): vol.Any(None, bool),
-        vol.Optional("tilt_mode"): vol.In(
-            [
-                "none",
-                "sequential_close",
-                "sequential_open",
-                "sequential",
-                "dual_motor",
-                "inline",
-            ]
-        ),
-        vol.Optional("travel_time_close"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION, max=600))
-        ),
-        vol.Optional("travel_time_open"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION, max=600))
-        ),
-        vol.Optional("tilt_time_close"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION, max=600))
-        ),
-        vol.Optional("tilt_time_open"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=MIN_DURATION, max=600))
-        ),
-        vol.Optional("travel_startup_delay"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
-        ),
-        vol.Optional("tilt_startup_delay"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
-        ),
-        vol.Optional("endpoint_runon_time"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
-        ),
-        vol.Optional("min_movement_time"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
-        ),
-        # Accepted and ignored (absent from _FIELD_MAP, so never persisted):
-        # a browser holding a cached copy of the old card still sends it.
-        vol.Optional("direction_change_delay"): vol.Any(
-            None, vol.All(vol.Coerce(float), vol.Range(min=0, max=600))
-        ),
-        vol.Optional("safe_tilt_position"): vol.Any(None, PERCENT),
-        vol.Optional("max_tilt_allowed_position"): vol.Any(None, PERCENT),
-        vol.Optional("tilt_open_switch"): vol.Any(str, None),
-        vol.Optional("tilt_close_switch"): vol.Any(str, None),
-        vol.Optional("tilt_stop_switch"): vol.Any(str, None),
-        vol.Optional("close_includes_tilt"): vol.Any(None, bool),
+        **_UPDATE_CONFIG_FIELD_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -397,18 +413,19 @@ async def ws_update_config(
 
     new_options = dict(config_entry.options)
 
-    for ws_key, conf_key in _FIELD_MAP.items():
-        if ws_key in msg:
-            value = msg[ws_key]
-            if value is None:
-                new_options.pop(conf_key, None)
-            else:
-                # Normalize the legacy "sequential" string on write so
-                # persisted options never carry it — the frontend no longer
-                # has dropdown/hint keys for it.
-                if conf_key == CONF_TILT_MODE and value == "sequential":
-                    value = "sequential_close"
-                new_options[conf_key] = value
+    for field in _CONFIG_FIELDS:
+        if field.conf_key is None or field.ws_key not in msg:
+            continue
+        value = msg[field.ws_key]
+        if value is None:
+            new_options.pop(field.conf_key, None)
+        else:
+            # A field's normalize hook (e.g. the legacy "sequential" tilt mode)
+            # canonicalises the value so persisted options never carry a name
+            # the frontend can no longer render.
+            if field.normalize is not None:
+                value = field.normalize(value)
+            new_options[field.conf_key] = value
 
     # Reject script entities in a mode that cannot drive one (they auto-return
     # to 'off', which switch/toggle modes misread as a stop). Validate the
