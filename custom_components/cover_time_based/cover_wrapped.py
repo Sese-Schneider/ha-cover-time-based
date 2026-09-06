@@ -679,11 +679,21 @@ class WrappedCoverTimeBased(CoverTimeBased):
         drops it too, for a cover whose open/closed states fire when the motor
         merely stops mid-travel rather than only at the physical endpoints
         (issue #238) — there a `closed` proves nothing about position.
+
+        A command-echo cover reports no usable position at all, so this
+        returns None for it regardless of the other flags.
         """
         # A device whose every report is ignored (issue #248) reports no usable
         # position, so the startup live-sync and any other consumer fall back to
         # the time-based tracker rather than a value we do not trust.
         if self._ignore_all_reports:
+            return None
+        # A command-echo cover's state and position are echoes of the last
+        # command, not measurements: neither report channel trusts them, and
+        # the startup live-sync must not either. This is also what lets the
+        # card's single position-reporting profile stand in for the older
+        # "position unreliable" flag without losing anything.
+        if self._reports_command_not_endpoint:
             return None
         state = self.hass.states.get(self._cover_entity_id) if state is None else state
         if state is None:

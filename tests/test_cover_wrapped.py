@@ -2052,7 +2052,8 @@ class TestWrappedSyncsToLivePositionAtStartup:
     underlying may have been moved (app/remote) while HA was down. Trust a
     live reported position over the stored snapshot at startup — but not a
     bare `closed` (the untrustworthy reappearance shape #160 guards against),
-    an unavailable underlying, or when ignore_reported_position is set.
+    an unavailable underlying, or a cover whose reported position is not a
+    measurement (ignore_reported_position, or a command-echo cover).
     """
 
     @staticmethod
@@ -2107,6 +2108,27 @@ class TestWrappedSyncsToLivePositionAtStartup:
 
         assert cover.travel_calc.current_position() == 30
         # No divergence detected, so no spurious persist at startup.
+        _mock_position_store.async_save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_command_echo_keeps_stored_value(
+        self, make_cover, _mock_position_store
+    ):
+        """A command-echo cover never trusts a reported position, at startup
+        included: both live report channels already ignore it, so a number
+        echoed back from the last command must not move the tracker either.
+        """
+        _mock_position_store.async_get = AsyncMock(return_value={"position": 30})
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            reports_command_not_endpoint=True,
+            ignore_reported_position=False,
+        )
+        self._set_underlying_state(cover, state="open", current_position=70)
+
+        await self._added_to_hass(cover)
+
+        assert cover.travel_calc.current_position() == 30
         _mock_position_store.async_save.assert_not_awaited()
 
     @pytest.mark.asyncio
