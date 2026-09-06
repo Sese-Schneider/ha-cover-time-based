@@ -297,14 +297,16 @@ Leave it **off** unless the position drifts on a cover whose relay responds
 slowly.
 
 > [!NOTE]
-> On the two **Toggle** modes a stop is a tap on the driving relay rather than a
-> guaranteed off, so a stop you press before the relay confirms is held back
-> until the confirmation arrives — or until the wait times out — and only then
-> tapped out. It is no longer swallowed. A *reversal* is held back the same way:
-> sending the cover the other way before the confirmation has arrived stops it
-> once the relay confirms, counts the run up to that stop, and a position
-> command then waits out the usual settle gap before driving the other way. An
-> open or close the other way only stops the cover; press it again to drive.
+> On the two **Toggle** modes a stop is a tap on a relay (the driving one again,
+> or the opposite one) rather than a guaranteed off, and in **Single button**
+> mode it is another press. A stop you send before the relay confirms is held
+> back until the confirmation arrives — or until the wait times out — and only
+> then tapped out, so it cannot be swallowed. A *reversal* is held back the same
+> way: sending the cover the other way before the confirmation has arrived
+> stops it once the relay confirms, counts the run up to that stop, and a
+> position command then waits out the usual settle gap before driving the other
+> way. An open or close the other way only stops the cover; press it again to
+> drive.
 
 #### Send stop signal at endpoints
 

@@ -3308,8 +3308,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         gap from driving afterwards. Every route that halts the cover lands
         here — through _neutralize_tracked_movement for both _stop_hardware
         implementations (CoverTimeBased's and ToggleBaseCover's, which does not
-        call super), calibration start and a raw command, and directly for the
-        known-position declarations.
+        call super), calibration start, a raw command and a direction change
+        at a parked start (_neutralize_parked_move, which stops and returns
+        rather than driving on, so it supersedes like a stop), and directly for
+        the known-position declarations.
 
         Passive routes must pass ``supersede=False``: a wrapped cover reporting
         its settled position snaps via set_known_position, and a switch-mode
@@ -4129,7 +4131,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         On tap hardware the relay confirmation is waited out first, and the
         confirmation runs the parked start: what is neutralised is then a
         tracked move whose position holds the run up to the stop about to be
-        sent. Otherwise the start is cancelled unrun.
+        sent. Otherwise the start is cancelled unrun. The supersede inside is
+        a second epoch bump behind _abandon_active_lifecycle's; nothing
+        compares epochs by distance, so it is redundant but benign.
         """
         await self._await_confirmation_before_stop()
         self._neutralize_tracked_movement()

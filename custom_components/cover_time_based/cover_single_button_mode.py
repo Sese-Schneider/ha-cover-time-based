@@ -36,7 +36,10 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
     # before the movement is torn down, or the motor runs between the two
     # presses with nothing counting it — see _await_confirmation_before_stop.
     _stop_is_a_tap = True
-    # A press's own release OFF follows its confirming ON.
+    # A press's own release OFF follows its confirming ON. The count has to be
+    # exact: a button that reports its ON but never its OFF leaves a mark per
+    # press outstanding, so a multi-press plan's confirming ON is never taken
+    # and tracking starts on the timeout fallback instead.
     _own_echoes_after_confirming_on = 1
 
     def __init__(self, pulse_time, **kwargs):

@@ -37,6 +37,10 @@ class ToggleBaseCover(SwitchCoverTimeBased):
     # and a tap sent before the start is confirmed can be swallowed or stop a
     # run nothing tracks yet — see _await_confirmation_before_stop.
     _stop_is_a_tap = True
+    # Nothing of ours trails the confirming ON: a release comes before the
+    # pulse, and the relay's self-release OFF is deliberately never pre-counted
+    # (see _pulse_relay).
+    _own_echoes_after_confirming_on = 0
 
     def __init__(self, relay_reports_off=True, **kwargs):
         super().__init__(**kwargs)
