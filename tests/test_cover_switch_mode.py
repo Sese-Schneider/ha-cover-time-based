@@ -159,7 +159,7 @@ class TestSwitchModeSendStop:
 
 # Where _mark_switch_pending schedules its safety timeout — patched to a no-op
 # so tests don't schedule real timers.
-_CALL_LATER = "custom_components.cover_time_based.cover_base.async_call_later"
+_CALL_LATER = "custom_components.cover_time_based.cover_echo_filter.async_call_later"
 
 
 def _set_switch_states(cover, states):

@@ -249,7 +249,7 @@ async def test_pulse_lifecycle_no_orphan_and_press_not_swallowed(
             new_callable=AsyncMock,
         ),
         patch(
-            "custom_components.cover_time_based.cover_base.async_call_later",
+            "custom_components.cover_time_based.cover_echo_filter.async_call_later",
             return_value=lambda: None,
         ),
     ):
@@ -292,7 +292,7 @@ async def test_pulse_stop_within_window_probe_desired_behaviour(make_cover):
             new_callable=AsyncMock,
         ),
         patch(
-            "custom_components.cover_time_based.cover_base.async_call_later",
+            "custom_components.cover_time_based.cover_echo_filter.async_call_later",
             return_value=lambda: None,
         ),
     ):
@@ -337,7 +337,7 @@ async def test_removal_cancels_pulses_and_turns_relays_off(make_cover):
             new_callable=AsyncMock,
         ),
         patch(
-            "custom_components.cover_time_based.cover_base.async_call_later",
+            "custom_components.cover_time_based.cover_echo_filter.async_call_later",
             return_value=lambda: None,
         ),
     ):

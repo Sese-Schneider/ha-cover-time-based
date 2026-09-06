@@ -21,7 +21,11 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 
-from custom_components.cover_time_based import cover_base, travel_calculator
+from custom_components.cover_time_based import (
+    cover_base,
+    cover_echo_filter,
+    travel_calculator,
+)
 from custom_components.cover_time_based.calibration import CalibrationState
 from custom_components.cover_time_based.cover import CONTROL_MODE_SINGLE_BUTTON
 from custom_components.cover_time_based.single_button_cycle import Phase
@@ -135,6 +139,7 @@ def feedback_clock():
     clock = FakeClock(wall=1_700_000_000.0, mono=5_000.0)
     with (
         patch.object(cover_base, "time", clock),
+        patch.object(cover_echo_filter, "time", clock),
         patch.object(travel_calculator, "time", clock),
     ):
         yield clock
@@ -532,7 +537,7 @@ class TestRelayFeedbackGuards:
         cover.travel_calc.set_position(0)
 
         with (
-            patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.2),
+            patch.object(cover_echo_filter, "RELAY_FEEDBACK_TIMEOUT", 0.2),
             patch.object(cover, "async_write_ha_state"),
         ):
             t0 = time.monotonic()
@@ -687,11 +692,11 @@ class TestRelayFeedbackGuards:
         assert open_calls, "open relay should have been marked pending"
         assert (
             open_calls[0].kwargs.get("timeout")
-            == cover_base.RELAY_FEEDBACK_PENDING_TIMEOUT
+            == cover_echo_filter.RELAY_FEEDBACK_PENDING_TIMEOUT
         )
         assert (
-            cover_base.RELAY_FEEDBACK_PENDING_TIMEOUT
-            > cover_base.RELAY_FEEDBACK_TIMEOUT
+            cover_echo_filter.RELAY_FEEDBACK_PENDING_TIMEOUT
+            > cover_echo_filter.RELAY_FEEDBACK_TIMEOUT
         )
 
 
@@ -867,7 +872,7 @@ class TestRelayFeedbackToggleMode:
         assert open_calls, "open relay should have been marked pending"
         assert (
             open_calls[0].kwargs.get("timeout")
-            == cover_base.RELAY_FEEDBACK_PENDING_TIMEOUT
+            == cover_echo_filter.RELAY_FEEDBACK_PENDING_TIMEOUT
         )
 
 
@@ -936,7 +941,7 @@ class TestRelayFeedbackToggleStop:
         cover.travel_calc.set_position(0)
 
         with (
-            patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.05),
+            patch.object(cover_echo_filter, "RELAY_FEEDBACK_TIMEOUT", 0.05),
             patch.object(cover, "async_write_ha_state"),
         ):
             await cover.async_open_cover()
@@ -1022,7 +1027,7 @@ class TestRelayFeedbackToggleStop:
         orphan = asyncio.get_running_loop().create_future()
         cover._feedback_wait_future = orphan
 
-        with patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.05):
+        with patch.object(cover_echo_filter, "RELAY_FEEDBACK_TIMEOUT", 0.05):
             await asyncio.wait_for(cover._await_confirmation_before_stop(), 1.0)
 
         # Passive: the wait gives up on the future, it does not cancel it.
@@ -1198,7 +1203,7 @@ class TestRelayFeedbackPulseMode:
         assert open_calls, "open relay should have been marked pending"
         assert (
             open_calls[0].kwargs.get("timeout")
-            == cover_base.RELAY_FEEDBACK_PENDING_TIMEOUT
+            == cover_echo_filter.RELAY_FEEDBACK_PENDING_TIMEOUT
         )
 
     @pytest.mark.asyncio
@@ -1253,7 +1258,7 @@ class TestRelayFeedbackPendingWindow:
             delays.append(delay)
             return MagicMock()
 
-        with patch.object(cover_base, "async_call_later", fake_call_later):
+        with patch.object(cover_echo_filter, "async_call_later", fake_call_later):
             yield cover, delays
 
     @pytest.mark.asyncio
@@ -1265,7 +1270,7 @@ class TestRelayFeedbackPendingWindow:
         fake_time = MagicMock()
         fake_time.monotonic = lambda: clock["t"]
 
-        with patch.object(cover_base, "time", fake_time):
+        with patch.object(cover_echo_filter, "time", fake_time):
             cover._mark_switch_pending("switch.open", 1, timeout=12.0)
             cover._mark_switch_pending("switch.open", 1, timeout=5.0)
 
@@ -1282,7 +1287,7 @@ class TestRelayFeedbackPendingWindow:
         fake_time = MagicMock()
         fake_time.monotonic = lambda: clock["t"]
 
-        with patch.object(cover_base, "time", fake_time):
+        with patch.object(cover_echo_filter, "time", fake_time):
             cover._mark_switch_pending("switch.open", 1, timeout=12.0)
             clock["t"] += 4.0
             cover._mark_switch_pending("switch.open", 1, timeout=5.0)
@@ -1670,7 +1675,7 @@ class TestRelayFeedbackToggleReversal:
         )
         cover.travel_calc.set_position(50)
         with (
-            patch.object(cover_base, "RELAY_FEEDBACK_TIMEOUT", 0.05),
+            patch.object(cover_echo_filter, "RELAY_FEEDBACK_TIMEOUT", 0.05),
             patch.object(cover, "_direction_change_delay", new_callable=AsyncMock),
         ):
             await cover.async_open_cover()
@@ -1921,6 +1926,7 @@ class TestRelayFeedbackWallClockSteps:
         stub_switches(cover)
         with (
             patch.object(cover_base, "time", clock),
+            patch.object(cover_echo_filter, "time", clock),
             patch.object(travel_calculator, "time", clock),
             patch.object(cover, "async_write_ha_state"),
         ):
