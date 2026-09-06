@@ -4153,15 +4153,16 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         The wait is on the deferred-start TASK, not on the future the echo
         resolves: both wake off that same future, so waiting on the future alone
         would only put this caller in the same wake-up batch as the task that
-        owns it, leaving "the start ran first" to callback ordering. Behind the
-        task, tracking has provably started (confirmation) or been anchored on
-        the command (the owner's own timeout fallback) before this returns.
+        owns it, leaving "the start ran first" to callback ordering. Once the
+        task is done, tracking has started (confirmation) or been anchored on
+        the command (the owner's own timeout fallback).
 
         Waiting is passive — ``asyncio.wait`` never cancels what it waits on — so
-        the owner keeps its slot and its own timeout. With no task the wait falls
-        back to the future (a calibration drive owns its wait inline); the
-        explicit timeout is then a backstop for a future left behind with no
-        owner to end it.
+        the owner keeps its slot and its own timeout. The explicit timeout here
+        is a backstop, not the normal exit: the owner's timeout started earlier
+        with the same length, so it fires first and completes the task; with no
+        task (a calibration drive owns its wait inline) the wait falls back to
+        the future, and the backstop ends a wait left behind with no owner.
         """
         if not self._stop_is_a_tap or self._triggered_externally:
             return
