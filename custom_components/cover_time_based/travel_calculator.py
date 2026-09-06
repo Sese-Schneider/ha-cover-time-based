@@ -29,7 +29,8 @@ class TravelStatus(Enum):
 class TravelCalculator:
     """Calculate the current position of a cover based on travel time.
 
-    Timestamps are time.monotonic() readings: a wall-clock step mid-travel must not move the tracker.
+    Timestamps are time.monotonic() readings: a wall-clock step mid-travel
+    must not move the tracker.
 
     Position convention: 0 = fully closed, 100 = fully open.
     """
@@ -165,10 +166,10 @@ class TravelCalculator:
             delay: Seconds to wait before tracking starts. Used for
                 sequential multi-step movements where a pre-step (e.g. tilt)
                 must complete before this calculator begins progressing.
-            ``base_monotonic``: a ``time.monotonic()`` reading the move actually
-                began at, instead of now. Relay-feedback timing passes the relay's
-                confirmation instant so the command-to-echo gap falls outside
-                the tracked travel.
+            base_monotonic: A ``time.monotonic()`` reading the move actually
+                began at, instead of now. Relay-feedback timing passes the
+                relay's confirmation instant so the command-to-echo gap falls
+                outside the tracked travel.
         """
         if self._last_known_position is None:
             self.set_position(_travel_to_position)

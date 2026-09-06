@@ -16,6 +16,7 @@ from homeassistant.core import State
 from custom_components.cover_time_based.calibration import CalibrationState
 from custom_components.cover_time_based.cover_base import CoverTimeBased
 from tests.helpers import relay_calls, stub_switches
+from tests.test_cover_wrapped import _set_wrapped_features
 
 
 class Gate:
@@ -695,9 +696,10 @@ async def test_pulse_stop_interrupted_by_removal_still_pulses_the_stop_relay(
     """Auto-stop stops its tracker, then sends STOP; removal lands mid-STOP.
 
     Pulse mode's STOP is turn_off(direction relays) then turn_on(stop relay).
-    Removal landing between them sees no tracker travelling and no timer, so
-    it owes nothing itself; the resumed STOP's turn_on must therefore not be
-    refused, or a latching pulse controller never receives its stop.
+    A STOP already in flight when removal lands must still finish: its
+    turn_on carries stop=True and so survives the removed entity's refusal of
+    every motor-starting call, independently of the stop removal sends itself.
+    Without that a latching pulse controller never receives its stop.
     """
     cover = make_cover(
         control_mode="pulse",
@@ -915,3 +917,342 @@ async def test_removal_at_pending_travel_start_releases_travel_relay(make_cover)
             await asyncio.wait_for(task, 2)
     print(f"pending travel: final relays={states}")
     assert states["switch.close"] == "off"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["toggle", "toggle_opposite", "pulse"])
+@pytest.mark.parametrize("defer", ["startup", "feedback"])
+async def test_deferred_inline_tilt_removal_does_not_save_old_tilt(
+    make_cover, _mock_position_store, defer, mode
+):
+    """A shared-motor tilt still deferred at removal owns the tilt axis.
+
+    Startup delay and relay-feedback wait both leave both trackers idle while
+    the relay is already energised. On hardware that stops itself the motor
+    runs on to its tilt limit, so recording the pre-move tilt would hand the
+    replacement a position the slats have already left.
+    """
+    cover = _inline_cover(
+        make_cover,
+        control_mode=mode,
+        send_endpoint_stop=False if mode == "pulse" else None,
+        tilt_startup_delay=5 if defer == "startup" else None,
+        wait_for_relay_feedback=defer == "feedback",
+    )
+    stub_switches(cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(20)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover_tilt()
+        await asyncio.sleep(0)
+        assert cover._startup_delay_task is not None
+        assert not cover.tilt_calc.is_traveling()
+        await cover.async_will_remove_from_hass()
+
+    data = _mock_position_store.async_save.await_args.args[1]
+    assert data.get("tilt_position") in (None, 100), data
+
+
+@pytest.mark.asyncio
+async def test_deferred_tilt_physical_limit_differs_from_restored_record(
+    make_cover, _mock_position_store
+):
+    """The replacement must not restore a tilt the motor has already left."""
+    cover = _inline_cover(make_cover, control_mode="toggle", tilt_startup_delay=5)
+    stub_switches(cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(20)
+    direction = None
+
+    async def physical_service(domain, service, data, *_):
+        nonlocal direction
+        if service == "turn_on":
+            move = "open" if data["entity_id"] == "switch.open" else "close"
+            direction = None if direction == move else move
+
+    cover.hass.services.async_call.side_effect = physical_service
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover_tilt()
+        assert direction == "open"
+        await cover.async_will_remove_from_hass()
+
+    assert direction == "open"  # No STOP was sent; this motor runs to its limit.
+    physical_tilt_at_limit = 100
+    data = _mock_position_store.async_save.await_args.args[1]
+    _mock_position_store.async_get.return_value = data
+    replacement = _inline_cover(make_cover, control_mode="toggle")
+    with patch.object(replacement, "async_write_ha_state"):
+        await replacement.async_added_to_hass()
+    assert replacement.tilt_calc.current_position() in (None, physical_tilt_at_limit)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target,limit", [("open", 100), ("close", 0)])
+async def test_deferred_dual_motor_tilt_removal_parks_at_the_tilt_limit(
+    make_cover, _mock_position_store, target, limit
+):
+    """The dual-motor twin: a deferred tilt-motor start parks at its limit.
+
+    The tilt tracker is idle across the deferred start, so the limit can only
+    come from the direction the command already running names.
+    """
+    cover = _dual_motor_cover(make_cover, control_mode="toggle", tilt_startup_delay=5)
+    stub_switches(cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(50)
+
+    with patch.object(cover, "async_write_ha_state"):
+        if target == "open":
+            await cover.async_open_cover_tilt()
+        else:
+            await cover.async_close_cover_tilt()
+        await asyncio.sleep(0)
+        assert cover._startup_delay_task is not None
+        assert not cover.tilt_calc.is_traveling()
+        await cover.async_will_remove_from_hass()
+
+    data = _mock_position_store.async_save.await_args.args[1]
+    assert data.get("tilt_position") == limit, data
+
+
+@pytest.mark.asyncio
+async def test_deferred_sequential_open_tilt_parks_at_the_tilt_limit_not_the_motor_s(
+    make_cover, _mock_position_store
+):
+    """sequential_open drives the motor the other way; the tilt limit follows tilt.
+
+    Opening the slats sends CLOSE to the shared motor, so reading the travel
+    command's own limit would park the tilt axis at 0.
+    """
+    cover = make_cover(
+        control_mode="toggle",
+        tilt_mode="sequential_open",
+        tilt_time_open=2.0,
+        tilt_time_close=2.0,
+        tilt_startup_delay=5,
+    )
+    stub_switches(cover)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(20)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover_tilt()
+        await asyncio.sleep(0)
+        assert cover._startup_delay_task is not None
+        await cover.async_will_remove_from_hass()
+
+    data = _mock_position_store.async_save.await_args.args[1]
+    assert data.get("tilt_position") == 100, data
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("gate_at", ["prepare", "forward"])
+async def test_native_tilt_does_not_restart_tracking_after_removal(make_cover, gate_at):
+    """Native tilt forwards over two awaits; a reload can land on either.
+
+    Every tracking start refuses after removal, so the driver must re-check
+    before animating tilt_calc rather than rely on the updater's own refusal.
+    """
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        tilt_mode="inline",
+        tilt_time_open=5,
+        tilt_time_close=5,
+    )
+    _set_wrapped_features(cover, 1 | 2 | 128)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(100)
+    assert cover._use_native_tilt()
+    gate = Gate()
+    name = (
+        "_prepare_native_tilt"
+        if gate_at == "prepare"
+        else "_call_set_cover_tilt_position"
+    )
+    original = getattr(cover, name)
+
+    async def parked(*args, **kwargs):
+        await original(*args, **kwargs)
+        await gate()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, name, new=parked),
+    ):
+        task = asyncio.create_task(
+            cover.async_set_cover_tilt_position(tilt_position=30)
+        )
+        await gate.parked()
+        await cover.async_will_remove_from_hass()
+        gate.proceed.set()
+        await asyncio.wait_for(task, 2)
+
+    assert not cover.tilt_calc.is_traveling()
+    assert cover._unsubscribe_auto_updater is None
+
+
+@pytest.mark.asyncio
+async def test_native_tilt_command_dispatched_after_removal_stays_stopped(make_cover):
+    """A native tilt command arriving after removal drives nothing at all."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        tilt_mode="inline",
+        tilt_time_open=5,
+        tilt_time_close=5,
+    )
+    _set_wrapped_features(cover, 1 | 2 | 128)
+    cover.travel_calc.set_position(50)
+    cover.tilt_calc.set_position(100)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_will_remove_from_hass()
+        cover.hass.services.async_call.reset_mock()
+        await cover.async_set_cover_tilt_position(tilt_position=30)
+
+    cover.hass.services.async_call.assert_not_called()
+    assert cover._unsubscribe_auto_updater is None
+    assert not cover.tilt_calc.is_traveling()
+
+
+@pytest.mark.asyncio
+async def test_prestep_start_await_cannot_restart_tilt(make_cover):
+    """The dual-motor tilt pre-step starts its tracker after driving the relay.
+
+    A reload landing on that drive must leave the tracker alone, or the dead
+    entity animates a tilt the replacement is also tracking.
+    """
+    cover = _dual_motor_cover(make_cover)
+    stub_switches(cover)
+    cover.travel_calc.set_position(100)
+    cover.tilt_calc.set_position(0)
+    gate = Gate()
+    original = cover._send_tilt_open
+
+    async def parked():
+        await original()
+        await gate()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_send_tilt_open", new=parked),
+    ):
+        task = asyncio.create_task(cover.set_position(20))
+        await gate.parked()
+        await cover.async_will_remove_from_hass()
+        gate.proceed.set()
+        await asyncio.wait_for(task, 2)
+
+    assert not cover.tilt_calc.is_traveling()
+
+
+@pytest.mark.asyncio
+async def test_pulse_removal_stop_is_released_and_final_record_is_last(
+    make_cover, _mock_position_store
+):
+    """Removal's own stop pulse must be released, and the record written once.
+
+    The record is the replacement's starting point, so it has to be the last
+    thing removal does — a background pulse completing behind it must not add
+    a second save.
+    """
+    cover = make_cover(control_mode="pulse", stop_switch="switch.stop", pulse_time=0.02)
+    stub_switches(cover)
+    cover.travel_calc.set_position(20)
+    states = {}
+    effects = []
+
+    async def service(domain, name, data, *_):
+        states[data["entity_id"]] = name == "turn_on"
+        effects.append((name, data["entity_id"]))
+
+    async def save(*_):
+        effects.append(("save", None))
+
+    cover.hass.services.async_call.side_effect = service
+    _mock_position_store.async_save.side_effect = save
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover()
+        effects.clear()
+        await cover.async_will_remove_from_hass()
+        assert effects[-1] == ("save", None)
+        assert effects.count(("save", None)) == 1
+        assert states["switch.stop"]
+        await asyncio.sleep(0.04)
+
+    assert not any(states.values()), f"a relay was left latched: {states}"
+    assert effects.count(("save", None)) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("service", sorted(CoverTimeBased._MOTOR_STARTING_SERVICES))
+async def test_removed_funnel_and_stop_exemption(make_cover, service):
+    """Every motor-starting service is refused after removal; a stop is not.
+
+    The refusal is what keeps a resumed continuation off the relays, and the
+    stop tag is the single hole in it — checked here per service rather than
+    only on the one path each other test happens to take.
+    """
+    cover = make_cover()
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_will_remove_from_hass()
+    cover.hass.services.async_call.reset_mock()
+
+    await cover._call_service("homeassistant", service, {"entity_id": "switch.open"})
+    cover.hass.services.async_call.assert_not_called()
+
+    await cover._call_service(
+        "homeassistant", service, {"entity_id": "switch.open"}, stop=True
+    )
+    cover.hass.services.async_call.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", ["open", "close"])
+@pytest.mark.parametrize("axis", ["travel", "tilt"])
+@pytest.mark.parametrize("mode", ["toggle", "toggle_opposite", "pulse"])
+async def test_stop_tags_reach_hardware_after_removal(
+    make_cover, mode, axis, direction
+):
+    """On momentary hardware a STOP is itself a relay tap, on either axis.
+
+    Toggle taps the same relay again, toggle-opposite taps the other one and
+    pulse taps a dedicated stop relay — all turn_on calls the removed entity
+    would otherwise refuse.
+    """
+    cover = make_cover(
+        control_mode=mode,
+        stop_switch="switch.stop",
+        tilt_mode="dual_motor",
+        tilt_time_open=5,
+        tilt_time_close=5,
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        tilt_stop_switch="switch.tilt_stop",
+        pulse_time=0.01,
+    )
+    stub_switches(cover)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_will_remove_from_hass()
+        mark = len(cover.hass.services.async_call.call_args_list)
+        cover._last_command = direction + "_cover"
+        cover._last_tilt_direction = direction
+        if axis == "travel":
+            await cover._send_stop()
+        else:
+            await cover._send_tilt_stop()
+
+    if mode == "pulse":
+        expected = "switch.stop" if axis == "travel" else "switch.tilt_stop"
+    else:
+        stop_direction = (
+            direction
+            if mode == "toggle"
+            else ("close" if direction == "open" else "open")
+        )
+        expected = "switch." + ("tilt_" if axis == "tilt" else "") + stop_direction
+
+    assert ("turn_on", expected) in relay_calls(cover, mark), (
+        f"the removed entity's stop never reached {expected}: "
+        f"{relay_calls(cover, mark)}"
+    )

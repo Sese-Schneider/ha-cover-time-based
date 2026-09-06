@@ -417,16 +417,25 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # settle independently; shared-motor tilt drives the travel motor
         # with only tilt_calc travelling.
         tilt_axis_driving = self._has_tilt_support() and self.tilt_calc.is_traveling()
-        tilt_motor_driving = self._has_tilt_motor() and (
-            self._moving_tilt_motor or tilt_axis_driving
-        )
         deferred = self._cancel_startup_delay_task()
         runon = self._cancel_delay_task()
+        # A cancelled deferred start is a move already at the relay with both
+        # trackers still idle. ``_moving_tilt`` names the axis it belongs to;
+        # ``_moving_tilt_motor`` only names the motor, so a shared-motor tilt
+        # read off that flag would settle the travel axis at the tilt's limit
+        # and leave the slats recorded where they no longer are.
+        deferred_tilt = deferred and self._moving_tilt
+        tilt_driving = (
+            tilt_axis_driving
+            or (self._has_tilt_motor() and self._moving_tilt_motor)
+            or deferred_tilt
+        )
+        # A shared-motor tilt runs the travel motor, so it drives both axes.
         travel_driving = (
             self.travel_calc.is_traveling()
-            or (tilt_axis_driving and not self._has_tilt_motor())
+            or ((tilt_axis_driving or deferred_tilt) and not self._has_tilt_motor())
             or runon
-            or (deferred and not self._moving_tilt_motor)
+            or (deferred and not self._moving_tilt)
         )
         await self._cancel_background_pulses()
         # A start may have reached the relay before its tracker was armed, so
@@ -435,6 +444,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # leave that motor to its limit switch and park its tracker there.
         stops_itself = self._self_stops_at_endpoints()
         fallback_limit = self._limit_for_last_command()
+        tilt_fallback_limit = self._tilt_limit_for_last_command()
         # Calibration owns its motor stop, including tracked overhead steps.
         if self._calibration is None and not stops_itself:
             await self._async_handle_command(SERVICE_STOP_COVER)
@@ -442,18 +452,13 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             if self._has_tilt_motor():
                 await self._send_tilt_stop()
         self._settle_axis_after_removal(
-            self.travel_calc,
-            driving=travel_driving,
-            stopped=travel_driving and not stops_itself,
-            fallback_limit=fallback_limit,
+            self.travel_calc, driving=travel_driving, fallback_limit=fallback_limit
         )
         if self._has_tilt_support():
             self._settle_axis_after_removal(
                 self.tilt_calc,
-                driving=tilt_motor_driving
-                or (tilt_axis_driving and not self._has_tilt_motor()),
-                stopped=(tilt_motor_driving or tilt_axis_driving) and not stops_itself,
-                fallback_limit=None,
+                driving=tilt_driving,
+                fallback_limit=tilt_fallback_limit,
             )
         self._moving_tilt_motor = False
         self._moving_tilt = False
@@ -464,7 +469,7 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             self._restore_calibration_startup_delay()
             self._cancel_calibration_tasks()
             try:
-                if not self._self_stops_at_endpoints():
+                if not stops_itself:
                     await self._calibration_stop()
             finally:
                 self._calibration = None
@@ -3340,18 +3345,22 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         calc: TravelCalculator,
         *,
         driving: bool,
-        stopped: bool,
         fallback_limit: int | None,
     ) -> None:
         """Leave one axis's tracker where the motor will actually be.
 
-        Stopped, or never driving, or a device that holds its own target: the
-        tracker's own position stands. Driving and left to its limit switch:
-        park at the limit in the direction of travel — from the tracker if it
-        is travelling, else from the last command — or forget the axis when
-        no direction is known.
+        Removal stops every motor it can stop, so an axis is still running
+        afterwards only on hardware that halts at its own limits. Never
+        driving, stopped by removal, or a device that holds its own target:
+        the tracker's own position stands. Otherwise park at the limit in the
+        direction of travel — from the tracker if it is travelling, else from
+        the last command — or forget the axis when no direction is known.
         """
-        if not driving or stopped or self._motor_stops_itself():
+        if (
+            not driving
+            or not self._self_stops_at_endpoints()
+            or self._motor_stops_itself()
+        ):
             calc.stop()
             return
         if calc.is_traveling():
@@ -3367,6 +3376,27 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return 100
         if self._last_command == SERVICE_CLOSE_COVER:
             return 0
+        return None
+
+    def _tilt_limit_for_last_command(self) -> int | None:
+        """The tilt limit the command now running heads for, or None.
+
+        The tilt tracker is idle across a deferred start, so the direction can
+        only come from the command already at the relay. Inverting
+        ``tilt_command_for`` — the same mapping the move used to choose that
+        command — keeps strategies whose slats open by driving the motor the
+        other way (sequential_open) pointing at the tilt limit rather than the
+        motor's.
+        """
+        if self._last_command is None:
+            return None
+        strategy = self._tilt_strategy
+        if strategy is None:
+            return self._limit_for_last_command()
+        if self._last_command == strategy.tilt_command_for(True):
+            return 0
+        if self._last_command == strategy.tilt_command_for(False):
+            return 100
         return None
 
     def _on_endpoint_reached(self, endpoint: int) -> None:
@@ -4383,7 +4413,9 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         return now - age
 
     async def _await_relay_confirmation(self, entity_id, commanded_at):
-        """Wait for ``entity_id``'s ON echo and return the tracking anchor (a monotonic reading).
+        """Wait for ``entity_id``'s ON echo; return the anchor to track from.
+
+        The anchor is a ``time.monotonic()`` reading.
 
         On timeout the anchor is ``commanded_at``, not the instant the wait gave
         up: the relay may have switched without reporting it, so the motor has

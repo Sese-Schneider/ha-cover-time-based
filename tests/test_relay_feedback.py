@@ -1893,3 +1893,88 @@ class TestRelayFeedbackSameRelayEchoes:
             await asyncio.sleep(0)
         assert _parked(cover, "switch.button")
         assert cover._pending_switch["switch.button"] == 2
+
+
+class TestRelayFeedbackWallClockSteps:
+    """An NTP step anywhere across the feedback path must not move the position.
+
+    The echo's ``last_changed`` is wall-clock, so the feedback path is the one
+    place tracking crosses from the steppable clock to the monotonic one. A
+    step on either side of that conversion has to leave the travel untouched.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "stage",
+        [
+            "before_command",
+            "before_echo",
+            "between_echo_and_resume",
+            "after_start",
+            "after_update",
+        ],
+    )
+    @pytest.mark.parametrize("step", [-3600, 3600])
+    async def test_wall_steps_each_feedback_stage(self, make_cover, step, stage):
+        clock = FakeClock(wall=1_700_000_000, mono=5_000)
+        cover = make_cover(wait_for_relay_feedback=True)
+        stub_switches(cover)
+        with (
+            patch.object(cover_base, "time", clock),
+            patch.object(travel_calculator, "time", clock),
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            cover.travel_calc.set_position(0)
+            if stage == "before_command":
+                clock.step_wall(step)
+            await cover.async_open_cover()
+            await asyncio.sleep(0)
+            clock.advance(3)
+            if stage == "before_echo":
+                clock.step_wall(step)
+            stamp = datetime.fromtimestamp(clock.time(), UTC)
+            cover._resolve_relay_feedback(
+                "switch.open", "on", type("Echo", (), {"last_changed": stamp})()
+            )
+            if stage == "between_echo_and_resume":
+                clock.step_wall(step)
+            await asyncio.sleep(0)
+
+            anchor = cover.travel_calc._last_known_position_timestamp
+            assert 5000 <= anchor <= 5003
+            if stage == "after_start":
+                clock.step_wall(step)
+            clock.advance(3)
+            pos = cover.travel_calc.current_position()
+            if stage == "after_update":
+                cover.travel_calc.update_position(pos)
+                clock.step_wall(step)
+            assert cover.travel_calc.current_position() == pos
+            assert 10 <= pos <= 20
+            clock.advance(40)
+            assert cover.travel_calc.position_reached()
+            await cover.async_will_remove_from_hass()
+
+    @pytest.mark.asyncio
+    async def test_feedback_wait_replacement_owns_cleanup(self, make_cover):
+        """Two waits alive at once: cancelling the older leaves the slot alone.
+
+        The mirror of test_cancelled_wait_does_not_clear_the_new_wait, which
+        cancels before the replacement registers. Resolving the survivor is
+        what clears the slot.
+        """
+        cover = make_cover()
+        first = asyncio.create_task(cover._wait_for_relay_echo("switch.open", 5))
+        await asyncio.sleep(0)
+        second = asyncio.create_task(cover._wait_for_relay_echo("switch.close", 5))
+        await asyncio.sleep(0)
+        second_future = cover._feedback_wait_future
+
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        assert cover._feedback_wait_future is second_future
+
+        second_future.set_result(None)
+        assert await second is None
+        assert cover._feedback_wait_future is None

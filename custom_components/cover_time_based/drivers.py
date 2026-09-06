@@ -94,6 +94,10 @@ class NativeTiltDriver(TiltDriver):
         cover._moving_tilt = True
         cover._log("NativeTiltDriver :: forwarding set_cover_tilt_position(%d)", target)
         await cover._call_set_cover_tilt_position(target)
+        if cover._removed:
+            # A reload can land on either await above; a removed entity never
+            # starts tracking again. Mirrors _start_tilt_pre_step.
+            return
         if current is None:
             cover.tilt_calc.update_position(100 if target <= 50 else 0)
         cover.tilt_calc.start_travel(target)

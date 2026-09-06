@@ -19,6 +19,8 @@ from .single_button_cycle import Action, Phase, plan
 
 # The phase a self-stopping motor is in once it has reached a travel limit.
 _PHASE_AT_ENDPOINT: dict[int, Phase] = {100: Phase.AT_OPEN, 0: Phase.AT_CLOSED}
+# The limit a motor running in each direction reaches on its own.
+_LIMIT_WHILE_MOVING: dict[Phase, int] = {Phase.MOVING_UP: 100, Phase.MOVING_DOWN: 0}
 
 
 def _live(task: asyncio.Task | None) -> asyncio.Task | None:
@@ -263,16 +265,13 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         self._cancel_settle()
         # Anchor an arrival whose settle margin removal cut short. A phase
         # pointing away from the endpoint is a departure, not an arrival.
-        endpoint = self.travel_calc.current_position()
+        position = self.travel_calc.current_position()
         if (
             not self.travel_calc.is_traveling()
-            and endpoint is not None
-            and (
-                (endpoint == 100 and self._phase is Phase.MOVING_UP)
-                or (endpoint == 0 and self._phase is Phase.MOVING_DOWN)
-            )
+            and position is not None
+            and _LIMIT_WHILE_MOVING.get(self._phase) == position
         ):
-            self._phase = _PHASE_AT_ENDPOINT[endpoint]
+            self._phase = _PHASE_AT_ENDPOINT[position]
         if self._open_switch_entity_id:
             await self._release_button()
 
@@ -302,14 +301,12 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         if calc is not self.travel_calc:
             super()._park_axis_at_limit(calc, limit)
             return
-        if self._phase is Phase.MOVING_UP:
-            super()._park_axis_at_limit(calc, 100)
-            self._phase = Phase.AT_OPEN
-        elif self._phase is Phase.MOVING_DOWN:
-            super()._park_axis_at_limit(calc, 0)
-            self._phase = Phase.AT_CLOSED
-        else:
+        running_to = _LIMIT_WHILE_MOVING.get(self._phase)
+        if running_to is None:
             calc.clear_position()
+            return
+        super()._park_axis_at_limit(calc, running_to)
+        self._phase = _PHASE_AT_ENDPOINT[running_to]
 
     def _on_endpoint_reached(self, endpoint: int) -> None:
         """Anchor the phase at the limit the tracker just reached.

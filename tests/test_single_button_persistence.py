@@ -238,3 +238,42 @@ async def test_single_button_removal_during_delayed_departure_parks_at_destinati
 
     data = _mock_position_store.async_save.await_args.args[1]
     assert data == {"position": 0, "phase": "at_closed"}
+
+
+async def test_single_button_removal_during_opposite_nudge_uses_phase(
+    make_cover, _mock_position_store
+):
+    """A nudge drives the motor the other way while the tracker still reads open.
+
+    Removal must record where the cycle actually leaves the cover — its phase —
+    not the direction the tracker was seeded with before the nudge began.
+    """
+    cover = make_cover(control_mode=CONTROL_MODE_SINGLE_BUTTON, pulse_time=0.01)
+    stub_switches(cover)
+    cover.travel_calc.set_position(50)
+    cover._phase = Phase.STOPPED_AFTER_UP
+    gate = Gate()
+
+    async def sleep(delay):
+        if delay == 1:
+            await gate()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch(
+            "custom_components.cover_time_based.cover_single_button_mode.sleep",
+            new=sleep,
+        ),
+    ):
+        await cover.async_open_cover()
+        await gate.parked()
+        assert cover._phase == Phase.MOVING_DOWN
+        assert cover.travel_calc.is_opening()
+        await cover.async_will_remove_from_hass()
+        gate.proceed.set()
+        await asyncio.sleep(0)
+
+    assert _mock_position_store.async_save.await_args.args[1] == {
+        "position": 0,
+        "phase": "at_closed",
+    }
