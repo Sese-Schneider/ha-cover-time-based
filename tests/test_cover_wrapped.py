@@ -100,6 +100,11 @@ def _calls(mock: AsyncMock):
     return mock.call_args_list
 
 
+def _services(cover):
+    """Return the service names called on hass.services.async_call, in order."""
+    return [c.args[1] for c in _calls(cover.hass.services.async_call)]
+
+
 def _attr_event(entity_id, state):
     """An attribute-change event carrying `state` as the entity's new state."""
     event = MagicMock()
@@ -686,6 +691,194 @@ class TestIgnoreAllReports:
         with patch.object(cover, "async_open_cover", new=AsyncMock()) as open_mock:
             await cover._handle_external_state_change("cover.inner", "unknown", "open")
         open_mock.assert_awaited_once()
+
+
+class TestIgnoreAllReportsTimedPath:
+    """ignore_all_reports keeps both axes on the timed path even when the
+    underlying advertises SET_POSITION / SET_TILT_POSITION.
+
+    A native target is expressed in the device's own position scale — the very
+    scale this profile declares untrustworthy — and with both report channels
+    ignored no settle-snap is left to reconcile the result.
+    """
+
+    def _prep(self, cover):
+        cover.start_auto_updater = MagicMock()
+        cover.async_write_ha_state = MagicMock()
+        cover.async_schedule_update_ha_state = MagicMock()
+
+    def test_use_native_set_position_is_disabled(self):
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
+        assert cover._use_native_set_position() is False
+
+    def test_position_driver_is_timed(self):
+        from custom_components.cover_time_based.drivers import TimedPositionDriver
+
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
+        assert isinstance(cover._position_driver(), TimedPositionDriver)
+
+    def test_motor_does_not_stop_itself(self):
+        # stops_itself=True would mean the auto-updater sends no stop: the
+        # tracker parks at the target and the relay is never told anything.
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
+        assert cover._motor_stops_itself() is False
+
+    @pytest.mark.asyncio
+    async def test_set_position_uses_timed_open_not_native_forward(self):
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        await cover.async_set_cover_position(position=50)
+
+        assert "set_cover_position" not in _services(cover), _services(cover)
+        assert "open_cover" in _services(cover)
+
+    @pytest.mark.asyncio
+    async def test_force_time_based_control_takes_the_timed_path(self):
+        # Control: the sibling option on the identical underlying.
+        cover = _make_wrapped_cover(force_time_based_position=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        await cover.async_set_cover_position(position=50)
+
+        assert "set_cover_position" not in _services(cover)
+        assert "open_cover" in _services(cover)
+
+    @pytest.mark.asyncio
+    async def test_we_stop_the_move_ourselves_and_reports_never_correct_it(self):
+        # End to end: the move is a timed open that we stop when our own
+        # tracker arrives, and whatever the device reports along the way
+        # changes nothing.
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
+        self._prep(cover)
+        cover.travel_calc.set_position(0)
+
+        await cover.async_set_cover_position(position=50)
+
+        assert _calls(cover.hass.services.async_call) == [
+            _cover_svc("open_cover", "cover.inner"),
+        ]
+        assert cover._motor_stops_itself() is False
+
+        # The device reports settling somewhere else entirely (its position
+        # scale is the lie this profile exists for). Both channels drop it.
+        st = _set_wrapped_features(
+            cover,
+            _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP,
+            state="open",
+            current_position=17,
+        )
+        cover._last_self_command_time = None
+        with patch.object(cover, "set_known_position", new=AsyncMock()) as snap:
+            await cover._handle_external_state_change("cover.inner", "opening", "open")
+            await cover._handle_external_attribute_change(
+                _attr_event("cover.inner", st)
+            )
+        snap.assert_not_awaited()
+        assert cover.travel_calc._travel_to_position == 50
+        assert cover._wrapped_reported_position() is None
+
+        # Our own timer arriving is what halts the motor.
+        cover.travel_calc.set_position(50)
+        await cover.auto_stop_if_necessary()
+        assert _services(cover) == ["open_cover", "stop_cover"]
+
+    def test_use_native_tilt_is_disabled(self):
+        cover = _make_wrapped_cover(
+            ignore_all_reports=True,
+            tilt_time_close=5,
+            tilt_time_open=5,
+            tilt_mode="inline",
+        )
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_TILT)
+        assert cover._use_native_tilt() is False
+
+    @pytest.mark.asyncio
+    async def test_set_tilt_position_uses_timed_path(self):
+        cover = _make_wrapped_cover(
+            ignore_all_reports=True,
+            tilt_time_close=5,
+            tilt_time_open=5,
+            tilt_mode="inline",
+        )
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_TILT)
+        self._prep(cover)
+        cover.tilt_calc.set_position(0)
+
+        await cover.async_set_cover_tilt_position(tilt_position=50)
+
+        assert "set_cover_tilt_position" not in _services(cover), _services(cover)
+
+    def test_reported_tilt_is_not_trusted(self):
+        cover = _make_wrapped_cover(
+            ignore_all_reports=True,
+            tilt_time_close=5,
+            tilt_time_open=5,
+            tilt_mode="inline",
+        )
+        st = _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_TILT)
+        st.attributes["current_tilt_position"] = 30
+        assert cover._wrapped_reported_tilt_position() is None
+
+    @pytest.mark.asyncio
+    async def test_tilt_snap_never_runs_under_ignore_all(self):
+        # _maybe_snap_to_reported_tilt is only reachable from the two report
+        # handlers, and both early-return on ignore_all_reports.
+        cover = _make_wrapped_cover(
+            ignore_all_reports=True,
+            tilt_time_close=5,
+            tilt_time_open=5,
+            tilt_mode="inline",
+        )
+        st = _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_TILT)
+        st.attributes["current_tilt_position"] = 30
+        cover.tilt_calc.set_position(80)
+        cover._last_self_command_time = None
+        with patch.object(
+            cover, "_maybe_snap_to_reported_tilt", new=AsyncMock()
+        ) as snap:
+            await cover._handle_external_state_change("cover.inner", "opening", "open")
+            await cover._handle_external_attribute_change(
+                _attr_event("cover.inner", st)
+            )
+        snap.assert_not_awaited()
+        assert cover.tilt_calc.current_position() == 80
+
+    @pytest.mark.asyncio
+    async def test_freeze_reissues_tracked_position_natively(self):
+        # With STOP unsupported, re-issuing our tracked position is the only
+        # halt command that exists — untrusted scale and all.
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION)  # no STOP
+        cover.travel_calc.set_position(43)
+
+        await cover._send_stop()
+
+        assert _calls(cover.hass.services.async_call) == [
+            call(
+                "cover",
+                "set_cover_position",
+                {"entity_id": "cover.inner", "position": 43},
+                False,
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_native_stop_is_used_when_supported(self):
+        cover = _make_wrapped_cover(ignore_all_reports=True)
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_POSITION | _F_STOP)
+
+        await cover._send_stop()
+
+        assert _services(cover) == ["stop_cover"]
 
 
 class TestInvertEndToEndOpenClose:

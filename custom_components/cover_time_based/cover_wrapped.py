@@ -184,9 +184,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
         Restricted to InlineTilt: the device positions its own slats, so the
         inline strategy's no-op snap_trackers_to_physical leaves our
         natively-set tilt intact. Dual-motor/sequential strategies re-derive
-        tilt from travel and keep the timed path. Command-echo covers report
-        nothing trustworthy to snap back from, so they keep the timed path too.
+        tilt from travel and keep the timed path. Command-echo and ignore-all
+        covers report nothing trustworthy to snap back from, so they keep the
+        timed path too.
         """
+        if self._ignore_all_reports:
+            return False
         if self._reports_command_not_endpoint:
             return False
         if not self._has_tilt_support():
@@ -219,8 +222,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
     def _use_native_set_position(self, *, features: int | None = None) -> bool:
         """Return True if set_cover_position should be forwarded natively.
 
-        Auto-detected from the wrapped entity's SET_POSITION support, with three
+        Auto-detected from the wrapped entity's SET_POSITION support, with four
         opt-outs:
+          - ignore_all_reports (the device's every report is untrusted, so its
+            position scale is too),
           - the force_time_based_position override (always legacy tracking),
           - reports_command_not_endpoint (the wrapped entity's state/position is
             a command echo, so it's tracked purely by time — never forward a
@@ -236,6 +241,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
             slats independently of our travel motor, so driving position
             natively is coupling-safe there.
         """
+        # A device whose every report is untrusted (ignore_all_reports) has an
+        # untrusted target scale too, and with both report channels ignored no
+        # settle-snap could ever correct a native move — so it is driven by
+        # the timers alone, exactly as the profile promises.
+        if self._ignore_all_reports:
+            return False
         if self._force_time_based_position:
             return False
         if self._reports_command_not_endpoint:
@@ -698,11 +709,13 @@ class WrappedCoverTimeBased(CoverTimeBased):
     ) -> int | None:
         """Return the wrapped cover's reported tilt position, or None.
 
-        Honors ignore_reported_position — a device whose reported values are
-        untrustworthy is untrustworthy on both axes. Unlike
+        Honors ignore_reported_position and ignore_all_reports — a device whose
+        reported values are untrustworthy is untrustworthy on both axes. Unlike
         _wrapped_reported_position there is no closed-state fallback: a closed
         cover implies nothing unambiguous about its slat angle.
         """
+        if self._ignore_all_reports:
+            return None
         if self._ignore_reported_position:
             return None
         state = self.hass.states.get(self._cover_entity_id) if state is None else state
@@ -802,7 +815,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # target: the device runs to where it already is and halts there. Only
         # do this when we positively know stop is unsupported and set position
         # is — otherwise keep the legacy stop_cover (covers an entity whose
-        # capabilities are momentarily unknown, e.g. while unavailable).
+        # capabilities are momentarily unknown, e.g. while unavailable). This is
+        # also the only stop available under ignore_all_reports: the frozen
+        # target is issued in the device's scale because no other command exists.
         features = self._wrapped_features()
         supports_stop = features is not None and bool(
             features & CoverEntityFeature.STOP

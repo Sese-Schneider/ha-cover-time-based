@@ -3,7 +3,7 @@
 ### Features
 
 - **Added a "No real endpoints" position-reporting profile for wrapped covers** ([#238](https://github.com/Sese-Schneider/ha-cover-time-based/issues/238)), for entities that report `open`/`closed` on any stop rather than only at the ends. The wrapped-cover trust settings are also consolidated into a single **Position reporting** dropdown.
-- **Added an "Ignore all device reports" position-reporting profile for wrapped covers** ([#248](https://github.com/Sese-Schneider/ha-cover-time-based/issues/248)).
+- **Added an "Ignore all device reports" position-reporting profile for wrapped covers** ([#248](https://github.com/Sese-Schneider/ha-cover-time-based/issues/248)). The cover is always driven by the timers, even when the device supports setting a position directly.
 - **Added a per-cover "Wait for relay confirmation before tracking" option** ([#231](https://github.com/Sese-Schneider/ha-cover-time-based/issues/231)).
 - **Serbian — Latin (`sr-Latn`) translation added.**
 - **Czech (`cs`) translation added** ([#241](https://github.com/Sese-Schneider/ha-cover-time-based/pull/241)).
