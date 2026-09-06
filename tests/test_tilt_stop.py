@@ -725,8 +725,7 @@ class TestTravelCommandReleasesDisplacedTiltMotor:
         Tilt already sits at the safe position, so ``_plan_tilt_for_travel``
         starts nothing and there is no pre-step to take the motor over — the
         travel relay would energise with the tilt relay still latched, and
-        ``_begin_movement`` would retarget tilt_calc as a coupled calculator
-        while the motor physically drives the other way. Both travel funnels
+        nothing downstream would de-energize it. Both travel funnels
         (``_async_move_to_endpoint`` and ``set_position``) reach that point.
         """
         cover = make_cover(

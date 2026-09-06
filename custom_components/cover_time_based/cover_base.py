@@ -1375,10 +1375,12 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         an early return (a resync at the current position, a ``set_position``
         to where the cover already is or one rejected as too short, a
         startup-delay no-op) or a travel that starts with no pre-step because
-        tilt is already safe — would otherwise leave the motor running with its
-        tracker orphaned, or retarget its tracker while it drives the other
-        way. Tilt half only: the travel relay is the caller's business (a
-        resync re-drives it on purpose).
+        tilt is already safe — would otherwise leave the tilt relay latched
+        with nothing left to stop it: ``auto_stop_if_necessary`` decides on
+        ``_moving_tilt_motor``, already cleared, so it takes the travel branch
+        and the orphaned tilt move never gets its relay de-energized. Tilt half
+        only: the travel relay is the caller's business (a resync re-drives it
+        on purpose).
 
         Unlike ``_stop_displaced_movement_for_tilt`` (a tilt *reversal*), this
         settles rather than sending a bare tilt stop, so a momentary relay is
@@ -1856,9 +1858,10 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
             return
 
         # No pre-step took the tilt motor over, so this travel command displaces
-        # it: release it before energising the travel relay, or _begin_movement
-        # retargets tilt_calc as a coupled calculator while the motor drives the
-        # other way.
+        # it: release it before energising the travel relay, or the tilt relay
+        # stays latched right through the travel with nothing left to stop it —
+        # auto_stop_if_necessary reads the already-cleared _moving_tilt_motor
+        # and takes the travel branch.
         await self._release_displaced_tilt_motor(was_tilt_motor_move)
 
         if not suppress_start_command:
@@ -2167,6 +2170,8 @@ class CoverTimeBased(CalibrationMixin, CoverEntity, RestoreEntity):
         # shared_motor_tilt_traveling excludes uses_tilt_motor strategies by
         # construction, and every tilt-motor entry point stops travel_calc on
         # its way in — so was_tilt_motor_move implies neither condition holds.
+        # The release inside is kept anyway, so every exit of this funnel reads
+        # the same way.
         if is_direction_change and (
             self.travel_calc.is_traveling() or shared_motor_tilt_traveling
         ):
