@@ -809,7 +809,9 @@ class TestRelayFeedbackArming:
 
         with (
             _gated_sleep() as (gate, _slept),
-            patch("custom_components.cover_time_based.cover_base.async_call_later"),
+            patch(
+                "custom_components.cover_time_based.cover_echo_filter.async_call_later"
+            ),
         ):
             await cover._send_open()
             # Armed synchronously: _begin_movement consumes it right after
@@ -837,7 +839,9 @@ class TestRelayFeedbackArming:
                 "custom_components.cover_time_based.cover_single_button_mode.sleep",
                 new_callable=AsyncMock,
             ),
-            patch("custom_components.cover_time_based.cover_base.async_call_later"),
+            patch(
+                "custom_components.cover_time_based.cover_echo_filter.async_call_later"
+            ),
         ):
             await cover._send_open()
             assert cover._consume_feedback_arm() == "switch.button"
@@ -854,7 +858,9 @@ class TestRelayFeedbackArming:
                 "custom_components.cover_time_based.cover_single_button_mode.sleep",
                 new_callable=AsyncMock,
             ),
-            patch("custom_components.cover_time_based.cover_base.async_call_later"),
+            patch(
+                "custom_components.cover_time_based.cover_echo_filter.async_call_later"
+            ),
         ):
             await cover._send_stop()
             assert cover._consume_feedback_arm() is None
