@@ -143,8 +143,8 @@ async def test_migrate_v2_non_sequential_bumps_version_only(hass: HomeAssistant)
     assert entry.options["tilt_mode"] == "inline"
 
 
-async def test_migrate_v3_is_idempotent(hass: HomeAssistant):
-    """v3 entries are not modified."""
+async def test_migrate_v3_to_v4_preserves_tilt_mode(hass: HomeAssistant):
+    """v3 entries migrate to v4, keeping tilt_mode untouched."""
     from custom_components.cover_time_based import async_migrate_entry
 
     entry = MockConfigEntry(
@@ -161,6 +161,32 @@ async def test_migrate_v3_is_idempotent(hass: HomeAssistant):
     assert result is True
     assert entry.version == 4
     assert entry.options["tilt_mode"] == "sequential_close"
+
+
+async def test_migrate_is_noop_on_current_version(hass: HomeAssistant):
+    """v4 entries (the current version) are left untouched."""
+    from custom_components.cover_time_based import async_migrate_entry
+
+    options = {
+        "tilt_mode": "sequential_close",
+        "position_reporting": "reliable",
+        "travel_time_open": 10,
+        "travel_time_close": 12,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=4,
+        title="Test",
+        data={},
+        options=options,
+    )
+    entry.add_to_hass(hass)
+
+    result = await async_migrate_entry(hass, entry)
+
+    assert result is True
+    assert entry.version == 4
+    assert entry.options == options
 
 
 async def test_state_has_position_attribute_after_movement(
