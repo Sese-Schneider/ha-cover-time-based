@@ -17,7 +17,7 @@ from homeassistant.const import (
 )
 from homeassistant.exceptions import HomeAssistantError
 
-from custom_components.cover_time_based.cover_base import RecalibrationPlan
+from custom_components.cover_time_based.recalibration import RecalibrationPlan
 
 
 def _tilt_send_spy(cover):
