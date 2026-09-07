@@ -1573,6 +1573,27 @@ class TestTiltSettleSnap:
 
         assert cover.tilt_calc.current_position() == 0
 
+    @pytest.mark.asyncio
+    async def test_no_snap_for_command_echo(self):
+        # _maybe_snap_to_reported_tilt is gated on _use_native_tilt(), which is
+        # False for command_echo covers — the reported tilt is never read, even
+        # though the underlying advertises SET_TILT_POSITION and reports one.
+        cover = _make_wrapped_cover(
+            tilt_time_close=5,
+            tilt_time_open=5,
+            tilt_mode="inline",
+            reports_command_not_endpoint=True,
+        )
+        st = _set_wrapped_features(
+            cover, _F_OPEN | _F_CLOSE | _F_SET_TILT, state="open"
+        )
+        st.attributes["current_tilt_position"] = 70
+        cover.tilt_calc.set_position(30)
+
+        await cover._maybe_snap_to_reported_tilt()
+
+        assert cover.tilt_calc.current_position() == 30  # unchanged; not native
+
 
 class TestNativeCouplingNeutralized:
     """A position move on a native-tilt cover schedules no main-motor tilt
