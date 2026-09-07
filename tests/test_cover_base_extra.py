@@ -894,7 +894,7 @@ class TestMarkSwitchPending:
     def test_increments_pending_count(self, make_cover):
         cover = make_cover()
         with patch(
-            "custom_components.cover_time_based.cover_base.async_call_later"
+            "custom_components.cover_time_based.cover_echo_filter.async_call_later"
         ) as mock_call_later:
             mock_call_later.return_value = MagicMock()
             cover._mark_switch_pending("switch.open", 2)
@@ -904,7 +904,7 @@ class TestMarkSwitchPending:
     def test_accumulates_pending_count(self, make_cover):
         cover = make_cover()
         with patch(
-            "custom_components.cover_time_based.cover_base.async_call_later"
+            "custom_components.cover_time_based.cover_echo_filter.async_call_later"
         ) as mock_call_later:
             mock_call_later.return_value = MagicMock()
             cover._mark_switch_pending("switch.open", 1)
@@ -918,7 +918,7 @@ class TestMarkSwitchPending:
         cover._pending_switch_timers["switch.open"] = old_timer
 
         with patch(
-            "custom_components.cover_time_based.cover_base.async_call_later"
+            "custom_components.cover_time_based.cover_echo_filter.async_call_later"
         ) as mock_call_later:
             mock_call_later.return_value = MagicMock()
             cover._mark_switch_pending("switch.open", 1)
@@ -928,7 +928,7 @@ class TestMarkSwitchPending:
     def test_sets_new_safety_timeout(self, make_cover):
         cover = make_cover()
         with patch(
-            "custom_components.cover_time_based.cover_base.async_call_later"
+            "custom_components.cover_time_based.cover_echo_filter.async_call_later"
         ) as mock_call_later:
             mock_call_later.return_value = MagicMock()
             cover._mark_switch_pending("switch.open", 1)
@@ -1194,7 +1194,7 @@ class TestMarkSwitchPendingTimeout:
             return MagicMock()
 
         with patch(
-            "custom_components.cover_time_based.cover_base.async_call_later",
+            "custom_components.cover_time_based.cover_echo_filter.async_call_later",
             side_effect=mock_call_later,
         ):
             cover._mark_switch_pending("switch.open", 2)
