@@ -437,7 +437,9 @@ export function renderInputEntities(card, c) {
         }
       </div>
       ${
-        c.control_mode === "toggle" || c.control_mode === "toggle_opposite"
+        c.control_mode === "toggle" ||
+        c.control_mode === "toggle_opposite" ||
+        c.control_mode === "single_button"
           ? renderToggleWithHelp(
               card,
               "relay_reports_off.label",
