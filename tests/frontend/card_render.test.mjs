@@ -58,6 +58,12 @@ const wrappedCfg = (over = {}) => ({
   ...over,
 });
 
+const singleButtonCfg = (over = {}) => ({
+  control_mode: "single_button",
+  open_switch_entity_id: "switch.b",
+  ...over,
+});
+
 // ---------------------------------------------------------------------------
 // render() — top-level
 // ---------------------------------------------------------------------------
@@ -407,6 +413,17 @@ test("toggle_opposite mode shows the relay_reports_off toggle", async () => {
   });
   const labels = [...card.shadowRoot.querySelectorAll(".toggle-label")].map((n) => n.textContent);
   // The relay_reports_off toggle label is present (same as toggle mode).
+  expect(labels.some((t) => /report/i.test(t))).toBe(true);
+});
+
+test("single_button mode shows the relay_reports_off toggle", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: singleButtonCfg(),
+    activeTab: "device",
+  });
+  const labels = [...card.shadowRoot.querySelectorAll(".toggle-label")].map((n) => n.textContent);
+  // A single button can be a pulse module too, so the option applies here.
   expect(labels.some((t) => /report/i.test(t))).toBe(true);
 });
 

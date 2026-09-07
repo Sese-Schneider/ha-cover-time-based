@@ -1518,6 +1518,111 @@ class TestSingleButtonFeedback:
         assert cover.travel_calc.current_position() > 0
 
 
+class TestSingleButtonRelayReportsOff:
+    """A single button on a pulse module that reports its ON but never its OFF.
+
+    The same #105 hardware the toggle modes' ``relay_reports_off`` option
+    covers: the module self-releases physically, so a ``turn_off`` is a spurious
+    extra press and the OFF echo never arrives. With the option off, this mode
+    must send no ``turn_off``, count only the ON echoes the hardware actually
+    emits, and never stall a multi-press move on a confirmation the hardware
+    cannot give (#273 follow-up (a)).
+    """
+
+    @pytest.mark.asyncio
+    async def test_press_sends_no_turn_off(self, make_cover):
+        """A pulse module self-releases; a turn_off would be an extra press."""
+        cover = _stub(
+            _make_single_button(
+                make_cover,
+                relay_reports_off=False,
+                travel_time_open=10,
+                travel_time_close=10,
+            )
+        )
+        cover.travel_calc.set_position(0)
+        cover._phase = Phase.AT_CLOSED
+        with single_button_sleep_patch():
+            await cover.async_open_cover()  # one press from AT_CLOSED
+            await _turns()
+        offs = [
+            c
+            for c in cover.hass.services.async_call.call_args_list
+            if c == _ha("turn_off", "switch.button")
+        ]
+        assert offs == []
+        assert len(_taps(cover, "switch.button")) == 1
+
+    @pytest.mark.asyncio
+    async def test_single_press_marks_one_echo_and_confirms(self, make_cover):
+        """The lone ON edge is the only echo, so one mark and it confirms."""
+        cover = _stub(
+            _make_single_button(
+                make_cover,
+                relay_reports_off=False,
+                travel_time_open=10,
+                travel_time_close=10,
+            )
+        )
+        cover.travel_calc.set_position(0)
+        cover._phase = Phase.AT_CLOSED
+        with single_button_sleep_patch():
+            await cover.async_open_cover()
+            await _turns()
+            assert not cover.travel_calc.is_traveling()  # parked on the echo
+            assert cover._pending_switch["switch.button"] == 1  # ON only, not ON+OFF
+            await cover._async_switch_state_changed(
+                _echo_event("switch.button", "off", "on", datetime.now(UTC))
+            )
+            await asyncio.sleep(0)
+        assert cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_multi_press_starts_inline_without_stalling(self, make_cover):
+        """The motor-starting last press lands on an already-on entity and emits
+        no echo, so the move starts inline instead of parking for the feedback
+        timeout."""
+        cover = _stub(
+            _make_single_button(
+                make_cover,
+                relay_reports_off=False,
+                travel_time_open=10,
+                travel_time_close=10,
+            )
+        )
+        cover.travel_calc.set_position(50)
+        cover._phase = Phase.MOVING_UP
+        with single_button_sleep_patch():
+            await cover.async_close_cover()  # two-press reversal from MOVING_UP
+            await _turns()
+        assert not _parked(cover, "switch.button")
+        assert cover._feedback_armed_entity is None
+        assert cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_press_on_a_stuck_on_button_marks_no_echo(self, make_cover):
+        """A turn_on on a button already reporting on emits no HA echo, so
+        nothing is marked (a stranded mark would swallow a later press) and the
+        move starts inline rather than waiting for a confirmation that can't
+        arrive."""
+        cover = _make_single_button(
+            make_cover,
+            relay_reports_off=False,
+            travel_time_open=10,
+            travel_time_close=10,
+        )
+        stub_switches(cover, on=("switch.button",))
+        cover.async_write_ha_state = MagicMock()
+        cover.travel_calc.set_position(0)
+        cover._phase = Phase.AT_CLOSED
+        with single_button_sleep_patch():
+            await cover.async_open_cover()
+            await _turns()
+        assert cover._pending_switch.get("switch.button", 0) == 0
+        assert cover._feedback_armed_entity is None
+        assert len(_taps(cover, "switch.button")) == 1  # still pulsed
+
+
 class TestRelayFeedbackToggleReversal:
     """A reversal sent while the driving relay is unconfirmed (issue #268).
 

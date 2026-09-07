@@ -450,7 +450,13 @@ def _create_cover_from_options(options, device_id="", name=""):
     elif control_mode == CONTROL_MODE_SINGLE_BUTTON:
         sb_args = dict(switch_args)
         sb_args["tilt_strategy"] = None  # tilt unsupported in this mode
-        return SingleButtonModeCover(pulse_time=pulse_time, **sb_args)
+        return SingleButtonModeCover(
+            pulse_time=pulse_time,
+            relay_reports_off=options.get(
+                CONF_RELAY_REPORTS_OFF, DEFAULT_RELAY_REPORTS_OFF
+            ),
+            **sb_args,
+        )
     else:
         return SwitchModeCover(**switch_args)
 

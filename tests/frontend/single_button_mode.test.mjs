@@ -128,16 +128,17 @@ test("single_button mode: tilt select is absent even for a stale dual_motor tilt
   expect(card.shadowRoot.querySelector(".dual-motor-config")).toBeNull();
 });
 
-test("single_button mode still shows exactly the four all-mode toggles (assumed_state, force_endpoint_redrive, wait_for_relay_feedback, recalibrate_before_position)", async () => {
-  // Same count as switch mode (card_render.test.mjs) — confirms only
-  // close/stop/tilt were hidden, nothing else was accidentally dropped.
+test("single_button mode shows exactly five toggles (the four all-mode ones plus relay_reports_off)", async () => {
+  // Confirms only close/stop/tilt were hidden and nothing else was
+  // accidentally dropped — plus relay_reports_off, which single_button shares
+  // with the toggle modes for hardware pulse modules (#273 follow-up (a)).
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: singleButtonCfg(),
     activeTab: "device",
   });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  expect(toggles.length).toBe(4);
+  expect(toggles.length).toBe(5);
 });
 
 test("other modes are unaffected: switch mode still shows the close switch picker and no Resync control", async () => {

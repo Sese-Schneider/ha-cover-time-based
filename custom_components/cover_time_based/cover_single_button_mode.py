@@ -38,15 +38,14 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
     # before the movement is torn down, or the motor runs between the two
     # presses with nothing counting it — see _await_confirmation_before_stop.
     _stop_is_a_tap = True
-    # A press's own release OFF follows its confirming ON. The count has to be
-    # exact: a button that reports its ON but never its OFF leaves a mark per
-    # press outstanding, so a multi-press plan's confirming ON is never taken
-    # and tracking starts on the timeout fallback instead.
-    _own_echoes_after_confirming_on = 1
 
-    def __init__(self, pulse_time, **kwargs):
+    def __init__(self, pulse_time, relay_reports_off=True, **kwargs):
         super().__init__(**kwargs)
         self._pulse_time = pulse_time
+        # A pulse module (issue #105) reports its ON but self-releases without
+        # ever reporting its OFF, so a turn_off is a spurious extra press and no
+        # OFF echo arrives — see _release_button and _run_press_sequence.
+        self._relay_reports_off = relay_reports_off
         self._phase = Phase.AT_CLOSED
         self._press_task: asyncio.Task | None = None
         self._settle_task: asyncio.Task | None = None
@@ -56,6 +55,15 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         # needs a cleanup turn_off) from one cancelled between presses (the
         # button is already OFF there -- no cleanup needed).
         self._press_active = False
+
+    @property
+    def _own_echoes_after_confirming_on(self) -> int:
+        """How many of our own echoes trail the confirming ON.
+
+        A press's release OFF follows its confirming ON (1) — unless the button
+        never reports its OFF (a pulse module), where nothing trails it (0).
+        """
+        return 1 if self._relay_reports_off else 0
 
     # --- configuration -------------------------------------------------
     def _are_entities_configured(self) -> bool:
@@ -79,11 +87,46 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
 
     # --- press sequencing ---------------------------------------------
     async def _release_button(self) -> None:
+        # A pulse module self-releases physically and never reports its OFF, so a
+        # turn_off is not an idempotent "off" but a spurious activation — another
+        # press (issue #105). Skip it: the hardware is already released.
+        if not self._relay_reports_off:
+            return
         await self._call_service(
             "homeassistant",
             "turn_off",
             {"entity_id": self._open_switch_entity_id},
         )
+
+    def _can_confirm_press(self, phases: list[Phase]) -> bool:
+        """Whether the motor-starting press will emit an ON echo to confirm on.
+
+        A relay that reports its OFF gives a clean OFF->ON edge on every press,
+        so any plan can confirm on its last (motor-starting) press. A pulse
+        module (issue #105) reports its ON but never its OFF: only a lone press
+        from a released button emits an edge; a multi-press plan's last press
+        lands on an already-on entity and produces no echo, so it cannot be
+        confirmed and starts inline instead of stalling for the feedback
+        timeout (#273 follow-up (a)).
+        """
+        if self._relay_reports_off:
+            return True
+        return len(phases) == 1 and not self._switch_is_on(self._open_switch_entity_id)
+
+    def _expected_press_echoes(self, entity_id) -> int:
+        """How many echoes a single press about to be sent will emit.
+
+        A relay that reports its OFF gives a turn_on ON echo and a release OFF
+        echo — two. A pulse module reports its ON but never its OFF, so a turn_on
+        on a released (off) button is one echo, and a turn_on on one already
+        reporting on emits none (HA fires no event for a no-op state). Marking
+        echoes the hardware never sends would strand a pending count that
+        swallows the user's next genuine press until the safety timeout clears
+        it — the exact bug this option fixes (#273 follow-up (a)).
+        """
+        if self._relay_reports_off:
+            return 2
+        return 0 if self._switch_is_on(entity_id) else 1
 
     def _start_press_sequence(self, action: Action) -> None:
         """Plan from the current phase and schedule the press sequence.
@@ -100,8 +143,10 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         phases = plan(self._phase, action)
         if not phases:
             return
-        armed = action is not Action.STOP and self._arm_relay_feedback(
-            self._open_switch_entity_id
+        armed = (
+            action is not Action.STOP
+            and self._can_confirm_press(phases)
+            and self._arm_relay_feedback(self._open_switch_entity_id)
         )
         if self._removed:
             return
@@ -188,13 +233,15 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
                     await sleep(DIRECTION_CHANGE_DELAY)
                 if self._wait_for_relay_feedback:
                     confirming = armed and index == len(phases) - 1
-                    self._mark_switch_pending(
-                        entity_id,
-                        2,
-                        timeout=self._armed_echo_window(window)
-                        if confirming
-                        else window,
-                    )
+                    expected = self._expected_press_echoes(entity_id)
+                    if expected:
+                        self._mark_switch_pending(
+                            entity_id,
+                            expected,
+                            timeout=self._armed_echo_window(window)
+                            if confirming
+                            else window,
+                        )
                 await self._call_service(
                     "homeassistant",
                     "turn_on",

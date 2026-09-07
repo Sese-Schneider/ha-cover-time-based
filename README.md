@@ -146,7 +146,7 @@ detail. A blank cell means the option is not shown for that mode.
 | [Force time-based positioning](#force-time-based-positioning) | ✓ | | | | | |
 | [Invert position](#invert-position) | ✓ | | | | | |
 | [Pulse time](#pulse-time) | | | ✓ | | | ✓ |
-| [Relay reports its own OFF](#relay-reports-its-own-off) | | | | ✓ | ✓ | |
+| [Relay reports its own OFF](#relay-reports-its-own-off) | | | | ✓ | ✓ | ✓ |
 | [Send stop signal at endpoints](#send-stop-signal-at-endpoints) | | | ✓ | | | |
 | [Wait for relay confirmation](#wait-for-relay-confirmation-before-tracking) | | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [Resync](#cover_time_basedresync) | | | | | | ✓ |
@@ -271,13 +271,18 @@ toggle relay releases itself after its own brief pulse.
 
 #### Relay reports its own OFF
 
-Applies to both Toggle modes. Leave it **on** for normal toggle relays, which
-switch themselves off after a pulse and report that off back to Home Assistant.
-Turn it **off** for hardware-managed pulse modules, such as an **Aqara T2** in
-its internal-pulse mode, that pulse the contact themselves but never report the
-off, leaving the switch entity stuck on. On that hardware a "turn off" is really
-another activation pulse, so with the option off the integration only ever sends
-a single on command per press, giving exactly one clean activation each time.
+Applies to both Toggle modes and to Single button. Leave it **on** for normal
+relays, which switch themselves off after a pulse and report that off back to
+Home Assistant. Turn it **off** for hardware-managed pulse modules, such as an
+**Aqara T2** in its internal-pulse mode, that pulse the contact themselves but
+never report the off, leaving the switch entity stuck on. On that hardware a
+"turn off" is really another activation pulse, so with the option off the
+integration only ever sends a single on command per press, giving exactly one
+clean activation each time. In **Single button** mode this also means each cycle
+step is a single clean press, and — because the module's off is never reported —
+[Wait for relay confirmation](#wait-for-relay-confirmation-before-tracking) no
+longer stalls a multi-press move: only a lone press can be confirmed, so a move
+that needs several presses starts tracking from the command time instead.
 
 #### Wait for relay confirmation before tracking
 
