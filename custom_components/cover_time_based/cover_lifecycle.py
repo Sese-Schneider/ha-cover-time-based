@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from asyncio import sleep
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
@@ -17,83 +17,17 @@ from homeassistant.exceptions import HomeAssistantError
 from .travel_calculator import TravelCalculator, TravelStatus
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
+    from .cover_host import _CoverHost
+
+    _MixinBase = _CoverHost
+else:
+    _MixinBase = object
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class MovementLifecycleMixin:
+class MovementLifecycleMixin(_MixinBase):
     """Mixin providing movement lifecycle (auto-stop, pre-step, restore) for CoverTimeBased."""
-
-    if TYPE_CHECKING:
-        hass: HomeAssistant
-        entity_id: str
-        travel_calc: TravelCalculator
-        tilt_calc: TravelCalculator
-        _tilt_strategy: Any
-        _delay_task: asyncio.Task[Any] | None
-        _last_command: str | None
-        _endpoint_runon_time: float | None
-        _movement_epoch: int
-        _recalibration_epoch: int | None
-        _removed: bool
-        _self_initiated_movement: bool
-        _triggered_externally: bool
-        _moving_tilt: bool
-        _moving_tilt_motor: bool
-        _tilt_restore_active: bool
-        _tilt_restore_target: int | None
-        _travel_startup_delay: float | None
-        _tilt_startup_delay: float | None
-        _feedback_armed_entity: str | None
-        _pending_travel_target: int | None
-        _pending_travel_command: str | None
-        _pending_tilt_target: int | None
-        _pending_tilt_command: str | None
-        _pending_recalibrated_target: int | None
-        _pending_recalibrated_axis: str | None
-
-        def _log(self, msg: str, *args: Any) -> None: ...
-        def _has_tilt_support(self) -> bool: ...
-        def _has_tilt_motor(self) -> bool: ...
-        def position_reached(
-            self, *, positions: tuple[int | None, int | None] | None = None
-        ) -> bool: ...
-        async def _async_handle_command(self, command: str, *_args: Any) -> None: ...
-        async def _async_persist_position(self) -> None: ...
-        def _begin_movement(
-            self,
-            target: Any,
-            coupled_target: Any,
-            primary_calc: Any,
-            coupled_calc: Any,
-            startup_delay: Any,
-            pre_step_delay: float = 0.0,
-        ) -> None: ...
-        def _cancel_delay_task(self) -> bool: ...
-        def _cancel_startup_delay_task(self) -> bool: ...
-        def _claim_tilt_restore(self) -> int: ...
-        def _clear_multiphase_tilt_state(self) -> None: ...
-        async def _direction_change_delay(self) -> None: ...
-        def _disarm_recalibrated_leg(self) -> None: ...
-        def _movement_target(self, closing: bool) -> str | None: ...
-        def _release_tilt_restore(self) -> None: ...
-        def _require_movement_target_available(self, target: str | None) -> None: ...
-        async def _send_tilt_close(self) -> None: ...
-        async def _send_tilt_open(self) -> None: ...
-        async def _send_tilt_stop(self) -> None: ...
-        async def _settle_before_reversing(self) -> bool: ...
-        async def set_position(
-            self, position: Any, *, recalibrate: bool = True
-        ) -> None: ...
-        async def set_tilt_position(
-            self, position: Any, *, recalibrate: bool = True
-        ) -> None: ...
-        def start_auto_updater(self) -> None: ...
-        def stop_auto_updater(self) -> None: ...
-        def _supersede_movement(self) -> None: ...
-        def _tilt_movement_target(self, command: str) -> str | None: ...
-        def _tilt_restore_superseded(self, epoch: int) -> bool: ...
 
     async def auto_stop_if_necessary(self):
         """Do auto stop if necessary.

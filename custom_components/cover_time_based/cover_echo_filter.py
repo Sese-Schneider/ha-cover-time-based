@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.core import callback
 from homeassistant.helpers.event import async_call_later
@@ -17,51 +17,15 @@ from .const import (
 )
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
+    from .cover_host import _CoverHost
 
-    from .calibration import CalibrationState
-    from .travel_calculator import TravelCalculator
+    _MixinBase = _CoverHost
+else:
+    _MixinBase = object
 
 
-class SwitchEchoMixin:
+class SwitchEchoMixin(_MixinBase):
     """Mixin providing switch echo filtering for CoverTimeBased."""
-
-    if TYPE_CHECKING:
-        hass: HomeAssistant
-        _relay_intent: dict[str, bool]
-        _pending_switch: dict[str, int]
-        _pending_switch_timers: dict[str, Any]
-        _pending_switch_deadlines: dict[str, float]
-        _removed: bool
-        _wait_for_relay_feedback: bool
-        _feedback_armed_entity: str | None
-        _feedback_wait_entity: str | None
-        _feedback_wait_future: asyncio.Future | None
-        _startup_delay_task: asyncio.Task[Any] | None
-        _stop_is_a_tap: bool
-        _triggered_externally: bool
-        _own_echoes_after_confirming_on: int
-        _calibration: CalibrationState | None
-        _tilt_open_switch_id: str | None
-        _tilt_close_switch_id: str | None
-        _tilt_stop_switch_id: str | None
-        _self_initiated_movement: bool
-        travel_calc: TravelCalculator
-
-        def _log(self, msg: str, *args: Any) -> None: ...
-        def _is_stale_reappearance(self, old_val: Any, new_val: Any) -> bool: ...
-        def _has_tilt_support(self) -> bool: ...
-        @staticmethod
-        def _entity_unavailable(state: Any) -> bool: ...
-        def async_write_ha_state(self) -> None: ...
-        def _neutralize_tracked_movement(self, *, supersede: bool = True) -> None: ...
-        async def _handle_external_attribute_change(self, event: Any) -> None: ...
-        async def _handle_external_tilt_state_change(
-            self, entity_id: Any, old_val: Any, new_val: Any
-        ) -> None: ...
-        async def _handle_external_state_change(
-            self, entity_id: Any, old_val: Any, new_val: Any
-        ) -> None: ...
 
     def _switch_is_on(self, entity_id) -> bool:
         """Check if a switch entity is currently on."""

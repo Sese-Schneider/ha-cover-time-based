@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 from asyncio import sleep
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
@@ -18,48 +18,17 @@ from .calibration import STEPPED_CALIBRATION_ATTRIBUTES, CalibrationState
 from .const import RELAY_FEEDBACK_TIMEOUT
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
+    from .cover_host import _CoverHost
 
-    from .travel_calculator import TravelCalculator
+    _MixinBase = _CoverHost
+else:
+    _MixinBase = object
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class CalibrationMixin:
+class CalibrationMixin(_MixinBase):
     """Mixin providing calibration functionality for CoverTimeBased."""
-
-    if TYPE_CHECKING:
-        hass: HomeAssistant
-        supports_tilt: bool
-        _calibration: CalibrationState | None
-        _tilt_strategy: Any
-        _tilt_mode_str: str | None
-        _tilt_open_switch_id: str | None
-        _tilt_close_switch_id: str | None
-        _travel_time_close: float | None
-        _travel_time_open: float | None
-        _tilting_time_close: float | None
-        _tilting_time_open: float | None
-        current_cover_position: int | None
-        current_cover_tilt_position: int | None
-        travel_calc: TravelCalculator
-        tilt_calc: TravelCalculator
-
-        async def _async_handle_command(self, _command: str, *_args: Any) -> None: ...
-        def _consume_feedback_arm(self) -> str | None: ...
-        async def _wait_for_relay_echo(
-            self, entity_id: str, timeout: float, *, since: float | None = None
-        ) -> float | None: ...
-        async def _send_stop(self) -> None: ...
-        async def _send_tilt_open(self) -> None: ...
-        async def _send_tilt_close(self) -> None: ...
-        async def _send_tilt_stop(self) -> None: ...
-        def _has_tilt_motor(self) -> bool: ...
-        def async_write_ha_state(self) -> None: ...
-        def _self_stops_at_endpoints(self) -> bool: ...
-        def _supports_stepped_calibration(self) -> bool: ...
-        def _on_known_position(self, position: int) -> None: ...
-        def _neutralize_tracked_movement(self, *, supersede: bool = True) -> None: ...
 
     async def start_calibration(self, **kwargs):
         """Start a calibration test for the given attribute."""
