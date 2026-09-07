@@ -164,7 +164,7 @@ class TestCreateCoverFromOptions:
         # Defaults: native set_position auto-detected (override off);
         # command-echo interpretation off.
         assert cover._force_time_based_position is False
-        assert cover._reports_command_not_endpoint is False
+        assert cover._reporting.state_is_command is False
 
     def test_wrapped_cover_force_time_based_position(self):
         from custom_components.cover_time_based.const import (
@@ -185,20 +185,21 @@ class TestCreateCoverFromOptions:
 
     def test_wrapped_cover_reports_command_not_endpoint_true(self):
         from custom_components.cover_time_based.const import (
-            CONF_REPORTS_COMMAND_NOT_ENDPOINT,
+            CONF_POSITION_REPORTING,
+            POSITION_REPORTING_COMMAND_ECHO,
         )
 
         cover = _create_cover_from_options(
             {
                 CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
                 CONF_COVER_ENTITY_ID: "cover.inner",
-                CONF_REPORTS_COMMAND_NOT_ENDPOINT: True,
+                CONF_POSITION_REPORTING: POSITION_REPORTING_COMMAND_ECHO,
             },
             device_id="test",
             name="Test",
         )
         assert isinstance(cover, WrappedCoverTimeBased)
-        assert cover._reports_command_not_endpoint is True
+        assert cover._reporting.state_is_command is True
 
     def test_wrapped_invert_threads_into_cover(self):
         from custom_components.cover_time_based.cover import CONF_INVERT

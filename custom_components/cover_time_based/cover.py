@@ -31,14 +31,15 @@ from .const import (
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
-    CONF_IGNORE_ALL_REPORTS,
-    CONF_IGNORE_ENDPOINT_STATES,
-    CONF_IGNORE_REPORTED_POSITION,
+    CONF_IGNORE_ALL_REPORTS,  # noqa: F401 (re-exported for websocket_api)
+    CONF_IGNORE_ENDPOINT_STATES,  # noqa: F401 (re-exported for websocket_api)
+    CONF_IGNORE_REPORTED_POSITION,  # noqa: F401 (re-exported for websocket_api)
     CONF_INVERT,
     CONF_MIN_MOVEMENT_TIME,
+    CONF_POSITION_REPORTING,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
-    CONF_REPORTS_COMMAND_NOT_ENDPOINT,
+    CONF_REPORTS_COMMAND_NOT_ENDPOINT,  # noqa: F401 (re-exported for websocket_api)
     CONF_SEND_ENDPOINT_STOP,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
@@ -53,19 +54,21 @@ from .const import (
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
-    DEFAULT_IGNORE_ALL_REPORTS,
-    DEFAULT_IGNORE_ENDPOINT_STATES,
-    DEFAULT_IGNORE_REPORTED_POSITION,
+    DEFAULT_IGNORE_ALL_REPORTS,  # noqa: F401 (re-exported for websocket_api)
+    DEFAULT_IGNORE_ENDPOINT_STATES,  # noqa: F401 (re-exported for websocket_api)
+    DEFAULT_IGNORE_REPORTED_POSITION,  # noqa: F401 (re-exported for websocket_api)
     DEFAULT_INVERT,
+    DEFAULT_POSITION_REPORTING,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
-    DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
+    DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,  # noqa: F401 (re-exported for websocket_api)
     DEFAULT_SEND_ENDPOINT_STOP,
     DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
     RESYNC_POSITIONS,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
 from .helpers import resolve_entity
+from .position_reporting import from_profile
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -414,21 +417,11 @@ def _create_cover_from_options(options, device_id="", name=""):
     if control_mode == CONTROL_MODE_WRAPPED:
         return WrappedCoverTimeBased(
             cover_entity_id=options.get(CONF_COVER_ENTITY_ID, ""),
-            ignore_reported_position=options.get(
-                CONF_IGNORE_REPORTED_POSITION, DEFAULT_IGNORE_REPORTED_POSITION
+            reporting=from_profile(
+                options.get(CONF_POSITION_REPORTING, DEFAULT_POSITION_REPORTING)
             ),
             force_time_based_position=options.get(
                 CONF_FORCE_TIME_BASED_POSITION, DEFAULT_FORCE_TIME_BASED_POSITION
-            ),
-            reports_command_not_endpoint=options.get(
-                CONF_REPORTS_COMMAND_NOT_ENDPOINT,
-                DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
-            ),
-            ignore_endpoint_states=options.get(
-                CONF_IGNORE_ENDPOINT_STATES, DEFAULT_IGNORE_ENDPOINT_STATES
-            ),
-            ignore_all_reports=options.get(
-                CONF_IGNORE_ALL_REPORTS, DEFAULT_IGNORE_ALL_REPORTS
             ),
             invert=options.get(CONF_INVERT, DEFAULT_INVERT),
             **common,

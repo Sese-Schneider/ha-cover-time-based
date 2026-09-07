@@ -17,6 +17,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 
+from custom_components.cover_time_based import position_reporting
 from custom_components.cover_time_based.cover_wrapped import WrappedCoverTimeBased
 from tests.helpers import relay_calls
 
@@ -37,6 +38,7 @@ _F_SET_TILT = 128
 def _make_wrapped_cover(
     cover_entity_id="cover.inner",
     force_time_based_position=False,
+    ignore_reported_position=False,
     reports_command_not_endpoint=False,
     ignore_endpoint_states=False,
     ignore_all_reports=False,
@@ -74,9 +76,14 @@ def _make_wrapped_cover(
         min_movement_time=None,
         cover_entity_id=cover_entity_id,
         force_time_based_position=force_time_based_position,
-        reports_command_not_endpoint=reports_command_not_endpoint,
-        ignore_endpoint_states=ignore_endpoint_states,
-        ignore_all_reports=ignore_all_reports,
+        reporting=position_reporting.from_profile(
+            position_reporting.from_legacy_flags(
+                ignore_reported_position=ignore_reported_position,
+                reports_command_not_endpoint=reports_command_not_endpoint,
+                ignore_endpoint_states=ignore_endpoint_states,
+                ignore_all_reports=ignore_all_reports,
+            )
+        ),
         invert=invert,
     )
     hass = MagicMock()
@@ -1240,7 +1247,7 @@ class TestWrappedCommandEchoMode:
     @pytest.mark.asyncio
     async def test_default_flag_is_false(self):
         cover = _make_wrapped_cover()
-        assert cover._reports_command_not_endpoint is False
+        assert cover._reporting.state_is_command is False
 
     @pytest.mark.asyncio
     async def test_closed_is_close_command_not_snap(self):
@@ -1338,7 +1345,7 @@ class TestWrappedIgnoreEndpointStates:
     @pytest.mark.asyncio
     async def test_default_flag_is_false(self):
         cover = _make_wrapped_cover()
-        assert cover._ignore_endpoint_states is False
+        assert cover._reporting.trusts_endpoint_states is True
 
     def test_closed_reported_position_is_none_when_flag_on(self):
         cover = _make_wrapped_cover(ignore_endpoint_states=True)
@@ -1388,11 +1395,11 @@ class TestWrappedIgnoreEndpointStates:
     def test_option_flows_through_cover_factory(self, make_cover):
         # The real options -> cover.py -> constructor path wires the flag.
         cover = make_cover(cover_entity_id="cover.inner", ignore_endpoint_states=True)
-        assert cover._ignore_endpoint_states is True
+        assert cover._reporting.trusts_endpoint_states is False
 
     def test_option_defaults_false_through_cover_factory(self, make_cover):
         cover = make_cover(cover_entity_id="cover.inner")
-        assert cover._ignore_endpoint_states is False
+        assert cover._reporting.trusts_endpoint_states is True
 
 
 class TestUseNativeTilt:

@@ -29,6 +29,7 @@ from .drivers import (
     PositionDriver,
     TimedPositionDriver,
 )
+from .position_reporting import RELIABLE, PositionReportingPolicy
 from .tilt_strategies.inline import InlineTilt
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,21 +56,15 @@ class WrappedCoverTimeBased(CoverTimeBased):
     def __init__(
         self,
         cover_entity_id,
-        ignore_reported_position=False,
+        reporting: PositionReportingPolicy = RELIABLE,
         force_time_based_position=False,
-        reports_command_not_endpoint=False,
-        ignore_endpoint_states=False,
-        ignore_all_reports=False,
         invert=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._cover_entity_id = cover_entity_id
-        self._ignore_reported_position = ignore_reported_position
+        self._reporting: PositionReportingPolicy = reporting
         self._force_time_based_position = force_time_based_position
-        self._reports_command_not_endpoint = reports_command_not_endpoint
-        self._ignore_endpoint_states = ignore_endpoint_states
-        self._ignore_all_reports = ignore_all_reports
         self._invert = invert
         self._last_self_command_time: float | None = None
         # The underlying moving state the in-flight command settles into; the
@@ -190,13 +185,11 @@ class WrappedCoverTimeBased(CoverTimeBased):
         Restricted to InlineTilt: the device positions its own slats, so the
         inline strategy's no-op snap_trackers_to_physical leaves our
         natively-set tilt intact. Dual-motor/sequential strategies re-derive
-        tilt from travel and keep the timed path. Command-echo and ignore-all
-        covers report nothing trustworthy to snap back from, so they keep the
-        timed path too.
+        tilt from travel and keep the timed path. A profile that doesn't
+        permit native forwarding (command-echo, ignore-all) reports nothing
+        trustworthy to snap back from, so it keeps the timed path too.
         """
-        if self._ignore_all_reports:
-            return False
-        if self._reports_command_not_endpoint:
+        if not self._reporting.permits_native:
             return False
         if not self._has_tilt_support():
             return False
@@ -228,16 +221,16 @@ class WrappedCoverTimeBased(CoverTimeBased):
     def _use_native_set_position(self, *, features: int | None = None) -> bool:
         """Return True if set_cover_position should be forwarded natively.
 
-        Auto-detected from the wrapped entity's SET_POSITION support, with four
+        Auto-detected from the wrapped entity's SET_POSITION support, with three
         opt-outs:
-          - ignore_all_reports (the device's every report is untrusted, so its
-            position scale is too),
+          - a profile that doesn't permit native forwarding (`permits_native`
+            False: ignore-all, whose every report is untrusted so its position
+            scale is too; or command-echo, whose state/position is a command
+            echo and is tracked purely by time — never forward a native
+            position to it; this also keeps the command-echo reinterpretation
+            in _handle_external_state_change from ever racing a self-driven
+            native move),
           - the force_time_based_position override (always legacy tracking),
-          - reports_command_not_endpoint (the wrapped entity's state/position is
-            a command echo, so it's tracked purely by time — never forward a
-            native position to it; this also keeps the command-echo
-            reinterpretation in _handle_external_state_change from ever racing a
-            self-driven native move), and
           - a configured *timed* tilt strategy: native forwarding drives travel
             only and can't express the tilt coupling/pre-steps the time-based
             path plans, so a *timed* tilt strategy keeps the timed path
@@ -247,11 +240,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
             slats independently of our travel motor, so driving position
             natively is coupling-safe there.
         """
-        if self._ignore_all_reports:
+        if not self._reporting.permits_native:
             return False
         if self._force_time_based_position:
-            return False
-        if self._reports_command_not_endpoint:
             return False
         # A configured tilt strategy normally keeps the timed path so the
         # tilt coupling/pre-steps can run. But when tilt is itself forwarded
@@ -297,10 +288,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
     def _self_stops_at_endpoints(self) -> bool:
         """Command-echo wrapped covers have no endstop and must be stopped.
 
-        A wrapped cover whose state is a command echo
-        (``reports_command_not_endpoint``) reports no real endpoint and, in
-        practice, drives an endstop-less motor that merely stalls against the
-        mechanical stop while powered. The base assumption that the motor
+        A wrapped cover whose state is a command echo (``state_is_command``)
+        reports no real endpoint and, in practice, drives an endstop-less
+        motor that merely stalls against the mechanical stop while powered.
+        The base assumption that the motor
         self-stops at its limit does not hold, so return False: the endpoint
         stop must be sent to de-energize the motor rather than let it stall
         until the device's own max-time cutoff (issue #152).
@@ -309,7 +300,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         default of True — its underlying motor stops at its own limits, so the
         endpoint stop stays redundant and is skipped.
         """
-        if self._reports_command_not_endpoint:
+        if self._reporting.state_is_command:
             return False
         return super()._self_stops_at_endpoints()
 
@@ -322,7 +313,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         async_close_cover's skip-at-0 (issue #152). A plain wrapped cover keeps
         the base resync behaviour.
         """
-        return self._reports_command_not_endpoint
+        return self._reporting.state_is_command
 
     def _start_bounce_grace_window(self) -> None:
         self._last_self_command_time = time.monotonic()
@@ -348,7 +339,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # (issue #248): ignore state, transitions and position alike and track
         # purely by time. Availability still updates — it is handled upstream
         # in _async_switch_state_changed before this dispatch.
-        if self._ignore_all_reports:
+        if self._reporting.ignores_all_transitions:
             self._log(
                 "_handle_external_state_change :: ignoring %s -> %s"
                 " (all reports ignored)",
@@ -371,7 +362,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # the endpoint and native-set-position logic below — neither applies to
         # them (they have no set_position, so the native-move guard is a no-op
         # for them anyway, and we never snap).
-        if self._reports_command_not_endpoint:
+        if self._reporting.state_is_command:
             await self._handle_command_state(new_val)
             return
 
@@ -551,7 +542,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         auto-stop (see the is_traveling guard, below the stopped-state check).
         Native (holds_itself) moves are unaffected and keep snapping.
 
-        Command-echo covers (reports_command_not_endpoint) report no
+        Command-echo covers (``state_is_command``) report no
         trustworthy position or endpoint, so we ignore their attribute-only
         updates entirely — mirroring the short-circuit in
         _handle_external_state_change. Without this, an attribute update while
@@ -565,9 +556,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return
         # The underlying's reported position is untrustworthy too (issue #248):
         # ignore attribute-only updates, mirroring the state-channel guard above.
-        if self._ignore_all_reports:
+        if self._reporting.ignores_all_transitions:
             return
-        if self._reports_command_not_endpoint:
+        if self._reporting.state_is_command:
             return
         if self._in_bounce_grace_window():
             return
@@ -631,7 +622,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
     def _is_stale_reappearance(self, old_val, new_val) -> bool:
         """A command-echo cover coming back online is not issuing a command.
 
-        With ``reports_command_not_endpoint`` the wrapped entity's state *is*
+        With ``state_is_command`` the wrapped entity's state *is*
         the last command it was given, so the open/closed it carries on the way
         back is that retained value resurfacing rather than something anyone
         just asked for. Replaying it would run a phantom timed travel — a full
@@ -654,7 +645,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         the whole transition here would throw that away along with the
         opening/closing and tilt handling it also drives.
         """
-        if not self._reports_command_not_endpoint:
+        if not self._reporting.state_is_command:
             return False
         if old_val == STATE_UNAVAILABLE:
             self._returning_from_unavailable = new_val == STATE_UNKNOWN
@@ -668,50 +659,37 @@ class WrappedCoverTimeBased(CoverTimeBased):
     ) -> int | None:
         """Return the wrapped cover's reported position, or None if unknown.
 
-        Honors ignore_all_reports, reports_command_not_endpoint and
-        ignore_reported_position. The first two reject every position source;
-        the third skips the numeric attribute but allows the closed fallback.
-        Prefers the current_position attribute. Falls back to 0 for
-        state=closed (unambiguous); state=open without an attribute is
-        ambiguous (could be any position > 0) and returns None. Both the
-        attribute and the closed fallback are translated through
-        _invert_position, so when self._invert is set the reported value is
-        100 - position and the closed fallback becomes 100.
+        Governed by the position-reporting policy's ``trusts_position_attr``
+        and ``trusts_endpoint_states``. A profile with neither set (command-echo,
+        ignore-all) reads no position source at all. Prefers the
+        current_position attribute. Falls back to 0 for state=closed
+        (unambiguous); state=open without an attribute is ambiguous (could be
+        any position > 0) and returns None. Both the attribute and the closed
+        fallback are translated through _invert_position, so when self._invert
+        is set the reported value is 100 - position and the closed fallback
+        becomes 100.
 
         ``trust_closed=False`` drops that fallback, for a caller holding a
         state it does not consider a real endpoint report (see the reappearance
-        handling in _handle_external_state_change). ``ignore_endpoint_states``
-        drops it too, for a cover whose open/closed states fire when the motor
-        merely stops mid-travel rather than only at the physical endpoints
-        (issue #238) — there a `closed` proves nothing about position.
-
-        A command-echo cover reports no usable position at all, so this
-        returns None for it regardless of the other flags.
+        handling in _handle_external_state_change). A profile with
+        ``trusts_endpoint_states`` False drops it too, for a cover whose
+        open/closed states fire when the motor merely stops mid-travel rather
+        than only at the physical endpoints (issue #238) — there a `closed`
+        proves nothing about position.
         """
-        # A device whose every report is ignored (issue #248) reports no usable
-        # position, so the startup live-sync and any other consumer fall back to
-        # the time-based tracker rather than a value we do not trust.
-        if self._ignore_all_reports:
-            return None
-        # A command-echo cover's state and position are echoes of the last
-        # command, not measurements: neither report channel trusts them, and
-        # the startup live-sync must not either.
-        if self._reports_command_not_endpoint:
-            return None
         state = self.hass.states.get(self._cover_entity_id) if state is None else state
         if state is None:
             return None
-        # When configured to ignore the reported position, behave like a cover
-        # that reports no position at all: track purely by time. The closed
-        # state below is still trusted — it is an unambiguous endpoint, not a
-        # reported position number.
-        if not self._ignore_reported_position:
+        # A profile that trusts the position attribute reads it; one that
+        # doesn't (untrusted position, command echo, ignore-all) falls through
+        # to the closed-state fallback below, or to None.
+        if self._reporting.trusts_position_attr:
             attr_pos = state.attributes.get(ATTR_CURRENT_POSITION)
             if isinstance(attr_pos, (int, float)) and 0 <= attr_pos <= 100:
                 return self._invert_position(int(attr_pos))
         if (
             trust_closed
-            and not self._ignore_endpoint_states
+            and self._reporting.trusts_endpoint_states
             and state.state == STATE_CLOSED
         ):
             return self._invert_position(0)
@@ -722,14 +700,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
     ) -> int | None:
         """Return the wrapped cover's reported tilt position, or None.
 
-        Honors ignore_reported_position and ignore_all_reports — a device whose
-        reported values are untrustworthy is untrustworthy on both axes. Unlike
+        Governed by ``trusts_tilt_attr`` — a profile whose reported values are
+        untrustworthy on the position axis is untrustworthy on tilt too. Unlike
         _wrapped_reported_position there is no closed-state fallback: a closed
         cover implies nothing unambiguous about its slat angle.
         """
-        if self._ignore_all_reports:
-            return None
-        if self._ignore_reported_position:
+        if not self._reporting.trusts_tilt_attr:
             return None
         state = self.hass.states.get(self._cover_entity_id) if state is None else state
         if state is None:
@@ -858,7 +834,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # do this when we positively know stop is unsupported and set position
         # is — otherwise keep the legacy stop_cover (covers an entity whose
         # capabilities are momentarily unknown, e.g. while unavailable). This is
-        # also the only stop available under ignore_all_reports: the frozen
+        # also the only stop available under the ignore-all profile: the frozen
         # target is issued in the device's scale because no other command exists.
         features = self._wrapped_features()
         supports_stop = features is not None and bool(
