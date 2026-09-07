@@ -51,9 +51,7 @@ def test_from_legacy_flags_single_flags():
 def test_from_legacy_flags_precedence():
     # ignore_all beats everything; command_echo beats no_endpoints/unreliable.
     assert (
-        pr.from_legacy_flags(
-            ignore_all_reports=True, reports_command_not_endpoint=True
-        )
+        pr.from_legacy_flags(ignore_all_reports=True, reports_command_not_endpoint=True)
         == "ignore_all"
     )
     assert (
@@ -63,9 +61,7 @@ def test_from_legacy_flags_precedence():
         == "command_echo"
     )
     assert (
-        pr.from_legacy_flags(
-            ignore_endpoint_states=True, ignore_reported_position=True
-        )
+        pr.from_legacy_flags(ignore_endpoint_states=True, ignore_reported_position=True)
         == "no_endpoints"
     )
 
