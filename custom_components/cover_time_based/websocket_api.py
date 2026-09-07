@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .calibration import CALIBRATABLE_ATTRIBUTES
-from .const import DOMAIN
+from .const import DOMAIN, POSITION_REPORTING_VALUES
 from .cover import (
     CONF_ASSUMED_STATE,
     CONF_CLOSE_INCLUDES_TILT,
@@ -23,17 +23,14 @@ from .cover import (
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
-    CONF_IGNORE_ALL_REPORTS,
-    CONF_IGNORE_ENDPOINT_STATES,
-    CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
     CONF_MAX_TILT_ALLOWED_POSITION,
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
+    CONF_POSITION_REPORTING,
     CONF_PULSE_TIME,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
-    CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SAFE_TILT_POSITION,
     CONF_SEND_ENDPOINT_STOP,
     CONF_STOP_SWITCH_ENTITY_ID,
@@ -59,14 +56,11 @@ from .cover import (
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
-    DEFAULT_IGNORE_ALL_REPORTS,
-    DEFAULT_IGNORE_ENDPOINT_STATES,
-    DEFAULT_IGNORE_REPORTED_POSITION,
     DEFAULT_INVERT,
+    DEFAULT_POSITION_REPORTING,
     DEFAULT_PULSE_TIME,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
-    DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
     DEFAULT_SEND_ENDPOINT_STOP,
     DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
     PERCENT,
@@ -172,34 +166,16 @@ _CONFIG_FIELDS: tuple[_ConfigField, ...] = (
     _ConfigField("stop_switch_entity_id", CONF_STOP_SWITCH_ENTITY_ID, _ENTITY),
     _ConfigField("cover_entity_id", CONF_COVER_ENTITY_ID, _ENTITY),
     _ConfigField(
-        "ignore_reported_position",
-        CONF_IGNORE_REPORTED_POSITION,
-        _BOOL,
-        default=DEFAULT_IGNORE_REPORTED_POSITION,
+        "position_reporting",
+        CONF_POSITION_REPORTING,
+        vol.In(POSITION_REPORTING_VALUES),
+        default=DEFAULT_POSITION_REPORTING,
     ),
     _ConfigField(
         "force_time_based_position",
         CONF_FORCE_TIME_BASED_POSITION,
         _BOOL,
         default=DEFAULT_FORCE_TIME_BASED_POSITION,
-    ),
-    _ConfigField(
-        "reports_command_not_endpoint",
-        CONF_REPORTS_COMMAND_NOT_ENDPOINT,
-        _BOOL,
-        default=DEFAULT_REPORTS_COMMAND_NOT_ENDPOINT,
-    ),
-    _ConfigField(
-        "ignore_endpoint_states",
-        CONF_IGNORE_ENDPOINT_STATES,
-        _BOOL,
-        default=DEFAULT_IGNORE_ENDPOINT_STATES,
-    ),
-    _ConfigField(
-        "ignore_all_reports",
-        CONF_IGNORE_ALL_REPORTS,
-        _BOOL,
-        default=DEFAULT_IGNORE_ALL_REPORTS,
     ),
     _ConfigField("invert", CONF_INVERT, _BOOL, default=DEFAULT_INVERT),
     _ConfigField(
