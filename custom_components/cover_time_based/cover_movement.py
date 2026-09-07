@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
@@ -23,110 +23,17 @@ from .tilt_strategies.planning import (
 )
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
+    from .cover_host import _CoverHost
 
-    from .travel_calculator import TravelCalculator
+    _MixinBase = _CoverHost
+else:
+    _MixinBase = object
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class MovementMixin:
+class MovementMixin(_MixinBase):
     """Mixin providing movement orchestration for CoverTimeBased."""
-
-    if TYPE_CHECKING:
-        hass: HomeAssistant
-        supports_tilt: bool
-        travel_calc: TravelCalculator
-        tilt_calc: TravelCalculator
-        _tilt_strategy: Any
-        _startup_delay_task: Any
-        _delay_task: Any
-        _last_command: str | None
-        _endpoint_runon_time: float | None
-        _min_movement_time: float | None
-        _movement_epoch: int
-        _moving_tilt: bool
-        _moving_tilt_motor: bool
-        _self_initiated_movement: bool
-        _triggered_externally: bool
-        _close_includes_tilt: bool
-        _tilt_restore_target: int | None
-        _travel_startup_delay: float | None
-        _tilt_startup_delay: float | None
-        _travel_time_close: float | None
-        _travel_time_open: float | None
-        _tilting_time_close: float | None
-        _tilting_time_open: float | None
-        _open_switch_entity_id: str | None
-        _close_switch_entity_id: str | None
-        _tilt_open_switch_id: str | None
-        _tilt_close_switch_id: str | None
-        _missing_entities_label: str
-        _SWITCH_TARGET_ATTRS: tuple[str, ...]
-
-        def _log(self, msg: str, *args: Any) -> None: ...
-        def async_write_ha_state(self) -> None: ...
-        def stop_auto_updater(self) -> None: ...
-        async def _async_handle_command(self, command: str, *_args: Any) -> None: ...
-        async def _abandon_active_lifecycle(self) -> None: ...
-        def _arm_recalibrated_leg(self, target: Any, axis: Any) -> None: ...
-        def _at_endpoint(self, position: Any) -> bool: ...
-        async def _await_confirmation_before_stop(self) -> None: ...
-        def _begin_movement(
-            self,
-            target: Any,
-            coupled_target: Any,
-            primary_calc: Any,
-            coupled_calc: Any,
-            startup_delay: Any,
-            pre_step_delay: float = 0.0,
-        ) -> None: ...
-        def _cancel_delay_task(self) -> bool: ...
-        def _cancel_startup_delay_task(self) -> bool: ...
-        async def _delayed_stop(self, delay: Any) -> None: ...
-        def _is_direction_change(self, command: Any) -> bool: ...
-        async def _neutralize_parked_move(self) -> None: ...
-        def _recalibration_plan(
-            self, recalibrate: Any, position: Any, *, axis: Any
-        ) -> Any: ...
-        async def _release_displaced_tilt_motor(
-            self, was_tilt_motor_move: Any
-        ) -> None: ...
-        def _self_stops_at_endpoints(self) -> bool: ...
-        async def _send_tilt_close(self) -> None: ...
-        async def _send_tilt_open(self) -> None: ...
-        async def _send_tilt_stop(self) -> None: ...
-        async def _settle_before_reversing(self) -> bool: ...
-        async def _start_recalibration_drive(
-            self, axis: Any, target: Any = 100
-        ) -> bool: ...
-        async def _start_tilt_pre_step(
-            self,
-            tilt_target: Any,
-            travel_target: Any,
-            travel_command: Any,
-            restore_target: Any,
-        ) -> None: ...
-        async def _start_travel_pre_step(
-            self, travel_target: Any, tilt_target: Any, tilt_command: Any
-        ) -> None: ...
-        async def _stop_and_settle_before_recalibration_drive(
-            self, command: Any
-        ) -> bool: ...
-        async def _stop_and_settle_tilt_before_recalibration_drive(
-            self, command: Any, was_tilt_motor_move: Any
-        ) -> bool: ...
-        async def _stop_displaced_movement_for_tilt(
-            self, was_tilt_motor_move: Any
-        ) -> None: ...
-        def _stop_travel_if_traveling(self) -> None: ...
-        async def async_stop_cover(
-            self,
-            *,
-            supersede: bool = True,
-            tilt_axis_reported: bool = False,
-            **kwargs: Any,
-        ) -> None: ...
 
     async def _async_move_to_endpoint(self, target, *, suppress_start_command=False):
         """Move cover to an endpoint (0=fully closed, 100=fully open).
