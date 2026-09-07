@@ -131,7 +131,7 @@ test("single_button mode: tilt select is absent even for a stale dual_motor tilt
 test("single_button mode shows exactly five toggles (the four all-mode ones plus relay_reports_off)", async () => {
   // Confirms only close/stop/tilt were hidden and nothing else was
   // accidentally dropped — plus relay_reports_off, which single_button shares
-  // with the toggle modes for hardware pulse modules (issue #273 follow-up (a)).
+  // with the toggle modes for hardware pulse modules (#273 follow-up (a)).
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: singleButtonCfg(),

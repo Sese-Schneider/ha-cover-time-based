@@ -107,7 +107,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         from a released button emits an edge; a multi-press plan's last press
         lands on an already-on entity and produces no echo, so it cannot be
         confirmed and starts inline instead of stalling for the feedback
-        timeout (issue #273 follow-up (a)).
+        timeout (#273 follow-up (a)).
         """
         if self._relay_reports_off:
             return True
@@ -122,7 +122,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         reporting on emits none (HA fires no event for a no-op state). Marking
         echoes the hardware never sends would strand a pending count that
         swallows the user's next genuine press until the safety timeout clears
-        it — the exact bug this option fixes (issue #273 follow-up (a)).
+        it — the exact bug this option fixes (#273 follow-up (a)).
         """
         if self._relay_reports_off:
             return 2

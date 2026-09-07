@@ -1526,7 +1526,7 @@ class TestSingleButtonRelayReportsOff:
     extra press and the OFF echo never arrives. With the option off, this mode
     must send no ``turn_off``, count only the ON echoes the hardware actually
     emits, and never stall a multi-press move on a confirmation the hardware
-    cannot give (issue #273 follow-up (a)).
+    cannot give (#273 follow-up (a)).
     """
 
     @pytest.mark.asyncio
