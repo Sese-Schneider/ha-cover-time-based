@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .calibration import CALIBRATABLE_ATTRIBUTES
-from .const import DOMAIN, POSITION_REPORTING_VALUES
+from .const import DEFAULT_POSITION_REPORTING, DOMAIN, POSITION_REPORTING_VALUES
 from .cover import (
     CONF_ASSUMED_STATE,
     CONF_CLOSE_INCLUDES_TILT,
@@ -57,7 +57,6 @@ from .cover import (
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_INVERT,
-    DEFAULT_POSITION_REPORTING,
     DEFAULT_PULSE_TIME,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,

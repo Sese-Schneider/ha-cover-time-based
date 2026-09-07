@@ -1,4 +1,4 @@
-"""Unit tests for the position-reporting policy (backlog 5.4)."""
+"""Unit tests for the position-reporting policy."""
 
 from dataclasses import FrozenInstanceError
 
@@ -63,6 +63,19 @@ def test_from_legacy_flags_precedence():
     assert (
         pr.from_legacy_flags(ignore_endpoint_states=True, ignore_reported_position=True)
         == "no_endpoints"
+    )
+
+
+def test_reachable_multi_flag_combo_collapses_to_command_echo():
+    # The only multi-flag combo any shipped UI could persist (both were pre-#239
+    # separate options). It collapses to command_echo, which is behaviour-
+    # preserving: reports_command_not_endpoint's effects subsumed
+    # ignore_reported_position's at every decision site.
+    assert (
+        pr.from_legacy_flags(
+            ignore_reported_position=True, reports_command_not_endpoint=True
+        )
+        == "command_echo"
     )
 
 

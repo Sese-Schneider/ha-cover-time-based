@@ -1,4 +1,4 @@
-"""Position-reporting trust policy for wrapped covers (backlog 5.4).
+"""Position-reporting trust policy for wrapped covers.
 
 A wrapped cover trusts the underlying entity's reports to a degree named by
 one enum profile. PositionReportingPolicy states that trust as six predicates
@@ -26,17 +26,27 @@ class PositionReportingPolicy:
 
     trusts_position_attr: bool  # read the numeric current_position attribute
     trusts_endpoint_states: bool  # trust open/closed as real endpoints
-    trusts_tilt_attr: bool  # read the current_tilt_position attribute
     state_is_command: bool  # the wrapped state IS a command echo, not a reading
     ignores_all_transitions: bool  # ignore state/attribute changes entirely
-    permits_native: bool  # allow native set_position / tilt forwarding
+
+    @property
+    def trusts_tilt_attr(self) -> bool:
+        # Tilt reports are trusted exactly when the position attribute is:
+        # a device whose position number is untrustworthy is untrustworthy on tilt too.
+        return self.trusts_position_attr
+
+    @property
+    def permits_native(self) -> bool:
+        # Native set_position/tilt forwarding is unsafe when the wrapped state is a
+        # command echo or all reports are ignored.
+        return not (self.state_is_command or self.ignores_all_transitions)
 
 
-RELIABLE = PositionReportingPolicy(True, True, True, False, False, True)
-UNRELIABLE = PositionReportingPolicy(False, True, False, False, False, True)
-NO_ENDPOINTS = PositionReportingPolicy(True, False, True, False, False, True)
-COMMAND_ECHO = PositionReportingPolicy(False, False, False, True, False, False)
-IGNORE_ALL = PositionReportingPolicy(False, False, False, False, True, False)
+RELIABLE = PositionReportingPolicy(True, True, False, False)
+UNRELIABLE = PositionReportingPolicy(False, True, False, False)
+NO_ENDPOINTS = PositionReportingPolicy(True, False, False, False)
+COMMAND_ECHO = PositionReportingPolicy(False, False, True, False)
+IGNORE_ALL = PositionReportingPolicy(False, False, False, True)
 
 _BY_PROFILE = {
     POSITION_REPORTING_RELIABLE: RELIABLE,
@@ -66,6 +76,12 @@ def from_legacy_flags(
     contradictory legacy combination resolves to the highest-precedence flag
     set, exactly as the card has always shown it.
     """
+    # Precedence is lossy only for multi-flag combinations. The sole combo any
+    # shipped UI could persist, ignore_reported_position + reports_command_not_endpoint
+    # (both pre-#239 separate options), collapses to command_echo and is
+    # behaviour-preserving. The other multi-flag combos were never co-settable:
+    # ignore_endpoint_states (#239) and ignore_all_reports (#248) each shipped
+    # dropdown-only, with no YAML surface.
     if ignore_all_reports:
         return POSITION_REPORTING_IGNORE_ALL
     if reports_command_not_endpoint:

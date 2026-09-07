@@ -305,7 +305,7 @@ class TestPositionReportingRoundTrip:
     """position_reporting is returned in get_config and saved in
     update_config; it replaced the four legacy boolean flags
     (ignore_reported_position / reports_command_not_endpoint /
-    ignore_endpoint_states / ignore_all_reports) (backlog 5.4)."""
+    ignore_endpoint_states / ignore_all_reports)."""
 
     @pytest.mark.asyncio
     async def test_get_config_defaults_position_reporting_reliable(self):

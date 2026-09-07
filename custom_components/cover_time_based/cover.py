@@ -51,7 +51,6 @@ from .const import (
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_INVERT,
-    DEFAULT_POSITION_REPORTING,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
     DEFAULT_SEND_ENDPOINT_STOP,
@@ -409,9 +408,7 @@ def _create_cover_from_options(options, device_id="", name=""):
     if control_mode == CONTROL_MODE_WRAPPED:
         return WrappedCoverTimeBased(
             cover_entity_id=options.get(CONF_COVER_ENTITY_ID, ""),
-            reporting=from_profile(
-                options.get(CONF_POSITION_REPORTING, DEFAULT_POSITION_REPORTING)
-            ),
+            reporting=from_profile(options.get(CONF_POSITION_REPORTING)),
             force_time_based_position=options.get(
                 CONF_FORCE_TIME_BASED_POSITION, DEFAULT_FORCE_TIME_BASED_POSITION
             ),
