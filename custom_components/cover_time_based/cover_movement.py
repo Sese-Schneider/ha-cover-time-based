@@ -13,6 +13,7 @@ from homeassistant.const import (
 )
 from homeassistant.exceptions import HomeAssistantError
 
+from .recalibration import RecalibrationPlan
 from .tilt_strategies import SequentialTilt
 from .tilt_strategies.planning import (
     calculate_pre_step_delay,
@@ -503,12 +504,6 @@ class MovementMixin:
         a redundant nudge to skip. A future caller passing ``recalibrate=False``
         for an unrelated reason would silently get that exemption too.
         """
-        # Imported inside the method to break the import cycle: cover_base
-        # imports this mixin at module load, and RecalibrationPlan is defined
-        # in cover_base (after that import), so a module-level import would be
-        # unresolved. By call time cover_base is fully loaded.
-        from .cover_base import RecalibrationPlan
-
         plan = self._recalibration_plan(recalibrate, position, axis="travel")
         if plan is RecalibrationPlan.TWO_LEG:
             # Leg A always drives OPEN (the fully-open datum), so it only
@@ -725,9 +720,6 @@ class MovementMixin:
         a redundant nudge to skip. A future caller passing ``recalibrate=False``
         for an unrelated reason would silently get that exemption too.
         """
-        # See set_position for why RecalibrationPlan is imported inside the method.
-        from .cover_base import RecalibrationPlan
-
         plan = self._recalibration_plan(recalibrate, position, axis="tilt")
         if plan is RecalibrationPlan.TWO_LEG:
             # The drive axis is "tilt" only where the tilt motor is independent

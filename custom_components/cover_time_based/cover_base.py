@@ -7,7 +7,6 @@ from abc import abstractmethod
 from asyncio import sleep
 from contextvars import ContextVar
 from datetime import timedelta
-from enum import Enum, auto
 from typing import Literal
 
 from homeassistant.components.cover import (
@@ -55,6 +54,7 @@ from .cover_echo_filter import SwitchEchoMixin
 from .cover_lifecycle import MovementLifecycleMixin
 from .cover_movement import MovementMixin
 from .position_storage import async_get_position_store
+from .recalibration import RecalibrationPlan
 from .tilt_strategies import InlineTilt, SequentialTilt
 from .travel_calculator import TravelCalculator, TravelStatus
 
@@ -89,14 +89,6 @@ class RawCommandNotSupported(HomeAssistantError):
 # dispatch in _recalibration_plan / _start_recalibration_drive /
 # _arm_recalibrated_leg.
 RecalibrationAxis = Literal["travel", "tilt"]
-
-
-class RecalibrationPlan(Enum):
-    """What a position command should do about recalibration (issue #179)."""
-
-    NONE = auto()
-    TWO_LEG = auto()
-    FORCED_ENDPOINT = auto()
 
 
 class CoverTimeBased(
