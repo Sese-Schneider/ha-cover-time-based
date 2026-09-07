@@ -10,11 +10,12 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
+from . import position_reporting
 from .card_resources import (
     async_register_card_resource,
     async_unregister_card_resource,
 )
-from .const import DOMAIN
+from .const import CONF_POSITION_REPORTING, DOMAIN
 from .position_storage import async_get_position_store
 from .websocket_api import async_register_websocket_api
 
@@ -82,6 +83,19 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if new_options.get("tilt_mode") == "sequential":
             new_options["tilt_mode"] = "sequential_close"
         hass.config_entries.async_update_entry(entry, options=new_options, version=3)
+
+    if entry.version < 4:
+        new_options = dict(entry.options)
+        profile = position_reporting.from_legacy_flags(
+            ignore_reported_position=new_options.pop("ignore_reported_position", False),
+            ignore_endpoint_states=new_options.pop("ignore_endpoint_states", False),
+            reports_command_not_endpoint=new_options.pop(
+                "reports_command_not_endpoint", False
+            ),
+            ignore_all_reports=new_options.pop("ignore_all_reports", False),
+        )
+        new_options[CONF_POSITION_REPORTING] = profile
+        hass.config_entries.async_update_entry(entry, options=new_options, version=4)
 
     return True
 

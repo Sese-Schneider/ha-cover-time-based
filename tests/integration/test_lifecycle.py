@@ -118,7 +118,7 @@ async def test_migrate_v2_sequential_to_v3_sequential_close(hass: HomeAssistant)
     result = await async_migrate_entry(hass, entry)
 
     assert result is True
-    assert entry.version == 3
+    assert entry.version == 4
     assert entry.options["tilt_mode"] == "sequential_close"
     assert entry.options["travel_time_open"] == 10
 
@@ -139,7 +139,7 @@ async def test_migrate_v2_non_sequential_bumps_version_only(hass: HomeAssistant)
     result = await async_migrate_entry(hass, entry)
 
     assert result is True
-    assert entry.version == 3
+    assert entry.version == 4
     assert entry.options["tilt_mode"] == "inline"
 
 
@@ -159,7 +159,7 @@ async def test_migrate_v3_is_idempotent(hass: HomeAssistant):
     result = await async_migrate_entry(hass, entry)
 
     assert result is True
-    assert entry.version == 3
+    assert entry.version == 4
     assert entry.options["tilt_mode"] == "sequential_close"
 
 
