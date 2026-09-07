@@ -11,16 +11,13 @@ from custom_components.cover_time_based.cover import (
     CONF_COVER_ENTITY_ID,
     CONF_DIRECTION_CHANGE_DELAY,
     CONF_FORCE_ENDPOINT_REDRIVE,
-    CONF_IGNORE_ALL_REPORTS,
-    CONF_IGNORE_ENDPOINT_STATES,
-    CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
     CONF_MIN_MOVEMENT_TIME,
     CONF_OPEN_SWITCH_ENTITY_ID,
+    CONF_POSITION_REPORTING,
     CONF_PULSE_TIME,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
-    CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SEND_ENDPOINT_STOP,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_TILT_CLOSE_SWITCH,
@@ -300,15 +297,18 @@ class TestWsGetConfig:
 
 
 # ---------------------------------------------------------------------------
-# Dual-motor field round-tripping
+# position_reporting round-tripping
 # ---------------------------------------------------------------------------
 
 
-class TestIgnoreReportedPositionRoundTrip:
-    """ignore_reported_position is returned in get_config and saved in update_config."""
+class TestPositionReportingRoundTrip:
+    """position_reporting is returned in get_config and saved in
+    update_config; it replaced the four legacy boolean flags
+    (ignore_reported_position / reports_command_not_endpoint /
+    ignore_endpoint_states / ignore_all_reports)."""
 
     @pytest.mark.asyncio
-    async def test_get_config_defaults_to_false(self):
+    async def test_get_config_defaults_position_reporting_reliable(self):
         hass, _, entity_reg = _make_hass(options={})
         conn = _make_connection()
 
@@ -327,38 +327,10 @@ class TestIgnoreReportedPositionRoundTrip:
             )
 
         result = conn.send_result.call_args[0][1]
-        assert result["ignore_reported_position"] is False
+        assert result["position_reporting"] == "reliable"
 
     @pytest.mark.asyncio
-    async def test_get_config_returns_stored_true(self):
-        hass, _, entity_reg = _make_hass(
-            options={
-                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
-                CONF_COVER_ENTITY_ID: "cover.inner",
-                CONF_IGNORE_REPORTED_POSITION: True,
-            }
-        )
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_get_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/get_config",
-                    "entity_id": ENTITY_ID,
-                },
-            )
-
-        result = conn.send_result.call_args[0][1]
-        assert result["ignore_reported_position"] is True
-
-    @pytest.mark.asyncio
-    async def test_update_config_saves_true(self):
+    async def test_update_config_persists_position_reporting(self):
         hass, _, entity_reg = _make_hass(
             options={CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED}
         )
@@ -375,170 +347,35 @@ class TestIgnoreReportedPositionRoundTrip:
                     "id": 1,
                     "type": "cover_time_based/update_config",
                     "entity_id": ENTITY_ID,
-                    "ignore_reported_position": True,
+                    "position_reporting": "command_echo",
                 },
             )
 
         new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
-        assert new_options[CONF_IGNORE_REPORTED_POSITION] is True
-
-
-class TestIgnoreEndpointStatesRoundTrip:
-    """ignore_endpoint_states is returned in get_config and saved in update_config."""
-
-    @pytest.mark.asyncio
-    async def test_get_config_defaults_to_false(self):
-        hass, _, entity_reg = _make_hass(options={})
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
+        assert new_options[CONF_POSITION_REPORTING] == "command_echo"
+        # the four legacy flags this field replaced are gone
+        for legacy in (
+            "ignore_reported_position",
+            "reports_command_not_endpoint",
+            "ignore_endpoint_states",
+            "ignore_all_reports",
         ):
-            await _ws_get_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/get_config",
-                    "entity_id": ENTITY_ID,
-                },
-            )
+            assert legacy not in new_options
 
-        result = conn.send_result.call_args[0][1]
-        assert result["ignore_endpoint_states"] is False
+    def test_update_config_rejects_unknown_position_reporting(self):
+        """An unknown position_reporting value must fail schema validation."""
+        import voluptuous as vol
 
-    @pytest.mark.asyncio
-    async def test_get_config_returns_stored_true(self):
-        hass, _, entity_reg = _make_hass(
-            options={
-                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
-                CONF_COVER_ENTITY_ID: "cover.inner",
-                CONF_IGNORE_ENDPOINT_STATES: True,
-            }
-        )
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_get_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/get_config",
-                    "entity_id": ENTITY_ID,
-                },
-            )
-
-        result = conn.send_result.call_args[0][1]
-        assert result["ignore_endpoint_states"] is True
-
-    @pytest.mark.asyncio
-    async def test_update_config_saves_true(self):
-        hass, _, entity_reg = _make_hass(
-            options={CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED}
-        )
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_update_config(
-                hass,
-                conn,
+        schema = ws_update_config._ws_schema
+        with pytest.raises(vol.Invalid):
+            schema(
                 {
                     "id": 1,
                     "type": "cover_time_based/update_config",
                     "entity_id": ENTITY_ID,
-                    "ignore_endpoint_states": True,
-                },
+                    "position_reporting": "bogus",
+                }
             )
-
-        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
-        assert new_options[CONF_IGNORE_ENDPOINT_STATES] is True
-
-
-class TestIgnoreAllReportsRoundTrip:
-    """ignore_all_reports is returned in get_config and saved in update_config."""
-
-    @pytest.mark.asyncio
-    async def test_get_config_defaults_to_false(self):
-        hass, _, entity_reg = _make_hass(options={})
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_get_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/get_config",
-                    "entity_id": ENTITY_ID,
-                },
-            )
-
-        result = conn.send_result.call_args[0][1]
-        assert result["ignore_all_reports"] is False
-
-    @pytest.mark.asyncio
-    async def test_get_config_returns_stored_true(self):
-        hass, _, entity_reg = _make_hass(
-            options={
-                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
-                CONF_COVER_ENTITY_ID: "cover.inner",
-                CONF_IGNORE_ALL_REPORTS: True,
-            }
-        )
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_get_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/get_config",
-                    "entity_id": ENTITY_ID,
-                },
-            )
-
-        result = conn.send_result.call_args[0][1]
-        assert result["ignore_all_reports"] is True
-
-    @pytest.mark.asyncio
-    async def test_update_config_saves_true(self):
-        hass, _, entity_reg = _make_hass(
-            options={CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED}
-        )
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_update_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/update_config",
-                    "entity_id": ENTITY_ID,
-                    "ignore_all_reports": True,
-                },
-            )
-
-        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
-        assert new_options[CONF_IGNORE_ALL_REPORTS] is True
 
 
 def test_every_field_map_key_is_accepted_by_the_update_schema():
@@ -2426,85 +2263,6 @@ class TestScriptGuardInUpdateConfig:
         conn.send_error.assert_not_called()
         new_opts = hass.config_entries.async_update_entry.call_args[1]["options"]
         assert new_opts[CONF_OPEN_SWITCH_ENTITY_ID] == "script.press_button"
-
-
-class TestReportsCommandNotEndpointRoundTrip:
-    """reports_command_not_endpoint is returned in get_config and saved in update_config."""
-
-    @pytest.mark.asyncio
-    async def test_get_config_defaults_to_false(self):
-        hass, _, entity_reg = _make_hass(options={})
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_get_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/get_config",
-                    "entity_id": ENTITY_ID,
-                },
-            )
-
-        result = conn.send_result.call_args[0][1]
-        assert result["reports_command_not_endpoint"] is False
-
-    @pytest.mark.asyncio
-    async def test_get_config_returns_stored_true(self):
-        hass, _, entity_reg = _make_hass(
-            options={
-                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
-                CONF_COVER_ENTITY_ID: "cover.inner",
-                CONF_REPORTS_COMMAND_NOT_ENDPOINT: True,
-            }
-        )
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_get_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/get_config",
-                    "entity_id": ENTITY_ID,
-                },
-            )
-
-        result = conn.send_result.call_args[0][1]
-        assert result["reports_command_not_endpoint"] is True
-
-    @pytest.mark.asyncio
-    async def test_update_config_saves_true(self):
-        hass, _, entity_reg = _make_hass(
-            options={CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED}
-        )
-        conn = _make_connection()
-
-        with patch(
-            "custom_components.cover_time_based.websocket_api.er.async_get",
-            return_value=entity_reg,
-        ):
-            await _ws_update_config(
-                hass,
-                conn,
-                {
-                    "id": 1,
-                    "type": "cover_time_based/update_config",
-                    "entity_id": ENTITY_ID,
-                    "reports_command_not_endpoint": True,
-                },
-            )
-
-        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
-        assert new_options[CONF_REPORTS_COMMAND_NOT_ENDPOINT] is True
 
 
 # ---------------------------------------------------------------------------

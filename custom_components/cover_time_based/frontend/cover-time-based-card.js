@@ -508,43 +508,8 @@ class CoverTimeBasedCard extends LitElement {
   }
 
   _onPositionReportingChange(e) {
-    // One dropdown stands in for four mutually-exclusive booleans describing
-    // how the wrapped cover reports position. Each profile writes all four so
-    // switching between them never leaves a stale flag set (all false is the
-    // reliable default). Mirrors positionReportingProfile() in card-render.js.
-    const PROFILES = {
-      reliable: {
-        ignore_reported_position: false,
-        ignore_endpoint_states: false,
-        reports_command_not_endpoint: false,
-        ignore_all_reports: false,
-      },
-      unreliable: {
-        ignore_reported_position: true,
-        ignore_endpoint_states: false,
-        reports_command_not_endpoint: false,
-        ignore_all_reports: false,
-      },
-      no_endpoints: {
-        ignore_reported_position: false,
-        ignore_endpoint_states: true,
-        reports_command_not_endpoint: false,
-        ignore_all_reports: false,
-      },
-      command_echo: {
-        ignore_reported_position: false,
-        ignore_endpoint_states: false,
-        reports_command_not_endpoint: true,
-        ignore_all_reports: false,
-      },
-      ignore_all: {
-        ignore_reported_position: false,
-        ignore_endpoint_states: false,
-        reports_command_not_endpoint: false,
-        ignore_all_reports: true,
-      },
-    };
-    this._updateLocal(PROFILES[e.target.value] || PROFILES.reliable);
+    // One dropdown, one persisted enum. reliable is the default profile.
+    this._updateLocal({ position_reporting: e.target.value || "reliable" });
   }
 
   _onPulseTimeChange(e) {

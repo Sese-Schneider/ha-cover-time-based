@@ -5,16 +5,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.cover_time_based import position_reporting
 from custom_components.cover_time_based.const import (
     CONF_CLOSE_INCLUDES_TILT,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
-    CONF_IGNORE_ENDPOINT_STATES,
-    CONF_IGNORE_REPORTED_POSITION,
     CONF_INVERT,
+    CONF_POSITION_REPORTING,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
-    CONF_REPORTS_COMMAND_NOT_ENDPOINT,
     CONF_SEND_ENDPOINT_STOP,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
 )
@@ -115,6 +114,7 @@ def make_cover(make_hass, _mock_position_store):
         force_time_based_position=None,
         reports_command_not_endpoint=None,
         ignore_endpoint_states=None,
+        ignore_all_reports=None,
         force_endpoint_redrive=None,
         wait_for_relay_feedback=None,
         recalibrate_before_position=None,
@@ -175,14 +175,22 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_SEND_ENDPOINT_STOP] = send_endpoint_stop
         if close_includes_tilt is not None:
             options[CONF_CLOSE_INCLUDES_TILT] = close_includes_tilt
-        if ignore_reported_position is not None:
-            options[CONF_IGNORE_REPORTED_POSITION] = ignore_reported_position
         if force_time_based_position is not None:
             options[CONF_FORCE_TIME_BASED_POSITION] = force_time_based_position
-        if reports_command_not_endpoint is not None:
-            options[CONF_REPORTS_COMMAND_NOT_ENDPOINT] = reports_command_not_endpoint
-        if ignore_endpoint_states is not None:
-            options[CONF_IGNORE_ENDPOINT_STATES] = ignore_endpoint_states
+        if any(
+            (
+                ignore_reported_position,
+                reports_command_not_endpoint,
+                ignore_endpoint_states,
+                ignore_all_reports,
+            )
+        ):
+            options[CONF_POSITION_REPORTING] = position_reporting.from_legacy_flags(
+                ignore_reported_position=bool(ignore_reported_position),
+                ignore_endpoint_states=bool(ignore_endpoint_states),
+                reports_command_not_endpoint=bool(reports_command_not_endpoint),
+                ignore_all_reports=bool(ignore_all_reports),
+            )
         if force_endpoint_redrive is not None:
             options[CONF_FORCE_ENDPOINT_REDRIVE] = force_endpoint_redrive
         if wait_for_relay_feedback is not None:

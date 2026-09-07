@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.helpers.issue_registry import IssueSeverity
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.cover_time_based import (
     _CARD_BASE_URL,
@@ -628,6 +629,57 @@ class TestCardResourceUnregistration:
         mock_remove_js.assert_called_once()
         _, js_url = mock_remove_js.call_args.args
         assert js_url == _CARD_JS_URL
+
+
+class TestMigration:
+    """async_migrate_entry: four legacy booleans collapse to one enum (v4)."""
+
+    async def _migrate(self, hass, options):
+        from custom_components.cover_time_based import async_migrate_entry
+
+        entry = MockConfigEntry(domain=DOMAIN, options=options, version=3)
+        entry.add_to_hass(hass)
+        assert await async_migrate_entry(hass, entry) is True
+        return entry
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "flag,expected",
+        [
+            ("ignore_reported_position", "unreliable"),
+            ("ignore_endpoint_states", "no_endpoints"),
+            ("reports_command_not_endpoint", "command_echo"),
+            ("ignore_all_reports", "ignore_all"),
+        ],
+    )
+    async def test_single_flag_migrates(self, hass, flag, expected):
+        entry = await self._migrate(hass, {"cover_entity_id": "cover.x", flag: True})
+        assert entry.version == 4
+        assert entry.options["position_reporting"] == expected
+        for legacy in (
+            "ignore_reported_position",
+            "ignore_endpoint_states",
+            "reports_command_not_endpoint",
+            "ignore_all_reports",
+        ):
+            assert legacy not in entry.options
+
+    @pytest.mark.asyncio
+    async def test_contradictory_combo_uses_precedence(self, hass):
+        entry = await self._migrate(
+            hass,
+            {
+                "cover_entity_id": "cover.x",
+                "ignore_reported_position": True,
+                "reports_command_not_endpoint": True,
+            },
+        )
+        assert entry.options["position_reporting"] == "command_echo"
+
+    @pytest.mark.asyncio
+    async def test_no_flags_defaults_reliable(self, hass):
+        entry = await self._migrate(hass, {"cover_entity_id": "cover.x"})
+        assert entry.options["position_reporting"] == "reliable"
 
 
 class TestCardResourceRegisteredOnce:
