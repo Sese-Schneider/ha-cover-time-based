@@ -328,7 +328,9 @@ endpoints.
 ### Controlling a cover with a single button
 
 Choose **Single button (cycling)** for a motor with only one control input — no
-separate open and close relays, just one line to pulse. Select the switch or
+separate open and close relays, just one line to pulse. This mode is currently
+in **Beta** (it is labelled as such in the control-mode picker) while its
+behaviour settles. Select the switch or
 `script` entity that drives it as the **Button or script**. Each press advances a fixed
 cycle, and the motor stops itself at its physical limits:
 
