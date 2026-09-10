@@ -352,6 +352,109 @@ class TestOppositeExternalTravel:
         await _cancel_tasks(cover)
 
 
+class TestOppositeExternalFallingEdgePress:
+    """Falling-edge external press on non-self-reporting relays (#232).
+
+    An Aqara-T2-style relay (relay_reports_off=False) never reports its own
+    OFF, so its switch entity is left stuck `on` after any operation. The next
+    physical wall press then flips it `on`->`off`, and on that hardware every
+    edge is a real motor pulse. That falling edge must be treated as a press.
+
+    With relay_reports_off=True (self-releasing relays, the default) the
+    `on`->`off` edge is the button release and must still be ignored.
+    """
+
+    @pytest.mark.asyncio
+    async def test_external_close_falling_edge_when_idle_starts_closing(self):
+        # Reporter's scenario: idle at 25%, close relay stuck `on`, wall close
+        # press flips it `on`->`off`.
+        cover = _make_opposite_cover(relay_reports_off=False)
+        _all_relays_off(cover)
+        cover.travel_calc.set_position(25)
+        assert not cover.travel_calc.is_traveling()
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_state_change("switch.close", "on", "off")
+        finally:
+            cover._triggered_externally = False
+
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc.is_closing()
+        assert cover.travel_calc._travel_to_position == 0
+        await _cancel_tasks(cover)
+
+    @pytest.mark.asyncio
+    async def test_self_reporting_relay_ignores_falling_edge(self):
+        # Default hardware (relay_reports_off=True): ON->OFF is the button
+        # release and must NOT start a movement. Guards the #232 fix against
+        # regressing every self-releasing-relay user.
+        cover = _make_opposite_cover(relay_reports_off=True)
+        _all_relays_off(cover)
+        cover.travel_calc.set_position(25)
+        assert not cover.travel_calc.is_traveling()
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_state_change("switch.close", "on", "off")
+        finally:
+            cover._triggered_externally = False
+
+        assert not cover.travel_calc.is_traveling()
+        assert cover.hass.services.async_call.await_count == 0
+        await _cancel_tasks(cover)
+
+    @pytest.mark.asyncio
+    async def test_non_reporting_relay_ignores_unavailable_transition(self):
+        # A Zigbee drop (ON->unavailable) is never a press, even on a
+        # non-self-reporting relay where the falling edge to `off` does act.
+        cover = _make_opposite_cover(relay_reports_off=False)
+        _all_relays_off(cover)
+        cover.travel_calc.set_position(25)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_state_change(
+                    "switch.close", "on", "unavailable"
+                )
+        finally:
+            cover._triggered_externally = False
+
+        assert not cover.travel_calc.is_traveling()
+        assert cover.hass.services.async_call.await_count == 0
+        await _cancel_tasks(cover)
+
+    @pytest.mark.asyncio
+    async def test_external_tilt_close_falling_edge_when_idle_starts_tilt_closing(self):
+        # The shared gate also feeds the tilt handler, so a non-reporting tilt
+        # relay's falling-edge press must start a tilt move too.
+        cover = _make_opposite_cover(
+            tilt_open_switch="switch.tilt_open",
+            tilt_close_switch="switch.tilt_close",
+            relay_reports_off=False,
+        )
+        _all_relays_off(cover)
+        cover.tilt_calc.set_position(100)
+        assert not cover.tilt_calc.is_traveling()
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_tilt_state_change(
+                    "switch.tilt_close", "on", "off"
+                )
+        finally:
+            cover._triggered_externally = False
+
+        assert cover.tilt_calc.is_traveling()
+        assert cover.tilt_calc.is_closing()
+        assert cover.tilt_calc._travel_to_position == 0
+        await _cancel_tasks(cover)
+
+
 class TestOppositeExternalTilt:
     @pytest.mark.asyncio
     async def test_external_tilt_close_while_tilt_opening_stops(self):
