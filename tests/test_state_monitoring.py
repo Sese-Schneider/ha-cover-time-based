@@ -20,6 +20,7 @@ from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
     CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_TOGGLE_OPPOSITE,
 )
 
 
@@ -1201,6 +1202,36 @@ class TestToggleE2EThroughStateListener:
 
         # Handler called (not echo-filtered)
         handler.assert_awaited_once()
+
+
+class TestNonReportingFallingEdgeE2E:
+    """End-to-end repro of issue #232 through the full state listener.
+
+    Reporter's Aqara T2 (toggle-opposite, relay_reports_off=False): after an
+    HA move the close relay is left stuck ``on``, so the physical wall close
+    press flips it ``on``->``off``. That external falling edge must flow all
+    the way through the pipeline (echo filter, dispatch, edge gate) and start a
+    close — the exact ``EXTERNAL ... on->off ... -> dispatching`` line the
+    reporter logged, which previously dispatched but then did nothing.
+    """
+
+    @pytest.mark.asyncio
+    async def test_wall_close_press_falling_edge_starts_closing(self, make_cover):
+        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE_OPPOSITE)
+        cover._relay_reports_off = False
+        cover.travel_calc.set_position(25)
+        assert cover._pending_switch.get("switch.close", 0) == 0
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_switch_state_changed(
+                _make_state_event("switch.close", "on", "off")
+            )
+
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc.is_closing()
+        # Background travel task is cancelled by the make_cover fixture teardown
+        # (it tracks tasks on cover.hass._test_tasks), matching the sibling
+        # external-state-change tests in this file.
 
 
 # ===================================================================

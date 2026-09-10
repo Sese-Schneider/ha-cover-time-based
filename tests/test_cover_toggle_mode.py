@@ -976,6 +976,51 @@ class TestToggleExternalTravelWhileTraveling:
         await _cancel_tasks(cover)
 
 
+class TestToggleExternalFallingEdgePress:
+    """Same-button parity for the #232 falling-edge fix in the shared gate.
+
+    On a non-self-reporting relay (relay_reports_off=False) the entity is left
+    stuck `on`, so the next press flips it ON->OFF; that falling edge is a
+    press. With the default self-reporting relay it stays a release and is
+    ignored.
+    """
+
+    @pytest.mark.asyncio
+    async def test_non_reporting_relay_falling_edge_when_idle_starts_opening(self):
+        cover = _make_toggle_cover(relay_reports_off=False)
+        _all_relays_off(cover)
+        cover.travel_calc.set_position(0)
+        assert not cover.travel_calc.is_traveling()
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_state_change("switch.open", "on", "off")
+        finally:
+            cover._triggered_externally = False
+
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 100
+        await _cancel_tasks(cover)
+
+    @pytest.mark.asyncio
+    async def test_self_reporting_relay_ignores_falling_edge(self):
+        cover = _make_toggle_cover(relay_reports_off=True)
+        _all_relays_off(cover)
+        cover.travel_calc.set_position(0)
+
+        cover._triggered_externally = True
+        try:
+            with patch.object(cover, "async_write_ha_state"):
+                await cover._handle_external_state_change("switch.open", "on", "off")
+        finally:
+            cover._triggered_externally = False
+
+        assert not cover.travel_calc.is_traveling()
+        assert cover.hass.services.async_call.await_count == 0
+        await _cancel_tasks(cover)
+
+
 class TestToggleExternalTravelKeysOffTravelAxis:
     """Same-button travel handler decides on the travel axis, not a moving
     *independent* tilt motor (dual_motor). Mirrors the opposite-mode handler and

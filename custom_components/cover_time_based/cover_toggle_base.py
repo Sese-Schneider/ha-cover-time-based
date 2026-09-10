@@ -71,12 +71,14 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         return self._travel_axis_closing()
 
     def _debounce_external_toggle(self, entity_id) -> bool:
-        """Return True if this rising edge should be dropped as contact bounce.
+        """Return True if this edge should be dropped as contact bounce.
 
         Records the accept time on the entity when it is NOT dropped, so the
         next edge within the debounce window is suppressed. Momentary switches
         produce OFF->ON->OFF per physical click; without this a single click
-        could double-trigger.
+        could double-trigger. With ``relay_reports_off`` disabled either edge is
+        an actionable press (see :meth:`_ignore_external_toggle_edge`), so both
+        are debounced here.
         """
         now = time.monotonic()
         last = self._last_external_toggle_time.get(entity_id, 0)
@@ -88,13 +90,26 @@ class ToggleBaseCover(SwitchCoverTimeBased):
     def _ignore_external_toggle_edge(self, entity_id, new_val, caller) -> bool:
         """Return True if this external edge is not an actionable press.
 
-        Only the rising edge (OFF->ON) is a button press; the ON->OFF release is
-        ignored. Contact bounce (a repeat edge within the debounce window) is
-        dropped too, logging the drop under ``caller``. Both toggle modes gate
-        their external handlers on this, so the rising-edge + debounce boilerplate
-        lives in one place.
+        On a self-releasing relay only the rising edge (OFF->ON) is a button
+        press; the ON->OFF release is ignored. Contact bounce (a repeat edge
+        within the debounce window) is dropped too, logging the drop under
+        ``caller``. Both toggle modes gate their external handlers on this, so
+        the edge + debounce boilerplate lives in one place.
+
+        When ``relay_reports_off`` is disabled the relay never reports its OFF
+        (e.g. an Aqara T2 in hardware-pulse mode), so its entity is left stuck
+        ``on`` and the next physical press flips it ON->OFF; on that hardware
+        every edge is a real motor pulse, so the falling edge IS a press and
+        must act too (issue #232). This is echo-safe: that mode never issues a
+        ``turn_off`` (see ``_turn_off_relay``), so any ``off`` observed here is
+        external, never one of our own echoes. ``unavailable``/``unknown``
+        transitions are still never presses (a reappearance is guarded upstream
+        in ``_async_switch_state_changed`` before it reaches here).
         """
-        if new_val != "on":
+        actionable = (
+            new_val in ("on", "off") if not self._relay_reports_off else new_val == "on"
+        )
+        if not actionable:
             return True
         if self._debounce_external_toggle(entity_id):
             self._log("%s :: debounced toggle on %s", caller, entity_id)
