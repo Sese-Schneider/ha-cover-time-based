@@ -479,6 +479,89 @@ class TestForceTimeBasedPositionRoundTrip:
         assert new_options[CONF_FORCE_TIME_BASED_POSITION] is True
 
 
+class TestSkipStopWhenIdleRoundTrip:
+    """skip_stop_when_idle is returned in get_config and saved in update_config."""
+
+    @pytest.mark.asyncio
+    async def test_get_config_defaults_to_false(self):
+        hass, _, entity_reg = _make_hass(options={})
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["skip_stop_when_idle"] is False
+
+    @pytest.mark.asyncio
+    async def test_get_config_returns_stored_true(self):
+        from custom_components.cover_time_based.const import CONF_SKIP_STOP_WHEN_IDLE
+
+        hass, _, entity_reg = _make_hass(
+            options={
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+                CONF_COVER_ENTITY_ID: "cover.inner",
+                CONF_SKIP_STOP_WHEN_IDLE: True,
+            }
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_get_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/get_config",
+                    "entity_id": ENTITY_ID,
+                },
+            )
+
+        result = conn.send_result.call_args[0][1]
+        assert result["skip_stop_when_idle"] is True
+
+    @pytest.mark.asyncio
+    async def test_update_config_saves_true(self):
+        from custom_components.cover_time_based.const import CONF_SKIP_STOP_WHEN_IDLE
+
+        hass, _, entity_reg = _make_hass(
+            options={CONF_CONTROL_MODE: CONTROL_MODE_PULSE}
+        )
+        conn = _make_connection()
+
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(
+                hass,
+                conn,
+                {
+                    "id": 1,
+                    "type": "cover_time_based/update_config",
+                    "entity_id": ENTITY_ID,
+                    "skip_stop_when_idle": True,
+                },
+            )
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_options[CONF_SKIP_STOP_WHEN_IDLE] is True
+
+
 class TestRelayReportsOffRoundTrip:
     """relay_reports_off is returned in get_config and saved in update_config."""
 

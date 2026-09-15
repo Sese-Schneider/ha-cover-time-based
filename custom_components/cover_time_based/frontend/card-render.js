@@ -384,6 +384,13 @@ export function renderInputEntities(card, c) {
               recalibrate_before_position: e.target.checked,
             }),
         )}
+        ${renderToggleWithHelp(
+          card,
+          "skip_stop_when_idle.label",
+          "skip_stop_when_idle.helper",
+          c.skip_stop_when_idle === true,
+          (e) => card._updateLocal({ skip_stop_when_idle: e.target.checked }),
+        )}
       </div>
     `;
   }
@@ -497,6 +504,20 @@ export function renderInputEntities(card, c) {
             recalibrate_before_position: e.target.checked,
           }),
       )}
+      ${
+        // Pulse covers can drive themselves to a hardware "my"/favourite preset
+        // on a redundant stop (issue #251); wrapped covers show this in their
+        // own section above.
+        c.control_mode === "pulse"
+          ? renderToggleWithHelp(
+              card,
+              "skip_stop_when_idle.label",
+              "skip_stop_when_idle.helper",
+              c.skip_stop_when_idle === true,
+              (e) => card._updateLocal({ skip_stop_when_idle: e.target.checked }),
+            )
+          : ""
+      }
     </div>
   `;
 }

@@ -571,17 +571,18 @@ test("wrapped mode renders cover entity-picker (with includeDomains cover)", asy
   expect(coverPicker).not.toBeUndefined();
 });
 
-test("wrapped mode renders ha-switch toggles (force-time-based, invert, assumed-state, force-endpoint-redrive, recalibrate-before-position)", async () => {
+test("wrapped mode renders ha-switch toggles (force-time-based, invert, assumed-state, force-endpoint-redrive, recalibrate-before-position, skip-stop-when-idle)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: wrappedCfg(),
     activeTab: "device",
   });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // Exactly 5 toggles: force_time_based_position, invert, assumed_state,
-  // force_endpoint_redrive, recalibrate_before_position. (ignore_reported_position
-  // and reports_command_not_endpoint are now the position-reporting dropdown.)
-  expect(toggles.length).toBe(5);
+  // Exactly 6 toggles: force_time_based_position, invert, assumed_state,
+  // force_endpoint_redrive, recalibrate_before_position, skip_stop_when_idle.
+  // (ignore_reported_position and reports_command_not_endpoint are now the
+  // position-reporting dropdown.)
+  expect(toggles.length).toBe(6);
 });
 
 test("switch mode renders open + close switch pickers (no stop switch)", async () => {

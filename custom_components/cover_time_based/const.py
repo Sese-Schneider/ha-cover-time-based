@@ -143,3 +143,14 @@ PULSE_ECHO_MARGIN = 2.0
 # see CoverTimeBased._recalibration_plan.
 CONF_RECALIBRATE_BEFORE_POSITION = "recalibrate_before_position"
 DEFAULT_RECALIBRATE_BEFORE_POSITION = False
+
+# Wrapped/pulse modes. A stop issued from HA while the cover is already stopped
+# is normally still forwarded to the hardware. On a shutter with a hardware
+# "my"/favourite preset (Somfy RTS and similar) that redundant stop drives the
+# shutter to its favourite (issue #251). When True, the stop is withheld while
+# the cover is believed idle, so the shutter stays put. Off by default, so the
+# existing behaviour is unchanged. Honoured only by wrapped and pulse covers
+# (see CoverTimeBased._suppresses_stop_when_idle); switch, toggle and single-
+# button covers need the stop and ignore it.
+CONF_SKIP_STOP_WHEN_IDLE = "skip_stop_when_idle"
+DEFAULT_SKIP_STOP_WHEN_IDLE = False
