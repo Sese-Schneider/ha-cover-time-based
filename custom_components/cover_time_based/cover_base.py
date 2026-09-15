@@ -155,6 +155,7 @@ class CoverTimeBased(
         force_endpoint_redrive=False,
         wait_for_relay_feedback=False,
         recalibrate_before_position=False,
+        skip_stop_when_idle=False,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -162,6 +163,7 @@ class CoverTimeBased(
         self._force_endpoint_redrive = force_endpoint_redrive
         self._wait_for_relay_feedback = wait_for_relay_feedback
         self._recalibrate_before_position = recalibrate_before_position
+        self._skip_stop_when_idle = skip_stop_when_idle
 
         self._tilt_strategy = tilt_strategy
         # Keep the raw configured mode so calibration can still pick the right
@@ -1587,10 +1589,27 @@ class CoverTimeBased(
             self._tilt_strategy.snap_trackers_to_physical(
                 self.travel_calc, self.tilt_calc
             )
-        if not self._triggered_externally and not (
-            self._has_tilt_motor()
-            and self._self_stops_at_endpoints()
+        # A stop pressed in HA on a cover that is already stopped normally still
+        # forwards a stop to the hardware. On a shutter with a hardware
+        # "my"/favourite preset (Somfy RTS and similar) that redundant stop
+        # drives the shutter off to its favourite — issue #251. When
+        # skip_stop_when_idle is set and the cover was idle, suppress it. Only
+        # wrapped and pulse covers honour the option (_suppresses_stop_when_idle);
+        # switch/toggle/single-button need the stop to de-energise a latched
+        # relay or as a genuine tap, so they ignore it.
+        skip_idle_stop = (
+            self._skip_stop_when_idle
             and not travel_was_moving
+            and self._suppresses_stop_when_idle()
+        )
+        if (
+            not self._triggered_externally
+            and not skip_idle_stop
+            and not (
+                self._has_tilt_motor()
+                and self._self_stops_at_endpoints()
+                and not travel_was_moving
+            )
         ):
             # Skip the internal TRAVEL stop only for a dual-motor cover whose
             # travel axis did not move (a plain tilt move): it leaves
@@ -1619,6 +1638,17 @@ class CoverTimeBased(
         self._moving_tilt_motor = False
         self._moving_tilt = False
         self._last_command = None
+
+    def _suppresses_stop_when_idle(self) -> bool:
+        """Whether this cover honours the skip_stop_when_idle option.
+
+        Only wrapped and pulse covers can drive themselves to a hardware
+        "my"/favourite preset on a redundant stop (issue #251), so only they
+        override this to True. Switch, toggle and single-button covers need the
+        stop even when idle — to de-energise a latched relay, or as a genuine
+        tap — so the base default is False and the option is ignored for them.
+        """
+        return False
 
     def _should_stop_tilt_motor(
         self, tilt_phase_was_active: bool, *, tilt_axis_reported: bool

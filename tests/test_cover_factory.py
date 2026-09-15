@@ -19,6 +19,7 @@ from custom_components.cover_time_based.cover import (
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_RELAY_REPORTS_OFF,
+    CONF_SKIP_STOP_WHEN_IDLE,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILT_TIME_CLOSE,
@@ -285,6 +286,65 @@ class TestCreateCoverFromOptions:
             name="My Cover",
         )
         assert cover._wait_for_relay_feedback is False
+
+    def test_skip_stop_when_idle_from_options(self):
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                CONF_STOP_SWITCH_ENTITY_ID: "switch.stop",
+                CONF_SKIP_STOP_WHEN_IDLE: True,
+            },
+            device_id="myid",
+            name="My Cover",
+        )
+        assert cover._skip_stop_when_idle is True
+
+    def test_skip_stop_when_idle_defaults_false(self):
+        cover = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+            },
+            device_id="myid",
+            name="My Cover",
+        )
+        assert cover._skip_stop_when_idle is False
+
+    def test_skip_stop_when_idle_only_honoured_by_wrapped_and_pulse(self):
+        """Wrapped and pulse suppress; switch/toggle/single-button do not."""
+        pulse = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_PULSE,
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+                CONF_STOP_SWITCH_ENTITY_ID: "switch.stop",
+            },
+            device_id="p",
+            name="p",
+        )
+        wrapped = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED,
+                CONF_COVER_ENTITY_ID: "cover.real",
+            },
+            device_id="w",
+            name="w",
+        )
+        switch = _create_cover_from_options(
+            {
+                CONF_CONTROL_MODE: CONTROL_MODE_SWITCH,
+                CONF_OPEN_SWITCH_ENTITY_ID: "switch.open",
+                CONF_CLOSE_SWITCH_ENTITY_ID: "switch.close",
+            },
+            device_id="s",
+            name="s",
+        )
+        assert pulse._suppresses_stop_when_idle() is True
+        assert wrapped._suppresses_stop_when_idle() is True
+        assert switch._suppresses_stop_when_idle() is False
 
 
 # ===================================================================

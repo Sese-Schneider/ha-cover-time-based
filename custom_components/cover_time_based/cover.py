@@ -37,6 +37,7 @@ from .const import (
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
     CONF_SEND_ENDPOINT_STOP,
+    CONF_SKIP_STOP_WHEN_IDLE,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILT_TIME_CLOSE,
@@ -54,6 +55,7 @@ from .const import (
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
     DEFAULT_SEND_ENDPOINT_STOP,
+    DEFAULT_SKIP_STOP_WHEN_IDLE,
     DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
     RESYNC_POSITIONS,
 )
@@ -402,6 +404,9 @@ def _create_cover_from_options(options, device_id="", name=""):
         ),
         "recalibrate_before_position": options.get(
             CONF_RECALIBRATE_BEFORE_POSITION, DEFAULT_RECALIBRATE_BEFORE_POSITION
+        ),
+        "skip_stop_when_idle": options.get(
+            CONF_SKIP_STOP_WHEN_IDLE, DEFAULT_SKIP_STOP_WHEN_IDLE
         ),
     }
 

@@ -33,6 +33,7 @@ from custom_components.cover_time_based.cover import (
     CONF_RELAY_REPORTS_OFF,
     CONF_SAFE_TILT_POSITION,
     CONF_SEND_ENDPOINT_STOP,
+    CONF_SKIP_STOP_WHEN_IDLE,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_TILT_CLOSE_SWITCH,
     CONF_TILT_MODE,
@@ -88,6 +89,7 @@ EXPECTED_DEFAULT_CONFIG = {
     "force_endpoint_redrive": False,
     "wait_for_relay_feedback": False,
     "recalibrate_before_position": False,
+    "skip_stop_when_idle": False,
 }
 
 # The exact ws_key -> conf_key mapping every persisted field goes through.
@@ -99,6 +101,7 @@ EXPECTED_FIELD_MAP = {
     "force_endpoint_redrive": CONF_FORCE_ENDPOINT_REDRIVE,
     "wait_for_relay_feedback": CONF_WAIT_FOR_RELAY_FEEDBACK,
     "recalibrate_before_position": CONF_RECALIBRATE_BEFORE_POSITION,
+    "skip_stop_when_idle": CONF_SKIP_STOP_WHEN_IDLE,
     "open_switch_entity_id": CONF_OPEN_SWITCH_ENTITY_ID,
     "close_switch_entity_id": CONF_CLOSE_SWITCH_ENTITY_ID,
     "stop_switch_entity_id": CONF_STOP_SWITCH_ENTITY_ID,

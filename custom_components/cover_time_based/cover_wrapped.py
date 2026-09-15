@@ -273,6 +273,12 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return self._native_position_driver
         return self._timed_position_driver
 
+    def _suppresses_stop_when_idle(self) -> bool:
+        """A wrapped cover forwards a stop to its underlying entity even when
+        idle, which sends a Somfy RTS-style shutter to its favourite. Honour
+        the skip_stop_when_idle option so that can be turned off (issue #251)."""
+        return True
+
     def _motor_stops_itself(self) -> bool:
         """The device holds the target itself — the auto-updater must not send
         a relay stop.
