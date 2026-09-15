@@ -1584,6 +1584,22 @@ class CoverTimeBased(
             tilt_axis_reported=tilt_axis_reported,
         )
         travel_was_moving = self.travel_calc.is_traveling()
+        # A commanded move whose tracker has not started ticking yet is still in
+        # flight: is_traveling() is False during the travel_startup_delay window
+        # and during a pulse relay-feedback wait, but the motor is (or is about
+        # to be) running, so a stop landing there must reach the hardware. Read
+        # these two signals directly — _last_command would look "in flight" but
+        # a silent endpoint resync (open-at-100) can leave it set on an idle
+        # cover. Captured before _neutralize_tracked_movement cancels the
+        # startup task below.
+        move_in_flight = (
+            travel_was_moving
+            or (
+                self._startup_delay_task is not None
+                and not self._startup_delay_task.done()
+            )
+            or self._feedback_wait_entity is not None
+        )
         self._neutralize_tracked_movement(supersede=supersede)
         if self._has_tilt_support():
             self._tilt_strategy.snap_trackers_to_physical(
@@ -1599,7 +1615,7 @@ class CoverTimeBased(
         # relay or as a genuine tap, so they ignore it.
         skip_idle_stop = (
             self._skip_stop_when_idle
-            and not travel_was_moving
+            and not move_in_flight
             and self._suppresses_stop_when_idle()
         )
         if (
