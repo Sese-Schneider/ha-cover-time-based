@@ -82,7 +82,12 @@ class PulseModeCover(SwitchCoverTimeBased):
         """A pulse stop pressed while the cover is already stopped is read by a
         Somfy RTS-style controller as go-to-favourite (the same phenomenon as
         the endpoint case in #133). Honour skip_stop_when_idle so the stop tap
-        can be withheld when the cover is idle (issue #251)."""
+        can be withheld when the cover is idle (issue #251).
+
+        Safe for a latching controller too (the #129 kind that needs a stop
+        pulse to end a move): the guard only withholds the stop when the cover
+        is already idle, and such a controller reaches idle only after its own
+        stop has landed, so nothing is left stranded "moving"."""
         return True
 
     async def _settle_external_endpoint(self) -> None:

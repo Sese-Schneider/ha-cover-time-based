@@ -335,13 +335,16 @@ in Home Assistant on a cover that is not moving sends the shutter off to its
 favourite. Turn this **on** to hold that redundant stop back: while the cover is
 already stopped, Home Assistant does not forward the stop, and the shutter stays
 where it is. A stop sent while the cover _is_ moving is unaffected and still
-halts it. Leave it **off** to keep the current behaviour.
+halts it. Leave it **off** to keep the current behaviour. On a **Pulse** cover
+this is the stop-button counterpart of
+[Send stop signal at endpoints](#send-stop-signal-at-endpoints), which governs
+the same _my_ behaviour when the stop is the one sent automatically at a limit.
 
 Home Assistant cannot see a press of the physical remote's _my_ button (on
 one-way radio like Somfy RTS nothing is reported back), so it cannot track a move
 you make that way. If you want the shutter to go to its favourite from Home
-Assistant, add a button that calls `cover.set_position` with the favourite
-position.
+Assistant, add a button that calls `cover.set_cover_position` with the
+favourite position.
 
 ### Controlling a cover with a single button
 
