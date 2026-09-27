@@ -13,6 +13,7 @@ from homeassistant.const import (
 )
 from homeassistant.exceptions import HomeAssistantError
 
+from .errors import CoverNotConfiguredError
 from .recalibration import RecalibrationPlan
 from .tilt_strategies import SequentialTilt
 from .tilt_strategies.planning import (
@@ -977,10 +978,7 @@ class MovementMixin(_MixinBase):
         """Raise if the cover is not properly configured."""
         missing = self._get_missing_configuration()
         if missing:
-            raise HomeAssistantError(
-                f"Cover not configured: missing {', '.join(missing)}. "
-                "Please configure using the Cover Time Based card."
-            )
+            raise CoverNotConfiguredError(missing)
 
     def _require_travel_time(self, closing: bool) -> float:
         """Return travel time for the given direction, or raise if not configured."""
