@@ -159,12 +159,12 @@ test("a failed version lookup still downloads, with the version marked unknown",
   expect(data.integration_version).toBe("unknown");
 });
 
-test("the download button responds to Enter like a click", async () => {
+test.each(["Enter", " "])("the download button responds to %j like a click", async (key) => {
   const captured = captureDownload();
   card = await mountCard(hassWith(), { selectedEntity: "cover.living_room", config: cfg });
 
   card.shadowRoot
     .querySelector(".download-config")
-    .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    .dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
   await vi.waitFor(() => expect(captured.filename).toBeDefined());
 });
