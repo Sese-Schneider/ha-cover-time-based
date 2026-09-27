@@ -571,8 +571,9 @@ short one (say half a second) it can cause a large position error that builds up
 over time. The startup delay tells the integration to wait that long after
 switching the relay on before it starts counting position, which keeps short
 movements accurate. Values between **0.05 and 0.15 seconds** are typical, and
-travel and tilt can be set separately. Measure both of the axis's times first:
-the startup delay stays greyed out in the list until they are set.
+travel and tilt can be set separately. Measure both travel times first
+(or both tilt times, for the tilt startup delay): the startup delay stays greyed
+out in the list until they are set.
 
 ### Endpoint run-on time
 
@@ -941,7 +942,7 @@ listed here, use the card.
 | `stop_switch_entity_id` | entity | Required in pulse mode | Switch that stops the cover. May be a `script` entity in pulse mode. | None |
 | `cover_entity_id` | entity | **Required**, or the open/close switches | Existing cover entity to wrap. | |
 | `input_mode` | string | _Optional_ | Control mode for switch-based covers: `switch`, `pulse`, `toggle`, `toggle_opposite`, or `single_button`. | `switch` |
-| `travelling_time_down` | float | _Optional_ | Seconds to close the cover. 0.1–600 s. The cover is unavailable until both travel times are set. | unset |
+| `travelling_time_down` | float | _Optional_ | Seconds to close the cover. 0.1–600 s. | unset |
 | `travelling_time_up` | float | _Optional_ | Seconds to open the cover. 0.1–600 s. | unset |
 | `tilting_time_down` | float | _Optional_ | Seconds to tilt the cover fully closed. 0.1–600 s. | None |
 | `tilting_time_up` | float | _Optional_ | Seconds to tilt the cover fully open. 0.1–600 s. | None |
@@ -954,6 +955,8 @@ listed here, use the card.
 | `relay_reports_off` | boolean | _Optional_ | Toggle mode: set `false` for pulse modules that never report their off. | true |
 | `send_endpoint_stop` | boolean | _Optional_ | Pulse mode: set `false` for auto-stop controllers that reposition on a stop received while stopped. | true |
 | `direction_change_delay` | float | _Deprecated_ | No longer configurable. Accepted and ignored; the reversing pause is fixed at 1.0s. | — |
+
+The cover is unavailable until both `travelling_time_down` and `travelling_time_up` are set.
 
 </details>
 
