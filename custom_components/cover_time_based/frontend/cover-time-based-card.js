@@ -775,6 +775,7 @@ class CoverTimeBasedCard extends LitElement {
         return;
       }
     } else {
+      await this._inFlightSave;
       this._flushAutoSave();
       await this._inFlightSave;
       config = this._config;

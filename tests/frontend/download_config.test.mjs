@@ -244,6 +244,35 @@ test("a save already in flight is waited for before the download", async () => {
   await vi.waitFor(() => expect(captured.filename).toBeDefined());
 });
 
+test("a newer edit pending behind a running save waits for both saves", async () => {
+  const captured = captureDownload();
+  const first = deferred();
+  const second = deferred();
+  let calls = 0;
+  const hass = hassWith({
+    "cover_time_based/update_config": () => (++calls === 1 ? first.promise : second.promise),
+  });
+  card = await mountCard(hass, { selectedEntity: "cover.living_room", config: cfg });
+
+  card._updateLocal({ travel_time_open: 30 });
+  card._flushAutoSave();
+  card._updateLocal({ travel_time_open: 40 });
+  card.shadowRoot.querySelector(".download-config").click();
+  second.resolve({});
+  await new Promise((r) => setTimeout(r, 20));
+  expect(captured.blob).toBeUndefined();
+
+  first.resolve({});
+  await vi.waitFor(() => expect(captured.blob).toBeDefined());
+
+  const data = JSON.parse(await captured.blob.text());
+  expect(data.config.travel_time_open).toBe(40);
+  const saves = hass.callWS.mock.calls
+    .map(([msg]) => msg)
+    .filter((msg) => msg.type === "cover_time_based/update_config");
+  expect(saves.map((msg) => msg.travel_time_open)).toEqual([30, 40]);
+});
+
 test("switching covers while the save runs cancels the download", async () => {
   const captured = captureDownload();
   const save = deferred();
