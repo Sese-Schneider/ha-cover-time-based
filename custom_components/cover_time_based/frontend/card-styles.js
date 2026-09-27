@@ -63,7 +63,7 @@ export const cardStyles = css`
       }
 
       .toggle-with-help .toggle-switch {
-        margin-left: auto;
+        margin-inline-start: auto;
       }
 
       .help-anchor {
@@ -93,7 +93,7 @@ export const cardStyles = css`
       .info-popover {
         position: absolute;
         top: calc(100% + 6px);
-        left: 0;
+        inset-inline-start: 0;
         z-index: 9;
         width: max-content;
         max-width: 260px;
@@ -174,7 +174,7 @@ export const cardStyles = css`
         opacity: 0.8;
         white-space: nowrap;
         min-width: 36px;
-        text-align: right;
+        text-align: end;
       }
 
       /* Tabs */
@@ -230,7 +230,7 @@ export const cardStyles = css`
       }
 
       .radio-group.indent {
-        margin-left: 28px;
+        margin-inline-start: 28px;
         margin-top: 8px;
       }
 
@@ -326,7 +326,7 @@ export const cardStyles = css`
       }
 
       .timing-table th {
-        text-align: left;
+        text-align: start;
         padding: 8px 12px;
         border-bottom: 2px solid var(--divider-color);
         color: var(--secondary-text-color);
@@ -344,7 +344,7 @@ export const cardStyles = css`
 
       .value-cell {
         font-family: var(--code-font-family, monospace);
-        text-align: right;
+        text-align: end;
         white-space: nowrap;
       }
 
@@ -358,7 +358,7 @@ export const cardStyles = css`
         font-size: inherit;
         color: var(--primary-text-color);
         background: var(--card-background-color, #fff);
-        text-align: right;
+        text-align: end;
       }
 
       .timing-input::placeholder {
@@ -369,7 +369,7 @@ export const cardStyles = css`
 
       .unit {
         color: var(--secondary-text-color);
-        margin-left: 2px;
+        margin-inline-start: 2px;
       }
 
       /* Native select for calibration dropdowns */

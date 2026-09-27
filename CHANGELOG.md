@@ -1,3 +1,9 @@
+## 4.13.0 (unreleased)
+
+### Features
+
+- **New translation: Hebrew** ([#294](https://github.com/Sese-Schneider/ha-cover-time-based/issues/294)). The configuration card now also lays itself out right-to-left for Hebrew (and any other right-to-left language): switches, table headings and numbers sit on the correct side instead of being mirrored the wrong way.
+
 ## 4.12.0 (2026-09-25)
 
 ### Features
