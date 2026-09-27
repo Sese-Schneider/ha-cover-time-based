@@ -27,6 +27,7 @@ import { translate } from "./translations.js";
 import { loadDismissedLangs, persistLangDismissed } from "./language-banner.js";
 import { cardStyles } from "./card-styles.js";
 import { renderCard } from "./card-render.js";
+import { buildConfigExport, exportFilename, downloadJson } from "./config-export.js";
 
 class CoverTimeBasedCard extends LitElement {
   static get properties() {
@@ -756,6 +757,33 @@ class CoverTimeBasedCard extends LitElement {
     } catch (err) {
       console.error("Resync failed:", err);
     }
+  }
+
+  async _onDownloadConfig() {
+    const entityId = this._selectedEntity;
+    const config = this._config;
+    if (!entityId || !config || !this.hass) return;
+    let integrationVersion;
+    try {
+      ({ version: integrationVersion } = await this.hass.callWS({
+        type: "manifest/get",
+        integration: DOMAIN,
+      }));
+    } catch (err) {
+      console.warn("Could not read the integration version:", err);
+    }
+    const now = new Date();
+    downloadJson(
+      exportFilename(entityId, now),
+      buildConfigExport({
+        entityId,
+        config,
+        stateObj: this.hass.states[entityId],
+        integrationVersion,
+        haVersion: this.hass.config?.version,
+        now,
+      }),
+    );
   }
 
   _onCreateNew() {
