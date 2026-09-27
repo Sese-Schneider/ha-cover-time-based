@@ -20,14 +20,27 @@ const STYLES = readFileSync(
   "utf8",
 );
 
+const LINES = STYLES.split("\n").map((line, i) => ({ line: line.trim(), n: i + 1 }));
+
 test("card styles use no physical left/right properties", () => {
-  const physical = STYLES.split("\n")
-    .map((line, i) => ({ line: line.trim(), n: i + 1 }))
-    .filter(({ line }) =>
-      /^(left|right|(margin|padding|border)-(left|right)[\w-]*|float)\s*:|text-align\s*:\s*(left|right)\b/.test(
-        line,
-      ),
-    )
-    .map(({ line, n }) => `${n}: ${line}`);
+  const physical = LINES.filter(({ line }) =>
+    /^(left|right|(margin|padding|border)-(left|right)[\w-]*|float)\s*:|text-align\s*:\s*(left|right)\b/.test(
+      line,
+    ),
+  ).map(({ line, n }) => `${n}: ${line}`);
   expect(physical).toEqual([]);
+});
+
+test("box shorthands give the left and right sides the same value", () => {
+  // The fourth value of a four-value shorthand is the left side and the second
+  // is the right; if they differ the rule does not mirror.
+  const lopsided = LINES.filter(({ line }) => {
+    const m = /^(margin|padding|inset|border-width|border-style|border-color)\s*:\s*([^;]+);/.exec(
+      line,
+    );
+    if (!m) return false;
+    const parts = m[2].trim().split(/\s+(?![^(]*\))/);
+    return parts.length === 4 && parts[1] !== parts[3];
+  }).map(({ line, n }) => `${n}: ${line}`);
+  expect(lopsided).toEqual([]);
 });
