@@ -32,11 +32,20 @@ class TestTravelCalculatorEdgeCases:
         assert calc.current_position() is None
         assert calc.travel_direction == TravelStatus.STOPPED
 
-    def test_stopped_mid_travel_with_only_one_travel_time(self, mock_time):
-        """Issue #245: calibration saves one direction's time before the other.
+    def test_start_travel_when_position_none(self):
+        """start_travel() with unknown position snaps to target immediately."""
+        calc = TravelCalculator(travel_time_down=30, travel_time_up=30)
+        assert calc._last_known_position is None
+        calc.start_travel(50)
+        assert calc.current_position() == 50
+        assert calc.travel_direction == TravelStatus.STOPPED
 
-        Stopped, the target equals the position, so there is nothing left to
-        travel — the missing closing time must not be consulted.
+    def test_stopped_mid_travel_with_only_one_travel_time(self, mock_time):
+        """stop() mid-travel with only the opening time set leaves a settled position (issue #245).
+
+        Calibration saves one direction's time before the other. Stopped, the
+        target equals the position, so there is nothing left to travel — the
+        missing closing time must not be consulted.
         """
         calc = TravelCalculator(travel_time_down=None, travel_time_up=20)
         calc.set_position(0)
@@ -45,14 +54,6 @@ class TestTravelCalculatorEdgeCases:
         calc.stop()
         assert calc.current_position() == 50
         assert calc.is_traveling() is False
-
-    def test_start_travel_when_position_none(self):
-        """start_travel() with unknown position snaps to target immediately."""
-        calc = TravelCalculator(travel_time_down=30, travel_time_up=30)
-        assert calc._last_known_position is None
-        calc.start_travel(50)
-        assert calc.current_position() == 50
-        assert calc.travel_direction == TravelStatus.STOPPED
 
     def test_snapshot_restore_round_trips_full_state(self):
         """restore() puts back every field snapshot() captured, so a mutation

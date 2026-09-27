@@ -1,20 +1,24 @@
-"""Entity-teardown quiescence (audit Task 13).
+"""Entity-teardown quiescence.
 
 Removal happens on every configuration-card save (the entry reloads). It must
 leave nothing behind that can later drive the relays: the endpoint run-on stop
 timer (``_delay_task``), the startup-delay arming timer (``_startup_delay_task``),
 and — mid-calibration — the driven motor itself. These tests pin that
 ``async_will_remove_from_hass`` cancels the two ghost timers and stops a
-calibration-driven motor.
+calibration-driven motor, and that removal never sends a call to a relay that
+was never set.
 
-Adapted from the audit probe corpus (``verify_backend.py::test_b10_*`` inverted
-and ``test_audit_config_calib.py::test_removal_mid_calibration_leaves_relay_latched``).
+The timer and calibration tests are adapted from the audit probe corpus
+(``verify_backend.py::test_b10_*`` inverted and
+``test_audit_config_calib.py::test_removal_mid_calibration_leaves_relay_latched``).
 """
 
 import asyncio
 from unittest.mock import patch
 
 import pytest
+
+from tests.helpers import relay_calls
 
 
 @pytest.mark.asyncio
@@ -108,9 +112,7 @@ async def test_removal_sends_nothing_to_an_unset_relay(
     with patch.object(cover, "async_write_ha_state"):
         await cover.async_will_remove_from_hass()
 
-    targets = [
-        c.args[2].get("entity_id") for c in cover.hass.services.async_call.mock_calls
-    ]
+    targets = [eid for _, eid in relay_calls(cover)]
     assert "" not in targets
     if open_switch:
         assert open_switch in targets
