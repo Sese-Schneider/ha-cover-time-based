@@ -257,14 +257,10 @@ class CoverTimeBasedCard extends LitElement {
 
   /**
    * Flushes a pending debounced autosave immediately instead of losing it.
-   * Used both here (disconnect) and by the device-picker handler in
-   * card-render.js, which must save the outgoing entity's edit before
-   * swapping _selectedEntity/_config to the newly-picked one.
    *
-   * _autoSave is async and callers here can't await it (disconnectedCallback
-   * can't be async; the picker handler needs the read of _selectedEntity/
-   * _config to happen synchronously, before it reassigns them) - that's fine,
-   * the WS call is already in flight by the time this returns.
+   * Synchronous so the picker handler's read of _selectedEntity/_config
+   * happens before it reassigns them. A caller that needs the save finished
+   * awaits this._inFlightSave, which holds the latest _autoSave() promise.
    */
   _flushAutoSave() {
     if (!this._autoSaveTimer) return;
@@ -275,7 +271,7 @@ class CoverTimeBasedCard extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    // While calibrating, _autoSave defers itself (Task 24) rather than
+    // While calibrating, _autoSave defers itself rather than
     // saving - there is nothing timing-locked worth flushing, and flushing
     // here would just re-arm the timer on an element that may be gone for
     // good. Check calibration first and skip the flush in that case.
@@ -371,9 +367,9 @@ class CoverTimeBasedCard extends LitElement {
     this._autoSaveTimer = setTimeout(() => {
       // Null out BEFORE calling _autoSave: _flushAutoSave() treats a non-null
       // _autoSaveTimer as "a save is pending". Leaving the elapsed timer id in
-      // place here would make a later flush (disconnect, or the device-picker
-      // handler before a switch) fire a duplicate update_config for a save
-      // that already went through.
+      // place here would make a later flush (disconnect, a cover switch, or a
+      // download) fire a duplicate update_config for a save that already went
+      // through.
       this._autoSaveTimer = null;
       this._inFlightSave = this._autoSave();
     }, 500);
@@ -763,10 +759,26 @@ class CoverTimeBasedCard extends LitElement {
     const entityId = this._selectedEntity;
     if (!entityId || !this._config || !this.hass) return;
     // The file records what the server holds: a pending edit is saved first,
-    // and one the server rejects is replaced by the reloaded config.
-    this._flushAutoSave();
-    await this._inFlightSave;
-    const config = this._config;
+    // and one the server rejects is replaced by the reloaded config. During
+    // calibration saves are deferred, so the server's copy is read instead,
+    // once any save already sent has been answered.
+    let config;
+    if (this._isCalibrating()) {
+      await this._inFlightSave;
+      try {
+        config = await this.hass.callWS({
+          type: "cover_time_based/get_config",
+          entity_id: entityId,
+        });
+      } catch (err) {
+        console.error("Failed to read config for download:", err);
+        return;
+      }
+    } else {
+      this._flushAutoSave();
+      await this._inFlightSave;
+      config = this._config;
+    }
     if (this._selectedEntity !== entityId || !config) return;
     let integrationVersion;
     try {
