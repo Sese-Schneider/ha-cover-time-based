@@ -3,7 +3,7 @@
 ### Features
 
 - **New translation: Hebrew** ([#294](https://github.com/Sese-Schneider/ha-cover-time-based/issues/294)). The configuration card now also lays itself out right-to-left for Hebrew (and any other right-to-left language): switches, table headings and numbers sit on the correct side instead of being mirrored the wrong way.
-- **Download a cover's configuration from the card** ([#297](https://github.com/Sese-Schneider/ha-cover-time-based/pull/297)). A download icon at the end of the bar showing the cover's name saves a JSON file with the cover's settings, its current state, and the integration and Home Assistant versions, ready to attach to a bug report. The file matches what Home Assistant holds: an edit the card has not saved yet is saved first or, during a calibration, left out.
+- **Download a cover's configuration from the card** ([#297](https://github.com/Sese-Schneider/ha-cover-time-based/pull/297), [#299](https://github.com/Sese-Schneider/ha-cover-time-based/pull/299)). A download icon at the end of the bar showing the cover's name saves a JSON file with the cover's settings, its current state, and the integration and Home Assistant versions, ready to attach to a bug report. The file matches what Home Assistant holds: an edit the card has not saved yet is saved first or, during a calibration, left out.
 
 ### Fixes
 
