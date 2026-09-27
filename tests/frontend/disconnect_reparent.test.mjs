@@ -1,13 +1,10 @@
 /**
- * Task 27 (F5 + F7): disconnectedCallback must not silently drop a pending
- * debounced edit, and must not treat a synchronous HA re-parent (masonry
- * re-layout / dashboard edit / phone rotation triggers disconnect+reconnect
- * on the SAME element) as "the user left" while a calibration is running.
- * The device-picker handler (card-render.js) must also flush a pending edit
- * for the OLD entity before switching _config/_selectedEntity to the new one.
- *
- * Adapted from docs/audit/2026-07-21-audit-probes/f5_debounce.probe.mjs and
- * f1_f6_f7.probe.mjs (F7 case) into the repo-fixture test style.
+ * disconnectedCallback must not silently drop a pending debounced edit, and
+ * must not treat a synchronous HA re-parent (masonry re-layout / dashboard
+ * edit / phone rotation triggers disconnect+reconnect on the SAME element) as
+ * "the user left" while a calibration is running. The device-picker handler
+ * (card-render.js) must also flush a pending edit for the OLD entity before
+ * switching _config/_selectedEntity to the new one.
  *
  * Run: npm run test:fe -- tests/frontend/disconnect_reparent.test.mjs
  */
@@ -161,8 +158,8 @@ test("(iv) editing then switching the device picker flushes the pending edit for
 // (v) a NORMAL debounced save that already fired must not be re-flushed:
 // _flushAutoSave uses _autoSaveTimer as its "a save is pending" signal, so
 // the debounce callback must null it out before calling _autoSave - otherwise
-// the stale, already-elapsed timer id makes a later flush (disconnect, or
-// the picker handler before a device switch) fire a duplicate update_config.
+// the stale, already-elapsed timer id makes a later flush (disconnect, a
+// cover switch, or a download) fire a duplicate update_config.
 // ---------------------------------------------------------------------------
 
 test("(v) flushing after the debounced save already fired does not send a duplicate update_config", async () => {

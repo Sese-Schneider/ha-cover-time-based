@@ -146,6 +146,14 @@ export const cardStyles = css`
       .download-config {
         cursor: pointer;
         flex-shrink: 0;
+        padding: 6px;
+        border-radius: 50%;
+        outline: none;
+      }
+
+      .download-config:hover,
+      .download-config:focus-visible {
+        background: color-mix(in srgb, var(--text-primary-color, #fff) 20%, transparent);
       }
 
       .entity-id {
