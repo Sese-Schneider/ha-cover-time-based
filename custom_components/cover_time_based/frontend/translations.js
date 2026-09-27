@@ -69,7 +69,7 @@ export const EN = {
   "tilt_motor.stop_switch_pulse": "Tilt stop switch or script",
   "tilt_motor.safe_position": "Safe tilt position",
   "tilt_motor.safe_position_helper": "Tilt moves here before travel (100 = fully open)",
-  "tilt_motor.max_allowed_position": "Max tilt allowed position (optional)",
+  "tilt_motor.max_allowed_position": "Max tilt-allowed position (optional)",
   "tilt_motor.max_allowed_helper":
     "Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)",
   "tilt.close_includes_tilt": "Close cover also closes slats",
@@ -246,7 +246,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Posição de inclinação segura",
     "tilt_motor.safe_position_helper":
       "A inclinação move-se para aqui antes do deslocamento (100 = totalmente aberto)",
-    "tilt_motor.max_allowed_position": "Posição máxima permitida de inclinação (opcional)",
+    "tilt_motor.max_allowed_position": "Posição máxima que permite inclinação (opcional)",
     "tilt_motor.max_allowed_helper":
       "A inclinação só é permitida quando a posição do estore está neste valor ou abaixo (0 = fechado, 100 = aberto)",
     "tilt.close_includes_tilt": "Fechar estore também fecha lâminas",
@@ -423,7 +423,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Bezpieczna pozycja nachylenia",
     "tilt_motor.safe_position_helper":
       "Nachylenie przesuwa się tu przed ruchem (100 = w pełni otwarte)",
-    "tilt_motor.max_allowed_position": "Maks. dozwolona pozycja nachylenia (opcjonalna)",
+    "tilt_motor.max_allowed_position": "Maks. pozycja pozwalająca na nachylenie (opcjonalna)",
     "tilt_motor.max_allowed_helper":
       "Nachylenie dozwolone tylko gdy pozycja rolety wynosi tyle lub mniej (0 = zamknięta, 100 = otwarta)",
     "tilt.close_includes_tilt": "Zamknięcie rolety zamyka również lamele",
@@ -599,7 +599,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Sichere Neigungsposition",
     "tilt_motor.safe_position_helper":
       "Die Neigung fährt vor der Fahrt hierhin (100 = vollständig geöffnet)",
-    "tilt_motor.max_allowed_position": "Maximal erlaubte Neigungsposition (optional)",
+    "tilt_motor.max_allowed_position": "Höchste Position mit erlaubter Neigung (optional)",
     "tilt_motor.max_allowed_helper":
       "Neigen ist nur erlaubt, wenn die Rollladenposition auf oder unter diesem Wert liegt (0 = geschlossen, 100 = offen)",
     "tilt.close_includes_tilt": "Schließen des Rollladens schließt auch die Lamellen",
@@ -779,7 +779,8 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Posizione di inclinazione sicura",
     "tilt_motor.safe_position_helper":
       "L'inclinazione si porta qui prima della corsa (100 = completamente aperta)",
-    "tilt_motor.max_allowed_position": "Posizione di inclinazione massima consentita (facoltativa)",
+    "tilt_motor.max_allowed_position":
+      "Posizione massima con inclinazione consentita (facoltativa)",
     "tilt_motor.max_allowed_helper":
       "L'inclinazione è consentita solo quando la posizione della tapparella è pari o inferiore a questo valore (0 = chiusa, 100 = aperta)",
     "tilt.close_includes_tilt": "La chiusura della tapparella chiude anche le lamelle",
@@ -954,7 +955,8 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Veilige kantelpositie",
     "tilt_motor.safe_position_helper":
       "De kanteling gaat hierheen vóór de beweging (100 = volledig open)",
-    "tilt_motor.max_allowed_position": "Maximaal toegestane kantelpositie (optioneel)",
+    "tilt_motor.max_allowed_position":
+      "Maximale positie waarbij kantelen is toegestaan (optioneel)",
     "tilt_motor.max_allowed_helper":
       "Kantelen is alleen toegestaan wanneer de rolluikpositie op of onder deze waarde ligt (0 = gesloten, 100 = open)",
     "tilt.close_includes_tilt": "Rolluik sluiten sluit ook de lamellen",
@@ -1131,7 +1133,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Position d'inclinaison de sécurité",
     "tilt_motor.safe_position_helper":
       "L'inclinaison se place ici avant la course (100 = complètement ouverte)",
-    "tilt_motor.max_allowed_position": "Position d'inclinaison maximale autorisée (facultatif)",
+    "tilt_motor.max_allowed_position": "Position maximale autorisant l'inclinaison (facultatif)",
     "tilt_motor.max_allowed_helper":
       "L'inclinaison n'est autorisée que lorsque la position du volet est égale ou inférieure à cette valeur (0 = fermé, 100 = ouvert)",
     "tilt.close_includes_tilt": "Fermer le volet ferme aussi les lames",
@@ -1307,7 +1309,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Posición de inclinación segura",
     "tilt_motor.safe_position_helper":
       "La inclinación se mueve aquí antes del recorrido (100 = totalmente abierta)",
-    "tilt_motor.max_allowed_position": "Posición máxima de inclinación permitida (opcional)",
+    "tilt_motor.max_allowed_position": "Posición máxima que permite la inclinación (opcional)",
     "tilt_motor.max_allowed_helper":
       "La inclinación solo se permite cuando la posición de la persiana es igual o inferior a este valor (0 = cerrada, 100 = abierta)",
     "tilt.close_includes_tilt": "Cerrar la persiana también cierra las lamas",
@@ -1486,7 +1488,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Posició d'inclinació segura",
     "tilt_motor.safe_position_helper":
       "La inclinació es mou aquí abans del recorregut (100 = totalment oberta)",
-    "tilt_motor.max_allowed_position": "Posició màxima d'inclinació permesa (opcional)",
+    "tilt_motor.max_allowed_position": "Posició màxima que permet la inclinació (opcional)",
     "tilt_motor.max_allowed_helper":
       "La inclinació només es permet quan la posició de la persiana és igual o inferior a aquest valor (0 = tancada, 100 = oberta)",
     "tilt.close_includes_tilt": "Tancar la persiana també tanca les lamel·les",
@@ -1664,7 +1666,7 @@ export const TRANSLATIONS = {
     "tilt_motor.stop_switch_pulse": "Spínač nebo skript zastavení náklonu",
     "tilt_motor.safe_position": "Bezpečná pozice náklonu",
     "tilt_motor.safe_position_helper": "Náklon se sem přesune před pohybem (100 = plně otevřeno)",
-    "tilt_motor.max_allowed_position": "Maximální povolená pozice náklonu (volitelné)",
+    "tilt_motor.max_allowed_position": "Maximální pozice, při které je povolen náklon (volitelné)",
     "tilt_motor.max_allowed_helper":
       "Náklon je povolen pouze tehdy, když je pozice rolety na této hodnotě nebo pod ní (0 = zavřeno, 100 = otevřeno)",
     "tilt.close_includes_tilt": "Zavření rolety zavře i lamely",
@@ -1838,7 +1840,7 @@ export const TRANSLATIONS = {
     "tilt_motor.stop_switch_pulse": "Prekidač ili skripta za zaustavljanje nagiba",
     "tilt_motor.safe_position": "Bezbedna pozicija nagiba",
     "tilt_motor.safe_position_helper": "Nagib se pomera ovde pre kretanja (100 = potpuno otvoreno)",
-    "tilt_motor.max_allowed_position": "Najveća dozvoljena pozicija nagiba (opciono)",
+    "tilt_motor.max_allowed_position": "Najveća pozicija na kojoj je dozvoljen nagib (opciono)",
     "tilt_motor.max_allowed_helper":
       "Nagib je dozvoljen samo kada je pozicija roletne na ovoj vrednosti ili ispod nje (0 = zatvoreno, 100 = otvoreno)",
     "tilt.close_includes_tilt": "Zatvaranje roletne zatvara i lamele",
