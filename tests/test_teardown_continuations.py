@@ -936,6 +936,7 @@ async def test_deferred_inline_tilt_removal_does_not_save_old_tilt(
         make_cover,
         control_mode=mode,
         send_endpoint_stop=False if mode == "pulse" else None,
+        stop_switch="switch.stop" if mode == "pulse" else None,
         tilt_startup_delay=5 if defer == "startup" else None,
         wait_for_relay_feedback=defer == "feedback",
     )

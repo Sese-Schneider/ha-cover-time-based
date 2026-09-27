@@ -80,7 +80,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
         # overhead and minimum-movement tests measure nothing on this cycle.
         return False
 
-    async def _handle_external_state_change(self, entity_id, old_state, new_state):
+    async def _handle_external_state_change(self, entity_id, old_val, new_val):
         # The button is an output we drive; its state changes are our own
         # echoes, and this mode has no feedback to read. Ignore them.
         self._log("single_button :: ignoring external state change on %s", entity_id)
@@ -319,8 +319,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             and _LIMIT_WHILE_MOVING.get(self._phase) == position
         ):
             self._phase = _PHASE_AT_ENDPOINT[position]
-        if self._open_switch_entity_id:
-            await self._release_button()
+        await self._release_button()
 
     # --- the mode contract --------------------------------------------
     async def _send_open(self) -> None:

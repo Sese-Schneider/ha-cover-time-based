@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
+from custom_components.cover_time_based.cover import CONTROL_MODE_SINGLE_BUTTON
 from tests.helpers import relay_calls
 
 
@@ -116,4 +117,24 @@ async def test_removal_sends_nothing_to_an_unset_relay(
     assert "" not in targets
     if open_switch:
         assert open_switch in targets
+    assert _mock_position_store.async_save.await_args is not None
+
+
+@pytest.mark.asyncio
+async def test_single_button_removal_sends_nothing_without_a_button(
+    make_cover, _mock_position_store
+):
+    """Removal releases the button; a new cover has none set yet."""
+    cover = make_cover(
+        control_mode=CONTROL_MODE_SINGLE_BUTTON,
+        open_switch="",
+        close_switch="",
+        relay_reports_off=True,
+        travel_time_close=None,
+        travel_time_open=None,
+    )
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_will_remove_from_hass()
+
+    assert relay_calls(cover) == []
     assert _mock_position_store.async_save.await_args is not None

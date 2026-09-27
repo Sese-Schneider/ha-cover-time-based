@@ -553,6 +553,8 @@ Most timings can be measured for you:
 | **Minimum movement time** | Blocks movements too short to physically move the cover. See [Minimum movement time](#minimum-movement-time). | not set |
 | **Endpoint run-on time** | Extra relay time at the endpoints so the motor reaches its limit (in Single button mode, a settle wait instead). Typed in rather than measured. See [Endpoint run-on time](#endpoint-run-on-time). | 2.0 |
 
+The cover shows as unavailable until both travel times are set.
+
 ### Tilt timings
 
 | Timing | What it is | Default |
@@ -569,7 +571,9 @@ short one (say half a second) it can cause a large position error that builds up
 over time. The startup delay tells the integration to wait that long after
 switching the relay on before it starts counting position, which keeps short
 movements accurate. Values between **0.05 and 0.15 seconds** are typical, and
-travel and tilt can be set separately.
+travel and tilt can be set separately. Measure both travel times first
+(or both tilt times, for the tilt startup delay): the startup delay stays greyed
+out in the list until they are set.
 
 ### Endpoint run-on time
 
@@ -951,6 +955,8 @@ listed here, use the card.
 | `relay_reports_off` | boolean | _Optional_ | Toggle mode: set `false` for pulse modules that never report their off. | true |
 | `send_endpoint_stop` | boolean | _Optional_ | Pulse mode: set `false` for auto-stop controllers that reposition on a stop received while stopped. | true |
 | `direction_change_delay` | float | _Deprecated_ | No longer configurable. Accepted and ignored; the reversing pause is fixed at 1.0s. | — |
+
+The cover is unavailable until both `travelling_time_down` and `travelling_time_up` are set.
 
 </details>
 

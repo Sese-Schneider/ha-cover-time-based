@@ -742,50 +742,36 @@ class TestCalibrationRestoreOnStopFailure:
         assert cover._travel_startup_delay == 0.5
 
 
-class TestOverheadFallbackTravelTime:
-    """Test fallback travel_time selection in _start_overhead_test (lines 141, 152)."""
+class TestOverheadNeedsBothTimes:
+    """The stepped test runs the axis tracker, which needs both of its times."""
 
     @pytest.mark.asyncio
-    async def test_travel_startup_delay_open_direction_falls_back_to_close_time(
-        self, make_cover
+    @pytest.mark.parametrize("direction", ["open", "close"])
+    @pytest.mark.parametrize("missing", ["_travel_time_open", "_travel_time_close"])
+    async def test_travel_startup_delay_refused_with_one_travel_time(
+        self, make_cover, missing, direction
     ):
-        """Line 141: travel_time = self._travel_time_open or self._travel_time_close.
-
-        When direction=open but only travel_time_close is configured,
-        the fallback branch should use travel_time_close.
-        """
         cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
-        # Clear open time so the `or` fallback fires
-        cover._travel_time_open = None
-        with patch.object(cover, "async_write_ha_state"):
+        setattr(cover, missing, None)
+        with pytest.raises(HomeAssistantError, match="Travel time"):
             await cover.start_calibration(
-                attribute="travel_startup_delay", timeout=300.0, direction="open"
+                attribute="travel_startup_delay", timeout=300.0, direction=direction
             )
-        assert cover._calibration is not None
-        assert cover._calibration.automation_task is not None
-        # step_duration = travel_time / 10 = 60 / 10 = 6.0
-        assert cover._calibration.step_duration == 6.0
+        assert cover._calibration is None
 
     @pytest.mark.asyncio
-    async def test_tilt_startup_delay_open_direction_falls_back_to_close_time(
-        self, make_cover
+    @pytest.mark.parametrize("direction", ["open", "close"])
+    @pytest.mark.parametrize("missing", ["_tilting_time_open", "_tilting_time_close"])
+    async def test_tilt_startup_delay_refused_with_one_tilt_time(
+        self, make_cover, missing, direction
     ):
-        """Line 152: travel_time = self._tilting_time_open or self._tilting_time_close.
-
-        When direction=open but only tilting_time_close is configured,
-        the fallback branch should use tilting_time_close.
-        """
         cover = make_cover(tilt_time_close=10.0, tilt_time_open=10.0)
-        # Clear open time so the `or` fallback fires
-        cover._tilting_time_open = None
-        with patch.object(cover, "async_write_ha_state"):
+        setattr(cover, missing, None)
+        with pytest.raises(HomeAssistantError, match="Tilt time"):
             await cover.start_calibration(
-                attribute="tilt_startup_delay", timeout=300.0, direction="open"
+                attribute="tilt_startup_delay", timeout=300.0, direction=direction
             )
-        assert cover._calibration is not None
-        assert cover._calibration.automation_task is not None
-        # tilt: 3 steps, total_divisions=5, step_pct=20, step_duration=10.0*20/100=2.0
-        assert cover._calibration.step_duration == 2.0
+        assert cover._calibration is None
 
 
 class TestSetPositionAfterCalibrationNoTilt:
@@ -818,20 +804,18 @@ class TestSetPositionAfterCalibrationNoTilt:
 
 
 class TestCalibrationResultOpenDirection:
-    """Test _calculate_calibration_result for OPEN direction (lines 385, 390)."""
+    """Test _calculate_calibration_result for the OPEN direction."""
 
     @pytest.mark.asyncio
     async def test_travel_startup_delay_open_direction_result(self, make_cover):
-        """Lines 384-385: total_time = self._travel_time_open or self._travel_time_close.
-
-        Run calibration result calculation for travel_startup_delay
-        in the OPEN direction.
+        """Run calibration result calculation for travel_startup_delay
+        in the OPEN direction, which uses the opening travel time.
         """
         import time as time_mod
 
         from homeassistant.const import SERVICE_OPEN_COVER
 
-        cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
+        cover = make_cover(travel_time_close=30.0, travel_time_open=60.0)
         mock_entry = MagicMock()
         mock_entry.options = {}
         cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
@@ -854,16 +838,14 @@ class TestCalibrationResultOpenDirection:
 
     @pytest.mark.asyncio
     async def test_tilt_startup_delay_open_direction_result(self, make_cover):
-        """Lines 389-390: total_time = self._tilting_time_open or self._tilting_time_close.
-
-        Run calibration result calculation for tilt_startup_delay
-        in the OPEN direction.
+        """Run calibration result calculation for tilt_startup_delay
+        in the OPEN direction, which uses the opening tilt time.
         """
         import time as time_mod
 
         from homeassistant.const import SERVICE_OPEN_COVER
 
-        cover = make_cover(tilt_time_close=10.0, tilt_time_open=10.0)
+        cover = make_cover(tilt_time_close=5.0, tilt_time_open=10.0)
         mock_entry = MagicMock()
         mock_entry.options = {}
         cover.hass.config_entries.async_get_entry = MagicMock(return_value=mock_entry)
@@ -886,18 +868,20 @@ class TestCalibrationResultOpenDirection:
 
 
 class TestCalibrationResultTotalTimeNone:
-    """Test _calculate_calibration_result when total_time is None (lines 393-396)."""
+    """Test _calculate_calibration_result when total_time is None."""
 
     @pytest.mark.asyncio
-    async def test_travel_startup_delay_with_no_travel_times_returns_zero(
+    async def test_travel_startup_delay_without_own_direction_time_returns_zero(
         self, make_cover
     ):
-        """Lines 392-396: total_time is None warning branch.
+        """total_time is None warning branch.
 
-        Set both travel times to None after starting calibration, then
-        call _calculate_calibration_result — should return 0.0 with warning.
+        Clear the closing travel time after starting a closing calibration:
+        the result must not borrow the opening time, so it is 0.0 with a warning.
         """
         import time as time_mod
+
+        from homeassistant.const import SERVICE_CLOSE_COVER
 
         cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
         mock_entry = MagicMock()
@@ -907,27 +891,24 @@ class TestCalibrationResultTotalTimeNone:
 
         with patch.object(cover, "async_write_ha_state"):
             await cover.start_calibration(
-                attribute="travel_startup_delay", timeout=300.0
+                attribute="travel_startup_delay", timeout=300.0, direction="close"
             )
+            assert cover._calibration.move_command == SERVICE_CLOSE_COVER
             # Simulate some progress
             cover._calibration.step_count = 8
             cover._calibration.continuous_start = time_mod.monotonic() - 28.0
-            # Now clear both travel times so total_time resolves to None
             cover._travel_time_close = None
-            cover._travel_time_open = None
             result = await cover.stop_calibration()
 
         assert result["value"] == 0.0
 
 
 class TestPulseTimeSubtraction:
-    """Test pulse_time subtraction in _calculate_calibration_result (line 410)."""
+    """Test pulse_time subtraction in _calculate_calibration_result."""
 
     @pytest.mark.asyncio
     async def test_pulse_time_subtracted_from_continuous_time(self, make_cover):
-        """Line 410: continuous_time -= pulse_time.
-
-        Set _pulse_time on the cover, run travel_startup_delay calibration,
+        """Set _pulse_time on the cover, run travel_startup_delay calibration,
         verify that pulse_time is subtracted from continuous_time in the
         overhead calculation.
         """
@@ -957,13 +938,11 @@ class TestPulseTimeSubtraction:
 
 
 class TestUnexpectedCalibrationAttribute:
-    """Test ValueError for unexpected attribute (line 433)."""
+    """Test ValueError for unexpected attribute."""
 
     @pytest.mark.asyncio
     async def test_unexpected_attribute_raises_value_error(self, make_cover):
-        """Line 433: raise ValueError(...) for unexpected attribute.
-
-        Manually set calibration attribute to something invalid, then
+        """Manually set calibration attribute to something invalid, then
         call _calculate_calibration_result — should raise ValueError.
         """
         from custom_components.cover_time_based.calibration import CalibrationState

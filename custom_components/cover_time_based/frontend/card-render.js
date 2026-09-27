@@ -895,7 +895,8 @@ export function renderCalibration(card, calibrating) {
 
   const c = card._config;
   const hasTravel = c?.travel_time_close || c?.travel_time_open;
-  const hasTilt = c?.tilt_time_close || c?.tilt_time_open;
+  const hasBothTravel = c?.travel_time_close && c?.travel_time_open;
+  const hasBothTilt = c?.tilt_time_close && c?.tilt_time_open;
 
   const disabledKeys = new Set();
   if (card._knownPosition === "unknown") {
@@ -940,9 +941,9 @@ export function renderCalibration(card, calibrating) {
     }
   }
 
-  // Startup delay requires the corresponding time to be calibrated first
-  if (!hasTravel) disabledKeys.add("travel_startup_delay");
-  if (!hasTilt) disabledKeys.add("tilt_startup_delay");
+  // The startup-delay test steps the axis tracker, which needs both directions
+  if (!hasBothTravel) disabledKeys.add("travel_startup_delay");
+  if (!hasBothTilt) disabledKeys.add("tilt_startup_delay");
   if (!hasTravel) disabledKeys.add("min_movement_time");
 
   if (calibrating) {

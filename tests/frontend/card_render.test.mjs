@@ -1358,8 +1358,8 @@ test("device tab fieldset is disabled while _saving=true", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// _renderCalibration disabledKeys branches: knownPosition variants
-// These cover lines 1517-1548 in the source.
+// _renderCalibration disabledKeys branches: knownPosition variants and
+// missing travel/tilt times
 // ---------------------------------------------------------------------------
 
 test("cal-attribute options: knownPosition=open disables travel_time_open; sequential_close tilt disables tilt_time_close", async () => {
@@ -1471,6 +1471,45 @@ test("cal-attribute options: knownPosition=closed_tilt_closed with sequential_op
   // For sequential_open, travel_time_open is measurable from closed_tilt_closed
   const travelOpenOpt = opts.find((o) => o.value === "travel_time_open");
   expect(travelOpenOpt?.hasAttribute("disabled")).toBe(false);
+});
+
+test.each([
+  [{ travel_time_open: 20 }, true],
+  [{ travel_time_close: 20 }, true],
+  [{ travel_time_close: 20, travel_time_open: 20 }, false],
+])("cal-attribute options: travel_startup_delay with %o disabled=%s", async (times, disabled) => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(times),
+    activeTab: "timing",
+    knownPosition: "open",
+  });
+  const calSelect = card.shadowRoot.querySelector("#cal-attribute");
+  const opt = [...calSelect.options].find((o) => o.value === "travel_startup_delay");
+  expect(opt?.hasAttribute("disabled")).toBe(disabled);
+});
+
+test.each([
+  [{ tilt_time_open: 5 }, true],
+  [{ tilt_time_close: 5 }, true],
+  [{ tilt_time_close: 5, tilt_time_open: 5 }, false],
+])("cal-attribute options: tilt_startup_delay with %o disabled=%s", async (times, disabled) => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg({
+      tilt_mode: "dual_motor",
+      tilt_open_switch: "switch.to",
+      tilt_close_switch: "switch.tc",
+      travel_time_close: 20,
+      travel_time_open: 20,
+      ...times,
+    }),
+    activeTab: "timing",
+    knownPosition: "closed",
+  });
+  const calSelect = card.shadowRoot.querySelector("#cal-attribute");
+  const opt = [...calSelect.options].find((o) => o.value === "tilt_startup_delay");
+  expect(opt?.hasAttribute("disabled")).toBe(disabled);
 });
 
 // ---------------------------------------------------------------------------

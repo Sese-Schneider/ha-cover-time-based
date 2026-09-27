@@ -57,18 +57,19 @@ class CalibrationMixin(_MixinBase):
                 " available for this control mode"
             )
 
+        # The stepped test runs the axis tracker, which needs both directions.
         if attribute == "travel_startup_delay" and not (
-            self._travel_time_close or self._travel_time_open
+            self._travel_time_close and self._travel_time_open
         ):
             raise HomeAssistantError(
-                "Travel time must be configured before calibrating startup delay"
+                "Travel times must be configured before calibrating startup delay"
             )
 
         if attribute == "tilt_startup_delay" and not (
-            self._tilting_time_close or self._tilting_time_open
+            self._tilting_time_close and self._tilting_time_open
         ):
             raise HomeAssistantError(
-                "Tilt time must be configured before calibrating startup delay"
+                "Tilt times must be configured before calibrating startup delay"
             )
 
         # Calibration drives the motors directly, and a still-armed
@@ -235,9 +236,9 @@ class CalibrationMixin(_MixinBase):
             position = self.current_cover_position
             move_command = self._resolve_direction(direction, position)
             if move_command == SERVICE_OPEN_COVER:
-                travel_time = self._travel_time_open or self._travel_time_close
+                travel_time = self._travel_time_open
             else:
-                travel_time = self._travel_time_close or self._travel_time_open
+                travel_time = self._travel_time_close
             num_steps = CALIBRATION_OVERHEAD_STEPS
             # Zero startup delay during test so tracker doesn't compensate
             self._calibration.saved_startup_delay = self._travel_startup_delay
@@ -246,9 +247,9 @@ class CalibrationMixin(_MixinBase):
             position = self.current_cover_tilt_position
             move_command = self._resolve_direction(direction, position)
             if move_command == SERVICE_OPEN_COVER:
-                travel_time = self._tilting_time_open or self._tilting_time_close
+                travel_time = self._tilting_time_open
             else:
-                travel_time = self._tilting_time_close or self._tilting_time_open
+                travel_time = self._tilting_time_close
             num_steps = CALIBRATION_TILT_OVERHEAD_STEPS
             # Zero startup delay during test so tracker doesn't compensate
             self._calibration.saved_startup_delay = self._tilt_startup_delay
@@ -545,19 +546,18 @@ class CalibrationMixin(_MixinBase):
         if attribute in ("travel_startup_delay", "tilt_startup_delay"):
             closing = self._calibration.move_command == SERVICE_CLOSE_COVER
             if attribute == "travel_startup_delay":
-                if closing:
-                    total_time = self._travel_time_close or self._travel_time_open
-                else:
-                    total_time = self._travel_time_open or self._travel_time_close
+                total_time = (
+                    self._travel_time_close if closing else self._travel_time_open
+                )
             else:
-                if closing:
-                    total_time = self._tilting_time_close or self._tilting_time_open
-                else:
-                    total_time = self._tilting_time_open or self._tilting_time_close
+                total_time = (
+                    self._tilting_time_close if closing else self._tilting_time_open
+                )
 
             if not total_time:
                 _LOGGER.warning(
-                    "Startup delay calibration requires travel/tilt time to be set first"
+                    "%s times must be configured before calibrating startup delay",
+                    "Travel" if attribute == "travel_startup_delay" else "Tilt",
                 )
                 return 0.0
             step_count = self._calibration.step_count
