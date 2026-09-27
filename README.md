@@ -95,7 +95,9 @@ it; for anyone else its commands are rejected. It has two tabs, **Device** and
 **Calibration**; fill in the Device tab first, as the Calibration tab depends on
 it. The card remembers the last cover you were working on and reselects it next
 time the dashboard loads. (That memory is kept per browser rather than per Home
-Assistant user, and a cover you have since deleted is simply not restored.)
+Assistant user, and a cover you have since deleted is simply not restored.) The
+download icon at the end of the bar showing the selected cover's name saves that
+cover's settings as a JSON file, useful for [bug reports](#report-an-issue).
 
 To add the card to a dashboard:
 
@@ -752,7 +754,11 @@ logger:
 
 Please open bugs and feature requests on
 [GitHub](https://github.com/Sese-Schneider/ha-cover-time-based/issues). Including
-debug logs helps a great deal.
+debug logs helps a great deal, and so does the cover's configuration: on the
+configuration card, select the cover and click the download icon at the end of
+the bar showing its name. That saves a JSON file with the cover's settings, its
+current state, and the integration and Home Assistant versions. Attach it to the
+issue.
 
 ## Advanced hardware notes
 

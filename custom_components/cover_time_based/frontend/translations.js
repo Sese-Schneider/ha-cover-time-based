@@ -5,6 +5,7 @@ export const EN = {
   save_failed: "Save failed — value reverted",
   confirm_cancel_calibration: "A calibration is running. Cancel it and continue?",
   create_new: "+ Create new cover entity",
+  download_config: "Download configuration",
   yaml_warning:
     "This entity uses YAML configuration and cannot be configured from this card. Please migrate to the UI: Settings \u2192 Devices & Services \u2192 Helpers \u2192 Create Helper \u2192 Cover Time Based.",
   load_failed: "Failed to load configuration. Please try again.",
@@ -181,6 +182,7 @@ export const TRANSLATIONS = {
     save_failed: "Falha ao guardar — valor revertido",
     confirm_cancel_calibration: "Existe uma calibração em curso. Cancelar e continuar?",
     create_new: "+ Criar nova entidade de estore",
+    download_config: "Transferir configuração",
     yaml_warning:
       "Esta entidade utiliza configuração YAML e não pode ser configurada a partir deste cartão. Por favor, migre para a interface gráfica: Definições > Dispositivos e Serviços > Auxiliares > Criar Auxiliar > Estore Baseado em Tempo.",
     load_failed: "Falha ao carregar a configuração. Por favor, tente novamente.",
@@ -357,6 +359,7 @@ export const TRANSLATIONS = {
     save_failed: "Zapis nie powiódł się — wartość przywrócona",
     confirm_cancel_calibration: "Kalibracja jest w toku. Anulować ją i kontynuować?",
     create_new: "+ Utwórz nową encję rolety",
+    download_config: "Pobierz konfigurację",
     yaml_warning:
       "Ta encja używa konfiguracji YAML i nie może być konfigurowana z tej karty. Proszę przeprowadzić migrację do interfejsu użytkownika: Ustawienia > Urządzenia i usługi > Pomocniki > Utwórz pomocnik > Roleta sterowana czasowo.",
     load_failed: "Nie udało się załadować konfiguracji. Spróbuj ponownie.",
@@ -533,6 +536,7 @@ export const TRANSLATIONS = {
     save_failed: "Speichern fehlgeschlagen — Wert zurückgesetzt",
     confirm_cancel_calibration: "Eine Kalibrierung läuft. Abbrechen und fortfahren?",
     create_new: "+ Neue Rollladen-Entität anlegen",
+    download_config: "Konfiguration herunterladen",
     yaml_warning:
       "Diese Entität verwendet eine YAML-Konfiguration und kann nicht über diese Karte konfiguriert werden. Bitte migriere sie auf die Benutzeroberfläche: Einstellungen → Geräte & Dienste → Helfer → Helfer erstellen → Cover Time Based.",
     load_failed: "Laden der Konfiguration fehlgeschlagen. Bitte versuche es erneut.",
@@ -713,6 +717,7 @@ export const TRANSLATIONS = {
     save_failed: "Salvataggio non riuscito — valore ripristinato",
     confirm_cancel_calibration: "È in corso una calibrazione. Annullarla e continuare?",
     create_new: "+ Crea una nuova entità tapparella",
+    download_config: "Scarica configurazione",
     yaml_warning:
       "Questa entità utilizza la configurazione YAML e non può essere configurata da questa scheda. Esegui la migrazione all'interfaccia utente: Impostazioni → Dispositivi e servizi → Helper → Crea helper → Cover Time Based.",
     load_failed: "Caricamento della configurazione non riuscito. Riprova.",
@@ -890,6 +895,7 @@ export const TRANSLATIONS = {
     save_failed: "Opslaan mislukt — waarde teruggezet",
     confirm_cancel_calibration: "Er loopt een kalibratie. Deze annuleren en doorgaan?",
     create_new: "+ Nieuwe rolluikentiteit aanmaken",
+    download_config: "Configuratie downloaden",
     yaml_warning:
       "Deze entiteit gebruikt YAML-configuratie en kan niet vanuit deze kaart worden geconfigureerd. Migreer naar de gebruikersinterface: Instellingen → Apparaten en diensten → Helpers → Helper aanmaken → Cover Time Based.",
     load_failed: "Laden van de configuratie mislukt. Probeer het opnieuw.",
@@ -1067,6 +1073,7 @@ export const TRANSLATIONS = {
     save_failed: "Échec de l'enregistrement — valeur rétablie",
     confirm_cancel_calibration: "Un étalonnage est en cours. L'annuler et continuer\u00a0?",
     create_new: "+ Créer une nouvelle entité de volet",
+    download_config: "Télécharger la configuration",
     yaml_warning:
       "Cette entité utilise une configuration YAML et ne peut pas être configurée depuis cette carte. Veuillez migrer vers l'interface utilisateur\u00a0: Paramètres → Appareils et services → Entrées → Créer une entrée → Cover Time Based.",
     load_failed: "Échec du chargement de la configuration. Veuillez réessayer.",
@@ -1243,6 +1250,7 @@ export const TRANSLATIONS = {
     save_failed: "Error al guardar — valor restaurado",
     confirm_cancel_calibration: "Hay una calibración en curso. ¿Cancelarla y continuar?",
     create_new: "+ Crear una nueva entidad de persiana",
+    download_config: "Descargar configuración",
     yaml_warning:
       "Esta entidad usa configuración YAML y no se puede configurar desde esta tarjeta. Migra a la interfaz de usuario: Configuración → Dispositivos y servicios → Ayudantes → Crear ayudante → Cover Time Based.",
     load_failed: "Error al cargar la configuración. Inténtalo de nuevo.",
@@ -1422,6 +1430,7 @@ export const TRANSLATIONS = {
     save_failed: "Error en desar — valor revertit",
     confirm_cancel_calibration: "Hi ha una calibració en curs. Vols cancel·lar-la i continuar?",
     create_new: "+ Crea una nova entitat de persiana",
+    download_config: "Baixa la configuració",
     yaml_warning:
       "Aquesta entitat utilitza configuració YAML i no es pot configurar des d'aquesta targeta. Migra a la interfície d'usuari: Configuració → Dispositius i serveis → Ajudants → Crea ajudant → Cover Time Based.",
     load_failed: "No s'ha pogut carregar la configuració. Torna-ho a provar.",
@@ -1601,6 +1610,7 @@ export const TRANSLATIONS = {
     save_failed: "Uložení selhalo — hodnota vrácena",
     confirm_cancel_calibration: "Probíhá kalibrace. Zrušit ji a pokračovat?",
     create_new: "+ Vytvořit novou entitu rolety",
+    download_config: "Stáhnout konfiguraci",
     yaml_warning:
       "Tato entita používá konfiguraci YAML a nelze ji nastavit z této karty. Přejděte prosím na uživatelské rozhraní: Nastavení → Zařízení a služby → Pomocníci → Vytvořit pomocníka → Cover Time Based.",
     load_failed: "Nepodařilo se načíst konfiguraci. Zkuste to prosím znovu.",
@@ -1775,6 +1785,7 @@ export const TRANSLATIONS = {
     save_failed: "Čuvanje nije uspelo — vrednost je vraćena",
     confirm_cancel_calibration: "Kalibracija je u toku. Otkazati je i nastaviti?",
     create_new: "+ Kreiraj novi entitet roletne",
+    download_config: "Preuzmi konfiguraciju",
     yaml_warning:
       "Ovaj entitet koristi YAML konfiguraciju i ne može se podesiti sa ove kartice. Pređite na korisnički interfejs: Podešavanja → Uređaji i usluge → Pomoćnici → Kreirajte pomoćnika → Cover Time Based.",
     load_failed: "Učitavanje konfiguracije nije uspelo. Pokušajte ponovo.",
@@ -1950,6 +1961,7 @@ export const TRANSLATIONS = {
     save_failed: "השמירה נכשלה — הערך שוחזר",
     confirm_cancel_calibration: "כיול מתבצע כעת. לבטל אותו ולהמשיך?",
     create_new: "+ יצירת ישות תריס חדשה",
+    download_config: "הורדת תצורה",
     yaml_warning:
       "ישות זו משתמשת בתצורת YAML ולא ניתן להגדיר אותה מכרטיס זה. יש לעבור לממשק המשתמש: הגדרות ← מכשירים ושירותים ← עוזרים ← יצירת עוזר ← Cover Time Based.",
     load_failed: "טעינת התצורה נכשלה. יש לנסות שוב.",

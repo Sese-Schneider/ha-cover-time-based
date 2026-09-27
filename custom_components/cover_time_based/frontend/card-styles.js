@@ -143,6 +143,11 @@ export const cardStyles = css`
         gap: 8px;
       }
 
+      .download-config {
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+
       .entity-id {
         display: block;
         font-size: 0.85em;

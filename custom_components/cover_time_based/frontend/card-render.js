@@ -103,6 +103,21 @@ export function renderConfigSections(card) {
           </strong>
           <span class="entity-id">${card._selectedEntity}</span>
         </div>
+        <ha-icon
+          class="download-config"
+          icon="mdi:download"
+          role="button"
+          tabindex="0"
+          title=${card._t("download_config")}
+          aria-label=${card._t("download_config")}
+          @click=${() => card._onDownloadConfig()}
+          @keydown=${(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              card._onDownloadConfig();
+            }
+          }}
+        ></ha-icon>
       </div>
     </div>
 

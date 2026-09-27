@@ -10,12 +10,20 @@ const DEFAULT_WS = {
   "cover_time_based/raw_command": () => ({}),
 };
 
-export function makeHass({ states = {}, entities = {}, language = "en", ws = {}, service } = {}) {
+export function makeHass({
+  states = {},
+  entities = {},
+  language = "en",
+  ws = {},
+  service,
+  config,
+} = {}) {
   const routes = { ...DEFAULT_WS, ...ws };
   return {
     states,
     entities,
     language,
+    config,
     callWS: vi.fn(async ({ type, ...params }) => {
       const handler = routes[type];
       if (handler === undefined) {
