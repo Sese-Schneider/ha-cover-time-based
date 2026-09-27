@@ -939,6 +939,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
 
     async def async_set_cover_tilt_position(self, **kwargs):
         """Forward tilt-to-position natively when the wrapped cover can."""
+        self._require_configured()
         if ATTR_TILT_POSITION in kwargs and self._use_native_tilt():
             await self._native_tilt_driver.move_to(int(kwargs[ATTR_TILT_POSITION]))
             return

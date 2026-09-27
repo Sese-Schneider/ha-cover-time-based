@@ -546,19 +546,18 @@ class CalibrationMixin(_MixinBase):
         if attribute in ("travel_startup_delay", "tilt_startup_delay"):
             closing = self._calibration.move_command == SERVICE_CLOSE_COVER
             if attribute == "travel_startup_delay":
-                if closing:
-                    total_time = self._travel_time_close or self._travel_time_open
-                else:
-                    total_time = self._travel_time_open or self._travel_time_close
+                total_time = (
+                    self._travel_time_close if closing else self._travel_time_open
+                )
             else:
-                if closing:
-                    total_time = self._tilting_time_close or self._tilting_time_open
-                else:
-                    total_time = self._tilting_time_open or self._tilting_time_close
+                total_time = (
+                    self._tilting_time_close if closing else self._tilting_time_open
+                )
 
             if not total_time:
                 _LOGGER.warning(
-                    "Startup delay calibration requires travel/tilt time to be set first"
+                    "%s times must be configured before calibrating startup delay",
+                    "Travel" if attribute == "travel_startup_delay" else "Tilt",
                 )
                 return 0.0
             step_count = self._calibration.step_count

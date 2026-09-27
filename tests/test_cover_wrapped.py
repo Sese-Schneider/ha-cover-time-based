@@ -1474,6 +1474,20 @@ class TestNativeTiltForwarding:
         assert cover.tilt_calc._travel_to_position == 30
 
     @pytest.mark.asyncio
+    async def test_set_tilt_position_refused_with_one_travel_time(self):
+        from homeassistant.exceptions import HomeAssistantError
+
+        cover = self._native_tilt_cover()
+        cover._travel_time_close = None
+        cover.tilt_calc.set_position(100)
+
+        with pytest.raises(HomeAssistantError, match="missing travel times"):
+            await cover.async_set_cover_tilt_position(tilt_position=30)
+
+        assert _calls(cover.hass.services.async_call) == []
+        assert not cover.tilt_calc.is_traveling()
+
+    @pytest.mark.asyncio
     async def test_open_close_tilt_forward_natively(self):
         cover = self._native_tilt_cover()
         cover.tilt_calc.set_position(0)
