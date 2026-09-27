@@ -32,6 +32,21 @@ class TestTravelCalculatorEdgeCases:
         assert calc.current_position() is None
         assert calc.travel_direction == TravelStatus.STOPPED
 
+    @pytest.mark.parametrize(
+        "down,up,frm,to,direction",
+        [(None, 20, 100, 0, "closing"), (20, None, 0, 100, "opening")],
+    )
+    def test_travel_time_for_an_unset_direction_names_it(
+        self, down, up, frm, to, direction
+    ):
+        calc = TravelCalculator(travel_time_down=down, travel_time_up=up)
+        with pytest.raises(ValueError, match=f"{direction} travel time is not set"):
+            calc.calculate_travel_time(frm, to)
+
+    def test_zero_length_travel_needs_no_travel_time(self):
+        calc = TravelCalculator(travel_time_down=None, travel_time_up=None)
+        assert calc.calculate_travel_time(40, 40) == 0.0
+
     def test_start_travel_when_position_none(self):
         """start_travel() with unknown position snaps to target immediately."""
         calc = TravelCalculator(travel_time_down=30, travel_time_up=30)

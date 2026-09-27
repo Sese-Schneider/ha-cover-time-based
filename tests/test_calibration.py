@@ -742,50 +742,36 @@ class TestCalibrationRestoreOnStopFailure:
         assert cover._travel_startup_delay == 0.5
 
 
-class TestOverheadFallbackTravelTime:
-    """Test fallback travel_time selection in _start_overhead_test (lines 141, 152)."""
+class TestOverheadNeedsBothTimes:
+    """The stepped test runs the axis tracker, which needs both of its times."""
 
     @pytest.mark.asyncio
-    async def test_travel_startup_delay_open_direction_falls_back_to_close_time(
-        self, make_cover
+    @pytest.mark.parametrize("direction", ["open", "close"])
+    @pytest.mark.parametrize("missing", ["_travel_time_open", "_travel_time_close"])
+    async def test_travel_startup_delay_refused_with_one_travel_time(
+        self, make_cover, missing, direction
     ):
-        """Line 141: travel_time = self._travel_time_open or self._travel_time_close.
-
-        When direction=open but only travel_time_close is configured,
-        the fallback branch should use travel_time_close.
-        """
         cover = make_cover(travel_time_close=60.0, travel_time_open=60.0)
-        # Clear open time so the `or` fallback fires
-        cover._travel_time_open = None
-        with patch.object(cover, "async_write_ha_state"):
+        setattr(cover, missing, None)
+        with pytest.raises(HomeAssistantError, match="Travel time"):
             await cover.start_calibration(
-                attribute="travel_startup_delay", timeout=300.0, direction="open"
+                attribute="travel_startup_delay", timeout=300.0, direction=direction
             )
-        assert cover._calibration is not None
-        assert cover._calibration.automation_task is not None
-        # step_duration = travel_time / 10 = 60 / 10 = 6.0
-        assert cover._calibration.step_duration == 6.0
+        assert cover._calibration is None
 
     @pytest.mark.asyncio
-    async def test_tilt_startup_delay_open_direction_falls_back_to_close_time(
-        self, make_cover
+    @pytest.mark.parametrize("direction", ["open", "close"])
+    @pytest.mark.parametrize("missing", ["_tilting_time_open", "_tilting_time_close"])
+    async def test_tilt_startup_delay_refused_with_one_tilt_time(
+        self, make_cover, missing, direction
     ):
-        """Line 152: travel_time = self._tilting_time_open or self._tilting_time_close.
-
-        When direction=open but only tilting_time_close is configured,
-        the fallback branch should use tilting_time_close.
-        """
         cover = make_cover(tilt_time_close=10.0, tilt_time_open=10.0)
-        # Clear open time so the `or` fallback fires
-        cover._tilting_time_open = None
-        with patch.object(cover, "async_write_ha_state"):
+        setattr(cover, missing, None)
+        with pytest.raises(HomeAssistantError, match="Tilt time"):
             await cover.start_calibration(
-                attribute="tilt_startup_delay", timeout=300.0, direction="open"
+                attribute="tilt_startup_delay", timeout=300.0, direction=direction
             )
-        assert cover._calibration is not None
-        assert cover._calibration.automation_task is not None
-        # tilt: 3 steps, total_divisions=5, step_pct=20, step_duration=10.0*20/100=2.0
-        assert cover._calibration.step_duration == 2.0
+        assert cover._calibration is None
 
 
 class TestSetPositionAfterCalibrationNoTilt:

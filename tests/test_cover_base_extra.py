@@ -16,6 +16,7 @@ from homeassistant.components.cover import (
     CoverEntityFeature,
 )
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_SWITCH,
@@ -1229,6 +1230,43 @@ class TestUnconfiguredEntity:
         cover._travel_time_close = None
         cover._travel_time_open = None
         assert cover.available is False
+
+    @pytest.mark.parametrize(
+        "close_time,open_time", [(None, 5.0), (5.0, None)], ids=["no_close", "no_open"]
+    )
+    def test_one_travel_time_not_available(self, make_cover, close_time, open_time):
+        """Half-calibrated: unavailable until both directions are measured."""
+        cover = make_cover(travel_time_close=close_time, travel_time_open=open_time)
+        assert cover.available is False
+        assert "travel times" in cover._get_missing_configuration()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "command,kwargs",
+        [
+            ("async_close_cover_tilt", {}),
+            ("async_open_cover_tilt", {}),
+            ("async_set_cover_tilt_position", {"tilt_position": 30}),
+        ],
+    )
+    async def test_tilt_command_with_one_travel_time_is_refused(
+        self, make_cover, command, kwargs
+    ):
+        """Sequential tilt plans its travel leg, which needs both travel times."""
+        cover = make_cover(
+            travel_time_close=None,
+            travel_time_open=5.0,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="sequential",
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            pytest.raises(HomeAssistantError, match="missing travel times"),
+        ):
+            await getattr(cover, command)(**kwargs)
 
     def test_pulse_mode_without_stop_switch_not_available(self, make_cover):
         """Pulse mode cover without stop switch is not available."""

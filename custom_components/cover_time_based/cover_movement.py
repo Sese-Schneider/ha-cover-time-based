@@ -1004,7 +1004,7 @@ class MovementMixin(_MixinBase):
         missing = []
         if not self._are_entities_configured():
             missing.append(self._missing_entities_label)
-        if self._travel_time_close is None and self._travel_time_open is None:
+        if self._travel_time_close is None or self._travel_time_open is None:
             missing.append("travel times")
         return missing
 

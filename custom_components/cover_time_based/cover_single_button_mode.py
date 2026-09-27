@@ -319,8 +319,7 @@ class SingleButtonModeCover(SwitchCoverTimeBased):
             and _LIMIT_WHILE_MOVING.get(self._phase) == position
         ):
             self._phase = _PHASE_AT_ENDPOINT[position]
-        if self._open_switch_entity_id:
-            await self._release_button()
+        await self._release_button()
 
     # --- the mode contract --------------------------------------------
     async def _send_open(self) -> None:

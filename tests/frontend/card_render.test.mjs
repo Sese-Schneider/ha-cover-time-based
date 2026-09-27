@@ -1614,3 +1614,46 @@ test("max_tilt_allowed_position ha-input @change with empty string sets field to
   expect(updates.length).toBeGreaterThan(0);
   expect(updates[0]).toMatchObject({ max_tilt_allowed_position: null });
 });
+
+// ---------------------------------------------------------------------------
+// Startup-delay calibration steps the axis tracker, which needs both of its
+// times (issue #245)
+// ---------------------------------------------------------------------------
+
+const startupDelayDisabled = (card, key) =>
+  card.shadowRoot.querySelector(`#cal-attribute option[value="${key}"]`).disabled;
+
+test.each([
+  [{ travel_time_open: 20 }, true],
+  [{ travel_time_close: 20 }, true],
+  [{ travel_time_close: 20, travel_time_open: 20 }, false],
+])("travel_startup_delay with %o: disabled=%s", async (times, disabled) => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg(times),
+    activeTab: "calibration",
+    knownPosition: "open",
+  });
+  expect(startupDelayDisabled(card, "travel_startup_delay")).toBe(disabled);
+});
+
+test.each([
+  [{ tilt_time_open: 5 }, true],
+  [{ tilt_time_close: 5 }, true],
+  [{ tilt_time_close: 5, tilt_time_open: 5 }, false],
+])("tilt_startup_delay with %o: disabled=%s", async (times, disabled) => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: switchCfg({
+      tilt_mode: "dual_motor",
+      tilt_open_switch: "switch.to",
+      tilt_close_switch: "switch.tc",
+      travel_time_close: 20,
+      travel_time_open: 20,
+      ...times,
+    }),
+    activeTab: "calibration",
+    knownPosition: "closed",
+  });
+  expect(startupDelayDisabled(card, "tilt_startup_delay")).toBe(disabled);
+});

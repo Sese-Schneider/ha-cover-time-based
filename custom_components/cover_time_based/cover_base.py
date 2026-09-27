@@ -1709,11 +1709,13 @@ class CoverTimeBased(
 
     async def async_close_cover_tilt(self, **kwargs):
         """Tilt the cover fully closed."""
+        self._require_configured()
         self._log("async_close_cover_tilt")
         await self._async_move_tilt_to_endpoint(target=0)
 
     async def async_open_cover_tilt(self, **kwargs):
         """Tilt the cover fully open."""
+        self._require_configured()
         self._log("async_open_cover_tilt")
         await self._async_move_tilt_to_endpoint(target=100)
 
@@ -1727,6 +1729,7 @@ class CoverTimeBased(
 
     async def async_set_cover_tilt_position(self, **kwargs):
         """Move the cover tilt to a specific position."""
+        self._require_configured()
         if ATTR_TILT_POSITION in kwargs:
             position = kwargs[ATTR_TILT_POSITION]
             self._log("async_set_cover_tilt_position: %d", position)

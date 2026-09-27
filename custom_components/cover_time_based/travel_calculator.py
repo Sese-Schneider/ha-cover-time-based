@@ -49,7 +49,10 @@ class TravelCalculator:
     )
 
     def __init__(
-        self, travel_time_down: float, travel_time_up: float, name: str = ""
+        self,
+        travel_time_down: float | None,
+        travel_time_up: float | None,
+        name: str = "",
     ) -> None:
         """Initialize TravelCalculator.
 
@@ -262,9 +265,7 @@ class TravelCalculator:
                 and self.travel_direction == TravelStatus.DIRECTION_UP
             )
 
-        # A stopped tracker (target == position, no direction) has nothing left to
-        # travel, and must not need the travel time: one may still be uncalibrated.
-        if relative_position == 0 or position_reached_or_exceeded(relative_position):
+        if position_reached_or_exceeded(relative_position):
             return self._travel_to_position
 
         remaining_travel_time = self.calculate_travel_time(
@@ -292,9 +293,13 @@ class TravelCalculator:
     def calculate_travel_time(self, from_position: int, to_position: int) -> float:
         """Calculate time to travel from one position to another."""
         travel_range = to_position - from_position
+        if travel_range == 0:
+            return 0.0
         # Positive range = opening (position increasing), use travel_time_up
         # Negative range = closing (position decreasing), use travel_time_down
-        travel_time_full = (
-            self.travel_time_up if travel_range > 0 else self.travel_time_down
-        )
+        opening = travel_range > 0
+        travel_time_full = self.travel_time_up if opening else self.travel_time_down
+        if travel_time_full is None:
+            direction = "opening" if opening else "closing"
+            raise ValueError(f"{direction} travel time is not set")
         return travel_time_full * abs(travel_range) / 100
