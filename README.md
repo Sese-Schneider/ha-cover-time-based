@@ -459,7 +459,7 @@ tilt motor. (A wrapped cover with its own tilt does not need these switches.)
   that drive the tilt motor.
 - **Safe tilt position**: the tilt moves here before the cover travels. Defaults
   to **100**, fully open.
-- **Max tilt allowed position** _(optional)_: tilt is only allowed when the cover
+- **Max tilt-allowed position** _(optional)_: tilt is only allowed when the cover
   is at or below this position, where 0 is closed and 100 is open.
 
 How a physical switch or automation firing the tilt relay is interpreted under

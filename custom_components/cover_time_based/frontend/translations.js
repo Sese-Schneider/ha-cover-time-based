@@ -69,7 +69,7 @@ export const EN = {
   "tilt_motor.stop_switch_pulse": "Tilt stop switch or script",
   "tilt_motor.safe_position": "Safe tilt position",
   "tilt_motor.safe_position_helper": "Tilt moves here before travel (100 = fully open)",
-  "tilt_motor.max_allowed_position": "Max tilt allowed position (optional)",
+  "tilt_motor.max_allowed_position": "Max tilt-allowed position (optional)",
   "tilt_motor.max_allowed_helper":
     "Tilt only allowed when cover position is at or below this value (0 = closed, 100 = open)",
   "tilt.close_includes_tilt": "Close cover also closes slats",
@@ -246,7 +246,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Posição de inclinação segura",
     "tilt_motor.safe_position_helper":
       "A inclinação move-se para aqui antes do deslocamento (100 = totalmente aberto)",
-    "tilt_motor.max_allowed_position": "Posição máxima permitida de inclinação (opcional)",
+    "tilt_motor.max_allowed_position": "Posição máxima que permite inclinação (opcional)",
     "tilt_motor.max_allowed_helper":
       "A inclinação só é permitida quando a posição do estore está neste valor ou abaixo (0 = fechado, 100 = aberto)",
     "tilt.close_includes_tilt": "Fechar estore também fecha lâminas",
@@ -423,7 +423,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Bezpieczna pozycja nachylenia",
     "tilt_motor.safe_position_helper":
       "Nachylenie przesuwa się tu przed ruchem (100 = w pełni otwarte)",
-    "tilt_motor.max_allowed_position": "Maks. dozwolona pozycja nachylenia (opcjonalna)",
+    "tilt_motor.max_allowed_position": "Maks. pozycja pozwalająca na nachylenie (opcjonalna)",
     "tilt_motor.max_allowed_helper":
       "Nachylenie dozwolone tylko gdy pozycja rolety wynosi tyle lub mniej (0 = zamknięta, 100 = otwarta)",
     "tilt.close_includes_tilt": "Zamknięcie rolety zamyka również lamele",
@@ -599,7 +599,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Sichere Neigungsposition",
     "tilt_motor.safe_position_helper":
       "Die Neigung fährt vor der Fahrt hierhin (100 = vollständig geöffnet)",
-    "tilt_motor.max_allowed_position": "Maximal erlaubte Neigungsposition (optional)",
+    "tilt_motor.max_allowed_position": "Höchste Position mit erlaubter Neigung (optional)",
     "tilt_motor.max_allowed_helper":
       "Neigen ist nur erlaubt, wenn die Rollladenposition auf oder unter diesem Wert liegt (0 = geschlossen, 100 = offen)",
     "tilt.close_includes_tilt": "Schließen des Rollladens schließt auch die Lamellen",
@@ -779,7 +779,8 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Posizione di inclinazione sicura",
     "tilt_motor.safe_position_helper":
       "L'inclinazione si porta qui prima della corsa (100 = completamente aperta)",
-    "tilt_motor.max_allowed_position": "Posizione di inclinazione massima consentita (facoltativa)",
+    "tilt_motor.max_allowed_position":
+      "Posizione massima con inclinazione consentita (facoltativa)",
     "tilt_motor.max_allowed_helper":
       "L'inclinazione è consentita solo quando la posizione della tapparella è pari o inferiore a questo valore (0 = chiusa, 100 = aperta)",
     "tilt.close_includes_tilt": "La chiusura della tapparella chiude anche le lamelle",
@@ -954,7 +955,8 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Veilige kantelpositie",
     "tilt_motor.safe_position_helper":
       "De kanteling gaat hierheen vóór de beweging (100 = volledig open)",
-    "tilt_motor.max_allowed_position": "Maximaal toegestane kantelpositie (optioneel)",
+    "tilt_motor.max_allowed_position":
+      "Maximale positie waarbij kantelen is toegestaan (optioneel)",
     "tilt_motor.max_allowed_helper":
       "Kantelen is alleen toegestaan wanneer de rolluikpositie op of onder deze waarde ligt (0 = gesloten, 100 = open)",
     "tilt.close_includes_tilt": "Rolluik sluiten sluit ook de lamellen",
@@ -1131,7 +1133,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Position d'inclinaison de sécurité",
     "tilt_motor.safe_position_helper":
       "L'inclinaison se place ici avant la course (100 = complètement ouverte)",
-    "tilt_motor.max_allowed_position": "Position d'inclinaison maximale autorisée (facultatif)",
+    "tilt_motor.max_allowed_position": "Position maximale autorisant l'inclinaison (facultatif)",
     "tilt_motor.max_allowed_helper":
       "L'inclinaison n'est autorisée que lorsque la position du volet est égale ou inférieure à cette valeur (0 = fermé, 100 = ouvert)",
     "tilt.close_includes_tilt": "Fermer le volet ferme aussi les lames",
@@ -1307,7 +1309,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Posición de inclinación segura",
     "tilt_motor.safe_position_helper":
       "La inclinación se mueve aquí antes del recorrido (100 = totalmente abierta)",
-    "tilt_motor.max_allowed_position": "Posición máxima de inclinación permitida (opcional)",
+    "tilt_motor.max_allowed_position": "Posición máxima que permite la inclinación (opcional)",
     "tilt_motor.max_allowed_helper":
       "La inclinación solo se permite cuando la posición de la persiana es igual o inferior a este valor (0 = cerrada, 100 = abierta)",
     "tilt.close_includes_tilt": "Cerrar la persiana también cierra las lamas",
@@ -1486,7 +1488,7 @@ export const TRANSLATIONS = {
     "tilt_motor.safe_position": "Posició d'inclinació segura",
     "tilt_motor.safe_position_helper":
       "La inclinació es mou aquí abans del recorregut (100 = totalment oberta)",
-    "tilt_motor.max_allowed_position": "Posició màxima d'inclinació permesa (opcional)",
+    "tilt_motor.max_allowed_position": "Posició màxima que permet la inclinació (opcional)",
     "tilt_motor.max_allowed_helper":
       "La inclinació només es permet quan la posició de la persiana és igual o inferior a aquest valor (0 = tancada, 100 = oberta)",
     "tilt.close_includes_tilt": "Tancar la persiana també tanca les lamel·les",
@@ -1664,7 +1666,7 @@ export const TRANSLATIONS = {
     "tilt_motor.stop_switch_pulse": "Spínač nebo skript zastavení náklonu",
     "tilt_motor.safe_position": "Bezpečná pozice náklonu",
     "tilt_motor.safe_position_helper": "Náklon se sem přesune před pohybem (100 = plně otevřeno)",
-    "tilt_motor.max_allowed_position": "Maximální povolená pozice náklonu (volitelné)",
+    "tilt_motor.max_allowed_position": "Maximální pozice, při které je povolen náklon (volitelné)",
     "tilt_motor.max_allowed_helper":
       "Náklon je povolen pouze tehdy, když je pozice rolety na této hodnotě nebo pod ní (0 = zavřeno, 100 = otevřeno)",
     "tilt.close_includes_tilt": "Zavření rolety zavře i lamely",
@@ -1838,7 +1840,7 @@ export const TRANSLATIONS = {
     "tilt_motor.stop_switch_pulse": "Prekidač ili skripta za zaustavljanje nagiba",
     "tilt_motor.safe_position": "Bezbedna pozicija nagiba",
     "tilt_motor.safe_position_helper": "Nagib se pomera ovde pre kretanja (100 = potpuno otvoreno)",
-    "tilt_motor.max_allowed_position": "Najveća dozvoljena pozicija nagiba (opciono)",
+    "tilt_motor.max_allowed_position": "Najveća pozicija na kojoj je dozvoljen nagib (opciono)",
     "tilt_motor.max_allowed_helper":
       "Nagib je dozvoljen samo kada je pozicija roletne na ovoj vrednosti ili ispod nje (0 = zatvoreno, 100 = otvoreno)",
     "tilt.close_includes_tilt": "Zatvaranje roletne zatvara i lamele",
@@ -1940,6 +1942,178 @@ export const TRANSLATIONS = {
     "hints.none.travel_time_close": "Kliknite na Završi kada je roletna potpuno zatvorena.",
     "hints.none.travel_time_open": "Kliknite na Završi kada je roletna potpuno otvorena.",
     "hints.min_movement_time": "Kliknite na Završi čim primetite da se roletna kreće.",
+  },
+  he: {
+    header: "הגדרות Cover Time Based",
+    loading: "טוען...",
+    saving: "שומר...",
+    save_failed: "השמירה נכשלה — הערך שוחזר",
+    confirm_cancel_calibration: "כיול מתבצע כעת. לבטל אותו ולהמשיך?",
+    create_new: "+ יצירת ישות תריס חדשה",
+    yaml_warning:
+      "ישות זו משתמשת בתצורת YAML ולא ניתן להגדיר אותה מכרטיס זה. יש לעבור לממשק המשתמש: הגדרות ← מכשירים ושירותים ← עוזרים ← יצירת עוזר ← Cover Time Based.",
+    load_failed: "טעינת התצורה נכשלה. יש לנסות שוב.",
+    admin_required: "כרטיס זה דורש חשבון מנהל. יש להתחבר כמנהל כדי להגדיר תריסים.",
+    "tabs.device": "מכשיר",
+    "tabs.calibration": "כיול",
+    "control_mode.label": "מצב שליטה",
+    "control_mode.wrapped": "עטיפת ישות תריס קיימת",
+    "control_mode.switch": "מתג (מחזיק מצב)",
+    "control_mode.pulse": "פולס (רגעי)",
+    "control_mode.toggle": "החלפת מצב (אותו לחצן)",
+    "control_mode.toggle_opposite": "החלפת מצב (לחצן נגדי)",
+    "control_mode.single_button": "לחצן יחיד (מחזורי) (בטא)",
+    "control_mode.pulse_time": "משך הפולס",
+    "entities.cover_entity": "ישות תריס",
+    "position_reporting.label": "דיווח מיקום",
+    "position_reporting.reliable": "משוב מיקום אמין",
+    "position_reporting.reliable_helper":
+      "התריס העטוף מדווח על מיקום אמין ומגיע לנקודות הקצה האמיתיות שלו, פתוח וסגור. ברירת המחדל — הבחירה הנכונה, אלא אם המיקום שבמעקב סוטה מהמקום שבו התריס נמצא בפועל.",
+    "position_reporting.unreliable": "מיקום לא אמין — מעקב לפי זמן",
+    "position_reporting.unreliable_helper":
+      "מעקב אחר המיקום לפי זמן בלבד, תוך התעלמות מהמיקום שהתריס העטוף מדווח. יש להפעיל אפשרות זו אם התריס העטוף מדווח על מיקום לא אמין.",
+    "position_reporting.no_endpoints": "אין נקודות קצה אמיתיות — מדווח פתוח/סגור בעצירה",
+    "position_reporting.no_endpoints_helper":
+      "לתריסים ללא משוב מיקום, שמדווחים פתוח/סגור כשהמנוע נעצר באמצע התנועה ולא רק בנקודות הקצה הפיזיות. דיווח על מצב סגור עוצר את המעקב במיקום המחושב, במקום לקפוץ ל-0%.",
+    "position_reporting.command_echo": "המצב משקף את הפקודה האחרונה",
+    "position_reporting.command_echo_helper":
+      "יש להפעיל עבור תריסים (למשל חלק מתריסי Tuya) שהמצב (פתוח/סגור/לא ידוע) שהם מדווחים הוא הד של הפקודה ולא נקודת קצה אמיתית — הם אינם מדווחים על מעבר של פתיחה/סגירה ואינם מדווחים מיקום. המצב מטופל כפקודת פתיחה/סגירה/עצירה, והמעקב אחר המיקום נעשה לפי זמן.",
+    "position_reporting.ignore_all": "התעלמות מכל דיווחי המכשיר",
+    "position_reporting.ignore_all_helper":
+      "המצב והמיקום של המכשיר אינם אמינים כלל. מתעלמים מכל מה שהוא מדווח ועוקבים אחר המיקום אך ורק לפי טיימרי הפתיחה/סגירה. Home Assistant הופך לדרך היחידה להזיז את התריס — הפעלה באמצעות מתג קיר או שלט רחוק אינה נכללת במעקב.",
+    "position_reporting.docs_link": "למידע נוסף",
+    "entities.force_time_based_position": "אילוץ מיקום מבוסס זמן",
+    "entities.force_time_based_position_helper":
+      "כברירת מחדל, אם התריס העטוף תומך בהגדרת מיקום, פקודת הגדרת המיקום נשלחת אליו ישירות. יש להפעיל אפשרות זו כדי לשלוט בו במקום זאת באמצעות פקודות פתיחה/סגירה/עצירה מתוזמנות, תוך התעלמות מהתמיכה המובנית שלו בהגדרת מיקום.",
+    "entities.invert": "היפוך מיקום",
+    "entities.invert_helper":
+      "היפוך ציר המיקום: מדווח 100 פחות המיקום של התריס העטוף, ומחליף בין פתיחה לסגירה. לשימוש בכיסויים שפועלים הפוך, למשל סוכך שהישות העטופה שלו מדווחת פתוח = פרוס. ציר המיקום בלבד; לוגיקת ההטיה אינה משתנה — מיועד לכיסויים עם מיקום בלבד (סוככים/תריסים), לא לתריסי רפפות עם הטיה.",
+    "entities.switch_entities": "ישויות מתג",
+    "entities.open_switch": "מתג פתיחה",
+    "entities.close_switch": "מתג סגירה",
+    "entities.stop_switch": "מתג עצירה",
+    "entities.switch_entities_pulse": "ישויות מתג / סקריפט",
+    "entities.open_switch_pulse": "מתג או סקריפט לפתיחה",
+    "entities.close_switch_pulse": "מתג או סקריפט לסגירה",
+    "entities.stop_switch_pulse": "מתג או סקריפט לעצירה",
+    "entities.button_or_script": "לחצן או סקריפט",
+    "tilt.label": "מצב הטיה",
+    "tilt.none": "לא נתמך",
+    "tilt.sequential_close": "נסגר ואז מטה את הרפפות לסגירה",
+    "tilt.sequential_open": "נסגר ואז מטה את הרפפות לפתיחה",
+    "tilt.dual_motor": "מנוע הטיה נפרד",
+    "tilt.inline": "הטיה יחד עם התנועה",
+    "tilt_motor.label": "מנוע הטיה",
+    "tilt_motor.open_switch": "מתג פתיחת הטיה",
+    "tilt_motor.close_switch": "מתג סגירת הטיה",
+    "tilt_motor.stop_switch": "מתג עצירת הטיה",
+    "tilt_motor.label_pulse": "מנוע הטיה (מתג או סקריפט)",
+    "tilt_motor.open_switch_pulse": "מתג או סקריפט לפתיחת הטיה",
+    "tilt_motor.close_switch_pulse": "מתג או סקריפט לסגירת הטיה",
+    "tilt_motor.stop_switch_pulse": "מתג או סקריפט לעצירת הטיה",
+    "tilt_motor.safe_position": "מיקום הטיה בטוח",
+    "tilt_motor.safe_position_helper": "ההטיה עוברת למיקום זה לפני התנועה (100 = פתוח לגמרי)",
+    "tilt_motor.max_allowed_position": "מיקום מרבי שבו מותרת הטיה (אופציונלי)",
+    "tilt_motor.max_allowed_helper":
+      "הטיה מותרת רק כשמיקום התריס שווה לערך זה או נמוך ממנו (0 = סגור, 100 = פתוח)",
+    "tilt.close_includes_tilt": "סגירת התריס סוגרת גם את הרפפות",
+    "tilt.close_includes_tilt_helper": "בעת סגירה, הרפפות מוטות לסגירה בסוף התנועה",
+    "assumed_state.label": "מצב משוער",
+    "assumed_state.helper":
+      "כשהאפשרות מופעלת, Home Assistant מתייחס למיקום כמשוער ומשאיר את פקדי הפתיחה והסגירה פעילים. יש לכבות אותה אם אפשר לסמוך על החישוב מבוסס הזמן ורצוי שהממשק יציג באפור פעולות לא זמינות (למשל סגירה כשהתריס כבר סגור).",
+    "relay_reports_off.label": "הממסר מדווח על הכיבוי שלו",
+    "relay_reports_off.helper":
+      "יש להשאיר מופעל עבור ממסרי החלפת מצב רגילים, שנכבים מעצמם לאחר הפולס ומדווחים על כך. יש לכבות עבור מודולי פולס שמנוהלים בחומרה (למשל Aqara T2), שמפיקים את הפולס באופן פנימי אך לעולם אינם מדווחים כשהם נכבים, כך שישות המתג נשארת תקועה במצב פועל. כשהאפשרות כבויה, השילוב שולח פקודת ON אחת בלבד לכל לחיצה ולעולם לא OFF — כך שכל לחיצה היא הפעלה נקייה אחת בדיוק, ללא פקודות כפולות.",
+    "send_endpoint_stop.label": "שליחת אות עצירה בנקודות הקצה",
+    "send_endpoint_stop.helper":
+      "כשהתריס מגיע לפתיחה מלאה או לסגירה מלאה, נשלח פולס העצירה. יש להשאיר מופעל עבור בקרים שממשיכים לפעול עד שהם מקבלים פקודת עצירה (אחרת התריס נתקע והלחצנים הפיזיים מפסיקים להגיב). יש לכבות אם המנוע עוצר בעצמו בקצוות ועצירה נוספת מזיזה אותו למיקום מוגדר מראש/מועדף.",
+    "force_endpoint_redrive.label": "תמיד לשלוח שוב פתיחה/סגירה בנקודות הקצה",
+    "force_endpoint_redrive.helper":
+      "לתריסים ללא משוב מיקום שאפשר להזיז גם בשלט רחוק חיצוני, כך ש-Home Assistant עלול לחשוב בטעות שהם כבר פתוחים או סגורים לגמרי. כשהאפשרות מופעלת, פקודת פתיחה או סגירה מופעלת תמיד למשך זמן התנועה המלא, גם אם Home Assistant חושב שהתריס כבר שם — וכך מובטח שהפקודה מגיעה למנוע. יש להשאיר כבוי עבור תריסים שמדווחים על המיקום שלהם.",
+    "wait_for_relay_feedback.label": "המתנה לאישור הממסר לפני המעקב",
+    "wait_for_relay_feedback.helper":
+      "מפעיל את טיימר המיקום כשהממסר מדווח שהוא הופעל, במקום ברגע שליחת הפקודה. ברשת Zigbee/Z-Wave איטית או רדומה הפקודה עשויה להגיע לממסר רק אחרי כמה שניות; בלי אפשרות זו, העיכוב הזה נספר כתנועה והמיקום שבמעקב מקדים את התריס. יש להשאיר כבוי, אלא אם המיקום סוטה בתריסים שהממסר שלהם מגיב לאט.",
+    "skip_stop_when_idle.label": "לא לשלוח עצירה כשהתריס כבר עצור",
+    "skip_stop_when_idle.helper":
+      'לתריסים עם מיקום מועדף "my" בחומרה (למשל Somfy RTS): לחיצה על עצירה כשהתריס כבר עצור מזיזה אותו למיקום המועדף. כשהאפשרות מופעלת, Home Assistant אינו מעביר את פקודת העצירה כשהתריס כבר עצור, כך שהוא נשאר במקומו. יש להשאיר כבוי כדי לשמור על ההתנהגות הנוכחית.',
+    "recalibrate_before_position.label": "פתיחה מלאה לפני מעבר למיקום (בטא)",
+    "recalibrate_before_position.helper":
+      "לתריסים ללא משוב מיקום שגם שלט רחוק יכול להזיז. פותח את התריס לגמרי לפני כל פקודת מיקום, כך שהתנועה מתחילה ממיקום ידוע ולא מהערכה שסטתה. מכפיל בערך את התנועה של כל הזזה, ובהטיה משולבת או רציפה הוא מזיז את התריס כשמכוונים את הרפפות.",
+    "resync.label": "סנכרון מחדש",
+    "resync.helper":
+      "מדווח לשילוב על המיקום האמיתי של התריס לאחר שהוזז בלחצן הפיזי או בשלט רחוק RF. פעולה זו מעגנת מחדש את המעקב ועוצרת את המנוע אם Home Assistant עדיין מפעיל אותו; היא לעולם אינה מפעילה מנוע.",
+    more_info: "מידע נוסף",
+    "timing.travel_attribute_header": "תכונת תנועה",
+    "timing.tilt_attribute_header": "תכונת הטיה",
+    "timing.value_header": "ערך",
+    "timing.not_set": "לא מוגדר",
+    "timing.travel_time_close": "זמן תנועה (סגירה)",
+    "timing.travel_time_open": "זמן תנועה (פתיחה)",
+    "timing.travel_startup_delay": "עיכוב התנעה של התנועה",
+    "timing.tilt_time_close": "זמן הטיה (סגירה)",
+    "timing.tilt_time_open": "זמן הטיה (פתיחה)",
+    "timing.tilt_startup_delay": "עיכוב התנעה של ההטיה",
+    "timing.min_movement_time": "זמן תנועה מינימלי",
+    "timing.endpoint_runon_time": "זמן המשך תנועה בנקודת הקצה",
+    "position.label": "מיקום נוכחי",
+    "position.helper": "יש להזיז את התריס לנקודת קצה ידועה, ואז להגדיר את המיקום.",
+    "position.unknown": "לא ידוע",
+    "position.open": "פתוח לגמרי",
+    "position.closed": "סגור לגמרי",
+    "position.closed_tilt_open": "סגור לגמרי, הטיה פתוחה",
+    "position.closed_tilt_closed": "סגור לגמרי, הטיה סגורה",
+    "calibration.label": "כיול תזמון",
+    "calibration.attribute_label": "תכונה",
+    "calibration.start": "התחלה",
+    "calibration.active": "כיול פעיל",
+    "calibration.step": "שלב {step}",
+    "calibration.final_step": "שלב אחרון",
+    "calibration.cancel": "ביטול",
+    "calibration.finish": "סיום",
+    "calibration.set_position_first": "יש להגדיר מיקום כדי להתחיל את הכיול.",
+    "controls.cover_label": "תריס",
+    "controls.tilt_label": "הטיה",
+    "controls.open": "פתיחה",
+    "controls.stop": "עצירה",
+    "controls.close": "סגירה",
+    "controls.tilt_open": "פתיחת הטיה",
+    "controls.tilt_stop": "עצירת הטיה",
+    "controls.tilt_close": "סגירת הטיה",
+    "hints.sequential_close.travel_time_close":
+      "יש להתחיל כשהתריס פתוח לגמרי. יש ללחוץ על סיום כשהתריס סגור לגמרי, לפני שמתחילה הטיית הרפפות.",
+    "hints.sequential_close.travel_time_open":
+      "יש להתחיל כשהתריס סגור והרפפות פתוחות. יש ללחוץ על סיום כשהתריס פתוח לגמרי.",
+    "hints.sequential_close.tilt_time_close":
+      "יש להתחיל כשהתריס סגור אך הרפפות פתוחות. יש ללחוץ על סיום כשהרפפות סגורות לגמרי.",
+    "hints.sequential_close.tilt_time_open":
+      "יש להתחיל כשהתריס והרפפות סגורים. יש ללחוץ על סיום כשהרפפות פתוחות.",
+    "hints.sequential_open.travel_time_close":
+      "יש להתחיל כשהתריס פתוח לגמרי והרפפות סגורות. יש ללחוץ על סיום כשהתריס סגור לגמרי, לפני שמתחילה הטיית הרפפות לפתיחה.",
+    "hints.sequential_open.travel_time_open":
+      "יש להתחיל כשהתריס סגור והרפפות סגורות. יש ללחוץ על סיום כשהתריס פתוח לגמרי.",
+    "hints.sequential_open.tilt_time_close":
+      "יש להתחיל כשהתריס סגור אך הרפפות פתוחות. יש ללחוץ על סיום כשהרפפות סגורות לגמרי.",
+    "hints.sequential_open.tilt_time_open":
+      "יש להתחיל כשהתריס והרפפות סגורים. יש ללחוץ על סיום כשהרפפות פתוחות לגמרי.",
+    "hints.dual_motor.travel_time_close":
+      "יש להתחיל כשהתריס פתוח והרפפות במיקום הבטוח. יש ללחוץ על סיום כשהתריס סגור לגמרי.",
+    "hints.dual_motor.travel_time_open":
+      "יש להתחיל כשהתריס סגור והרפפות במיקום הבטוח. יש ללחוץ על סיום כשהתריס פתוח לגמרי.",
+    "hints.dual_motor.tilt_time_close":
+      "יש להתחיל כשהתריס סגור והרפפות פתוחות. יש ללחוץ על סיום כשהרפפות סגורות לגמרי.",
+    "hints.dual_motor.tilt_time_open":
+      "יש להתחיל כשגם התריס וגם הרפפות סגורים. יש ללחוץ על סיום כשהרפפות פתוחות לגמרי.",
+    "hints.inline.travel_time_close":
+      "יש להתחיל כשגם התריס וגם הרפפות פתוחים לגמרי. יש ללחוץ על סיום כששניהם סגורים לגמרי.",
+    "hints.inline.travel_time_open":
+      "יש להתחיל כשגם התריס וגם הרפפות סגורים לגמרי. יש ללחוץ על סיום כששניהם פתוחים לגמרי.",
+    "hints.inline.tilt_time_close":
+      "יש להתחיל כשהרפפות פתוחות לגמרי. יש ללחוץ על סיום כשהרפפות סגורות לגמרי.",
+    "hints.inline.tilt_time_open":
+      "יש להתחיל כשהרפפות סגורות לגמרי. יש ללחוץ על סיום כשהרפפות פתוחות לגמרי.",
+    "hints.none.travel_time_close": "יש ללחוץ על סיום כשהתריס סגור לגמרי.",
+    "hints.none.travel_time_open": "יש ללחוץ על סיום כשהתריס פתוח לגמרי.",
+    "hints.min_movement_time": "יש ללחוץ על סיום ברגע שמבחינים שהתריס זז.",
   },
 };
 
