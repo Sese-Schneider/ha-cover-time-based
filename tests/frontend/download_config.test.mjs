@@ -6,6 +6,9 @@
  */
 
 import { test, expect, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { makeHass } from "./helpers/hass.mjs";
 import { mountCard, defineHaStubs } from "./helpers/mount.mjs";
 import {
@@ -167,4 +170,107 @@ test.each(["Enter", " "])("the download button responds to %j like a click", asy
     .querySelector(".download-config")
     .dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
   await vi.waitFor(() => expect(captured.filename).toBeDefined());
+});
+
+// ---------------------------------------------------------------------------
+// Pending edits are saved before the download
+// ---------------------------------------------------------------------------
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+test("a pending edit is saved before the download, and the file holds it", async () => {
+  const captured = captureDownload();
+  const hass = hassWith();
+  HTMLAnchorElement.prototype.click.mockImplementation(function () {
+    captured.filename = this.download;
+    captured.callsAtDownload = hass.callWS.mock.calls.map(([msg]) => msg.type);
+  });
+  card = await mountCard(hass, { selectedEntity: "cover.living_room", config: cfg });
+
+  card._updateLocal({ travel_time_open: 30 });
+  card.shadowRoot.querySelector(".download-config").click();
+  await vi.waitFor(() => expect(captured.filename).toBeDefined());
+
+  expect(captured.callsAtDownload).toContain("cover_time_based/update_config");
+  expect(hass.callWS).toHaveBeenCalledWith(
+    expect.objectContaining({ type: "cover_time_based/update_config", travel_time_open: 30 }),
+  );
+  const data = JSON.parse(await captured.blob.text());
+  expect(data.config.travel_time_open).toBe(30);
+});
+
+test("a pending edit the server rejects is left out of the file", async () => {
+  const captured = captureDownload();
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  card = await mountCard(
+    hassWith({
+      "cover_time_based/update_config": () => {
+        throw new Error("rejected");
+      },
+      "cover_time_based/get_config": () => cfg,
+    }),
+    { selectedEntity: "cover.living_room", config: cfg },
+  );
+
+  card._updateLocal({ travel_time_open: 999 });
+  card.shadowRoot.querySelector(".download-config").click();
+  await vi.waitFor(() => expect(captured.blob).toBeDefined());
+
+  const data = JSON.parse(await captured.blob.text());
+  expect(data.config.travel_time_open).toBe(23.4);
+});
+
+test("a save already in flight is waited for before the download", async () => {
+  const captured = captureDownload();
+  const save = deferred();
+  card = await mountCard(hassWith({ "cover_time_based/update_config": () => save.promise }), {
+    selectedEntity: "cover.living_room",
+    config: cfg,
+  });
+
+  card._updateLocal({ travel_time_open: 30 });
+  card._flushAutoSave();
+  card.shadowRoot.querySelector(".download-config").click();
+  await new Promise((r) => setTimeout(r, 20));
+  expect(captured.filename).toBeUndefined();
+
+  save.resolve({});
+  await vi.waitFor(() => expect(captured.filename).toBeDefined());
+});
+
+test("switching covers while the save runs cancels the download", async () => {
+  const captured = captureDownload();
+  const save = deferred();
+  card = await mountCard(hassWith({ "cover_time_based/update_config": () => save.promise }), {
+    selectedEntity: "cover.living_room",
+    config: cfg,
+  });
+
+  card._updateLocal({ travel_time_open: 30 });
+  card.shadowRoot.querySelector(".download-config").click();
+  await new Promise((r) => setTimeout(r, 0));
+  card._selectedEntity = "cover.other";
+  save.resolve({});
+  await new Promise((r) => setTimeout(r, 20));
+
+  expect(captured.filename).toBeUndefined();
+});
+
+test("the download icon is highlighted on hover and keyboard focus", () => {
+  const styles = readFileSync(
+    path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../custom_components/cover_time_based/frontend/card-styles.js",
+    ),
+    "utf8",
+  );
+  expect(styles).toMatch(
+    /\.download-config:hover,\s*\.download-config:focus-visible\s*\{[^}]*\bbackground\s*:/,
+  );
 });

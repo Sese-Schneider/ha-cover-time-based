@@ -270,7 +270,7 @@ class CoverTimeBasedCard extends LitElement {
     if (!this._autoSaveTimer) return;
     clearTimeout(this._autoSaveTimer);
     this._autoSaveTimer = null;
-    this._autoSave(); // reads current _selectedEntity/_config - call BEFORE swapping them
+    this._inFlightSave = this._autoSave(); // reads current _selectedEntity/_config - call BEFORE swapping them
   }
 
   disconnectedCallback() {
@@ -375,7 +375,7 @@ class CoverTimeBasedCard extends LitElement {
       // handler before a switch) fire a duplicate update_config for a save
       // that already went through.
       this._autoSaveTimer = null;
-      this._autoSave();
+      this._inFlightSave = this._autoSave();
     }, 500);
   }
 
@@ -761,8 +761,13 @@ class CoverTimeBasedCard extends LitElement {
 
   async _onDownloadConfig() {
     const entityId = this._selectedEntity;
+    if (!entityId || !this._config || !this.hass) return;
+    // The file records what the server holds: a pending edit is saved first,
+    // and one the server rejects is replaced by the reloaded config.
+    this._flushAutoSave();
+    await this._inFlightSave;
     const config = this._config;
-    if (!entityId || !config || !this.hass) return;
+    if (this._selectedEntity !== entityId || !config) return;
     let integrationVersion;
     try {
       ({ version: integrationVersion } = await this.hass.callWS({
