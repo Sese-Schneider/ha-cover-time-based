@@ -262,7 +262,9 @@ class TravelCalculator:
                 and self.travel_direction == TravelStatus.DIRECTION_UP
             )
 
-        if position_reached_or_exceeded(relative_position):
+        # A stopped tracker (target == position, no direction) has nothing left to
+        # travel, and must not need the travel time: one may still be uncalibrated.
+        if relative_position == 0 or position_reached_or_exceeded(relative_position):
             return self._travel_to_position
 
         remaining_travel_time = self.calculate_travel_time(

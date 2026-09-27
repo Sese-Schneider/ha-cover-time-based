@@ -85,3 +85,33 @@ async def test_removal_mid_calibration_no_stop_pulse_on_toggle_opposite(make_cov
     ]
     assert ("turn_on", "switch.open") not in pulses, pulses
     assert ("turn_on", "switch.close") not in pulses, pulses
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "open_switch,close_switch", [("", ""), ("switch.open", "")], ids=["none", "partial"]
+)
+async def test_removal_sends_nothing_to_an_unset_relay(
+    make_cover, _mock_position_store, open_switch, close_switch
+):
+    """A new cover has no relays until its first card save, which reloads it.
+
+    Home Assistant rejects a service call with an empty entity id, and a
+    removal that raises leaves the entity half-removed (issue #245).
+    """
+    cover = make_cover(
+        open_switch=open_switch,
+        close_switch=close_switch,
+        travel_time_close=None,
+        travel_time_open=None,
+    )
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_will_remove_from_hass()
+
+    targets = [
+        c.args[2].get("entity_id") for c in cover.hass.services.async_call.mock_calls
+    ]
+    assert "" not in targets
+    if open_switch:
+        assert open_switch in targets
+    assert _mock_position_store.async_save.await_args is not None
