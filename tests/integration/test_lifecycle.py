@@ -1,11 +1,12 @@
 """Integration tests for config lifecycle and restart.
 
-Tests correct entity creation from config and position restore on restart.
+Entity creation from config, position restore across restart and reload, and config-entry migrations.
 """
 
 from __future__ import annotations
 
 from homeassistant.components.cover import ATTR_CURRENT_POSITION, CoverEntityFeature
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.entity_component import DATA_INSTANCES
 from pytest_homeassistant_custom_component.common import (
@@ -22,6 +23,26 @@ def _get_cover_entity(hass: HomeAssistant):
     entities = [e for e in entity_comp.entities if e.entity_id == "cover.test_cover"]
     assert entities, "Cover entity not found"
     return entities[0]
+
+
+async def _assert_reload_replaces_cover(hass: HomeAssistant, entry: MockConfigEntry):
+    """Reload the entry as a card save does; return the replacement entity.
+
+    A removal that raises leaves the old entity half-removed, so HA refuses
+    the replacement as a duplicate unique ID and the cover vanishes until a
+    restart (issue #245).
+    """
+    old = _get_cover_entity(hass)
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    # The state and the registry row exist whether or not the replacement was
+    # added, so look for the live entity object.
+    new = _get_cover_entity(hass)
+    assert new is not old
+    return new
 
 
 async def test_config_creates_correct_entity(hass: HomeAssistant, setup_input_booleans):
@@ -96,6 +117,58 @@ async def test_position_restored_on_restart(hass: HomeAssistant, setup_input_boo
 
     # Get the newly created entity
     cover = _get_cover_entity(hass)
+    assert cover.current_cover_position == 50
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_reload_of_a_new_cover_without_relays_keeps_the_entity(
+    hass: HomeAssistant, setup_input_booleans
+):
+    """A cover straight from the config flow has no options, so no relays.
+
+    Its first card save reloads it, and the removal stop must not send
+    homeassistant.turn_off to an empty entity id.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=4, title="Test Cover", data={}, options={}
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    await _assert_reload_replaces_cover(hass, entry)
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_reload_with_only_the_opening_time_keeps_the_entity(
+    hass: HomeAssistant, setup_input_booleans
+):
+    """Calibration saves the opening time before the closing time is measured.
+
+    Removal of a stopped cover at a known position must not need the missing
+    closing time, and the replacement restores that position.
+    """
+    options = {
+        "control_mode": "switch",
+        "open_switch_entity_id": "input_boolean.open_switch",
+        "close_switch_entity_id": "input_boolean.close_switch",
+        "travel_time_open": 30.0,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=4, title="Test Cover", data={}, options=options
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    await _get_cover_entity(hass).set_known_position(position=50)
+    await hass.async_block_till_done()
+
+    cover = await _assert_reload_replaces_cover(hass, entry)
     assert cover.current_cover_position == 50
 
     await hass.config_entries.async_unload(entry.entry_id)

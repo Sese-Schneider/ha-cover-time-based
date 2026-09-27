@@ -1422,6 +1422,12 @@ class CoverTimeBased(
         if self._removed and not stop and service in self._MOTOR_STARTING_SERVICES:
             self._log("_call_service :: %s.%s refused, entity removed", domain, service)
             return
+        # An unset relay or wrapped cover has nothing to switch, and HA rejects an
+        # empty entity id; inside removal that error stops the replacement being
+        # added (#245).
+        if "entity_id" in data and not data["entity_id"]:
+            self._log("_call_service :: %s.%s skipped, no entity set", domain, service)
+            return
         await self.hass.services.async_call(domain, service, data, False)
 
     def _supersede_movement(self) -> None:

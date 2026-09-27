@@ -40,6 +40,21 @@ class TestTravelCalculatorEdgeCases:
         assert calc.current_position() == 50
         assert calc.travel_direction == TravelStatus.STOPPED
 
+    def test_stopped_mid_travel_with_only_one_travel_time(self, mock_time):
+        """stop() mid-travel with only the opening time set leaves a settled position (issue #245).
+
+        Calibration saves one direction's time before the other. Stopped, the
+        target equals the position, so there is nothing left to travel — the
+        missing closing time must not be consulted.
+        """
+        calc = TravelCalculator(travel_time_down=None, travel_time_up=20)
+        calc.set_position(0)
+        calc.start_travel(100)
+        mock_time.monotonic.return_value = 1010.0
+        calc.stop()
+        assert calc.current_position() == 50
+        assert calc.is_traveling() is False
+
     def test_snapshot_restore_round_trips_full_state(self):
         """restore() puts back every field snapshot() captured, so a mutation
         made after the snapshot is fully undone (used for exception-safe

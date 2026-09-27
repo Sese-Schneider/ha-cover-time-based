@@ -7,6 +7,7 @@
 ### Fixes
 
 - **The "Max tilt-allowed position" setting is renamed to say what it limits.** It was labelled "Max tilt allowed position", which read as a limit on how far the slats tilt. It actually limits the cover's own position: tilting is only allowed while the cover is at or below this value. The label is corrected in every language.
+- **New and not-yet-calibrated covers no longer go missing after a save** ([#245](https://github.com/Sese-Schneider/ha-cover-time-based/issues/245)). Two saves crashed while Home Assistant swapped in the updated cover: the first save of a new cover, and saving the first calibration result while the other direction's travel time was still unset. The cover then disappeared until Home Assistant was restarted, and the card's calibration failed with "Entity not found". Pressing Stop mid-move on a cover with only one travel time set also raised an error.
 
 ## 4.12.0 (2026-09-25)
 
