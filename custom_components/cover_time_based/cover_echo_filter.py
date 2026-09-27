@@ -15,6 +15,7 @@ from .const import (
     RELAY_FEEDBACK_PENDING_TIMEOUT,
     RELAY_FEEDBACK_TIMEOUT,
 )
+from .errors import CoverNotConfiguredError
 
 if TYPE_CHECKING:
     from .cover_host import _CoverHost
@@ -551,5 +552,18 @@ class SwitchEchoMixin(_MixinBase):
                 )
             else:
                 await self._handle_external_state_change(entity_id, old_val, new_val)
+        except CoverNotConfiguredError as err:
+            # Caught here, not checked before dispatch, so the mode handler's
+            # relay interlock and position resync still run. Raised from an
+            # event callback, the refusal has no caller to reach and would land
+            # in HA's log as an error.
+            self._log(
+                "_async_switch_state_changed :: %s %s->%s move refused — cover"
+                " not configured (missing %s)",
+                entity_id,
+                old_val,
+                new_val,
+                ", ".join(err.missing),
+            )
         finally:
             self._triggered_externally = False
