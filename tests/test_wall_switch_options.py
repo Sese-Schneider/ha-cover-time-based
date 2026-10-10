@@ -294,3 +294,104 @@ def test_switch_mode_options_in_state_attributes(make_cover):
     assert attr["keep_external_latch"] is True
     assert attr["block_while_external"] is True
     assert attr["external_switch_holding"] is None
+
+
+# ---------------------------------------------------------------------------
+# pause_on_external_reversal
+# ---------------------------------------------------------------------------
+
+_MODE_SLEEP = "custom_components.cover_time_based.cover_switch_mode.sleep"
+_BASE_SLEEP = "custom_components.cover_time_based.cover_base.sleep"
+
+
+async def _external_on(cover, entity_id, *, mode_sleep=None):
+    """Dispatch a wall switch turning ``entity_id`` on, the way HA does."""
+    cover._triggered_externally = True
+    try:
+        with (
+            patch(_CALL_LATER),
+            patch(_MODE_SLEEP, mode_sleep or AsyncMock()),
+            patch(_BASE_SLEEP, AsyncMock()),
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_async_handle_command", new_callable=AsyncMock),
+        ):
+            await cover._handle_external_state_change(entity_id, "off", "on")
+    finally:
+        cover._triggered_externally = False
+
+
+@pytest.mark.asyncio
+async def test_external_reversal_pauses_and_reenergizes(make_cover):
+    """Opening, then the wall switch turns close on: close off, open off,
+    pause, close back on — and the cover tracks closing."""
+    cover = make_cover(pause_on_external_reversal=True)
+    cover.travel_calc.set_position(30)
+    cover.travel_calc.start_travel_up()
+    stub_switches(cover, on=("switch.open", "switch.close"))
+
+    await _external_on(cover, "switch.close")
+
+    assert relay_calls(cover) == [
+        ("turn_off", "switch.close"),
+        ("turn_off", "switch.open"),
+        ("turn_on", "switch.close"),
+    ]
+    assert cover._travel_axis_closing()
+    assert cover._pending_switch.get("switch.close") == 2
+
+
+@pytest.mark.asyncio
+async def test_external_reversal_from_standstill_pauses_before_tracking(make_cover):
+    """A latched opposite relay with the tracker idle still gets the pause."""
+    cover = make_cover(pause_on_external_reversal=True)
+    cover.travel_calc.set_position(100)
+    stub_switches(cover, on=("switch.open", "switch.close"))
+    pause = AsyncMock()
+
+    await _external_on(cover, "switch.close", mode_sleep=pause)
+
+    pause.assert_awaited()
+    assert relay_calls(cover)[-1] == ("turn_on", "switch.close")
+
+
+@pytest.mark.asyncio
+async def test_command_during_the_pause_cancels_the_reenergize(make_cover):
+    cover = make_cover(pause_on_external_reversal=True)
+    cover.travel_calc.set_position(100)
+    stub_switches(cover, on=("switch.open", "switch.close"))
+
+    async def stop_during_pause(_seconds):
+        await cover._send_stop()
+
+    await _external_on(cover, "switch.close", mode_sleep=stop_during_pause)
+
+    assert ("turn_on", "switch.close") not in relay_calls(cover)
+
+
+@pytest.mark.asyncio
+async def test_no_pause_when_opposite_relay_is_off(make_cover):
+    cover = make_cover(pause_on_external_reversal=True)
+    cover.travel_calc.set_position(100)
+    stub_switches(cover, on=("switch.close",))
+
+    await _external_on(cover, "switch.close")
+
+    assert relay_calls(cover) == []
+
+
+@pytest.mark.asyncio
+async def test_option_off_keeps_the_plain_interlock(make_cover):
+    cover = make_cover()
+    cover.travel_calc.set_position(30)
+    cover.travel_calc.start_travel_up()
+    stub_switches(cover, on=("switch.open", "switch.close"))
+
+    await _external_on(cover, "switch.close")
+
+    assert relay_calls(cover) == [("turn_off", "switch.open")]
+
+
+def test_pause_option_in_state_attributes(make_cover):
+    attr = make_cover(pause_on_external_reversal=True).extra_state_attributes
+    assert attr["pause_on_external_reversal"] is True
+    assert make_cover().extra_state_attributes["pause_on_external_reversal"] is False

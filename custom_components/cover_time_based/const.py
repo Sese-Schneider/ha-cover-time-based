@@ -124,6 +124,15 @@ CONF_BLOCK_WHILE_EXTERNAL = "block_while_external"
 DEFAULT_BLOCK_WHILE_EXTERNAL = False
 EVENT_COMMAND_BLOCKED = "cover_time_based_command_blocked"
 
+# Switch mode. When True and a wall switch turns one direction relay ON while
+# the other one is ON, the new relay is switched off again at once and back on
+# after DIRECTION_CHANGE_DELAY, once the interlock has released the old one.
+# Some motors ignore a direction change with no dead time (or with both
+# directions briefly energized) and simply stop; the pause gives them the
+# same stop-settle-drive the integration's own reversals use.
+CONF_PAUSE_ON_EXTERNAL_REVERSAL = "pause_on_external_reversal"
+DEFAULT_PAUSE_ON_EXTERNAL_REVERSAL = False
+
 # When True, movement commands wait for the underlying relay to confirm its state
 # change before proceeding. Behaviour is implemented elsewhere; this constant is
 # the plumbed per-cover config option.

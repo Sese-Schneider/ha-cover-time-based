@@ -526,6 +526,13 @@ export function renderInputEntities(card, c) {
               "block_while_external.helper",
               c.block_while_external === true,
               (e) => card._updateLocal({ block_while_external: e.target.checked }),
+            )}
+            ${renderToggleWithHelp(
+              card,
+              "pause_on_external_reversal.label",
+              "pause_on_external_reversal.helper",
+              c.pause_on_external_reversal === true,
+              (e) => card._updateLocal({ pause_on_external_reversal: e.target.checked }),
             )}`
           : ""
       }

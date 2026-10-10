@@ -644,10 +644,11 @@ test("switch mode shows assumed-state toggle", async () => {
     activeTab: "device",
   });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // Exactly 7 toggles: assumed-state, force-endpoint-redrive,
-  // reverse-on-opposite-command, wait-for-relay-feedback, keep-external-latch
-  // and block-while-external (switch-mode only) and recalibrate-before-position
-  expect(toggles.length).toBe(7);
+  // Exactly 8 toggles: assumed-state, force-endpoint-redrive,
+  // reverse-on-opposite-command, wait-for-relay-feedback, keep-external-latch,
+  // block-while-external and pause-on-external-reversal (switch-mode only) and
+  // recalibrate-before-position
+  expect(toggles.length).toBe(8);
 });
 
 // ---------------------------------------------------------------------------

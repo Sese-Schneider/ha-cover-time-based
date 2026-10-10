@@ -96,6 +96,9 @@ export const EN = {
   "block_while_external.label": "Refuse commands while a wall switch holds the cover",
   "block_while_external.helper":
     "Switch mode. While a wall switch holds a direction relay on, commands from Home Assistant (dashboard, automations, voice assistants) are refused and a cover_time_based_command_blocked event is fired, so an automation can tell you why. Release the switch to control the cover from Home Assistant again.",
+  "pause_on_external_reversal.label": "Pause when a wall switch reverses the cover",
+  "pause_on_external_reversal.helper":
+    "Switch mode. When a wall switch turns one direction on while the other relay is still on, the new relay is switched off at once and back on after a short pause, once the other relay is released. For motors that stop instead of reversing when the direction changes without a pause. The relay ends up on again, in step with the wall switch.",
   "wait_for_relay_feedback.label": "Wait for relay confirmation before tracking",
   "wait_for_relay_feedback.helper":
     "Starts the position timer when the relay reports it switched on, instead of the moment the command is sent. On a slow or cold Zigbee/Z-Wave mesh the command can take seconds to reach the relay; without this, that delay is counted as travel and the tracked position runs ahead of the cover. Leave off unless the position drifts on covers whose relay responds slowly.",
@@ -286,6 +289,9 @@ export const TRANSLATIONS = {
       "Recusar comandos enquanto um interruptor de parede segura o estore",
     "block_while_external.helper":
       "Modo interruptor. Enquanto um interruptor de parede mantém um relé de direção ligado, os comandos do Home Assistant (painel, automatizações, assistentes de voz) são recusados e é disparado um evento cover_time_based_command_blocked, para que uma automatização possa explicar o motivo. Solte o interruptor para voltar a controlar o estore pelo Home Assistant.",
+    "pause_on_external_reversal.label": "Pausar quando um interruptor de parede inverte o estore",
+    "pause_on_external_reversal.helper":
+      "Modo interruptor. Quando um interruptor de parede liga um sentido enquanto o outro relé ainda está ligado, o novo relé é desligado de imediato e volta a ligar após uma pausa curta, depois de o outro relé ser libertado. Para motores que param em vez de inverter quando o sentido muda sem pausa. O relé fica de novo ligado, em sintonia com o interruptor.",
     "wait_for_relay_feedback.label": "Aguardar confirmação do relé antes de rastrear",
     "wait_for_relay_feedback.helper":
       "Inicia o temporizador de posição quando o relé reporta que ligou, em vez do momento em que o comando é enviado. Numa malha Zigbee/Z-Wave lenta ou fria, o comando pode demorar segundos a chegar ao relé; sem esta opção, esse atraso é contado como deslocamento e a posição rastreada fica à frente do estore. Deixe inativo, a menos que a posição desvie em estores cujo relé responde lentamente.",
@@ -473,6 +479,9 @@ export const TRANSLATIONS = {
     "block_while_external.label": "Odrzucaj polecenia, gdy włącznik ścienny trzyma roletę",
     "block_while_external.helper":
       "Tryb przełącznika. Dopóki włącznik ścienny trzyma włączony przekaźnik kierunku, polecenia z Home Assistant (panel, automatyzacje, asystenci głosowi) są odrzucane i wywoływane jest zdarzenie cover_time_based_command_blocked, aby automatyzacja mogła wyjaśnić przyczynę. Zwolnij włącznik, aby znów sterować roletą z Home Assistant.",
+    "pause_on_external_reversal.label": "Pauza, gdy włącznik ścienny odwraca roletę",
+    "pause_on_external_reversal.helper":
+      "Tryb przełącznika. Gdy włącznik ścienny włącza jeden kierunek, a przekaźnik drugiego jest jeszcze włączony, nowy przekaźnik zostaje natychmiast wyłączony i po krótkiej przerwie, po zwolnieniu drugiego, ponownie włączony. Dla silników, które przy zmianie kierunku bez przerwy zatrzymują się zamiast zawrócić. Przekaźnik pozostaje potem włączony, zgodnie z włącznikiem.",
     "wait_for_relay_feedback.label": "Czekaj na potwierdzenie przekaźnika przed śledzeniem",
     "wait_for_relay_feedback.helper":
       "Uruchamia licznik czasu pozycji, gdy przekaźnik zgłosi, że się włączył, zamiast w chwili wysłania polecenia. W wolnej lub wychłodzonej sieci Zigbee/Z-Wave polecenie może docierać do przekaźnika przez kilka sekund; bez tej opcji to opóźnienie jest liczone jako ruch, a śledzona pozycja wyprzedza roletę. Pozostaw wyłączone, chyba że pozycja dryfuje w roletach, których przekaźnik reaguje wolno.",
@@ -659,6 +668,9 @@ export const TRANSLATIONS = {
     "block_while_external.label": "Befehle ablehnen, solange ein Wandschalter den Rollladen hält",
     "block_while_external.helper":
       "Schaltermodus. Solange ein Wandschalter ein Richtungsrelais eingeschaltet hält, werden Befehle aus Home Assistant (Dashboard, Automationen, Sprachassistenten) abgelehnt und ein Ereignis cover_time_based_command_blocked ausgelöst, damit eine Automation den Grund melden kann. Nach dem Lösen des Schalters ist der Rollladen wieder aus Home Assistant steuerbar.",
+    "pause_on_external_reversal.label": "Pause, wenn ein Wandschalter den Rollladen umkehrt",
+    "pause_on_external_reversal.helper":
+      "Schaltermodus. Schaltet ein Wandschalter eine Richtung ein, während das andere Relais noch an ist, wird das neue Relais sofort wieder ausgeschaltet und nach einer kurzen Pause – wenn das andere Relais frei ist – wieder eingeschaltet. Für Motoren, die bei einem Richtungswechsel ohne Pause stehen bleiben, statt umzukehren. Das Relais ist danach wieder an, passend zum Wandschalter.",
     "wait_for_relay_feedback.label": "Vor dem Verfolgen auf die Relais-Bestätigung warten",
     "wait_for_relay_feedback.helper":
       "Startet den Positionszeitgeber, wenn das Relais sein Einschalten meldet, statt im Moment des Befehlsversands. In einem langsamen oder kalten Zigbee-/Z-Wave-Mesh kann der Befehl mehrere Sekunden bis zum Relais brauchen; ohne diese Option wird diese Verzögerung als Fahrt gezählt und die verfolgte Position läuft dem Rollladen voraus. Lass die Option aus, sofern die Position bei Rollläden mit langsam reagierendem Relais nicht abdriftet.",
@@ -852,6 +864,9 @@ export const TRANSLATIONS = {
       "Rifiuta i comandi mentre un interruttore a muro tiene la tapparella",
     "block_while_external.helper":
       "Modalità interruttore. Finché un interruttore a muro tiene acceso un relè di direzione, i comandi da Home Assistant (dashboard, automazioni, assistenti vocali) vengono rifiutati e viene generato un evento cover_time_based_command_blocked, così un’automazione può spiegarne il motivo. Rilascia l’interruttore per comandare di nuovo la tapparella da Home Assistant.",
+    "pause_on_external_reversal.label": "Pausa quando un interruttore a muro inverte la tapparella",
+    "pause_on_external_reversal.helper":
+      "Modalità interruttore. Quando un interruttore a muro accende una direzione mentre l’altro relè è ancora acceso, il nuovo relè viene spento subito e riacceso dopo una breve pausa, una volta rilasciato l’altro. Per i motori che si fermano invece di invertire quando la direzione cambia senza pausa. Il relè resta poi acceso, allineato all’interruttore.",
     "wait_for_relay_feedback.label": "Attendi la conferma del relè prima di tracciare",
     "wait_for_relay_feedback.helper":
       "Avvia il timer di posizione quando il relè segnala di essersi acceso, anziché nel momento in cui viene inviato il comando. Su una rete mesh Zigbee/Z-Wave lenta o fredda il comando può impiegare alcuni secondi a raggiungere il relè; senza questa opzione, quel ritardo viene conteggiato come corsa e la posizione tracciata precede la tapparella. Lascialo disattivato, a meno che la posizione non vada alla deriva su tapparelle il cui relè risponde lentamente.",
@@ -1039,6 +1054,9 @@ export const TRANSLATIONS = {
       "Opdrachten weigeren zolang een wandschakelaar het rolluik vasthoudt",
     "block_while_external.helper":
       "Schakelaarmodus. Zolang een wandschakelaar een richtingsrelais aan houdt, worden opdrachten uit Home Assistant (dashboard, automatiseringen, spraakassistenten) geweigerd en wordt een cover_time_based_command_blocked-gebeurtenis afgevuurd, zodat een automatisering de reden kan melden. Laat de schakelaar los om het rolluik weer vanuit Home Assistant te bedienen.",
+    "pause_on_external_reversal.label": "Pauze wanneer een wandschakelaar het rolluik omkeert",
+    "pause_on_external_reversal.helper":
+      "Schakelaarmodus. Als een wandschakelaar een richting inschakelt terwijl het andere relais nog aan is, wordt het nieuwe relais meteen uitgeschakeld en na een korte pauze, zodra het andere relais vrij is, weer ingeschakeld. Voor motoren die stoppen in plaats van omkeren als de richting zonder pauze wisselt. Het relais is daarna weer aan, gelijk met de wandschakelaar.",
     "wait_for_relay_feedback.label": "Wacht op bevestiging van het relais voordat er gevolgd wordt",
     "wait_for_relay_feedback.helper":
       "Start de positietimer wanneer het relais meldt dat het is ingeschakeld, in plaats van op het moment dat het commando wordt verstuurd. Op een traag of koud Zigbee/Z-Wave-mesh kan het commando er seconden over doen om het relais te bereiken; zonder deze optie wordt die vertraging als beweging meegeteld en loopt de gevolgde positie voor op het rolluik. Laat dit uitstaan, tenzij de positie afwijkt bij rolluiken waarvan het relais traag reageert.",
@@ -1228,6 +1246,9 @@ export const TRANSLATIONS = {
       "Refuser les commandes tant qu’un interrupteur mural tient le volet",
     "block_while_external.helper":
       "Mode interrupteur. Tant qu’un interrupteur mural maintient un relais de direction activé, les commandes de Home Assistant (tableau de bord, automatisations, assistants vocaux) sont refusées et un événement cover_time_based_command_blocked est émis, afin qu’une automatisation puisse en indiquer la raison. Relâchez l’interrupteur pour piloter de nouveau le volet depuis Home Assistant.",
+    "pause_on_external_reversal.label": "Pause lorsqu’un interrupteur mural inverse le volet",
+    "pause_on_external_reversal.helper":
+      "Mode interrupteur. Lorsqu’un interrupteur mural active un sens alors que l’autre relais est encore activé, le nouveau relais est coupé aussitôt puis réactivé après une courte pause, une fois l’autre relais relâché. Pour les moteurs qui s’arrêtent au lieu de s’inverser lorsque le sens change sans pause. Le relais reste ensuite activé, en phase avec l’interrupteur.",
     "wait_for_relay_feedback.label": "Attendre la confirmation du relais avant le suivi",
     "wait_for_relay_feedback.helper":
       "Démarre le minuteur de position lorsque le relais signale qu'il s'est activé, plutôt qu'au moment où la commande est envoyée. Sur un réseau maillé Zigbee/Z-Wave lent ou froid, la commande peut mettre plusieurs secondes à atteindre le relais ; sans cette option, ce délai est compté comme de la course et la position suivie devance le volet. Laissez cette option désactivée, sauf si la position dérive sur des volets dont le relais répond lentement.",
@@ -1416,6 +1437,9 @@ export const TRANSLATIONS = {
       "Rechazar órdenes mientras un interruptor de pared retiene la persiana",
     "block_while_external.helper":
       "Modo interruptor. Mientras un interruptor de pared mantenga encendido un relé de dirección, se rechazan las órdenes de Home Assistant (panel, automatizaciones, asistentes de voz) y se lanza un evento cover_time_based_command_blocked para que una automatización pueda explicar el motivo. Suelta el interruptor para volver a controlar la persiana desde Home Assistant.",
+    "pause_on_external_reversal.label": "Pausa cuando un interruptor de pared invierte la persiana",
+    "pause_on_external_reversal.helper":
+      "Modo interruptor. Cuando un interruptor de pared enciende un sentido mientras el otro relé sigue encendido, el nuevo relé se apaga al instante y se vuelve a encender tras una breve pausa, una vez liberado el otro. Para motores que se detienen en lugar de invertir cuando el sentido cambia sin pausa. Después el relé queda encendido, acorde con el interruptor.",
     "wait_for_relay_feedback.label": "Esperar la confirmación del relé antes de rastrear",
     "wait_for_relay_feedback.helper":
       "Inicia el temporizador de posición cuando el relé informa de que se ha encendido, en lugar del momento en que se envía el comando. En una red mallada Zigbee/Z-Wave lenta o fría, el comando puede tardar segundos en llegar al relé; sin esta opción, ese retardo se cuenta como recorrido y la posición rastreada se adelanta a la persiana. Déjalo desactivado, a menos que la posición se desvíe en persianas cuyo relé responde con lentitud.",
@@ -1606,6 +1630,9 @@ export const TRANSLATIONS = {
     "block_while_external.label": "Rebutjar ordres mentre un interruptor de paret reté la persiana",
     "block_while_external.helper":
       "Mode interruptor. Mentre un interruptor de paret mantingui encès un relé de direcció, es rebutgen les ordres de Home Assistant (tauler, automatitzacions, assistents de veu) i es llança un esdeveniment cover_time_based_command_blocked perquè una automatització en pugui explicar el motiu. Deixa anar l’interruptor per tornar a controlar la persiana des de Home Assistant.",
+    "pause_on_external_reversal.label": "Pausa quan un interruptor de paret inverteix la persiana",
+    "pause_on_external_reversal.helper":
+      "Mode interruptor. Quan un interruptor de paret encén un sentit mentre l’altre relé encara està encès, el nou relé s’apaga a l’instant i es torna a encendre després d’una pausa breu, un cop alliberat l’altre. Per a motors que s’aturen en lloc d’invertir quan el sentit canvia sense pausa. Després el relé queda encès, d’acord amb l’interruptor.",
     "wait_for_relay_feedback.label": "Espera la confirmació del relé abans de fer el seguiment",
     "wait_for_relay_feedback.helper":
       "Inicia el temporitzador de posició quan el relé informa que s'ha activat, en lloc del moment en què s'envia l'ordre. En una xarxa mallada Zigbee/Z-Wave lenta o freda, l'ordre pot trigar segons a arribar al relé; sense aquesta opció, aquest retard es compta com a recorregut i la posició seguida s'avança a la persiana. Deixa-ho desactivat, tret que la posició es desviï en persianes el relé de les quals respon amb lentitud.",
@@ -1793,6 +1820,9 @@ export const TRANSLATIONS = {
     "block_while_external.label": "Odmítat příkazy, dokud nástěnný vypínač drží roletu",
     "block_while_external.helper":
       "Režim spínače. Dokud nástěnný vypínač drží zapnuté směrové relé, příkazy z Home Assistant (panel, automatizace, hlasoví asistenti) jsou odmítnuty a vyvolá se událost cover_time_based_command_blocked, aby automatizace mohla vysvětlit důvod. Po uvolnění vypínače lze roletu opět ovládat z Home Assistant.",
+    "pause_on_external_reversal.label": "Pauza, když nástěnný vypínač obrací roletu",
+    "pause_on_external_reversal.helper":
+      "Režim spínače. Když nástěnný vypínač zapne jeden směr, zatímco druhé relé je ještě zapnuté, nové relé se okamžitě vypne a po krátké pauze, jakmile se druhé uvolní, znovu zapne. Pro motory, které se při změně směru bez pauzy zastaví místo obrácení. Relé pak zůstane zapnuté, v souladu s vypínačem.",
     "wait_for_relay_feedback.label": "Před sledováním počkat na potvrzení relé",
     "wait_for_relay_feedback.helper":
       "Spustí časovač pozice ve chvíli, kdy relé nahlásí, že se zaplo, místo v okamžiku odeslání příkazu. V pomalé nebo studené síti Zigbee/Z-Wave může příkazu trvat několik sekund, než dorazí k relé; bez této volby se toto zpoždění počítá jako pohyb a sledovaná pozice předbíhá roletu. Ponechte vypnuté, pokud se pozice neodchyluje u rolet, jejichž relé reaguje pomalu.",
@@ -1978,6 +2008,9 @@ export const TRANSLATIONS = {
     "block_while_external.label": "Odbij komande dok zidni prekidač drži roletnu",
     "block_while_external.helper":
       "Režim prekidača. Dok zidni prekidač drži uključen relej smera, komande iz Home Assistant-a (kontrolna tabla, automatizacije, glasovni asistenti) se odbijaju i pokreće se događaj cover_time_based_command_blocked, kako bi automatizacija mogla da objasni razlog. Otpustite prekidač da biste roletnu ponovo upravljali iz Home Assistant-a.",
+    "pause_on_external_reversal.label": "Pauza kada zidni prekidač obrne roletnu",
+    "pause_on_external_reversal.helper":
+      "Režim prekidača. Kada zidni prekidač uključi jedan smer dok je drugi relej još uključen, novi relej se odmah isključuje i posle kratke pauze, kada se drugi oslobodi, ponovo uključuje. Za motore koji se zaustave umesto da promene smer kada se smer menja bez pauze. Relej zatim ostaje uključen, usklađen sa prekidačem.",
     "wait_for_relay_feedback.label": "Sačekaj potvrdu releja pre praćenja",
     "wait_for_relay_feedback.helper":
       "Pokreće tajmer pozicije kada relej prijavi da se uključio, umesto u trenutku slanja komande. Na sporoj ili hladnoj Zigbee/Z-Wave mreži komandi može trebati nekoliko sekundi da stigne do releja; bez ovoga se to kašnjenje računa kao kretanje i praćena pozicija izmiče ispred roletne. Ostavite isključeno osim ako pozicija ne odstupa kod roletni čiji relej sporo reaguje.",
@@ -2160,6 +2193,9 @@ export const TRANSLATIONS = {
     "block_while_external.label": "דחיית פקודות כל עוד מתג קיר מחזיק את התריס",
     "block_while_external.helper":
       "מצב מתג. כל עוד מתג קיר מחזיק ממסר כיוון דולק, פקודות מ-Home Assistant (לוח בקרה, אוטומציות, עוזרים קוליים) נדחות ומופעל אירוע cover_time_based_command_blocked, כדי שאוטומציה תוכל להסביר את הסיבה. שחרר את המתג כדי לשלוט שוב בתריס מ-Home Assistant.",
+    "pause_on_external_reversal.label": "השהיה כשמתג קיר הופך את כיוון התריס",
+    "pause_on_external_reversal.helper":
+      "מצב מתג. כשמתג קיר מדליק כיוון אחד בזמן שהממסר השני עדיין דולק, הממסר החדש נכבה מיד ונדלק שוב אחרי השהיה קצרה, לאחר שהממסר השני שוחרר. למנועים שנעצרים במקום להתהפך כשהכיוון מתחלף ללא השהיה. הממסר נשאר לאחר מכן דולק, מתואם עם מתג הקיר.",
     "wait_for_relay_feedback.label": "המתנה לאישור הממסר לפני המעקב",
     "wait_for_relay_feedback.helper":
       "מפעיל את טיימר המיקום כשהממסר מדווח שהוא הופעל, במקום ברגע שליחת הפקודה. ברשת Zigbee/Z-Wave איטית או רדומה הפקודה עשויה להגיע לממסר רק אחרי כמה שניות; בלי אפשרות זו, העיכוב הזה נספר כתנועה והמיקום שבמעקב מקדים את התריס. יש להשאיר כבוי, אלא אם המיקום סוטה בתריסים שהממסר שלהם מגיב לאט.",

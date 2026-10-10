@@ -13,6 +13,7 @@ from custom_components.cover_time_based.const import (
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_INVERT,
     CONF_KEEP_EXTERNAL_LATCH,
+    CONF_PAUSE_ON_EXTERNAL_REVERSAL,
     CONF_POSITION_REPORTING,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
@@ -126,6 +127,7 @@ def make_cover(make_hass, _mock_position_store):
         reverse_on_opposite_command=None,
         keep_external_latch=None,
         block_while_external=None,
+        pause_on_external_reversal=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -213,6 +215,8 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_KEEP_EXTERNAL_LATCH] = keep_external_latch
         if block_while_external is not None:
             options[CONF_BLOCK_WHILE_EXTERNAL] = block_while_external
+        if pause_on_external_reversal is not None:
+            options[CONF_PAUSE_ON_EXTERNAL_REVERSAL] = pause_on_external_reversal
 
         cover = _create_cover_from_options(
             options,

@@ -1,8 +1,15 @@
 """Latching relay (switch) mode cover."""
 
 import logging
+import time
+from asyncio import sleep
 
-from .const import CONF_BLOCK_WHILE_EXTERNAL, CONF_KEEP_EXTERNAL_LATCH
+from .const import (
+    CONF_BLOCK_WHILE_EXTERNAL,
+    CONF_KEEP_EXTERNAL_LATCH,
+    CONF_PAUSE_ON_EXTERNAL_REVERSAL,
+    DIRECTION_CHANGE_DELAY,
+)
 from .cover_switch import SwitchCoverTimeBased
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,11 +26,17 @@ class SwitchModeCover(SwitchCoverTimeBased):
         self,
         keep_external_latch: bool = False,
         block_while_external: bool = False,
+        pause_on_external_reversal: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._keep_external_latch = keep_external_latch
         self._block_while_external = block_while_external
+        self._pause_on_external_reversal = pause_on_external_reversal
+        # The relay an external reversal switched off for its pause and still
+        # owes a turn-on. Any relay command of ours clears it (_send_open /
+        # _send_close / _send_stop): a newer command owns the relays then.
+        self._reversal_rearm_entity: str | None = None
         # The direction switch last turned ON by the hardware (a wall switch),
         # not by us. Whether it still holds is read live from its state, so a
         # later release — by the wall switch or by our own command — needs no
@@ -36,6 +49,7 @@ class SwitchModeCover(SwitchCoverTimeBased):
         attr = super().extra_state_attributes
         attr[CONF_KEEP_EXTERNAL_LATCH] = self._keep_external_latch
         attr[CONF_BLOCK_WHILE_EXTERNAL] = self._block_while_external
+        attr[CONF_PAUSE_ON_EXTERNAL_REVERSAL] = self._pause_on_external_reversal
         attr["external_switch_holding"] = self._external_switch_on()
         return attr
 
@@ -90,6 +104,11 @@ class SwitchModeCover(SwitchCoverTimeBased):
         if entity_id == self._open_switch_entity_id:
             if new_val == "on":
                 _LOGGER.debug("_handle_external_state_change :: external open detected")
+                if self._pauses_external_reversal(self._close_switch_entity_id):
+                    await self._reverse_with_pause(
+                        entity_id, self._close_switch_entity_id, self.async_open_cover
+                    )
+                    return
                 await self._interlock_off(self._close_switch_entity_id)
                 await self.async_open_cover()
             elif new_val == "off":
@@ -102,6 +121,11 @@ class SwitchModeCover(SwitchCoverTimeBased):
                 _LOGGER.debug(
                     "_handle_external_state_change :: external close detected"
                 )
+                if self._pauses_external_reversal(self._open_switch_entity_id):
+                    await self._reverse_with_pause(
+                        entity_id, self._open_switch_entity_id, self.async_close_cover
+                    )
+                    return
                 await self._interlock_off(self._open_switch_entity_id)
                 await self.async_close_cover()
             elif new_val == "off":
@@ -109,6 +133,71 @@ class SwitchModeCover(SwitchCoverTimeBased):
                     "_handle_external_state_change :: external close switch off, stopping"
                 )
                 await self.async_stop_cover(supersede=False)
+
+    def _pauses_external_reversal(self, opposite_entity_id) -> bool:
+        """Whether a wall switch turning one direction ON is a reversal to pause.
+
+        Only with pause_on_external_reversal, and only when the opposite
+        relay is ON as far as we can tell — that is the case where both
+        directions are briefly energized and the motor gets no dead time.
+        """
+        return self._pause_on_external_reversal and self._relay_is_on(
+            opposite_entity_id
+        )
+
+    async def _reverse_with_pause(self, entity_id, opposite_entity_id, track) -> None:
+        """Give a wall-switch reversal the dead time the motor needs.
+
+        The wall switch has already energized ``entity_id`` while
+        ``opposite_entity_id`` was still on. Switch ``entity_id`` off again
+        at once, release the opposite relay (interlock), then let ``track``
+        (async_open_cover / async_close_cover, running as an external
+        trigger) stop the tracker and wait out its usual settle gap. Only
+        then is ``entity_id`` turned back on, so the motor sees stop, pause,
+        drive — and the relay ends up ON again, in step with the wall
+        switch. A tracker that was not travelling has no settle gap of its
+        own, so the pause is taken here before tracking starts.
+
+        Every relay write is marked as a pending echo so neither the brief
+        OFF nor the renewed ON is read back as the user operating the switch.
+        A relay command of ours issued in between (a stop, or a new move)
+        clears the owed turn-on.
+        """
+        _LOGGER.debug(
+            "_reverse_with_pause :: %s on while %s on, pausing the reversal",
+            entity_id,
+            opposite_entity_id,
+        )
+        self._reversal_rearm_entity = entity_id
+        started = time.monotonic()
+        await self._switch_relay(entity_id, False)
+        await self._interlock_off(opposite_entity_id)
+        if not self.travel_calc.is_traveling():
+            await sleep(DIRECTION_CHANGE_DELAY)
+        await track()
+        remaining = DIRECTION_CHANGE_DELAY - (time.monotonic() - started)
+        if remaining > 0:
+            await sleep(remaining)
+        if self._reversal_rearm_entity != entity_id:
+            _LOGGER.debug(
+                "_reverse_with_pause :: superseded during the pause, leaving %s off",
+                entity_id,
+            )
+            return
+        self._reversal_rearm_entity = None
+        await self._switch_relay(entity_id, True)
+
+    async def _switch_relay(self, entity_id, on: bool) -> None:
+        """Switch one relay, marking its echo only when the state will flip."""
+        if self._relay_is_on(entity_id) == on:
+            return
+        self._mark_switch_pending(entity_id, 1)
+        self._note_relay_intent(entity_id, on)
+        await self._call_service(
+            "homeassistant",
+            "turn_on" if on else "turn_off",
+            {"entity_id": entity_id},
+        )
 
     async def _interlock_off(self, entity_id) -> None:
         """Turn the opposite direction relay OFF (software interlock).
@@ -204,6 +293,7 @@ class SwitchModeCover(SwitchCoverTimeBased):
             await self.async_stop_cover(tilt_axis_reported=True)
 
     async def _send_open(self) -> None:
+        self._reversal_rearm_entity = None
         # Mark a pending echo only when the relay call will actually flip state
         # (matching _send_tilt_open). Marking unconditionally orphans the count
         # when the relay is already ON — e.g. a continuation re-driving the
@@ -240,6 +330,7 @@ class SwitchModeCover(SwitchCoverTimeBased):
         )
 
     async def _send_close(self) -> None:
+        self._reversal_rearm_entity = None
         # See _send_open: mark only when the relay will actually flip state,
         # judging the turn_off from our own last command and the driving
         # relay's turn_on from HA's state.
@@ -262,6 +353,7 @@ class SwitchModeCover(SwitchCoverTimeBased):
         )
 
     async def _send_stop(self) -> None:
+        self._reversal_rearm_entity = None
         # See _send_open: both releases are pre-counted from our own last
         # command while its echo is outstanding, so a stop issued inside a
         # slow relay's reporting lag still owns the OFF echo it causes.

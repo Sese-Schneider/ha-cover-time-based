@@ -35,6 +35,7 @@ from .const import (
     CONF_INVERT,
     CONF_KEEP_EXTERNAL_LATCH,
     CONF_MIN_MOVEMENT_TIME,
+    CONF_PAUSE_ON_EXTERNAL_REVERSAL,
     CONF_POSITION_REPORTING,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
@@ -57,6 +58,7 @@ from .const import (
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_INVERT,
     DEFAULT_KEEP_EXTERNAL_LATCH,
+    DEFAULT_PAUSE_ON_EXTERNAL_REVERSAL,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
     DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
@@ -478,6 +480,9 @@ def _create_cover_from_options(options, device_id="", name=""):
             ),
             block_while_external=options.get(
                 CONF_BLOCK_WHILE_EXTERNAL, DEFAULT_BLOCK_WHILE_EXTERNAL
+            ),
+            pause_on_external_reversal=options.get(
+                CONF_PAUSE_ON_EXTERNAL_REVERSAL, DEFAULT_PAUSE_ON_EXTERNAL_REVERSAL
             ),
             **switch_args,
         )

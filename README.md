@@ -395,6 +395,23 @@ hold lasts. Moving the rocker back to neutral releases the hold. The integration
 own stops (at the end of travel, or when the wall switch releases the relay) are
 never refused.
 
+#### Pause when a wall switch reverses the cover
+
+Applies to **Switch** mode. A wall switch wired to the relay module energizes a
+direction relay directly, so when it turns one direction on while the other
+relay is still on (the cover is moving the other way, or a latched relay is
+still on), the motor gets no dead time between the two directions — and for a
+short moment both are energized until the integration's interlock releases the
+old one. Some motors do not reverse then but simply stop, while Home Assistant
+goes on tracking a move that is not happening.
+
+Turn this **on** for such motors. The integration then switches the new relay
+off again at once, releases the old one, waits the same short settle gap it uses
+for its own reversals, and switches the new relay back on. The motor sees stop,
+pause, drive, the tracked move starts with the relay, and the relay ends up on
+again, in step with the wall switch. A command from Home Assistant during the
+pause (a stop, or another move) takes over and the relay is not switched back on.
+
 ### Controlling a cover with a single button
 
 Choose **Single button (cycling)** for a motor with only one control input — no
