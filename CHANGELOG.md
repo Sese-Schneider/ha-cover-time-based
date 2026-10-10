@@ -1,3 +1,11 @@
+## 4.14.0 (unreleased)
+
+### Features
+
+- **New "Reverse on an opposite open/close" option.** An open or close sent while the cover is moving re-targets it like set position to 100 %/0 % does — a command against the current direction stops, settles and drives the other way, one in the same direction lets the move carry on — instead of only stopping it. Helps voice assistants whose bridges send "set to 0 %/100 %" as plain open/close. Off by default; covers with tilt keep the stop.
+- **New "Keep the relay on after a wall-switch move" option for Switch mode.** A move started by a wall switch no longer switches the latched relay off at the end of travel, so a latching rocker on a toggle-input relay module stays in step with its relay and its next flip releases the relay instead of turning it back on. Off by default.
+- **New "Refuse commands while a wall switch holds the cover" option for Switch mode.** While a wall switch holds a direction relay on, commands from Home Assistant are refused with an error and a `cover_time_based_command_blocked` event, which an automation can use to tell you the switch is not in its neutral position. Off by default.
+
 ## 4.13.0 (2026-09-27)
 
 ### Features

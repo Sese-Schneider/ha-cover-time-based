@@ -391,6 +391,13 @@ export function renderInputEntities(card, c) {
         )}
         ${renderToggleWithHelp(
           card,
+          "reverse_on_opposite_command.label",
+          "reverse_on_opposite_command.helper",
+          c.reverse_on_opposite_command === true,
+          (e) => card._updateLocal({ reverse_on_opposite_command: e.target.checked }),
+        )}
+        ${renderToggleWithHelp(
+          card,
           "recalibrate_before_position.label",
           "recalibrate_before_position.helper",
           c.recalibrate_before_position === true,
@@ -496,6 +503,32 @@ export function renderInputEntities(card, c) {
         c.force_endpoint_redrive === true,
         (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
       )}
+      ${renderToggleWithHelp(
+        card,
+        "reverse_on_opposite_command.label",
+        "reverse_on_opposite_command.helper",
+        c.reverse_on_opposite_command === true,
+        (e) => card._updateLocal({ reverse_on_opposite_command: e.target.checked }),
+      )}
+      ${
+        // Only latching relays can be held ON by a wall switch.
+        (c.control_mode || "switch") === "switch"
+          ? html`${renderToggleWithHelp(
+              card,
+              "keep_external_latch.label",
+              "keep_external_latch.helper",
+              c.keep_external_latch === true,
+              (e) => card._updateLocal({ keep_external_latch: e.target.checked }),
+            )}
+            ${renderToggleWithHelp(
+              card,
+              "block_while_external.label",
+              "block_while_external.helper",
+              c.block_while_external === true,
+              (e) => card._updateLocal({ block_while_external: e.target.checked }),
+            )}`
+          : ""
+      }
       ${
         // Every relay-driven mode confirms via a relay ON echo; wrapped covers
         // drive an underlying cover entity, so there is no relay to wait on.

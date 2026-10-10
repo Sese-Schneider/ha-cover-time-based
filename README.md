@@ -348,6 +348,53 @@ you make that way. If you want the shutter to go to its favourite from Home
 Assistant, add a button that calls `cover.set_cover_position` with the
 favourite position.
 
+#### Keep the relay on after a wall-switch move
+
+Applies to **Switch** mode. When a wall switch wired to the relay module starts a
+move, the integration tracks it and, by default, switches the latched relay off
+once the travel time has run out. That is right for a push button, but on a
+module whose input follows a **latching rocker** (a "toggle" switch input) it
+leaves the rocker flipped while its relay is off: the next flip of the rocker
+then turns the relay back **on** instead of releasing it, and the cover moves
+when you meant to stop it.
+
+Turn this **on** to leave the relays as the wall switch set them. The motor's own
+limit switch ends the travel, the rocker and the relay stay in step, and the
+tracked position still lands on the endpoint. Commands from Home Assistant are
+unaffected: their moves still end with the relay switched off.
+
+#### Refuse commands while a wall switch holds the cover
+
+Applies to **Switch** mode. While a wall switch holds a direction relay on
+(observed as that relay turning on without Home Assistant asking for it, and
+still on), every command from Home Assistant — open, close, stop, set position
+and the tilt commands, whether from the dashboard, an automation or a voice
+assistant — is **refused**. The physical switch stays in charge, and switching
+the relay off underneath a latched rocker cannot put the two out of step.
+
+A refused command fails with an error, and the integration fires a
+`cover_time_based_command_blocked` event first, so an automation can tell you
+why nothing happened:
+
+```yaml
+triggers:
+  - trigger: event
+    event_type: cover_time_based_command_blocked
+actions:
+  - action: notify.notify
+    data:
+      message: >-
+        {{ state_attr(trigger.event.data.entity_id, 'friendly_name') }}:
+        the wall switch is not in its neutral position.
+```
+
+The event data holds `entity_id` (the cover), `service` (the refused command,
+e.g. `close_cover`) and `switch_entity_id` (the relay the wall switch holds).
+The cover's `external_switch_holding` attribute shows the same relay while the
+hold lasts. Moving the rocker back to neutral releases the hold. The integration's
+own stops (at the end of travel, or when the wall switch releases the relay) are
+never refused.
+
 ### Controlling a cover with a single button
 
 Choose **Single button (cycling)** for a motor with only one control input — no
@@ -470,7 +517,7 @@ the sequential modes is described under
 
 ### Options for every cover
 
-These three options are available whatever the Control Mode.
+These four options are available whatever the Control Mode.
 
 #### Assumed state
 
@@ -500,6 +547,19 @@ report their own position, where the skip is correct.
 > stop it partway the reported position is derived from that assumed start and can
 > be well off. Let a re-drive run all the way to the endpoint, where the position
 > resyncs, rather than stopping it mid-travel.
+
+#### Reverse on an opposite open/close
+
+By default, an **open** or **close** sent while the cover is moving only stops
+it; a second command then drives it. Turn this **on** to have such a command
+re-target the cover instead, exactly like **set position** to 100 % or 0 % does:
+a command against the current direction stops the motor, waits a short settle
+gap and drives the other way, and a command in the direction already travelled
+lets the move carry on. This suits voice assistants: some bridges (a Matter
+bridge for Alexa, for example) send "set to 0 % / 100 %" as a plain open or
+close, so with the option off asking for the opposite direction mid-move only
+stops the cover. Covers with tilt keep the in-motion stop, because the slat
+restore that follows a stop would be skipped.
 
 #### Fully open before moving to a position (Beta)
 

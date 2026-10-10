@@ -26,16 +26,19 @@ from .calibration import (
 )
 from .const import (
     CONF_ASSUMED_STATE,
+    CONF_BLOCK_WHILE_EXTERNAL,
     CONF_CLOSE_INCLUDES_TILT,
     CONF_DIRECTION_CHANGE_DELAY,
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_INVERT,
+    CONF_KEEP_EXTERNAL_LATCH,
     CONF_MIN_MOVEMENT_TIME,
     CONF_POSITION_REPORTING,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
+    CONF_REVERSE_ON_OPPOSITE_COMMAND,
     CONF_SEND_ENDPOINT_STOP,
     CONF_SKIP_STOP_WHEN_IDLE,
     CONF_TILT_MODE,
@@ -47,13 +50,16 @@ from .const import (
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
     DEFAULT_ASSUMED_STATE,
+    DEFAULT_BLOCK_WHILE_EXTERNAL,
     DEFAULT_CLOSE_INCLUDES_TILT,
     DEFAULT_ENDPOINT_RUNON_TIME,
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_INVERT,
+    DEFAULT_KEEP_EXTERNAL_LATCH,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
+    DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     DEFAULT_SEND_ENDPOINT_STOP,
     DEFAULT_SKIP_STOP_WHEN_IDLE,
     DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
@@ -408,6 +414,9 @@ def _create_cover_from_options(options, device_id="", name=""):
         "skip_stop_when_idle": options.get(
             CONF_SKIP_STOP_WHEN_IDLE, DEFAULT_SKIP_STOP_WHEN_IDLE
         ),
+        "reverse_on_opposite_command": options.get(
+            CONF_REVERSE_ON_OPPOSITE_COMMAND, DEFAULT_REVERSE_ON_OPPOSITE_COMMAND
+        ),
     }
 
     if control_mode == CONTROL_MODE_WRAPPED:
@@ -463,7 +472,15 @@ def _create_cover_from_options(options, device_id="", name=""):
             **sb_args,
         )
     else:
-        return SwitchModeCover(**switch_args)
+        return SwitchModeCover(
+            keep_external_latch=options.get(
+                CONF_KEEP_EXTERNAL_LATCH, DEFAULT_KEEP_EXTERNAL_LATCH
+            ),
+            block_while_external=options.get(
+                CONF_BLOCK_WHILE_EXTERNAL, DEFAULT_BLOCK_WHILE_EXTERNAL
+            ),
+            **switch_args,
+        )
 
 
 def devices_from_config(domain_config):

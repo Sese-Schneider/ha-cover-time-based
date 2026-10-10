@@ -7,13 +7,16 @@ import pytest
 
 from custom_components.cover_time_based import position_reporting
 from custom_components.cover_time_based.const import (
+    CONF_BLOCK_WHILE_EXTERNAL,
     CONF_CLOSE_INCLUDES_TILT,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_INVERT,
+    CONF_KEEP_EXTERNAL_LATCH,
     CONF_POSITION_REPORTING,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
+    CONF_REVERSE_ON_OPPOSITE_COMMAND,
     CONF_SEND_ENDPOINT_STOP,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
 )
@@ -120,6 +123,9 @@ def make_cover(make_hass, _mock_position_store):
         recalibrate_before_position=None,
         relay_reports_off=None,
         invert=None,
+        reverse_on_opposite_command=None,
+        keep_external_latch=None,
+        block_while_external=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -201,6 +207,12 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_RELAY_REPORTS_OFF] = relay_reports_off
         if invert is not None:
             options[CONF_INVERT] = invert
+        if reverse_on_opposite_command is not None:
+            options[CONF_REVERSE_ON_OPPOSITE_COMMAND] = reverse_on_opposite_command
+        if keep_external_latch is not None:
+            options[CONF_KEEP_EXTERNAL_LATCH] = keep_external_latch
+        if block_while_external is not None:
+            options[CONF_BLOCK_WHILE_EXTERNAL] = block_while_external
 
         cover = _create_cover_from_options(
             options,

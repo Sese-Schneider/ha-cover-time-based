@@ -2,6 +2,7 @@
 
 import logging
 
+from .const import CONF_BLOCK_WHILE_EXTERNAL, CONF_KEEP_EXTERNAL_LATCH
 from .cover_switch import SwitchCoverTimeBased
 
 _LOGGER = logging.getLogger(__name__)
@@ -13,6 +14,49 @@ class SwitchModeCover(SwitchCoverTimeBased):
     In switch mode, the direction switch stays ON for the entire duration
     of the movement. _send_stop turns both direction switches OFF.
     """
+
+    def __init__(
+        self,
+        keep_external_latch: bool = False,
+        block_while_external: bool = False,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self._keep_external_latch = keep_external_latch
+        self._block_while_external = block_while_external
+        # The direction switch last turned ON by the hardware (a wall switch),
+        # not by us. Whether it still holds is read live from its state, so a
+        # later release — by the wall switch or by our own command — needs no
+        # bookkeeping here. See _external_switch_holding.
+        self._external_on_switch: str | None = None
+
+    @property
+    def extra_state_attributes(self):
+        """Expose the wall-switch options and who holds the relay right now."""
+        attr = super().extra_state_attributes
+        attr[CONF_KEEP_EXTERNAL_LATCH] = self._keep_external_latch
+        attr[CONF_BLOCK_WHILE_EXTERNAL] = self._block_while_external
+        attr["external_switch_holding"] = self._external_switch_on()
+        return attr
+
+    def _external_switch_on(self) -> str | None:
+        """The direction switch a wall switch turned ON and that is still ON."""
+        entity_id = self._external_on_switch
+        if entity_id is None or self.hass is None:
+            return None
+        state = self.hass.states.get(entity_id)
+        return entity_id if state is not None and state.state == "on" else None
+
+    def _external_switch_holding(self) -> str | None:
+        """Holding wall switch, but only when block_while_external is enabled."""
+        if not self._block_while_external:
+            return None
+        return self._external_switch_on()
+
+    def _forget_external_switch(self) -> None:
+        """An HA command went ahead: the relays it drives are no longer the
+        wall switch's, even when it turns the same relay back on."""
+        self._external_on_switch = None
 
     def _self_stops_at_endpoints(self) -> bool:
         """Switch mode latches the direction relay ON for the whole travel.
@@ -36,6 +80,13 @@ class SwitchModeCover(SwitchCoverTimeBased):
         in _send_open / _send_close. Switch mode is the only mode that latches a
         direction relay, so it is the only mode that needs this.
         """
+        if new_val == "on" and entity_id in (
+            self._open_switch_entity_id,
+            self._close_switch_entity_id,
+        ):
+            self._external_on_switch = entity_id
+        elif new_val == "off" and entity_id == self._external_on_switch:
+            self._external_on_switch = None
         if entity_id == self._open_switch_entity_id:
             if new_val == "on":
                 _LOGGER.debug("_handle_external_state_change :: external open detected")
@@ -91,7 +142,18 @@ class SwitchModeCover(SwitchCoverTimeBased):
         already have been released externally, and we must not touch the
         opposite relay — reusing the interlock's guarded, echo-marked turn_off.
         Dual-motor tilt relays latch the same way, so settle them too.
+
+        With keep_external_latch the relays are left as the wall switch set
+        them: a latching rocker on a toggle-input module would otherwise stay
+        flipped while its relay is off, so its next flip re-energizes the relay
+        instead of releasing it. The motor's own limit switch ends the travel.
         """
+        if self._keep_external_latch:
+            _LOGGER.debug(
+                "_settle_external_endpoint :: keep_external_latch, leaving relays"
+                " as the wall switch set them"
+            )
+            return
         await self._interlock_off(self._open_switch_entity_id)
         await self._interlock_off(self._close_switch_entity_id)
         if self._has_tilt_motor():

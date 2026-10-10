@@ -38,6 +38,7 @@ from .const import (
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_MIN_MOVEMENT_TIME,
     CONF_RECALIBRATE_BEFORE_POSITION,
+    CONF_REVERSE_ON_OPPOSITE_COMMAND,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILT_TIME_CLOSE,
@@ -47,12 +48,14 @@ from .const import (
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
     DIRECTION_CHANGE_DELAY,
+    EVENT_COMMAND_BLOCKED,
     RESYNC_POSITIONS,
 )
 from .cover_calibration import CalibrationMixin
 from .cover_echo_filter import SwitchEchoMixin
 from .cover_lifecycle import MovementLifecycleMixin
 from .cover_movement import MovementMixin
+from .errors import CoverBlockedByExternalSwitchError
 from .position_storage import async_get_position_store
 from .recalibration import RecalibrationPlan
 from .tilt_strategies import InlineTilt, SequentialTilt
@@ -156,6 +159,7 @@ class CoverTimeBased(
         wait_for_relay_feedback=False,
         recalibrate_before_position=False,
         skip_stop_when_idle=False,
+        reverse_on_opposite_command=False,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -164,6 +168,7 @@ class CoverTimeBased(
         self._wait_for_relay_feedback = wait_for_relay_feedback
         self._recalibrate_before_position = recalibrate_before_position
         self._skip_stop_when_idle = skip_stop_when_idle
+        self._reverse_on_opposite_command = reverse_on_opposite_command
 
         self._tilt_strategy = tilt_strategy
         # Keep the raw configured mode so calibration can still pick the right
@@ -674,6 +679,7 @@ class CoverTimeBased(
         attr[CONF_FORCE_ENDPOINT_REDRIVE] = self._force_endpoint_redrive
         attr[CONF_WAIT_FOR_RELAY_FEEDBACK] = self._wait_for_relay_feedback
         attr[CONF_RECALIBRATE_BEFORE_POSITION] = self._recalibrate_before_position
+        attr[CONF_REVERSE_ON_OPPOSITE_COMMAND] = self._reverse_on_opposite_command
         if self._calibration is not None:
             attr["calibration_active"] = True
             attr["calibration_attribute"] = self._calibration.attribute
@@ -699,10 +705,22 @@ class CoverTimeBased(
         tilt at an implicit-open or safe position (sequential_close, dual_motor).
         """
         self._require_configured()
+        self._refuse_if_blocked_by_external_switch("close_cover")
         self._log("async_close_cover")
         if not self._triggered_externally and (
             self._travel_axis_opening() or self._travel_axis_closing()
         ):
+            if self._reverses_on_opposite_command():
+                # reverse_on_opposite_command: an in-motion close re-targets to
+                # 0 through set_position, which already stops, settles and
+                # drives the other way (or simply continues when the cover is
+                # closing already) — instead of only stopping.
+                self._log(
+                    "async_close_cover :: in motion, re-targeting to 0"
+                    " (reverse_on_opposite_command)"
+                )
+                await self.set_position(0)
+                return
             # In-motion UI click stops the cover. Reversing direction requires
             # a second click after the stop, or use set_cover_position which
             # keeps its existing stop-then-reverse behavior. External triggers
@@ -774,12 +792,23 @@ class CoverTimeBased(
         second click, or use set_cover_position which keeps its existing
         stop-then-reverse behavior. External triggers (wall switches) keep
         the legacy "stop and reverse if needed" behavior.
+        With reverse_on_opposite_command an in-motion click re-targets to the
+        endpoint instead (see _reverses_on_opposite_command).
         """
         self._require_configured()
+        self._refuse_if_blocked_by_external_switch("open_cover")
         self._log("async_open_cover")
         if not self._triggered_externally and (
             self._travel_axis_opening() or self._travel_axis_closing()
         ):
+            if self._reverses_on_opposite_command():
+                # See async_close_cover.
+                self._log(
+                    "async_open_cover :: in motion, re-targeting to 100"
+                    " (reverse_on_opposite_command)"
+                )
+                await self.set_position(100)
+                return
             self._log("async_open_cover :: cover is in motion, stopping")
             await self.async_stop_cover()
             return
@@ -802,6 +831,60 @@ class CoverTimeBased(
             self._log("async_open_cover :: already settled at 100, skipping resync")
             return
         await self._async_move_to_endpoint(target=100)
+
+    def _reverses_on_opposite_command(self) -> bool:
+        """Whether an in-motion open/close re-targets instead of stopping.
+
+        reverse_on_opposite_command applies to the travel axis only: covers
+        with tilt keep the in-motion stop, whose tilt restore bookkeeping an
+        endpoint re-target through set_position would bypass.
+        """
+        return self._reverse_on_opposite_command and not self._has_tilt_support()
+
+    def _external_switch_holding(self) -> str | None:
+        """The direction switch a wall switch is holding ON, if any.
+
+        Only latching (switch mode) hardware can hold a relay on; every other
+        mode returns None. See SwitchModeCover.
+        """
+        return None
+
+    def _forget_external_switch(self) -> None:
+        """Drop the record of a wall-switch-held relay (an HA command took over).
+
+        No-op outside switch mode. See SwitchModeCover.
+        """
+
+    def _refuse_if_blocked_by_external_switch(self, service: str) -> None:
+        """Refuse an HA command while a wall switch holds a relay (opt-in).
+
+        Commands dispatched for the hardware itself (``_triggered_externally``)
+        are never refused — they are the wall switch. The refusal fires
+        EVENT_COMMAND_BLOCKED first so an automation can explain it to the user,
+        then raises so the caller (UI, script, voice bridge) sees it failed.
+        """
+        if self._triggered_externally:
+            return
+        holder = self._external_switch_holding()
+        if holder is None:
+            # The command goes ahead, so HA takes the relays over from here on.
+            self._forget_external_switch()
+            return
+        self._log(
+            "%s refused :: %s is held on by a wall switch (block_while_external)",
+            service,
+            holder,
+        )
+        if self.hass is not None:
+            self.hass.bus.async_fire(
+                EVENT_COMMAND_BLOCKED,
+                {
+                    "entity_id": self.entity_id,
+                    "service": service,
+                    "switch_entity_id": holder,
+                },
+            )
+        raise CoverBlockedByExternalSwitchError(self.entity_id, service, holder)
 
     def _settled_at_endpoint(self, endpoint: int) -> bool:
         """Return True when the tracker is stopped exactly at ``endpoint`` (0 or
@@ -1552,6 +1635,11 @@ class CoverTimeBased(
 
         See _stop_hardware for ``supersede`` and ``tilt_axis_reported``.
         """
+        if supersede:
+            # Only a stop arriving from HA claims the movement (supersede=True);
+            # internal and external-trigger stops pass False and are never
+            # refused.
+            self._refuse_if_blocked_by_external_switch("stop_cover")
         self._log("async_stop_cover")
         await self._stop_hardware(
             supersede=supersede, tilt_axis_reported=tilt_axis_reported
@@ -1710,18 +1798,21 @@ class CoverTimeBased(
     async def async_close_cover_tilt(self, **kwargs):
         """Tilt the cover fully closed."""
         self._require_configured()
+        self._refuse_if_blocked_by_external_switch("close_cover_tilt")
         self._log("async_close_cover_tilt")
         await self._async_move_tilt_to_endpoint(target=0)
 
     async def async_open_cover_tilt(self, **kwargs):
         """Tilt the cover fully open."""
         self._require_configured()
+        self._refuse_if_blocked_by_external_switch("open_cover_tilt")
         self._log("async_open_cover_tilt")
         await self._async_move_tilt_to_endpoint(target=100)
 
     async def async_set_cover_position(self, **kwargs):
         """Move the cover to a specific position."""
         self._require_configured()
+        self._refuse_if_blocked_by_external_switch("set_cover_position")
         if ATTR_POSITION in kwargs:
             position = kwargs[ATTR_POSITION]
             self._log("async_set_cover_position: %d", position)
@@ -1730,6 +1821,7 @@ class CoverTimeBased(
     async def async_set_cover_tilt_position(self, **kwargs):
         """Move the cover tilt to a specific position."""
         self._require_configured()
+        self._refuse_if_blocked_by_external_switch("set_cover_tilt_position")
         if ATTR_TILT_POSITION in kwargs:
             position = kwargs[ATTR_TILT_POSITION]
             self._log("async_set_cover_tilt_position: %d", position)

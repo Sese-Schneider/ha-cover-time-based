@@ -18,3 +18,20 @@ class CoverNotConfiguredError(HomeAssistantError):
             "Please configure using the Cover Time Based card."
         )
         self.missing = missing
+
+
+class CoverBlockedByExternalSwitchError(HomeAssistantError):
+    """A command refused because a wall switch holds a direction relay ON.
+
+    Raised only with the block_while_external option, so the physical switch
+    stays authoritative while it is latched.
+    """
+
+    def __init__(self, entity_id: str, service: str, switch_entity_id: str) -> None:
+        super().__init__(
+            f"{entity_id}: {service} refused — {switch_entity_id} is held on by "
+            "a wall switch. Release the switch first."
+        )
+        self.entity_id = entity_id
+        self.service = service
+        self.switch_entity_id = switch_entity_id

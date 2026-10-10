@@ -97,6 +97,33 @@ DEFAULT_SEND_ENDPOINT_STOP = True
 CONF_FORCE_ENDPOINT_REDRIVE = "force_endpoint_redrive"
 DEFAULT_FORCE_ENDPOINT_REDRIVE = False
 
+# Switch mode. When True, a direction relay that a wall switch latched ON is
+# left energized when the externally-started move reaches its endpoint (the
+# motor's own limit switch stops it). By default the relay is released there,
+# which leaves a latching wall switch (a rocker on a toggle-input relay module)
+# out of step with the relay: its next flip turns the relay back on instead of
+# off. Keeping the latch keeps switch and relay in step.
+CONF_KEEP_EXTERNAL_LATCH = "keep_external_latch"
+DEFAULT_KEEP_EXTERNAL_LATCH = False
+
+# All modes. When True, open_cover / close_cover commanded while the cover is
+# travelling the *other* way reverses it (stop, settle, drive) the way
+# set_cover_position already does, instead of only stopping it. A command in
+# the direction already travelled keeps the move going. Voice assistants send
+# "open"/"close" (and "set to 0 %/100 %") through these services, where an
+# in-motion stop is not what the user asked for.
+CONF_REVERSE_ON_OPPOSITE_COMMAND = "reverse_on_opposite_command"
+DEFAULT_REVERSE_ON_OPPOSITE_COMMAND = False
+
+# Switch mode. When True, commands from Home Assistant (UI, automations, voice
+# assistants) are refused while a wall switch holds a direction relay ON: the
+# physical switch wins. The refusal raises CoverBlockedByExternalSwitchError
+# and fires EVENT_COMMAND_BLOCKED so an automation can tell the user why.
+# Commands that come from the hardware itself are never refused.
+CONF_BLOCK_WHILE_EXTERNAL = "block_while_external"
+DEFAULT_BLOCK_WHILE_EXTERNAL = False
+EVENT_COMMAND_BLOCKED = "cover_time_based_command_blocked"
+
 # When True, movement commands wait for the underlying relay to confirm its state
 # change before proceeding. Behaviour is implemented elsewhere; this constant is
 # the plumbed per-cover config option.
