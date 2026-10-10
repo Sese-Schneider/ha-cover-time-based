@@ -38,6 +38,7 @@ from .const import (
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_MIN_MOVEMENT_TIME,
     CONF_RECALIBRATE_BEFORE_POSITION,
+    CONF_REVERSE_ON_OPPOSITE_COMMAND,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILT_TIME_CLOSE,
@@ -156,6 +157,7 @@ class CoverTimeBased(
         wait_for_relay_feedback=False,
         recalibrate_before_position=False,
         skip_stop_when_idle=False,
+        reverse_on_opposite_command=False,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -164,6 +166,7 @@ class CoverTimeBased(
         self._wait_for_relay_feedback = wait_for_relay_feedback
         self._recalibrate_before_position = recalibrate_before_position
         self._skip_stop_when_idle = skip_stop_when_idle
+        self._reverse_on_opposite_command = reverse_on_opposite_command
 
         self._tilt_strategy = tilt_strategy
         # Keep the raw configured mode so calibration can still pick the right
@@ -678,6 +681,7 @@ class CoverTimeBased(
         attr[CONF_FORCE_ENDPOINT_REDRIVE] = self._force_endpoint_redrive
         attr[CONF_WAIT_FOR_RELAY_FEEDBACK] = self._wait_for_relay_feedback
         attr[CONF_RECALIBRATE_BEFORE_POSITION] = self._recalibrate_before_position
+        attr[CONF_REVERSE_ON_OPPOSITE_COMMAND] = self._reverse_on_opposite_command
         if self._calibration is not None:
             attr["calibration_active"] = True
             attr["calibration_attribute"] = self._calibration.attribute
@@ -707,6 +711,17 @@ class CoverTimeBased(
         if not self._triggered_externally and (
             self._travel_axis_opening() or self._travel_axis_closing()
         ):
+            if self._reverses_on_opposite_command():
+                # reverse_on_opposite_command: an in-motion close re-targets to
+                # 0 through set_position, which already stops, settles and
+                # drives the other way (or simply continues when the cover is
+                # closing already) — instead of only stopping.
+                self._log(
+                    "async_close_cover :: in motion, re-targeting to 0"
+                    " (reverse_on_opposite_command)"
+                )
+                await self.set_position(0)
+                return
             # In-motion UI click stops the cover. Reversing direction requires
             # a second click after the stop, or use set_cover_position which
             # keeps its existing stop-then-reverse behavior. External triggers
@@ -809,12 +824,22 @@ class CoverTimeBased(
         second click, or use set_cover_position which keeps its existing
         stop-then-reverse behavior. External triggers (wall switches) keep
         the legacy "stop and reverse if needed" behavior.
+        With reverse_on_opposite_command an in-motion click re-targets to the
+        endpoint instead (see _reverses_on_opposite_command).
         """
         self._require_configured()
         self._log("async_open_cover")
         if not self._triggered_externally and (
             self._travel_axis_opening() or self._travel_axis_closing()
         ):
+            if self._reverses_on_opposite_command():
+                # See async_close_cover.
+                self._log(
+                    "async_open_cover :: in motion, re-targeting to 100"
+                    " (reverse_on_opposite_command)"
+                )
+                await self.set_position(100)
+                return
             self._log("async_open_cover :: cover is in motion, stopping")
             await self.async_stop_cover()
             return
@@ -841,6 +866,15 @@ class CoverTimeBased(
             self._log("async_open_cover :: already settled at 100, skipping resync")
             return
         await self._async_move_to_endpoint(target=100)
+
+    def _reverses_on_opposite_command(self) -> bool:
+        """Whether an in-motion open/close re-targets instead of stopping.
+
+        reverse_on_opposite_command applies to the travel axis only: covers
+        with tilt keep the in-motion stop, whose tilt restore bookkeeping an
+        endpoint re-target through set_position would bypass.
+        """
+        return self._reverse_on_opposite_command and not self._has_tilt_support()
 
     def _settled_at_endpoint(self, endpoint: int) -> bool:
         """Return True when the tracker is stopped exactly at ``endpoint`` (0 or

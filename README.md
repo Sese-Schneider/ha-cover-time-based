@@ -503,7 +503,7 @@ the sequential modes is described under
 
 ### Options for every cover
 
-These three options are available whatever the Control Mode.
+These four options are available whatever the Control Mode.
 
 #### Assumed state
 
@@ -536,6 +536,19 @@ correct.
 > stop it partway the reported position is derived from that assumed start and can
 > be well off. Let a re-drive run all the way to the endpoint, where the position
 > resyncs, rather than stopping it mid-travel.
+
+#### Reverse on an opposite open/close
+
+By default, an **open** or **close** sent while the cover is moving only stops
+it; a second command then drives it. Turn this **on** to have such a command
+re-target the cover instead, exactly like **set position** to 100 % or 0 % does:
+a command against the current direction stops the motor, waits a short settle
+gap and drives the other way, and a command in the direction already travelled
+lets the move carry on. This suits voice assistants: some bridges (a Matter
+bridge for Alexa, for example) send "set to 0 % / 100 %" as a plain open or
+close, so with the option off asking for the opposite direction mid-move only
+stops the cover. Covers with tilt keep the in-motion stop, because the slat
+restore that follows a stop would be skipped.
 
 #### Fully open before moving to a position (Beta)
 

@@ -38,6 +38,7 @@ from .const import (
     CONF_POSITION_REPORTING,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
+    CONF_REVERSE_ON_OPPOSITE_COMMAND,
     CONF_SEND_ENDPOINT_STOP,
     CONF_SKIP_STOP_WHEN_IDLE,
     CONF_TILT_MODE,
@@ -62,6 +63,7 @@ from .const import (
     DEFAULT_INVERT,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
+    DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     DEFAULT_SEND_ENDPOINT_STOP,
     DEFAULT_SKIP_STOP_WHEN_IDLE,
     DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
@@ -403,6 +405,9 @@ def _create_cover_from_options(options, device_id="", name=""):
         ),
         "skip_stop_when_idle": options.get(
             CONF_SKIP_STOP_WHEN_IDLE, DEFAULT_SKIP_STOP_WHEN_IDLE
+        ),
+        "reverse_on_opposite_command": options.get(
+            CONF_REVERSE_ON_OPPOSITE_COMMAND, DEFAULT_REVERSE_ON_OPPOSITE_COMMAND
         ),
     }
 

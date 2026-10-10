@@ -571,19 +571,19 @@ test("wrapped mode renders cover entity-picker (with includeDomains cover)", asy
   expect(coverPicker).not.toBeUndefined();
 });
 
-test("wrapped mode renders ha-switch toggles (force-time-based, invert, link-to-device, assumed-state, force-endpoint-redrive, recalibrate-before-position, skip-stop-when-idle)", async () => {
+test("wrapped mode renders ha-switch toggles (force-time-based, invert, link-to-device, assumed-state, force-endpoint-redrive, reverse-on-opposite-command, recalibrate-before-position, skip-stop-when-idle)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: wrappedCfg(),
     activeTab: "device",
   });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // Exactly 7 toggles: force_time_based_position, invert, link_to_device,
-  // assumed_state, force_endpoint_redrive, recalibrate_before_position,
-  // skip_stop_when_idle.
+  // Exactly 8 toggles: force_time_based_position, invert, link_to_device,
+  // assumed_state, force_endpoint_redrive, reverse_on_opposite_command,
+  // recalibrate_before_position, skip_stop_when_idle.
   // (ignore_reported_position and reports_command_not_endpoint are now the
   // position-reporting dropdown.)
-  expect(toggles.length).toBe(7);
+  expect(toggles.length).toBe(8);
 });
 
 test("switch mode renders open + close switch pickers (no stop switch)", async () => {
@@ -644,9 +644,10 @@ test("switch mode shows assumed-state toggle", async () => {
     activeTab: "device",
   });
   const toggles = card.shadowRoot.querySelectorAll("ha-switch.toggle-switch");
-  // Exactly 4 toggles: assumed-state, force-endpoint-redrive,
-  // wait-for-relay-feedback (switch-mode only) and recalibrate-before-position
-  expect(toggles.length).toBe(4);
+  // Exactly 5 toggles: assumed-state, force-endpoint-redrive,
+  // reverse-on-opposite-command, wait-for-relay-feedback (switch-mode only)
+  // and recalibrate-before-position
+  expect(toggles.length).toBe(5);
 });
 
 // ---------------------------------------------------------------------------

@@ -15,8 +15,10 @@ from homeassistant.helpers import entity_registry as er
 from .calibration import CALIBRATABLE_ATTRIBUTES
 from .const import (
     CONF_LINK_TO_DEVICE,
+    CONF_REVERSE_ON_OPPOSITE_COMMAND,
     DEFAULT_LINK_TO_DEVICE,
     DEFAULT_POSITION_REPORTING,
+    DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     DOMAIN,
     POSITION_REPORTING_VALUES,
 )
@@ -155,6 +157,12 @@ _CONFIG_FIELDS: tuple[_ConfigField, ...] = (
         CONF_FORCE_ENDPOINT_REDRIVE,
         _BOOL,
         default=DEFAULT_FORCE_ENDPOINT_REDRIVE,
+    ),
+    _ConfigField(
+        "reverse_on_opposite_command",
+        CONF_REVERSE_ON_OPPOSITE_COMMAND,
+        _BOOL,
+        default=DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     ),
     _ConfigField(
         "wait_for_relay_feedback",

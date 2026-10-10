@@ -398,6 +398,13 @@ export function renderInputEntities(card, c) {
         )}
         ${renderToggleWithHelp(
           card,
+          "reverse_on_opposite_command.label",
+          "reverse_on_opposite_command.helper",
+          c.reverse_on_opposite_command === true,
+          (e) => card._updateLocal({ reverse_on_opposite_command: e.target.checked }),
+        )}
+        ${renderToggleWithHelp(
+          card,
           "recalibrate_before_position.label",
           "recalibrate_before_position.helper",
           c.recalibrate_before_position === true,
@@ -502,6 +509,13 @@ export function renderInputEntities(card, c) {
         "force_endpoint_redrive.helper",
         c.force_endpoint_redrive === true,
         (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
+      )}
+      ${renderToggleWithHelp(
+        card,
+        "reverse_on_opposite_command.label",
+        "reverse_on_opposite_command.helper",
+        c.reverse_on_opposite_command === true,
+        (e) => card._updateLocal({ reverse_on_opposite_command: e.target.checked }),
       )}
       ${
         // Every relay-driven mode confirms via a relay ON echo; wrapped covers
