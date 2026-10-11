@@ -1364,7 +1364,7 @@ export const TRANSLATIONS = {
       'Para persianas con un preajuste de hardware "my"/favorito (por ejemplo, Somfy RTS): pulsar detener con la persiana ya detenida la lleva a ese preajuste. Cuando está activado, Home Assistant no reenvía la orden de detener mientras la persiana ya está detenida, por lo que permanece en su sitio. Déjalo desactivado para mantener el comportamiento actual.',
     "link_to_device.label": "Mostrar en la página del dispositivo de la persiana envuelta",
     "link_to_device.helper":
-      "Añade esta persiana al dispositivo al que pertenece la persiana envuelta, para que aparezca en la página de ese dispositivo. Home Assistant puede entonces mostrar el nombre del dispositivo delante del nombre de esta persiana. Para elegir otro nombre, cambia el nombre de la persiana en la configuración de la entidad.",
+      "Añade esta persiana al dispositivo al que pertenece la persiana envuelta, para que aparezca en la página de ese dispositivo. Home Assistant puede entonces mostrar el nombre del dispositivo delante del nombre de esta persiana. Para elegir otro nombre, cambia el nombre de la persiana en los ajustes de la entidad.",
     "recalibrate_before_position.label": "Abrir totalmente antes de mover a una posición (Beta)",
     "recalibrate_before_position.helper":
       "Para persianas sin realimentación de posición que un mando a distancia también puede mover. Abre la persiana por completo antes de cada comando de posición, para que el movimiento parta de una posición conocida en lugar de una estimación desviada. Duplica aproximadamente el recorrido de cada movimiento y, con la inclinación durante el recorrido o la inclinación secuencial, mueve la persiana cuando ajustas las lamas.",
@@ -1547,7 +1547,7 @@ export const TRANSLATIONS = {
       "Per a persianes amb una predefinició \"my\"/preferida de maquinari (per exemple, Somfy RTS): prémer atura amb la persiana ja aturada la porta a aquesta predefinició. Quan està activat, el Home Assistant no reenvia l'ordre d'aturada mentre la persiana ja està aturada, de manera que roman al lloc. Deixa-ho desactivat per mantenir el comportament actual.",
     "link_to_device.label": "Mostra a la pàgina del dispositiu de la persiana embolcallada",
     "link_to_device.helper":
-      "Afegeix aquesta persiana al dispositiu al qual pertany la persiana embolcallada, perquè aparegui a la pàgina d'aquest dispositiu. Llavors Home Assistant pot mostrar el nom del dispositiu davant del nom d'aquesta persiana. Per triar un altre nom, canvia el nom de la persiana a la configuració de l'entitat.",
+      "Afegeix aquesta persiana al dispositiu al qual pertany la persiana embolcallada, perquè aparegui a la pàgina d'aquest dispositiu. Home Assistant pot mostrar llavors el nom del dispositiu davant del nom d'aquesta persiana. Per triar un altre nom, canvia el nom de la persiana a la configuració de l'entitat.",
     "recalibrate_before_position.label": "Obre del tot abans de moure's a una posició (Beta)",
     "recalibrate_before_position.helper":
       "Per a persianes sense realimentació de posició que un comandament a distància també pot moure. Obre la persiana del tot abans de cada ordre de posició, perquè el moviment parteixi d'una posició coneguda en lloc d'una estimació desviada. Duplica aproximadament el recorregut de cada moviment i, amb la inclinació durant el recorregut o la inclinació seqüencial, mou la persiana quan ajustes les lamel·les.",
