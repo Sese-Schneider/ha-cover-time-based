@@ -10,6 +10,16 @@ DOMAIN = "cover_time_based"
 # accepted values and their meaning are defined exactly once.
 RESYNC_POSITIONS = {STATE_CLOSED: 0, STATE_OPEN: 100}
 
+CONF_COVER_ENTITY_ID = "cover_entity_id"
+
+CONF_CONTROL_MODE = "control_mode"
+CONTROL_MODE_WRAPPED = "wrapped"
+CONTROL_MODE_SWITCH = "switch"
+CONTROL_MODE_PULSE = "pulse"
+CONTROL_MODE_TOGGLE = "toggle"
+CONTROL_MODE_TOGGLE_OPPOSITE = "toggle_opposite"
+CONTROL_MODE_SINGLE_BUTTON = "single_button"
+
 CONF_TILT_MODE = "tilt_mode"
 CONF_TRAVEL_TIME_CLOSE = "travel_time_close"
 CONF_TRAVEL_TIME_OPEN = "travel_time_open"

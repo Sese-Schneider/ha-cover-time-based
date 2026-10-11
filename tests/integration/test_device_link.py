@@ -3,19 +3,25 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
-import attr
+import homeassistant.util.dt as dt_util
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
-from custom_components.cover_time_based.device_link import LINK_BY_DEVICE_ENTRY
+from custom_components.cover_time_based.device_link import (
+    LINK_BY_DEVICE_ENTRY,
+    ONE_OWNER_DEVICES,
+)
 
 DOMAIN = "cover_time_based"
-# From HA 2026.8 a device has exactly one owning config entry; before, a set.
-ONE_OWNER_DEVICES = "config_entry_id" in attr.fields_dict(dr.DeviceEntry)
 # Loggers that warn on every test run for reasons unrelated to this feature.
 _UNRELATED_LOGGERS = {"homeassistant.loader", "aiohttp_fast_zlib"}
 
@@ -54,20 +60,18 @@ def _wrapped_entry(
     inner_entity_id: str,
     *,
     title: str = "Lounge Timed",
-    link_to_device: bool = True,
+    link_to_device: bool | None = True,
 ):
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        version=4,
-        title=title,
-        options={
-            "control_mode": "wrapped",
-            "cover_entity_id": inner_entity_id,
-            "link_to_device": link_to_device,
-            "travel_time_open": 30.0,
-            "travel_time_close": 30.0,
-        },
-    )
+    """A wrapped cover's config entry; `link_to_device=None` leaves the key out."""
+    options = {
+        "control_mode": "wrapped",
+        "cover_entity_id": inner_entity_id,
+        "travel_time_open": 30.0,
+        "travel_time_close": 30.0,
+    }
+    if link_to_device is not None:
+        options["link_to_device"] = link_to_device
+    entry = MockConfigEntry(domain=DOMAIN, version=4, title=title, options=options)
     entry.add_to_hass(hass)
     return entry
 
@@ -83,6 +87,18 @@ async def _change_options(
     """Save new options the way the card does; the update listener reloads."""
     hass.config_entries.async_update_entry(entry, options={**entry.options, **changes})
     await hass.async_block_till_done()
+
+
+async def _pass_hass_reload_delay(hass: HomeAssistant) -> None:
+    """Run the reload HA schedules ~30 s after an entity is re-enabled."""
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=31))
+    await hass.async_block_till_done()
+
+
+def _disable_device(hass: HomeAssistant, device) -> None:
+    dr.async_get(hass).async_update_device(
+        device.id, disabled_by=dr.DeviceEntryDisabler.USER
+    )
 
 
 def _our_entity(hass: HomeAssistant, entry: MockConfigEntry) -> er.RegistryEntry:
@@ -102,6 +118,16 @@ def _devices_listing(hass: HomeAssistant, entry: MockConfigEntry) -> list[str]:
 def _expected_listing(device) -> list[str]:
     # Before 2025.8 the only link method also adds our config entry to the device.
     return [] if LINK_BY_DEVICE_ENTRY else [device.id]
+
+
+@pytest.fixture(autouse=True)
+async def unload_our_entries(hass: HomeAssistant):
+    """Unload every cover this test loaded, to cancel its timers and listeners."""
+    yield
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.state is ConfigEntryState.LOADED:
+            await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
 
 
 @pytest.fixture
@@ -146,18 +172,7 @@ async def test_switch_off_by_default_leaves_the_cover_on_its_own(
     hass: HomeAssistant, no_warnings
 ):
     _, inner = _hardware_cover(hass, "lounge_blind")
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        version=4,
-        title="Lounge Timed",
-        options={
-            "control_mode": "wrapped",
-            "cover_entity_id": inner,
-            "travel_time_open": 30.0,
-            "travel_time_close": 30.0,
-        },
-    )
-    entry.add_to_hass(hass)
+    entry = _wrapped_entry(hass, inner, link_to_device=None)
 
     await _setup(hass, entry)
 
@@ -324,12 +339,152 @@ async def test_disabling_the_inner_covers_device_disables_the_cover(
     entry = _wrapped_entry(hass, inner)
     await _setup(hass, entry)
 
-    dr.async_get(hass).async_update_device(
-        device.id, disabled_by=dr.DeviceEntryDisabler.USER
-    )
+    _disable_device(hass, device)
     await hass.async_block_till_done()
 
     assert _our_entity(hass, entry).disabled_by is er.RegistryEntryDisabler.DEVICE
+
+
+async def _link_then_disable_the_device(hass: HomeAssistant):
+    device, inner = _hardware_cover(hass, "lounge_blind")
+    entry = _wrapped_entry(hass, inner)
+    await _setup(hass, entry)
+    _disable_device(hass, device)
+    await hass.async_block_till_done()
+    ours = _our_entity(hass, entry)
+    assert ours.disabled_by is er.RegistryEntryDisabler.DEVICE
+    assert hass.states.get(ours.entity_id) is None
+    return entry, ours.entity_id
+
+
+async def test_unlinking_from_a_disabled_device_brings_the_cover_back(
+    hass: HomeAssistant, entity_removals, no_warnings
+):
+    entry, entity_id = await _link_then_disable_the_device(hass)
+
+    await _change_options(hass, entry, link_to_device=False)
+
+    ours = _our_entity(hass, entry)
+    assert ours.device_id is None
+    assert ours.disabled_by is None
+    assert hass.states.get(entity_id) is not None
+    await _pass_hass_reload_delay(hass)
+    assert _our_entity(hass, entry).disabled_by is None
+    assert hass.states.get(entity_id) is not None
+    assert entity_removals == []
+
+
+async def test_moving_from_a_disabled_device_to_an_enabled_one_brings_the_cover_back(
+    hass: HomeAssistant, entity_removals, no_warnings
+):
+    entry, entity_id = await _link_then_disable_the_device(hass)
+    kitchen_device, kitchen = _hardware_cover(
+        hass, "kitchen_blind", device_name="Kitchen blind motor"
+    )
+
+    await _change_options(hass, entry, cover_entity_id=kitchen)
+
+    ours = _our_entity(hass, entry)
+    assert ours.device_id == kitchen_device.id
+    assert ours.disabled_by is None
+    assert hass.states.get(entity_id) is not None
+    await _pass_hass_reload_delay(hass)
+    assert _our_entity(hass, entry).disabled_by is None
+    assert hass.states.get(entity_id) is not None
+    assert entity_removals == []
+
+
+async def test_moving_to_another_disabled_device_keeps_the_cover_disabled(
+    hass: HomeAssistant, entity_removals, no_warnings
+):
+    entry, entity_id = await _link_then_disable_the_device(hass)
+    kitchen_device, kitchen = _hardware_cover(
+        hass, "kitchen_blind", device_name="Kitchen blind motor"
+    )
+    _disable_device(hass, kitchen_device)
+    await hass.async_block_till_done()
+    # Re-enabling the cover, even briefly, would make HA reload it 30 s later.
+    flips: list[dict] = []
+    hass.bus.async_listen(
+        er.EVENT_ENTITY_REGISTRY_UPDATED,
+        lambda event: (
+            flips.append(dict(event.data))
+            if "disabled_by" in event.data.get("changes", {})
+            else None
+        ),
+    )
+
+    await _change_options(hass, entry, cover_entity_id=kitchen)
+
+    ours = _our_entity(hass, entry)
+    assert ours.device_id == kitchen_device.id
+    assert ours.disabled_by is er.RegistryEntryDisabler.DEVICE
+    assert hass.states.get(entity_id) is None
+    assert flips == []
+    assert entity_removals == []
+
+
+@pytest.mark.parametrize("change", ["off", "move"])
+async def test_a_cover_the_user_disabled_stays_disabled(
+    hass: HomeAssistant, entity_removals, no_warnings, change
+):
+    device, inner = _hardware_cover(hass, "lounge_blind")
+    _, kitchen = _hardware_cover(
+        hass, "kitchen_blind", device_name="Kitchen blind motor"
+    )
+    entry = _wrapped_entry(hass, inner)
+    await _setup(hass, entry)
+    entity_id = _our_entity(hass, entry).entity_id
+    er.async_get(hass).async_update_entity(
+        entity_id, disabled_by=er.RegistryEntryDisabler.USER
+    )
+    _disable_device(hass, device)
+    await hass.async_block_till_done()
+
+    if change == "off":
+        await _change_options(hass, entry, link_to_device=False)
+    else:
+        await _change_options(hass, entry, cover_entity_id=kitchen)
+
+    assert _our_entity(hass, entry).disabled_by is er.RegistryEntryDisabler.USER
+    assert hass.states.get(entity_id) is None
+    assert entity_removals == []
+
+
+async def test_leftover_link_to_a_disabled_device_is_cleaned_up_and_the_cover_returns(
+    hass: HomeAssistant, entity_removals, no_warnings
+):
+    """Our cover sits on a disabled device left over from an earlier link."""
+    device, inner = _hardware_cover(hass, "lounge_blind")
+    entry = _wrapped_entry(hass, inner)
+    dev_reg = dr.async_get(hass)
+    leftover = dev_reg.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={("hardware", "old_blind")},
+        name="Old blind motor",
+    )
+    _disable_device(hass, leftover)
+    registered = er.async_get(hass).async_get_or_create(
+        "cover",
+        DOMAIN,
+        "cover_timebased_uuid_" + entry.entry_id,
+        suggested_object_id="lounge_timed",
+        config_entry=entry,
+        device_id=leftover.id,
+        disabled_by=er.RegistryEntryDisabler.DEVICE,
+    )
+
+    await _setup(hass, entry)
+
+    ours = _our_entity(hass, entry)
+    assert ours.id == registered.id
+    assert ours.device_id == device.id
+    assert ours.disabled_by is None
+    assert hass.states.get(ours.entity_id) is not None
+    assert _devices_listing(hass, entry) == _expected_listing(device)
+    await _pass_hass_reload_delay(hass)
+    assert _our_entity(hass, entry).disabled_by is None
+    assert entity_removals == []
 
 
 async def test_newer_home_assistant_puts_the_device_name_in_front(

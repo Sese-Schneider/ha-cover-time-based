@@ -147,6 +147,7 @@ detail. A blank cell means the option is not shown for that mode.
 | [Position reporting](#position-reporting) | ✓ | | | | | |
 | [Force time-based positioning](#force-time-based-positioning) | ✓ | | | | | |
 | [Invert position](#invert-position) | ✓ | | | | | |
+| [Show on the wrapped cover's device page](#show-on-the-wrapped-covers-device-page) | ✓ | | | | | |
 | [Pulse time](#pulse-time) | | | ✓ | | | ✓ |
 | [Relay reports its own OFF](#relay-reports-its-own-off) | | | | ✓ | ✓ | ✓ |
 | [Send stop signal at endpoints](#send-stop-signal-at-endpoints) | | | ✓ | | | |
@@ -257,13 +258,17 @@ name in front of its own, so a cover called "Lounge Timed" on a device called
 different name, rename the cover in its entity settings; that name is always
 used as it is.
 
-If the wrapped cover belongs to no device, such as a template cover, the switch
-has no effect. The link is worked out when the cover starts, so if the wrapped
-cover later moves to a different device (after re-pairing it, say), the
-time-based cover follows the next time you save its settings or restart Home
-Assistant. Once the cover belongs to a device, disabling that device in Home
-Assistant disables the time-based cover too. Covers set up in YAML are never
-linked to a device.
+If the wrapped cover belongs to no device, the switch has no effect. The link
+is worked out when the cover starts, so if the wrapped cover later moves to a
+different device (after re-pairing it, say), the time-based cover follows the
+next time you save its settings or restart Home Assistant.
+
+Once the cover belongs to a device, disabling that device in Home Assistant
+disables the time-based cover too. Re-enabling the device brings it back. So
+does turning the switch off, or choosing a wrapped cover that is not on a
+disabled device, the next time you save or restart. A time-based cover you
+disabled yourself stays disabled. Covers set up in YAML are never linked to a
+device.
 
 Wrapped covers have a few more behaviours worth knowing about, such as how they
 follow physical wall switches and when a cover positions itself natively. Those
