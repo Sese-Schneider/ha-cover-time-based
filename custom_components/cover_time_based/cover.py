@@ -32,6 +32,7 @@ from .const import (
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_INVERT,
+    CONF_LINK_TO_DEVICE,
     CONF_MIN_MOVEMENT_TIME,
     CONF_POSITION_REPORTING,
     CONF_RECALIBRATE_BEFORE_POSITION,
@@ -52,6 +53,7 @@ from .const import (
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_INVERT,
+    DEFAULT_LINK_TO_DEVICE,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
     DEFAULT_SEND_ENDPOINT_STOP,
@@ -60,6 +62,7 @@ from .const import (
     RESYNC_POSITIONS,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
+from .device_link import async_link_to_source_device
 from .helpers import resolve_entity
 from .position_reporting import from_profile
 
@@ -573,17 +576,23 @@ async def async_setup_platform(hass, config, async_add_entities, _discovery_info
 
 
 async def async_setup_entry(
-    _hass: HomeAssistant,
+    hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up a single cover entity from a config entry."""
+    options = config_entry.options
     entity = _create_cover_from_options(
-        config_entry.options,
+        options,
         device_id=config_entry.entry_id,
         name=config_entry.title,
     )
     entity._config_entry_id = config_entry.entry_id
+    linked = options.get(CONF_CONTROL_MODE) == CONTROL_MODE_WRAPPED and options.get(
+        CONF_LINK_TO_DEVICE, DEFAULT_LINK_TO_DEVICE
+    )
+    source = options.get(CONF_COVER_ENTITY_ID) if linked else None
+    async_link_to_source_device(hass, entity, config_entry.entry_id, source)
     async_add_entities([entity])
 
     platform = entity_platform.current_platform.get()

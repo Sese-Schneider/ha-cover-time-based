@@ -154,3 +154,9 @@ DEFAULT_RECALIBRATE_BEFORE_POSITION = False
 # button covers need the stop and ignore it.
 CONF_SKIP_STOP_WHEN_IDLE = "skip_stop_when_idle"
 DEFAULT_SKIP_STOP_WHEN_IDLE = False
+
+# Show a wrapped cover on the device page of the cover it wraps (issue #304).
+# Off by default: on HA 2025.8+ HA then puts the device's name in front of the
+# cover's name, so turning it on for existing covers would rename them.
+CONF_LINK_TO_DEVICE = "link_to_device"
+DEFAULT_LINK_TO_DEVICE = False
