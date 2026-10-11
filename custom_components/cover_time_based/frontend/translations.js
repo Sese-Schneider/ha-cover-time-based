@@ -93,6 +93,9 @@ export const EN = {
   "skip_stop_when_idle.label": "Don't send Stop when already stopped",
   "skip_stop_when_idle.helper":
     'For shutters with a hardware "my"/favourite preset (e.g. Somfy RTS): pressing stop while the shutter is already stopped drives it to that preset. When on, Home Assistant does not forward the stop while the cover is already stopped, so the shutter stays put. Leave off to keep the current behaviour.',
+  "link_to_device.label": "Show on the wrapped cover's device page",
+  "link_to_device.helper":
+    "Adds this cover to the device that the wrapped cover belongs to, so it is listed on that device's page. Home Assistant may then show the device's name in front of this cover's name. To choose a different name, rename the cover in its entity settings.",
   "recalibrate_before_position.label": "Fully open before moving to a position (Beta)",
   "recalibrate_before_position.helper":
     "For covers with no position feedback that a remote can also move. Drives the cover fully open before each position command, so the move starts from a known position instead of a drifted guess. Roughly doubles the travel of every move, and on inline or sequential tilt it moves the cover when you adjust the slats.",
@@ -272,6 +275,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "Não enviar Parar quando já está parado",
     "skip_stop_when_idle.helper":
       'Para estores com uma predefinição "my"/favorita integrada (por exemplo, Somfy RTS): premir parar com o estore já parado envia-o para essa predefinição. Quando ativado, o Home Assistant não encaminha o comando de parar enquanto o estore já está parado, pelo que este permanece no lugar. Deixe desativado para manter o comportamento atual.',
+    "link_to_device.label": "Mostrar na página do dispositivo do estore encapsulado",
+    "link_to_device.helper":
+      "Adiciona este estore ao dispositivo a que pertence o estore encapsulado, para que apareça na página desse dispositivo. O Home Assistant pode então mostrar o nome do dispositivo antes do nome deste estore. Para escolher outro nome, mude o nome do estore nas definições da entidade.",
     "recalibrate_before_position.label": "Abrir totalmente antes de mover para uma posição (Beta)",
     "recalibrate_before_position.helper":
       "Para estores sem retorno de posição que também podem ser movidos por um telecomando. Antes de cada comando de definir posição, move primeiro o estore para totalmente aberto, para que o movimento comece a partir de uma posição conhecida em vez de uma estimativa desviada. Isto duplica, grosso modo, o tempo de deslocamento de cada movimento e, na inclinação durante o deslocamento ou na inclinação sequencial, ajustar as lâminas também move o estore.",
@@ -450,6 +456,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "Nie wysyłaj polecenia Zatrzymaj, gdy roleta już stoi",
     "skip_stop_when_idle.helper":
       'Dla rolet ze sprzętową zaprogramowaną pozycją "my"/ulubioną (np. Somfy RTS): naciśnięcie zatrzymania, gdy roleta już stoi, przesuwa ją do tej pozycji. Po włączeniu Home Assistant nie przekazuje polecenia zatrzymania, gdy roleta już stoi, więc pozostaje ona na miejscu. Pozostaw wyłączone, aby zachować obecne zachowanie.',
+    "link_to_device.label": "Pokaż na stronie urządzenia opakowanej rolety",
+    "link_to_device.helper":
+      "Dodaje tę roletę do urządzenia, do którego należy opakowana roleta, aby była widoczna na stronie tego urządzenia. Home Assistant może wtedy wyświetlać nazwę urządzenia przed nazwą tej rolety. Aby wybrać inną nazwę, zmień nazwę rolety w ustawieniach encji.",
     "recalibrate_before_position.label": "Otwórz w pełni przed przejściem do pozycji (Beta)",
     "recalibrate_before_position.helper":
       "Dla rolet bez informacji zwrotnej o pozycji, które mogą być poruszane również pilotem. Przed każdym poleceniem ustawienia pozycji najpierw otwiera roletę w pełni, dzięki czemu ruch zaczyna się od znanej pozycji, a nie od nieaktualnego przybliżenia. Z grubsza podwaja czas ruchu przy każdym przesunięciu, a przy nachyleniu w trakcie ruchu lub nachyleniu sekwencyjnym regulacja listew porusza także samą roletę.",
@@ -627,6 +636,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "Stopp nicht senden, wenn bereits gestoppt",
     "skip_stop_when_idle.helper":
       "Für Rollläden mit einer hardwareseitigen „my“/Favoriten-Voreinstellung (z. B. Somfy RTS): Ein Stopp bei bereits stehendem Rollladen fährt ihn in diese Voreinstellung. Wenn aktiviert, leitet Home Assistant den Stopp nicht weiter, solange der Rollladen bereits steht, sodass er an Ort und Stelle bleibt. Zum Beibehalten des bisherigen Verhaltens deaktiviert lassen.",
+    "link_to_device.label": "Auf der Geräteseite des eingebundenen Rollladens anzeigen",
+    "link_to_device.helper":
+      "Fügt diesen Rollladen dem Gerät hinzu, zu dem der eingebundene Rollladen gehört, sodass er auf der Seite dieses Geräts aufgeführt wird. Home Assistant zeigt dann möglicherweise den Gerätenamen vor dem Namen dieses Rollladens an. Um einen anderen Namen zu wählen, benenne den Rollladen in seinen Entitätseinstellungen um.",
     "recalibrate_before_position.label":
       "Vor einer Positionsfahrt zuerst vollständig öffnen (Beta)",
     "recalibrate_before_position.helper":
@@ -809,6 +821,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "Non inviare Stop quando è già fermo",
     "skip_stop_when_idle.helper":
       'Per tapparelle con una preimpostazione hardware "my"/preferita (ad esempio Somfy RTS): premere stop quando la tapparella è già ferma la porta a quella posizione. Quando attivo, Home Assistant non inoltra il comando di stop mentre la tapparella è già ferma, così resta al suo posto. Lascia disattivato per mantenere il comportamento attuale.',
+    "link_to_device.label": "Mostra nella pagina del dispositivo della tapparella incapsulata",
+    "link_to_device.helper":
+      "Aggiunge questa tapparella al dispositivo a cui appartiene la tapparella incapsulata, così compare nella pagina di quel dispositivo. Home Assistant potrebbe quindi mostrare il nome del dispositivo davanti al nome di questa tapparella. Per scegliere un nome diverso, rinomina la tapparella nelle impostazioni dell'entità.",
     "recalibrate_before_position.label": "Apri completamente prima di spostare in posizione (Beta)",
     "recalibrate_before_position.helper":
       "Per le tapparelle senza retroazione di posizione che possono essere spostate anche da un telecomando. Porta la tapparella in apertura completa prima di ogni comando di posizionamento, così il movimento parte da una posizione nota anziché da una stima alla deriva. Raddoppia circa il tempo di corsa di ogni movimento e, con l'inclinazione durante la corsa o quella sequenziale, muove la tapparella anche quando regoli le lamelle.",
@@ -986,6 +1001,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "Stop niet versturen als al gestopt",
     "skip_stop_when_idle.helper":
       'Voor rolluiken met een ingebouwde "my"/favoriete voorinstelling (bijvoorbeeld Somfy RTS): op stop drukken terwijl het rolluik al stilstaat, verplaatst het naar die voorinstelling. Wanneer ingeschakeld stuurt Home Assistant het stopcommando niet door zolang het rolluik al stilstaat, zodat het blijft staan. Laat uit om het huidige gedrag te behouden.',
+    "link_to_device.label": "Tonen op de apparaatpagina van het ingekapselde rolluik",
+    "link_to_device.helper":
+      "Voegt dit rolluik toe aan het apparaat waartoe het ingekapselde rolluik behoort, zodat het op de pagina van dat apparaat wordt vermeld. Home Assistant kan dan de naam van het apparaat vóór de naam van dit rolluik tonen. Wil je een andere naam, hernoem het rolluik dan in de entiteitsinstellingen.",
     "recalibrate_before_position.label":
       "Volledig openen voordat naar een positie wordt bewogen (Beta)",
     "recalibrate_before_position.helper":
@@ -1164,6 +1182,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "Ne pas envoyer Arrêt quand déjà arrêté",
     "skip_stop_when_idle.helper":
       "Pour les volets dotés d'un préréglage matériel \"my\"/favori (par exemple Somfy RTS) : appuyer sur arrêt alors que le volet est déjà arrêté l'envoie vers ce préréglage. Une fois activé, Home Assistant ne transmet pas l'arrêt tant que le volet est déjà arrêté, de sorte qu'il reste en place. Laissez désactivé pour conserver le comportement actuel.",
+    "link_to_device.label": "Afficher sur la page de l'appareil du volet encapsulé",
+    "link_to_device.helper":
+      "Ajoute ce volet à l'appareil auquel appartient le volet encapsulé, afin qu'il apparaisse sur la page de cet appareil. Home Assistant peut alors afficher le nom de l'appareil devant le nom de ce volet. Pour choisir un autre nom, renommez le volet dans les paramètres de l'entité.",
     "recalibrate_before_position.label": "Ouvrir complètement avant d'aller à une position (Bêta)",
     "recalibrate_before_position.helper":
       "Pour les volets sans retour de position qu'une télécommande peut aussi actionner. Ouvre complètement le volet avant chaque commande de position, afin que le mouvement parte d'une position connue plutôt que d'une estimation partie à la dérive. Cela double à peu près la course de chaque mouvement et, avec une inclinaison pendant la course ou une inclinaison séquentielle, le volet bouge lorsque vous réglez les lames.",
@@ -1341,6 +1362,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "No enviar Detener cuando ya está detenido",
     "skip_stop_when_idle.helper":
       'Para persianas con un preajuste de hardware "my"/favorito (por ejemplo, Somfy RTS): pulsar detener con la persiana ya detenida la lleva a ese preajuste. Cuando está activado, Home Assistant no reenvía la orden de detener mientras la persiana ya está detenida, por lo que permanece en su sitio. Déjalo desactivado para mantener el comportamiento actual.',
+    "link_to_device.label": "Mostrar en la página del dispositivo de la persiana envuelta",
+    "link_to_device.helper":
+      "Añade esta persiana al dispositivo al que pertenece la persiana envuelta, para que aparezca en la página de ese dispositivo. Home Assistant puede entonces mostrar el nombre del dispositivo delante del nombre de esta persiana. Para elegir otro nombre, cambia el nombre de la persiana en la configuración de la entidad.",
     "recalibrate_before_position.label": "Abrir totalmente antes de mover a una posición (Beta)",
     "recalibrate_before_position.helper":
       "Para persianas sin realimentación de posición que un mando a distancia también puede mover. Abre la persiana por completo antes de cada comando de posición, para que el movimiento parta de una posición conocida en lugar de una estimación desviada. Duplica aproximadamente el recorrido de cada movimiento y, con la inclinación durante el recorrido o la inclinación secuencial, mueve la persiana cuando ajustas las lamas.",
@@ -1521,6 +1545,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "No enviïs Atura quan ja està aturada",
     "skip_stop_when_idle.helper":
       "Per a persianes amb una predefinició \"my\"/preferida de maquinari (per exemple, Somfy RTS): prémer atura amb la persiana ja aturada la porta a aquesta predefinició. Quan està activat, el Home Assistant no reenvia l'ordre d'aturada mentre la persiana ja està aturada, de manera que roman al lloc. Deixa-ho desactivat per mantenir el comportament actual.",
+    "link_to_device.label": "Mostra a la pàgina del dispositiu de la persiana embolcallada",
+    "link_to_device.helper":
+      "Afegeix aquesta persiana al dispositiu al qual pertany la persiana embolcallada, perquè aparegui a la pàgina d'aquest dispositiu. Llavors Home Assistant pot mostrar el nom del dispositiu davant del nom d'aquesta persiana. Per triar un altre nom, canvia el nom de la persiana a la configuració de l'entitat.",
     "recalibrate_before_position.label": "Obre del tot abans de moure's a una posició (Beta)",
     "recalibrate_before_position.helper":
       "Per a persianes sense realimentació de posició que un comandament a distància també pot moure. Obre la persiana del tot abans de cada ordre de posició, perquè el moviment parteixi d'una posició coneguda en lloc d'una estimació desviada. Duplica aproximadament el recorregut de cada moviment i, amb la inclinació durant el recorregut o la inclinació seqüencial, mou la persiana quan ajustes les lamel·les.",
@@ -1699,6 +1726,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "Neposílat Stop, když už stojí",
     "skip_stop_when_idle.helper":
       'Pro rolety s hardwarovou předvolbou "my"/oblíbenou (např. Somfy RTS): stisknutí zastavení, když roleta již stojí, ji přesune do této předvolby. Když je zapnuto, Home Assistant nepředává příkaz k zastavení, dokud roleta již stojí, takže zůstane na místě. Ponechte vypnuté pro zachování stávajícího chování.',
+    "link_to_device.label": "Zobrazit na stránce zařízení zabalené rolety",
+    "link_to_device.helper":
+      "Přidá tuto roletu k zařízení, ke kterému patří zabalená roleta, takže se zobrazí na stránce tohoto zařízení. Home Assistant pak může před název této rolety zobrazit název zařízení. Chcete-li zvolit jiný název, přejmenujte roletu v nastavení entity.",
     "recalibrate_before_position.label": "Před přesunem na pozici plně otevřít (Beta)",
     "recalibrate_before_position.helper":
       "Pro rolety bez zpětné vazby pozice, kterými může pohybovat i dálkový ovladač. Před každým příkazem na pozici roletu plně otevře, takže pohyb začíná ze známé pozice místo z odchýleného odhadu. Zhruba zdvojnásobí dráhu každého pohybu a u současného nebo sekvenčního náklonu pohne roletou, když upravujete lamely.",
@@ -1875,6 +1905,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "Ne šalji Stop kada je već zaustavljeno",
     "skip_stop_when_idle.helper":
       'Za roletne sa hardverskom "my"/omiljenom postavkom (npr. Somfy RTS): pritisak na stop dok je roletna već zaustavljena pomera je na tu postavku. Kada je uključeno, Home Assistant ne prosleđuje komandu za zaustavljanje dok je roletna već zaustavljena, pa ostaje na mestu. Ostavite isključeno da biste zadržali trenutno ponašanje.',
+    "link_to_device.label": "Prikaži na stranici uređaja omotane roletne",
+    "link_to_device.helper":
+      "Dodaje ovu roletnu uređaju kojem pripada omotana roletna, tako da se prikazuje na stranici tog uređaja. Home Assistant tada može prikazati naziv uređaja ispred naziva ove roletne. Da biste izabrali drugi naziv, preimenujte roletnu u podešavanjima entiteta.",
     "recalibrate_before_position.label": "Potpuno otvori pre pomeranja na poziciju (Beta)",
     "recalibrate_before_position.helper":
       "Za roletne bez povratne informacije o poziciji koje daljinski upravljač takođe može da pomera. Pre svake komande za poziciju roletnu potpuno otvara, pa kretanje počinje od poznate pozicije umesto od izmaknute procene. Otprilike udvostručuje kretanje pri svakom pomeranju, a kod istovremenog ili sekvencijalnog nagiba pomera roletnu kada podešavate lamele.",
@@ -2048,6 +2081,9 @@ export const TRANSLATIONS = {
     "skip_stop_when_idle.label": "לא לשלוח עצירה כשהתריס כבר עצור",
     "skip_stop_when_idle.helper":
       'לתריסים עם מיקום מועדף "my" בחומרה (למשל Somfy RTS): לחיצה על עצירה כשהתריס כבר עצור מזיזה אותו למיקום המועדף. כשהאפשרות מופעלת, Home Assistant אינו מעביר את פקודת העצירה כשהתריס כבר עצור, כך שהוא נשאר במקומו. יש להשאיר כבוי כדי לשמור על ההתנהגות הנוכחית.',
+    "link_to_device.label": "הצגה בדף המכשיר של התריס העטוף",
+    "link_to_device.helper":
+      "מוסיף את התריס הזה למכשיר שאליו שייך התריס העטוף, כך שיופיע בדף של אותו מכשיר. ייתכן ש-Home Assistant יציג אז את שם המכשיר לפני שם התריס הזה. כדי לבחור שם אחר, יש לשנות את שם התריס בהגדרות הישות.",
     "recalibrate_before_position.label": "פתיחה מלאה לפני מעבר למיקום (בטא)",
     "recalibrate_before_position.helper":
       "לתריסים ללא משוב מיקום שגם שלט רחוק יכול להזיז. פותח את התריס לגמרי לפני כל פקודת מיקום, כך שהתנועה מתחילה ממיקום ידוע ולא מהערכה שסטתה. מכפיל בערך את התנועה של כל הזזה, ובהטיה משולבת או רציפה הוא מזיז את התריס כשמכוונים את הרפפות.",

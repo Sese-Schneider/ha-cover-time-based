@@ -241,6 +241,30 @@ its open and close commands. This affects position only, not tilt, and is meant
 for position-only covers such as awnings and shutters. Leave it off for a
 normally-oriented cover.
 
+#### Show on the wrapped cover's device page
+
+In Home Assistant a *device* is the physical thing, such as a Zigbee blind
+motor, and its page lists everything that belongs to it. Turn **Show on the
+wrapped cover's device page** on and the time-based cover joins the device of
+the cover it wraps, so it appears on that page next to the original entity.
+That keeps the two together, which helps if you hide the original and use the
+time-based cover as your everyday control.
+
+It is off by default because joining a device can change the cover's name.
+From Home Assistant 2025.8, an entity on a device is shown with the device's
+name in front of its own, so a cover called "Lounge Timed" on a device called
+"Lounge blind motor" shows as "Lounge blind motor Lounge Timed". To choose a
+different name, rename the cover in its entity settings; that name is always
+used as it is.
+
+If the wrapped cover belongs to no device, such as a template cover, the switch
+has no effect. The link is worked out when the cover starts, so if the wrapped
+cover later moves to a different device (after re-pairing it, say), the
+time-based cover follows the next time you save its settings or restart Home
+Assistant. Once the cover belongs to a device, disabling that device in Home
+Assistant disables the time-based cover too. Covers set up in YAML are never
+linked to a device.
+
 Wrapped covers have a few more behaviours worth knowing about, such as how they
 follow physical wall switches and when a cover positions itself natively. Those
 are covered under [Advanced hardware notes](#advanced-hardware-notes).
