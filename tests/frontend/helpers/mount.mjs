@@ -33,3 +33,11 @@ export async function mountCard(
   await el.updateComplete;
   return el;
 }
+
+/** The ha-switch in the toggle row labelled `label`, or null if none renders. */
+export function toggleByLabel(card, label) {
+  const row = [...card.shadowRoot.querySelectorAll(".toggle-with-help")].find(
+    (el) => el.querySelector(".toggle-label")?.textContent.trim() === label,
+  );
+  return row?.querySelector("ha-switch.toggle-switch") ?? null;
+}

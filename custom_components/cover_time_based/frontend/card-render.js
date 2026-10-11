@@ -377,6 +377,13 @@ export function renderInputEntities(card, c) {
         )}
         ${renderToggleWithHelp(
           card,
+          "entities.link_to_device",
+          "entities.link_to_device_helper",
+          c.link_to_device === true,
+          (e) => card._updateLocal({ link_to_device: e.target.checked }),
+        )}
+        ${renderToggleWithHelp(
+          card,
           "assumed_state.label",
           "assumed_state.helper",
           c.assumed_state !== false,
@@ -405,13 +412,6 @@ export function renderInputEntities(card, c) {
           "skip_stop_when_idle.helper",
           c.skip_stop_when_idle === true,
           (e) => card._updateLocal({ skip_stop_when_idle: e.target.checked }),
-        )}
-        ${renderToggleWithHelp(
-          card,
-          "link_to_device.label",
-          "link_to_device.helper",
-          c.link_to_device === true,
-          (e) => card._updateLocal({ link_to_device: e.target.checked }),
         )}
       </div>
     `;

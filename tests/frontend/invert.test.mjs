@@ -60,9 +60,7 @@ test("invert toggle reflects stored true", async () => {
     activeTab: "device",
   });
   const toggles = [...card.shadowRoot.querySelectorAll("ha-switch.toggle-switch")];
-  // Wrapped order (post #238 dropdown): [0] force_time_based_position,
-  // [1] invert, [2] assumed_state, [3] force_endpoint_redrive,
-  // [4] recalibrate_before_position
+  // Wrapped mode: [0] force_time_based_position, [1] invert.
   expect(toggles[1].checked).toBe(true);
 });
 

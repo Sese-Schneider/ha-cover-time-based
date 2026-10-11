@@ -7,7 +7,7 @@
  */
 import { test, expect, afterEach, vi } from "vitest";
 import { makeHass } from "./helpers/hass.mjs";
-import { mountCard, defineHaStubs } from "./helpers/mount.mjs";
+import { mountCard, defineHaStubs, toggleByLabel } from "./helpers/mount.mjs";
 
 defineHaStubs();
 let card;
@@ -25,21 +25,13 @@ const wrappedCfg = (over = {}) => ({
   ...over,
 });
 
-function findToggle(card) {
-  const rows = [...card.shadowRoot.querySelectorAll(".toggle-label")];
-  const label = rows.find((el) => el.textContent.trim() === LABEL);
-  if (!label) return null;
-  const row = label.closest(".toggle-with-help");
-  return row.querySelector("ha-switch.toggle-switch");
-}
-
 test("link_to_device toggle renders for wrapped mode, off by default", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: wrappedCfg(),
     activeTab: "device",
   });
-  const toggle = findToggle(card);
+  const toggle = toggleByLabel(card, LABEL);
   expect(toggle).not.toBeNull();
   expect(toggle.checked).toBe(false);
 });
@@ -56,9 +48,20 @@ for (const mode of ["switch", "pulse", "toggle", "toggle_opposite", "single_butt
       },
       activeTab: "device",
     });
-    expect(findToggle(card)).toBeNull();
+    expect(toggleByLabel(card, LABEL)).toBeNull();
   });
 }
+
+test("link_to_device toggle sits right after the invert toggle", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg(),
+    activeTab: "device",
+  });
+  const toggles = [...card.shadowRoot.querySelectorAll("ha-switch.toggle-switch")];
+  const invert = toggleByLabel(card, "Invert position");
+  expect(toggles.indexOf(toggleByLabel(card, LABEL))).toBe(toggles.indexOf(invert) + 1);
+});
 
 test("link_to_device toggle reflects stored true", async () => {
   card = await mountCard(makeHass(), {
@@ -66,7 +69,7 @@ test("link_to_device toggle reflects stored true", async () => {
     config: wrappedCfg({ link_to_device: true }),
     activeTab: "device",
   });
-  expect(findToggle(card).checked).toBe(true);
+  expect(toggleByLabel(card, LABEL).checked).toBe(true);
 });
 
 test("toggling link_to_device calls _updateLocal({ link_to_device })", async () => {
@@ -77,7 +80,7 @@ test("toggling link_to_device calls _updateLocal({ link_to_device })", async () 
   });
   const captured = [];
   card._updateLocal = (u) => captured.push(u);
-  const toggle = findToggle(card);
+  const toggle = toggleByLabel(card, LABEL);
   toggle.checked = true;
   toggle.dispatchEvent(new Event("change"));
   expect(captured).toContainEqual({ link_to_device: true });
