@@ -13,6 +13,7 @@ import pytest
 import voluptuous as vol
 
 from custom_components.cover_time_based import websocket_api
+from custom_components.cover_time_based.const import CONF_LINK_TO_DEVICE
 from custom_components.cover_time_based.cover import (
     CONF_ASSUMED_STATE,
     CONF_CLOSE_INCLUDES_TILT,
@@ -90,6 +91,7 @@ EXPECTED_DEFAULT_CONFIG = {
     "wait_for_relay_feedback": False,
     "recalibrate_before_position": False,
     "skip_stop_when_idle": False,
+    "link_to_device": False,
 }
 
 # The exact ws_key -> conf_key mapping every persisted field goes through.
@@ -125,6 +127,7 @@ EXPECTED_FIELD_MAP = {
     "tilt_stop_switch": CONF_TILT_STOP_SWITCH,
     "close_includes_tilt": CONF_CLOSE_INCLUDES_TILT,
     "assumed_state": CONF_ASSUMED_STATE,
+    "link_to_device": CONF_LINK_TO_DEVICE,
 }
 
 # The complete set of keys the update_config schema declares: the fixed frame

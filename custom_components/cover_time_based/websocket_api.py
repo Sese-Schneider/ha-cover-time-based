@@ -13,7 +13,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .calibration import CALIBRATABLE_ATTRIBUTES
-from .const import DEFAULT_POSITION_REPORTING, DOMAIN, POSITION_REPORTING_VALUES
+from .const import (
+    CONF_LINK_TO_DEVICE,
+    DEFAULT_LINK_TO_DEVICE,
+    DEFAULT_POSITION_REPORTING,
+    DOMAIN,
+    POSITION_REPORTING_VALUES,
+)
 from .cover import (
     CONF_ASSUMED_STATE,
     CONF_CLOSE_INCLUDES_TILT,
@@ -234,6 +240,9 @@ _CONFIG_FIELDS: tuple[_ConfigField, ...] = (
     ),
     _ConfigField(
         "assumed_state", CONF_ASSUMED_STATE, _BOOL, default=DEFAULT_ASSUMED_STATE
+    ),
+    _ConfigField(
+        "link_to_device", CONF_LINK_TO_DEVICE, _BOOL, default=DEFAULT_LINK_TO_DEVICE
     ),
 )
 

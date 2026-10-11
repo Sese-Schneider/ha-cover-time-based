@@ -27,6 +27,8 @@ from .calibration import (
 from .const import (
     CONF_ASSUMED_STATE,
     CONF_CLOSE_INCLUDES_TILT,
+    CONF_CONTROL_MODE,
+    CONF_COVER_ENTITY_ID,
     CONF_DIRECTION_CHANGE_DELAY,
     CONF_ENDPOINT_RUNON_TIME,
     CONF_FORCE_ENDPOINT_REDRIVE,
@@ -46,6 +48,12 @@ from .const import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
+    CONTROL_MODE_PULSE,
+    CONTROL_MODE_SINGLE_BUTTON,
+    CONTROL_MODE_SWITCH,
+    CONTROL_MODE_TOGGLE,
+    CONTROL_MODE_TOGGLE_OPPOSITE,
+    CONTROL_MODE_WRAPPED,
     DEFAULT_ASSUMED_STATE,
     DEFAULT_CLOSE_INCLUDES_TILT,
     DEFAULT_ENDPOINT_RUNON_TIME,
@@ -60,6 +68,7 @@ from .const import (
     RESYNC_POSITIONS,
 )
 from .cover_base import CoverTimeBased  # noqa: F401
+from .device_link import async_link_to_source_device
 from .helpers import resolve_entity
 from .position_reporting import from_profile
 
@@ -91,19 +100,6 @@ CONF_MAX_TILT_ALLOWED_POSITION = "max_tilt_allowed_position"
 CONF_TILT_OPEN_SWITCH = "tilt_open_switch"
 CONF_TILT_CLOSE_SWITCH = "tilt_close_switch"
 CONF_TILT_STOP_SWITCH = "tilt_stop_switch"
-CONF_COVER_ENTITY_ID = "cover_entity_id"
-
-# ---------------------------------------------------------------------------
-# Control mode constants
-# ---------------------------------------------------------------------------
-
-CONF_CONTROL_MODE = "control_mode"
-CONTROL_MODE_WRAPPED = "wrapped"
-CONTROL_MODE_SWITCH = "switch"
-CONTROL_MODE_PULSE = "pulse"
-CONTROL_MODE_TOGGLE = "toggle"
-CONTROL_MODE_TOGGLE_OPPOSITE = "toggle_opposite"
-CONTROL_MODE_SINGLE_BUTTON = "single_button"
 
 # Explicit YAML override for control_mode, read by _resolve_control_mode().
 # "wrapped" is excluded: that mode is resolved earlier from cover_entity_id
@@ -573,7 +569,7 @@ async def async_setup_platform(hass, config, async_add_entities, _discovery_info
 
 
 async def async_setup_entry(
-    _hass: HomeAssistant,
+    hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -584,6 +580,7 @@ async def async_setup_entry(
         name=config_entry.title,
     )
     entity._config_entry_id = config_entry.entry_id
+    async_link_to_source_device(hass, entity, config_entry)
     async_add_entities([entity])
 
     platform = entity_platform.current_platform.get()

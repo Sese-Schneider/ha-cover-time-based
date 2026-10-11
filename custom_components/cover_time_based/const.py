@@ -10,6 +10,16 @@ DOMAIN = "cover_time_based"
 # accepted values and their meaning are defined exactly once.
 RESYNC_POSITIONS = {STATE_CLOSED: 0, STATE_OPEN: 100}
 
+CONF_COVER_ENTITY_ID = "cover_entity_id"
+
+CONF_CONTROL_MODE = "control_mode"
+CONTROL_MODE_WRAPPED = "wrapped"
+CONTROL_MODE_SWITCH = "switch"
+CONTROL_MODE_PULSE = "pulse"
+CONTROL_MODE_TOGGLE = "toggle"
+CONTROL_MODE_TOGGLE_OPPOSITE = "toggle_opposite"
+CONTROL_MODE_SINGLE_BUTTON = "single_button"
+
 CONF_TILT_MODE = "tilt_mode"
 CONF_TRAVEL_TIME_CLOSE = "travel_time_close"
 CONF_TRAVEL_TIME_OPEN = "travel_time_open"
@@ -154,3 +164,9 @@ DEFAULT_RECALIBRATE_BEFORE_POSITION = False
 # button covers need the stop and ignore it.
 CONF_SKIP_STOP_WHEN_IDLE = "skip_stop_when_idle"
 DEFAULT_SKIP_STOP_WHEN_IDLE = False
+
+# Show a wrapped cover on the device page of the cover it wraps (issue #304).
+# Off by default: on HA 2025.8+ HA then puts the device's name in front of the
+# cover's name, so turning it on for existing covers would rename them.
+CONF_LINK_TO_DEVICE = "link_to_device"
+DEFAULT_LINK_TO_DEVICE = False

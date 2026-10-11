@@ -45,6 +45,9 @@ export const EN = {
   "entities.invert": "Invert position",
   "entities.invert_helper":
     "Flip the position axis: report 100 − the wrapped cover's position, and swap open/close. Use for covers that run backwards, e.g. an awning where the underlying entity reports open = extended. Position axis only; the tilt logic is unchanged — intended for position-only covers (awnings/shutters), not tilting venetians.",
+  "entities.link_to_device": "Show on the wrapped cover's device page",
+  "entities.link_to_device_helper":
+    "Adds this cover to the device that the wrapped cover belongs to, so it is listed on that device's page. Home Assistant may then show the device's name in front of this cover's name. To choose a different name, rename the cover in its entity settings.",
   "entities.switch_entities": "Switch Entities",
   "entities.open_switch": "Open switch",
   "entities.close_switch": "Close switch",
@@ -222,6 +225,9 @@ export const TRANSLATIONS = {
     "entities.invert": "Inverter posição",
     "entities.invert_helper":
       "Inverte o eixo da posição: reporta 100 − a posição do estore envolvido e troca abrir/fechar. Use para estores que funcionam ao contrário, por exemplo um toldo cuja entidade subjacente reporta aberto = estendido. Apenas o eixo da posição; a lógica de inclinação não é alterada — destinado a estores apenas de posição (toldos/estores), não a venezianas de lâminas orientáveis.",
+    "entities.link_to_device": "Mostrar na página do dispositivo do estore envolvido",
+    "entities.link_to_device_helper":
+      "Adiciona este estore ao dispositivo a que pertence o estore envolvido, para que apareça na página desse dispositivo. O Home Assistant pode então mostrar o nome do dispositivo antes do nome deste estore. Para escolher outro nome, mude o nome do estore nas definições da entidade.",
     "entities.switch_entities": "Entidades de Interruptor",
     "entities.open_switch": "Interruptor de abrir",
     "entities.close_switch": "Interruptor de fechar",
@@ -400,6 +406,9 @@ export const TRANSLATIONS = {
     "entities.invert": "Odwróć pozycję",
     "entities.invert_helper":
       "Odwraca oś pozycji: zgłasza 100 − pozycję opakowanej rolety i zamienia otwieranie/zamykanie. Użyj dla rolet działających odwrotnie, np. markizy, której encja bazowa zgłasza otwarte = rozwinięte. Dotyczy tylko osi pozycji; logika nachylenia pozostaje bez zmian — przeznaczone dla rolet wyłącznie pozycyjnych (markizy/rolety), a nie żaluzji z regulowanymi lamelami.",
+    "entities.link_to_device": "Pokaż na stronie urządzenia opakowanej rolety",
+    "entities.link_to_device_helper":
+      "Dodaje tę roletę do urządzenia, do którego należy opakowana roleta, aby była widoczna na stronie tego urządzenia. Home Assistant może wtedy wyświetlać nazwę urządzenia przed nazwą tej rolety. Aby wybrać inną nazwę, zmień nazwę rolety w ustawieniach encji.",
     "entities.switch_entities": "Encje przełączników",
     "entities.open_switch": "Przełącznik otwierania",
     "entities.close_switch": "Przełącznik zamykania",
@@ -577,6 +586,9 @@ export const TRANSLATIONS = {
     "entities.invert": "Position invertieren",
     "entities.invert_helper":
       "Kehrt die Positionsachse um: meldet 100 − die Position des eingebundenen Rollladens und vertauscht Öffnen/Schließen. Verwende dies für Rollläden, die verkehrt herum laufen, z. B. eine Markise, deren zugrunde liegende Entität offen = ausgefahren meldet. Betrifft nur die Positionsachse; die Neigungslogik bleibt unverändert — gedacht für Behänge, die nur eine Position kennen (Markisen/Rollläden), nicht für Jalousien mit verstellbaren Lamellen.",
+    "entities.link_to_device": "Auf der Geräteseite des eingebundenen Rollladens anzeigen",
+    "entities.link_to_device_helper":
+      "Fügt diesen Rollladen dem Gerät hinzu, zu dem der eingebundene Rollladen gehört, sodass er auf der Seite dieses Geräts aufgeführt wird. Home Assistant zeigt dann möglicherweise den Gerätenamen vor dem Namen dieses Rollladens an. Um einen anderen Namen zu wählen, benenne den Rollladen in seinen Entitätseinstellungen um.",
     "entities.switch_entities": "Schalter-Entitäten",
     "entities.open_switch": "Schalter zum Öffnen",
     "entities.close_switch": "Schalter zum Schließen",
@@ -758,6 +770,9 @@ export const TRANSLATIONS = {
     "entities.invert": "Inverti la posizione",
     "entities.invert_helper":
       "Inverte l'asse della posizione: riporta 100 − la posizione della tapparella incapsulata e scambia apertura/chiusura. Usa questa opzione per le tapparelle che funzionano al contrario, ad esempio una tenda da sole la cui entità sottostante riporta aperta = estesa. Riguarda solo l'asse della posizione; la logica di inclinazione resta invariata — è pensata per coperture con la sola posizione (tende da sole/tapparelle), non per veneziane con lamelle orientabili.",
+    "entities.link_to_device": "Mostra nella pagina del dispositivo della tapparella incapsulata",
+    "entities.link_to_device_helper":
+      "Aggiunge questa tapparella al dispositivo a cui appartiene la tapparella incapsulata, così compare nella pagina di quel dispositivo. Home Assistant potrebbe quindi mostrare il nome del dispositivo davanti al nome di questa tapparella. Per scegliere un nome diverso, rinomina la tapparella nelle impostazioni dell'entità.",
     "entities.switch_entities": "Entità interruttore",
     "entities.open_switch": "Interruttore di apertura",
     "entities.close_switch": "Interruttore di chiusura",
@@ -935,6 +950,9 @@ export const TRANSLATIONS = {
     "entities.invert": "Positie omkeren",
     "entities.invert_helper":
       "Keert de positie-as om: rapporteert 100 − de positie van het ingekapselde rolluik en verwisselt openen/sluiten. Gebruik dit voor rolluiken die omgekeerd lopen, bijvoorbeeld een zonnescherm waarvan de onderliggende entiteit open = uitgeschoven rapporteert. Alleen de positie-as; de kantellogica blijft ongewijzigd — bedoeld voor raambekleding met alleen een positie (zonneschermen/rolluiken), niet voor jaloezieën met verstelbare lamellen.",
+    "entities.link_to_device": "Tonen op de apparaatpagina van het ingekapselde rolluik",
+    "entities.link_to_device_helper":
+      "Voegt dit rolluik toe aan het apparaat waartoe het ingekapselde rolluik behoort, zodat het op de pagina van dat apparaat wordt vermeld. Home Assistant kan dan de naam van het apparaat vóór de naam van dit rolluik tonen. Wil je een andere naam, hernoem het rolluik dan in de entiteitsinstellingen.",
     "entities.switch_entities": "Schakelaarentiteiten",
     "entities.open_switch": "Schakelaar voor openen",
     "entities.close_switch": "Schakelaar voor sluiten",
@@ -1114,6 +1132,9 @@ export const TRANSLATIONS = {
     "entities.invert": "Inverser la position",
     "entities.invert_helper":
       "Inverse l'axe de position\u00a0: rapporte 100 − la position du volet encapsulé et permute ouverture/fermeture. À utiliser pour les volets qui fonctionnent à l'envers, par exemple un store banne dont l'entité sous-jacente rapporte ouvert = déployé. Concerne uniquement l'axe de position\u00a0; la logique d'inclinaison est inchangée — prévu pour les ouvertures qui ne gèrent que la position (stores bannes/volets roulants), pas pour les stores vénitiens à lames orientables.",
+    "entities.link_to_device": "Afficher sur la page de l'appareil du volet encapsulé",
+    "entities.link_to_device_helper":
+      "Ajoute ce volet à l'appareil auquel appartient le volet encapsulé, afin qu'il apparaisse sur la page de cet appareil. Home Assistant peut alors afficher le nom de l'appareil devant le nom de ce volet. Pour choisir un autre nom, renommez le volet dans les paramètres de l'entité.",
     "entities.switch_entities": "Entités d'interrupteur",
     "entities.open_switch": "Interrupteur d'ouverture",
     "entities.close_switch": "Interrupteur de fermeture",
@@ -1291,6 +1312,9 @@ export const TRANSLATIONS = {
     "entities.invert": "Invertir la posición",
     "entities.invert_helper":
       "Invierte el eje de posición: informa de 100 − la posición de la persiana envuelta e intercambia apertura y cierre. Úsalo para persianas que funcionan al revés, por ejemplo un toldo cuya entidad subyacente indica abierto = extendido. Solo afecta al eje de posición; la lógica de inclinación no cambia: está pensado para persianas y toldos que solo tienen posición, no para venecianas con lamas orientables.",
+    "entities.link_to_device": "Mostrar en la página del dispositivo de la persiana envuelta",
+    "entities.link_to_device_helper":
+      "Añade esta persiana al dispositivo al que pertenece la persiana envuelta, para que aparezca en la página de ese dispositivo. Home Assistant puede entonces mostrar el nombre del dispositivo delante del nombre de esta persiana. Para elegir otro nombre, cambia el nombre de la persiana en los ajustes de la entidad.",
     "entities.switch_entities": "Entidades de interruptor",
     "entities.open_switch": "Interruptor de apertura",
     "entities.close_switch": "Interruptor de cierre",
@@ -1471,6 +1495,9 @@ export const TRANSLATIONS = {
     "entities.invert": "Inverteix la posició",
     "entities.invert_helper":
       "Inverteix l'eix de posició: informa de 100 − la posició de la persiana embolcallada i intercanvia obertura i tancament. Fes-ho servir per a persianes que funcionen al revés, per exemple un tendal l'entitat subjacent del qual indica obert = desplegat. Només afecta l'eix de posició; la lògica d'inclinació no canvia: està pensat per a cobertes que només tenen posició (tendals/persianes enrotllables), no per a venecianes amb lamel·les orientables.",
+    "entities.link_to_device": "Mostra a la pàgina del dispositiu de la persiana embolcallada",
+    "entities.link_to_device_helper":
+      "Afegeix aquesta persiana al dispositiu al qual pertany la persiana embolcallada, perquè aparegui a la pàgina d'aquest dispositiu. Home Assistant pot mostrar llavors el nom del dispositiu davant del nom d'aquesta persiana. Per triar un altre nom, canvia el nom de la persiana a la configuració de l'entitat.",
     "entities.switch_entities": "Entitats d'interruptor",
     "entities.open_switch": "Interruptor d'obertura",
     "entities.close_switch": "Interruptor de tancament",
@@ -1651,6 +1678,9 @@ export const TRANSLATIONS = {
     "entities.invert": "Invertovat pozici",
     "entities.invert_helper":
       "Převrátí osu pozice: hlásí 100 − pozici zabalené rolety a prohodí otevřít/zavřít. Použijte pro rolety, které jedou obráceně, např. markýzu, kde podkladová entita hlásí otevřeno = vysunuto. Pouze osa pozice; logika náklonu zůstává beze změny — určeno pro rolety pouze s pozicí (markýzy/rolety), nikoli pro naklápěcí žaluzie.",
+    "entities.link_to_device": "Zobrazit na stránce zařízení zabalené rolety",
+    "entities.link_to_device_helper":
+      "Přidá tuto roletu k zařízení, ke kterému patří zabalená roleta, takže se zobrazí na stránce tohoto zařízení. Home Assistant pak může před název této rolety zobrazit název zařízení. Chcete-li zvolit jiný název, přejmenujte roletu v nastavení entity.",
     "entities.switch_entities": "Entity spínačů",
     "entities.open_switch": "Spínač otevírání",
     "entities.close_switch": "Spínač zavírání",
@@ -1826,6 +1856,9 @@ export const TRANSLATIONS = {
     "entities.invert": "Obrni poziciju",
     "entities.invert_helper":
       "Obrće osu pozicije: prijavljuje 100 − poziciju omotane roletne i zamenjuje otvori/zatvori. Koristite za roletne koje rade obrnuto, npr. tendu kod koje osnovni entitet prijavljuje otvoreno = razvučeno. Samo osa pozicije; logika nagiba je nepromenjena — namenjeno roletnama samo sa pozicijom (tende/roletne), ne venecijanerima koji se naginju.",
+    "entities.link_to_device": "Prikaži na stranici uređaja omotane roletne",
+    "entities.link_to_device_helper":
+      "Dodaje ovu roletnu uređaju kojem pripada omotana roletna, tako da se prikazuje na stranici tog uređaja. Home Assistant tada može prikazati naziv uređaja ispred naziva ove roletne. Da biste izabrali drugi naziv, preimenujte roletnu u podešavanjima entiteta.",
     "entities.switch_entities": "Entiteti prekidača",
     "entities.open_switch": "Prekidač za otvaranje",
     "entities.close_switch": "Prekidač za zatvaranje",
@@ -2000,6 +2033,9 @@ export const TRANSLATIONS = {
     "entities.invert": "היפוך מיקום",
     "entities.invert_helper":
       "היפוך ציר המיקום: מדווח 100 פחות המיקום של התריס העטוף, ומחליף בין פתיחה לסגירה. לשימוש בכיסויים שפועלים הפוך, למשל סוכך שהישות העטופה שלו מדווחת פתוח = פרוס. ציר המיקום בלבד; לוגיקת ההטיה אינה משתנה — מיועד לכיסויים עם מיקום בלבד (סוככים/תריסים), לא לתריסי רפפות עם הטיה.",
+    "entities.link_to_device": "הצגה בדף המכשיר של התריס העטוף",
+    "entities.link_to_device_helper":
+      "מוסיף את התריס הזה למכשיר שאליו שייך התריס העטוף, כך שיופיע בדף של אותו מכשיר. ייתכן ש-Home Assistant יציג אז את שם המכשיר לפני שם התריס הזה. כדי לבחור שם אחר, יש לשנות את שם התריס בהגדרות הישות.",
     "entities.switch_entities": "ישויות מתג",
     "entities.open_switch": "מתג פתיחה",
     "entities.close_switch": "מתג סגירה",
