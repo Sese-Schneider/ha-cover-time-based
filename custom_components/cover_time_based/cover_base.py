@@ -1293,8 +1293,9 @@ class CoverTimeBased(
         actually asked for is planned as a separate leg B afterwards (see
         set_position / set_tilt_position). An endpoint travel target (0 or
         100) has no separate leg — driving to it fully IS the whole move — so
-        that caller passes its own ``target`` instead of taking the default
-        (issue #179 finding 3).
+        its callers (the FORCED_ENDPOINT plan and set_position's
+        force_endpoint_redrive path) pass their own ``target`` instead of
+        taking the default (issue #179 finding 3).
 
         ``axis`` selects which tracker leg A drives, and with it which
         calculator is snapshotted/restored and which redrive coroutine runs.

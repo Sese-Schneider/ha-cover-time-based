@@ -1,16 +1,23 @@
-"""Force endpoint re-drive (issue #167).
+"""Force endpoint re-drive (issues #167 and #307).
 
 Covers with no position feedback can be moved by an external remote HA never
 sees, so HA keeps believing the cover is at an endpoint. With
-force_endpoint_redrive on, an open/close commanded at that believed endpoint is
-re-driven for the full travel time (modeled from the opposite endpoint) instead
-of being skipped as a no-op / short resync pulse.
+force_endpoint_redrive on, an open/close, or a set_position to 0/100, commanded
+at that believed endpoint is re-driven for the full travel time (modeled from
+the opposite endpoint) instead of being skipped as a no-op / short resync pulse.
 """
 
-from unittest.mock import patch
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+from homeassistant.const import (
+    SERVICE_CLOSE_COVER,
+    SERVICE_OPEN_COVER,
+    SERVICE_STOP_COVER,
+)
+from homeassistant.core import State
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.cover_time_based.cover import (
@@ -369,6 +376,7 @@ async def test_option_off_set_position_at_endpoint_is_noop(make_cover, endpoint)
     """Regression guard: with the flag off, set_position to the believed
     endpoint still sends nothing."""
     cover = make_cover()
+    assert cover._force_endpoint_redrive is False
     cover.travel_calc.set_position(endpoint)
 
     with patch.object(cover, "async_write_ha_state"):
@@ -376,10 +384,11 @@ async def test_option_off_set_position_at_endpoint_is_noop(make_cover, endpoint)
 
     assert not cover.travel_calc.is_traveling()
     cover.hass.services.async_call.assert_not_awaited()
+    assert cover._last_command is None
 
 
 @pytest.mark.asyncio
-async def test_set_position_mid_travel_target_not_forced(make_cover):
+async def test_set_position_non_endpoint_at_believed_position_not_forced(make_cover):
     """Only the endpoints are re-driven: a mid-travel target equal to the
     believed position is still a no-op with the flag on."""
     cover = make_cover(force_endpoint_redrive=True)
@@ -390,3 +399,94 @@ async def test_set_position_mid_travel_target_not_forced(make_cover):
 
     assert not cover.travel_calc.is_traveling()
     cover.hass.services.async_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_set_position_redrive_not_started_keeps_believed_position(make_cover):
+    """A set_position(100) re-drive that silently does not start (a same-
+    direction startup delay is already pending) must not leave the tracker
+    seeded at the opposite endpoint."""
+    cover = make_cover(
+        force_endpoint_redrive=True,
+        cover_entity_id="cover.inner",
+        travel_startup_delay=30,
+    )
+    cover.travel_calc.set_position(50)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_set_cover_position(position=100)
+        await asyncio.sleep(0.6)
+        await cover._handle_external_attribute_change(
+            SimpleNamespace(
+                data={
+                    "entity_id": "cover.inner",
+                    "new_state": State(
+                        "cover.inner", "open", {"current_position": 100}
+                    ),
+                }
+            )
+        )
+        assert cover.travel_calc.current_position() == 100
+        await cover.async_set_cover_position(position=100)
+
+    assert cover.travel_calc.current_position() == 100, (
+        "a re-drive that did not start must keep the believed position"
+    )
+
+
+def _inline_toggle_opposite_cover(make_cover):
+    return make_cover(
+        control_mode="toggle_opposite",
+        tilt_mode="inline",
+        tilt_time_close=2.0,
+        tilt_time_open=2.0,
+        force_endpoint_redrive=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_set_position_redrive_reversing_tilt_move_stops_and_settles(
+    make_cover, command_spy
+):
+    """Travel settled at 100 but an inline tilt move is closing the shared
+    motor: set_position(100) reverses it. On toggle-opposite hardware the
+    opposite button while moving is a stop, so the re-drive must stop and
+    settle first rather than press open straight into the running close."""
+    cover = _inline_toggle_opposite_cover(make_cover)
+    cover.travel_calc.set_position(100)
+    cover.tilt_calc.set_position(100)
+    cover.tilt_calc.start_travel(0)
+    cover._last_command = SERVICE_CLOSE_COVER
+
+    calls, spy = command_spy(cover)
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_async_handle_command", side_effect=spy),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        await cover.set_position(100)
+
+    assert calls == [SERVICE_STOP_COVER, SERVICE_OPEN_COVER], (
+        f"must stop the tilt close before driving open, in that order: {calls}"
+    )
+    settle.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_set_position_redrive_rides_same_direction_tilt_move(make_cover):
+    """Travel settled at 100 and an inline tilt move is already opening the
+    shared motor: set_position(100) must not re-send open, which would stop
+    the motor and leave the tracker animating a full open over a standstill."""
+    cover = _inline_toggle_opposite_cover(make_cover)
+    cover.travel_calc.set_position(100)
+    cover.tilt_calc.set_position(0)
+    cover.tilt_calc.start_travel(100)
+    cover._last_command = SERVICE_OPEN_COVER
+    cover.hass.services.async_call.reset_mock()
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_position(100)
+
+    cover.hass.services.async_call.assert_not_awaited()
+    assert cover.travel_calc.is_opening(), "the re-drive must still be tracked"
