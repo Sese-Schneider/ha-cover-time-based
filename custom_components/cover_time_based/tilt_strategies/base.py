@@ -56,6 +56,20 @@ class TiltStrategy(ABC):
     def restores_tilt(self) -> bool:
         """Whether tilt should be restored after a position change."""
 
+    @property
+    def tilt_close_ends_at_a_stop(self) -> bool:
+        """Whether a slat close ends against a limit wherever the slats start.
+
+        A dedicated tilt motor stops at its own limit, and a slat close that
+        drives the cover down stops at the closed end. One that drives the cover
+        up (SequentialOpenTilt) would lift a closed cover whose slats were in
+        fact already closed.
+        """
+        return (
+            self.uses_tilt_motor
+            or self.tilt_command_for(closing_tilt=True) == SERVICE_CLOSE_COVER
+        )
+
     @abstractmethod
     def plan_move_position(
         self,

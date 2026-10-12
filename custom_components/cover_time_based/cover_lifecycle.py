@@ -761,6 +761,20 @@ class MovementLifecycleMixin(_MixinBase):
             return
 
         current_tilt = self.tilt_calc.current_position()
+        tilt_unknown = (
+            current_tilt is None
+            and restore_target == 0
+            and self._tilt_strategy.tilt_close_ends_at_a_stop
+        )
+        if tilt_unknown:
+            # Unknown slats: close them as if from fully open; the close ends
+            # against its stop wherever they really were. The tracker takes
+            # that 100% only once the close commits, so a cancelled restore
+            # leaves the slats unknown.
+            self._log(
+                "_start_tilt_restore :: tilt unknown, closing it from an assumed 100%%"
+            )
+            current_tilt = 100
         if current_tilt is None or current_tilt == restore_target:
             self._log(
                 "_start_tilt_restore :: no restore needed (current=%s, target=%s)",
@@ -841,6 +855,8 @@ class MovementLifecycleMixin(_MixinBase):
             self._log("_start_tilt_restore :: cancelled during motor start, stopping")
             await self._stop_restore_motor()
             return
+        if tilt_unknown:
+            self.tilt_calc.set_position(100)
         self.tilt_calc.start_travel(restore_target)
         self.start_auto_updater()
 

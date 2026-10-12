@@ -479,8 +479,10 @@ Shown for the **Closes then tilts closed** and **Separate tilt motor** modes,
 and **on** by default. With it on, pressing close in the Home Assistant UI, or
 setting the position to 0% (as Apple HomeKit, voice assistants and the position
 slider do), closes the cover and then closes the slats, leaving both fully shut.
-Turn it **off** if you would rather have a close move the cover only and leave
-the slats where they are, so you can articulate them separately with the
+This also happens when Home Assistant does not yet know where the slats are
+(for example, just after tilt is set up): the slat close simply stops at its
+limit. Turn it **off** if you would rather have a close move the cover only and
+leave the slats where they are, so you can articulate them separately with the
 tilt-close button.
 
 #### Tilt motor
