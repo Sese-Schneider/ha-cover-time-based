@@ -17,7 +17,7 @@ import pytest
 from homeassistant.core import State
 
 from custom_components.cover_time_based.travel_calculator import TravelStatus
-from tests.helpers import stub_switches
+from tests.helpers import relay_calls, stub_switches
 
 
 class TestSkipResyncAtZero:
@@ -194,30 +194,6 @@ class TestTrailingTiltClose:
         assert cover._tilt_restore_target is None
 
     @pytest.mark.asyncio
-    async def test_no_trailing_tilt_when_tilt_already_zero(self, make_cover):
-        """Even with option=true, skip the tilt-close when tilt is already 0."""
-        cover = make_cover(
-            tilt_time_close=5.0,
-            tilt_time_open=5.0,
-            tilt_mode="sequential_close",
-            close_includes_tilt=True,
-        )
-        cover.travel_calc.set_position(100)
-        cover.tilt_calc.set_position(0)
-
-        with (
-            patch.object(cover, "async_write_ha_state"),
-            patch.object(cover, "_async_move_to_endpoint", new_callable=AsyncMock),
-            patch.object(
-                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
-            ) as mock_tilt,
-        ):
-            await cover.async_close_cover()
-
-        mock_tilt.assert_not_awaited()
-        assert cover._tilt_restore_target is None
-
-    @pytest.mark.asyncio
     async def test_no_trailing_tilt_when_no_tilt_support(self, make_cover):
         """No tilt support → no trailing tilt-close, period."""
         cover = make_cover(close_includes_tilt=True)  # no tilt times
@@ -326,6 +302,30 @@ class TestDualMotor:
 
         assert cover._pending_travel_target == 0  # tilt-to-safe pre-step running
         assert cover._tilt_restore_target == 100  # stays at safe, NOT driven to 0
+
+    @pytest.mark.asyncio
+    async def test_no_slat_close_when_closed_with_slats_closed(self, make_cover):
+        """Settled at (0, 0), where the last close left a separate tilt motor:
+        the close button has no travel to re-send and the slats are known
+        closed, so no slat close is sent."""
+        cover = _dual_motor_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_to_endpoint", new_callable=AsyncMock
+            ) as mock_travel,
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_close_cover()
+
+        mock_travel.assert_not_awaited()
+        mock_tilt.assert_not_awaited()
+        assert cover._tilt_restore_target is None
 
 
 class TestCloseButtonWhileMoving:
@@ -1037,3 +1037,241 @@ class TestRepeatedZeroWhileCloseParked:
                 cover.travel_calc.current_position(),
                 cover.tilt_calc.current_position(),
             ) == (0, 0)
+
+
+def _close_with(cover, how):
+    if how == "button":
+        return cover.async_close_cover()
+    return cover.async_set_cover_position(position=0)
+
+
+async def _close_to_rest(cover, how):
+    """Close via the button or 0%, then run the motors to rest; returns
+    (travel, tilt) and the relay calls made. A startup delay parks until
+    the motors are run."""
+    stub_switches(cover)
+    release = asyncio.Event()
+
+    async def held(*_args):
+        await release.wait()
+
+    with (
+        patch("custom_components.cover_time_based.travel_calculator.time") as mock_time,
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_await_startup_delay", held),
+    ):
+        mock_time.monotonic.return_value = 1000.0
+        await _close_with(cover, how)
+        await _run_to_rest(cover, mock_time, release)
+    return (
+        cover.travel_calc.current_position(),
+        cover.tilt_calc.current_position(),
+    ), relay_calls(cover)
+
+
+def _dual_motor_cover(make_cover, **options):
+    return make_cover(
+        tilt_time_close=5.0,
+        tilt_time_open=5.0,
+        tilt_mode="dual_motor",
+        tilt_open_switch="switch.tilt_open",
+        tilt_close_switch="switch.tilt_close",
+        safe_tilt_position=100,
+        close_includes_tilt=True,
+        **options,
+    )
+
+
+class TestForcedRedriveClosesSlats:
+    """With "Always re-send" on, a close at the believed (0, 0) re-drives the
+    full travel modelled from fully open, so on "Closes then tilts closed"
+    the slats sit open when it arrives and must be closed after it."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("how", ["button", "zero"])
+    @pytest.mark.parametrize("delay", [None, 2])
+    async def test_sequential_close_ends_with_slats_closed(
+        self, make_cover, how, delay
+    ):
+        cover = _sequential_close_cover(
+            make_cover, force_endpoint_redrive=True, travel_startup_delay=delay
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        end, calls = await _close_to_rest(cover, how)
+
+        assert end == (0, 0)
+        # The travel re-drive, then the slat close.
+        assert calls.count(("turn_on", "switch.close")) == 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("how", ["button", "zero"])
+    async def test_sequential_open_sends_no_slat_command(self, make_cover, how):
+        """On "Closes then tilts open", the slats are already closed whenever the
+        cover travels, so nothing follows the re-drive — a slat close there
+        drives the motor up."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+            close_includes_tilt=True,
+            force_endpoint_redrive=True,
+        )
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(0)
+
+        end, calls = await _close_to_rest(cover, how)
+
+        assert end == (0, 0)
+        assert calls.count(("turn_on", "switch.close")) == 1
+        assert ("turn_on", "switch.open") not in calls
+
+
+class TestOtherControlModes:
+    """Toggle, toggle-opposite and pulse covers end a close at (0, 0) too."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "mode_options",
+        [
+            {"control_mode": "toggle"},
+            {"control_mode": "toggle_opposite"},
+            {"control_mode": "pulse", "stop_switch": "switch.stop"},
+        ],
+        ids=["toggle", "toggle_opposite", "pulse"],
+    )
+    @pytest.mark.parametrize("believed_tilt", [0, None], ids=["redrive", "unknown"])
+    async def test_other_control_modes_end_with_slats_closed(
+        self, make_cover, mode_options, believed_tilt
+    ):
+        cover = _sequential_close_cover(
+            make_cover, force_endpoint_redrive=True, **mode_options
+        )
+        cover.travel_calc.set_position(0)
+        if believed_tilt is not None:
+            cover.tilt_calc.set_position(believed_tilt)
+
+        end, _calls = await _close_to_rest(cover, "button")
+
+        assert end == (0, 0)
+
+
+class TestUnknownSlatsAreClosed:
+    """Slats in an unknown position are not known to be closed, so "Close
+    cover also closes slats" closes them where that is safe without knowing
+    where they are: a dedicated tilt motor, or "Closes then tilts closed",
+    whose slat close drives down into the closed end stop."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("how", ["button", "zero"])
+    @pytest.mark.parametrize("travel", [0, 100])
+    @pytest.mark.parametrize("mode", ["sequential_close", "dual_motor"])
+    async def test_slats_end_closed(self, make_cover, how, travel, mode):
+        if mode == "dual_motor":
+            cover = _dual_motor_cover(make_cover)
+        else:
+            cover = _sequential_close_cover(make_cover)
+        cover.travel_calc.set_position(travel)
+        assert cover.tilt_calc.current_position() is None
+
+        end, _calls = await _close_to_rest(cover, how)
+
+        assert end == (0, 0)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("how", ["button", "zero"])
+    @pytest.mark.parametrize("travel", [0, 100])
+    async def test_sequential_open_does_not_drive_blind(self, make_cover, how, travel):
+        """Its slat close drives the motor up: from slats that were in fact
+        closed, that would lift a closed cover."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+            close_includes_tilt=True,
+        )
+        cover.travel_calc.set_position(travel)
+
+        end, calls = await _close_to_rest(cover, how)
+
+        assert end[0] == 0
+        assert ("turn_on", "switch.open") not in calls
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("how", ["button", "zero"])
+    async def test_option_off_leaves_unknown_slats(self, make_cover, how):
+        cover = _sequential_close_cover(make_cover, close_includes_tilt=False)
+        cover.travel_calc.set_position(100)
+
+        end, calls = await _close_to_rest(cover, how)
+
+        assert end == (0, None)
+        assert calls.count(("turn_on", "switch.close")) == 1
+
+    @pytest.mark.asyncio
+    async def test_chained_slat_close_never_drives_unknown_sequential_open(
+        self, make_cover
+    ):
+        """The chained slat close keeps the same rule on its own, for any
+        caller that schedules it with the slats unknown."""
+        cover = make_cover(
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_mode="sequential_open",
+            close_includes_tilt=True,
+        )
+        stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        cover._tilt_restore_target = 0
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._start_tilt_restore()
+
+        assert cover.tilt_calc.current_position() is None
+        assert ("turn_on", "switch.open") not in relay_calls(cover)
+
+    @pytest.mark.asyncio
+    async def test_cancelled_slat_close_leaves_slats_unknown(self, make_cover):
+        """A stop pressed while the travel relay is being stopped cancels the
+        chained slat close before the tilt motor starts: nothing moved the
+        slats, so they stay unknown rather than showing open."""
+        cover = _dual_motor_cover(make_cover)
+        stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        cover._tilt_restore_target = 0
+
+        async def stop(*_a, **_k):
+            await cover.async_stop_cover()
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_stop_travel_relay_if_needed", side_effect=stop),
+        ):
+            await cover._start_tilt_restore()
+
+        assert cover.tilt_calc.current_position() is None
+        assert ("turn_on", "switch.tilt_close") not in relay_calls(cover)
+
+    @pytest.mark.asyncio
+    async def test_slat_close_cancelled_during_motor_start_leaves_slats_unknown(
+        self, make_cover
+    ):
+        """A stop that lands while the tilt motor is being started cancels the
+        chained slat close after the tilt close was sent: the tracker never
+        took the assumed 100% starting point, so the slats stay unknown."""
+        cover = _dual_motor_cover(make_cover)
+        stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        cover._tilt_restore_target = 0
+
+        async def stop(*_a, **_k):
+            await cover.async_stop_cover()
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "_send_tilt_close", side_effect=stop),
+        ):
+            await cover._start_tilt_restore()
+
+        assert cover.tilt_calc.current_position() is None

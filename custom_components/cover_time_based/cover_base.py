@@ -697,10 +697,10 @@ class CoverTimeBased(
         Travel is moved to 0 unless already settled there (no resync motor
         pulse — matches HA convention that close_cover re-applied is a no-op).
 
-        When close_includes_tilt is True and the cover has tilt support and
-        tilt is not already at 0, the slats are closed afterward. This makes
-        close_cover land at (0, 0) on strategies that would otherwise park
-        tilt at an implicit-open or safe position (sequential_close, dual_motor).
+        With close_includes_tilt on, _close_tilt_after_travel_close decides
+        whether the slats are then closed. This makes close_cover land at
+        (0, 0) on strategies that would otherwise park tilt at an implicit-open
+        or safe position (sequential_close, dual_motor).
         """
         self._require_configured()
         self._log("async_close_cover")
@@ -762,7 +762,11 @@ class CoverTimeBased(
             self._close_includes_tilt
             and self._has_tilt_support()
             and not isinstance(self._tilt_strategy, InlineTilt)
-            and self.tilt_calc.current_position() not in (None, 0)
+        ):
+            return
+        tilt = self._tilt_before_slat_close()
+        if tilt == 0 or (
+            tilt is None and not self._tilt_strategy.tilt_close_ends_at_a_stop
         ):
             return
         if not chain:
@@ -783,6 +787,20 @@ class CoverTimeBased(
                 "_close_tilt_after_travel_close :: scheduling tilt-close after travel"
             )
             self._tilt_restore_target = 0
+
+    def _tilt_before_slat_close(self) -> int | None:
+        """Where the slats will be when the slat close starts, None if unknown.
+
+        Sequential slats sit at ``implicit_tilt_during_travel`` whenever the
+        cover is off its closed end, so a close travelling from there arrives
+        with them there. That includes a forced re-drive believed at (0, 0):
+        it is modelled from fully open, so the slats are moved to that value
+        once it runs.
+        """
+        travel = self.travel_calc.current_position()
+        if isinstance(self._tilt_strategy, SequentialTilt) and travel not in (None, 0):
+            return self._tilt_strategy.implicit_tilt_during_travel
+        return self.tilt_calc.current_position()
 
     async def async_open_cover(self, **kwargs):
         """Open the cover fully.
