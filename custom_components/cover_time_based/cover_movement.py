@@ -402,10 +402,11 @@ class MovementMixin(_MixinBase):
         """Move cover to a designated position.
 
         Returns True when the cover is now driving toward ``position``, or is
-        at it and the travel position any parked start leaves the cover at is
-        ``position`` too; False when this request gave up: superseded during a
-        settle, overruled by a parked start that leaves travel elsewhere, or too
-        short to be worth moving.
+        at it with travel stopped and the travel position any parked start
+        leaves the cover at is ``position`` too; False when this request gave
+        up: superseded during a settle, overruled by travel already moving or a
+        parked start that leaves travel elsewhere, or too short to be worth
+        moving.
 
         ``recalibrate`` is passed False by exactly one caller,
         ``_maybe_start_recalibrated_leg`` running leg B of a recalibrated
@@ -514,10 +515,12 @@ class MovementMixin(_MixinBase):
             command = SERVICE_OPEN_COVER
         else:
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
-            # A start still parked (e.g. an open waiting out its startup delay)
-            # runs on regardless, so this request is only done if that start
-            # leaves travel here.
-            return self._parked_start_heads_for(target)
+            # Travel still moving (e.g. an open on its first tick, still reading
+            # 0) or a start still parked runs on regardless, so this request
+            # is only done if nothing will take travel elsewhere.
+            return not self.travel_calc.is_traveling() and (
+                self._parked_start_heads_for(target)
+            )
 
         closing = command == SERVICE_CLOSE_COVER
 

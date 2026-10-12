@@ -747,6 +747,44 @@ class TestSetPositionZero:
         assert cover._tilt_restore_target is None
 
     @pytest.mark.asyncio
+    async def test_zero_just_after_an_open_leaves_adds_no_slat_close(self, make_cover):
+        """An open that has only just left 0 still reads 0 on its first tick.
+        A 0% then is ignored (the open carries on) and must not chain a slat
+        close to the open, which would drive the close relay at the top."""
+        cover = _sequential_close_cover(make_cover)
+        stub_switches(cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with (
+            patch(
+                "custom_components.cover_time_based.travel_calculator.time"
+            ) as mock_time,
+            patch.object(cover, "async_write_ha_state"),
+        ):
+            mock_time.monotonic.return_value = 1000.0
+            await cover.async_open_cover()
+            mock_time.monotonic.return_value += 0.05
+            assert cover.travel_calc.current_position() == 0
+            await cover.async_set_cover_position(position=0)
+            assert cover.travel_calc.is_opening()
+            assert cover._tilt_restore_target is None
+            cover.hass.services.async_call.reset_mock()
+            with patch.object(cover, "_direction_change_delay", new_callable=AsyncMock):
+                for _ in range(6):
+                    mock_time.monotonic.return_value += 100
+                    if cover.position_reached():
+                        await cover.auto_stop_if_necessary()
+                    await asyncio.sleep(0)
+
+            sent = [
+                (c.args[1], c.args[2]["entity_id"])
+                for c in cover.hass.services.async_call.call_args_list
+            ]
+            assert ("turn_on", "switch.close") not in sent, sent
+            assert cover.travel_calc.current_position() == 100
+
+    @pytest.mark.asyncio
     async def test_superseded_zero_does_not_close_tilt_after_newer_open(
         self, make_cover
     ):
