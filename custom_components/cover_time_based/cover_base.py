@@ -193,6 +193,9 @@ class CoverTimeBased(
         self._auto_updater_last_written: tuple | None = None
         self._delay_task = None
         self._startup_delay_task = None
+        # The travel position the start parked in _startup_delay_task leaves
+        # the cover at (None when nothing is parked).
+        self._parked_travel_target: int | None = None
         self._last_command = None
         # Claimed by every command that supersedes an in-flight movement; read
         # across the settle gap by _settle_before_reversing.
@@ -203,7 +206,8 @@ class CoverTimeBased(
         #   - _plan_tilt_for_travel (mid-position moves: restore prior tilt;
         #     dual-motor endpoint moves: snap tilt to endpoint).
         #   - _start_tilt_pre_step (after pre-step + travel completes).
-        #   - async_close_cover when close_includes_tilt is on and the tilt
+        #   - _close_tilt_after_travel_close (the close button and
+        #     set_cover_position(0)) when close_includes_tilt is on and the tilt
         #     strategy doesn't already drive tilt to 0 during close travel
         #     (sequential_close, dual_motor — not inline or sequential_open).
         self._tilt_restore_target: int | None = None
@@ -729,26 +733,27 @@ class CoverTimeBased(
         # opposite-direction startup delay to cancel, or an external sequential
         # close that articulates the slats.
         settled = self._settled_at_endpoint(0)
-        redrive_started = False
         if settled and self._force_endpoint_redrive:
             # issue #167: don't trust "already closed" — re-drive the full close
             # so a remote-opened, no-feedback cover actually closes. Started via
             # _start_recalibration_drive so a re-drive that never starts keeps
-            # the believed position (#307 follow-up).
-            redrive_started = await self._start_recalibration_drive("travel", target=0)
+            # the believed position (#307).
+            if not await self._start_recalibration_drive("travel", target=0):
+                self._log(
+                    "async_close_cover :: force_endpoint_redrive did not start,"
+                    " keeping believed position"
+                )
         elif not settled:
             await self._async_move_to_endpoint(target=0)
-        skip_travel = settled and not redrive_started
+        # Travel was skipped only when settled at 0 without a forced re-drive.
+        skip_travel = settled and not self._force_endpoint_redrive
 
-        await self._close_tilt_after_travel_close(travel_skipped=skip_travel)
+        await self._close_tilt_after_travel_close(chain=not skip_travel)
 
-    async def _close_tilt_after_travel_close(self, *, travel_skipped: bool) -> None:
-        """With close_includes_tilt on, close the slats once a close of travel
-        (the close button, or a set position of 0%) is done.
-
-        ``travel_skipped`` means travel was already settled at 0 and nothing
-        was started, so the slats are driven directly; otherwise travel is in
-        flight and the auto-updater chains the tilt close after it.
+    async def _close_tilt_after_travel_close(self, *, chain: bool) -> None:
+        """With close_includes_tilt on, close the slats after a close of travel
+        (the close button, or a set position of 0%): with ``chain``, after the
+        travel (the auto-updater starts it on arrival), otherwise now.
         """
         # Skip inline: its close already drives tilt to 0 via a TiltTo pre-step,
         # so the trailing restore would be a no-op AND would short-circuit the
@@ -760,10 +765,13 @@ class CoverTimeBased(
             and self.tilt_calc.current_position() not in (None, 0)
         ):
             return
-        if travel_skipped:
+        if not chain:
             # The auto-updater isn't running to consume _tilt_restore_target,
             # so drive tilt directly.
-            self._log("travel already at 0, closing tilt directly")
+            self._log(
+                "_close_tilt_after_travel_close :: travel already at 0,"
+                " closing tilt directly"
+            )
             await self._async_move_tilt_to_endpoint(target=0)
         elif self._tilt_restore_target is None:
             # Chained by the auto-updater after travel completes; driving tilt
@@ -771,7 +779,9 @@ class CoverTimeBased(
             # Guarded on `is None` so we don't overwrite a value that
             # _plan_tilt_for_travel may already have set (e.g. dual_motor
             # pre-step path sets _tilt_restore_target = target).
-            self._log("scheduling tilt-close after travel")
+            self._log(
+                "_close_tilt_after_travel_close :: scheduling tilt-close after travel"
+            )
             self._tilt_restore_target = 0
 
     async def async_open_cover(self, **kwargs):
@@ -803,7 +813,11 @@ class CoverTimeBased(
         if settled_open and self._force_endpoint_redrive:
             # issue #167: don't trust "already open" — re-drive the full open,
             # overriding both the command-echo skip and the short resync.
-            await self._start_recalibration_drive("travel", target=100)
+            if not await self._start_recalibration_drive("travel", target=100):
+                self._log(
+                    "async_open_cover :: force_endpoint_redrive did not start,"
+                    " keeping believed position"
+                )
             return
         if self._skip_open_resync_at_endpoint() and settled_open:
             self._log("async_open_cover :: already settled at 100, skipping resync")
@@ -866,12 +880,10 @@ class CoverTimeBased(
         full travel time (and each mode's tilt phases) instead of skipping or
         firing only a short resync pulse.
 
-        Correctness relies on callers only invoking this from a settled
-        endpoint: _settled_at_endpoint already excludes the states where
-        _async_move_to_endpoint would early-return without starting travel (a
-        pending opposite-direction startup delay, an external sequential close),
-        so seeding the opposite endpoint always reaches the full-travel branch.
-        Keep that exclusion in sync if those guards ever change.
+        Callers go through _start_recalibration_drive, which restores the
+        tracker when this silently does not start — _async_move_to_endpoint can
+        still return early after the seed (e.g. a same-direction startup delay
+        already pending).
 
         Validates BEFORE seeding the opposite endpoint: _async_move_to_endpoint
         performs the same _require_travel_time / _require_movement_target_available
@@ -1087,11 +1099,11 @@ class CoverTimeBased(
         the caller must pass the task it captured immediately before driving,
         so only a delay task the drive itself created counts.
 
-        One of three deliberately different "is anything moving" checks: this
+        One of several deliberately different "is anything moving" checks: this
         one asks whether the move *just commanded* began, _movement_in_progress
-        asks whether anything at all is still being driven, and toggle's
-        ``was_active`` asks only whether a tap would stop rather than start the
-        motor.
+        whether anything at all is still being driven, _travel_under_way
+        whether travel is, and toggle's ``was_active`` only whether a tap would
+        stop rather than start the motor.
         """
         if self.travel_calc.is_traveling():
             return True
@@ -1292,17 +1304,16 @@ class CoverTimeBased(
         started.
 
         Restores the tracker the forced re-drive seeded when the drive silently
-        did not start, so the caller's fallback plain move is planned from the
-        believed position rather than from the modelled opposite endpoint.
+        did not start, so the believed position survives rather than the
+        modelled opposite endpoint (and any fallback plain move is planned from
+        it).
 
         ``target`` defaults to 100: leg A of a mid-position recalibrated move
         always drives to the fully-open datum, since the position the user
         actually asked for is planned as a separate leg B afterwards (see
-        set_position / set_tilt_position). An endpoint travel target (0 or
-        100) has no separate leg — driving to it fully IS the whole move — so
-        its callers (the FORCED_ENDPOINT plan, and the force_endpoint_redrive
-        paths in set_position and the open/close buttons) pass their own
-        ``target`` instead of taking the default (issue #179 finding 3).
+        set_position / set_tilt_position). Callers driving to an endpoint pass
+        their own ``target`` — driving there fully IS the whole move (issue
+        #179 finding 3).
 
         ``axis`` selects which tracker leg A drives, and with it which
         calculator is snapshotted/restored and which redrive coroutine runs.
@@ -1315,7 +1326,8 @@ class CoverTimeBased(
 
         The drive's start command is suppressed when the motor is already
         running that way. This is the counterpart of the caller's own
-        stop-and-settle for the reversing case, and it has to be decided here
+        stop-and-settle for the reversing case (for the buttons, their
+        in-motion stop), and it has to be decided here
         rather than downstream: the forced re-drive seeds the opposite endpoint
         before issuing anything, which erases the "was travelling" evidence.
         Re-issuing the start command at a motor already driving that direction
@@ -1733,14 +1745,11 @@ class CoverTimeBased(
         if ATTR_POSITION in kwargs:
             position = kwargs[ATTR_POSITION]
             self._log("async_set_cover_position: %d", position)
-            await self.set_position(position)
-            if position == 0:
-                # Owner decision (#307 follow-up): 0% closes like the close
-                # button, slats included.
-                if self._settled_at_endpoint(0):
-                    await self._close_tilt_after_travel_close(travel_skipped=True)
-                elif self._movement_in_progress():
-                    await self._close_tilt_after_travel_close(travel_skipped=False)
+            if await self.set_position(position) and position == 0:
+                # 0% closes like the close button, slats included (#307).
+                await self._close_tilt_after_travel_close(
+                    chain=self._travel_under_way()
+                )
 
     async def async_set_cover_tilt_position(self, **kwargs):
         """Move the cover tilt to a specific position."""
@@ -1750,6 +1759,24 @@ class CoverTimeBased(
             self._log("async_set_cover_tilt_position: %d", position)
             await self.set_tilt_position(position)
 
+    def _travel_under_way(self) -> bool:
+        """Whether travel is moving, any start is parked (a startup delay or
+        relay-feedback wait, whichever axis it is for), or travel is queued
+        behind a tilt pre-step.
+
+        Narrower than _movement_in_progress: a dedicated tilt motor already
+        moving does not count, since a slat close chained after travel would
+        wait for that motor to finish instead.
+        """
+        return (
+            self.travel_calc.is_traveling()
+            or (
+                self._startup_delay_task is not None
+                and not self._startup_delay_task.done()
+            )
+            or self._pending_travel_target is not None
+        )
+
     def _movement_in_progress(self) -> bool:
         """Whether this entity is still driving the cover under its own lifecycle.
 
@@ -1757,10 +1784,11 @@ class CoverTimeBased(
         travel or tilt tracker, a startup-delay or relay-feedback wait, an
         endpoint run-on, a tilt pre-step or restore, and a dedicated tilt motor.
 
-        Broader than the other two "is anything moving" checks on purpose:
-        _movement_started asks only whether the move just commanded began, and
-        toggle's ``was_active`` (cover_toggle_base) only whether a tap would
-        stop the motor rather than start it.
+        Broader than the other "is anything moving" checks on purpose:
+        _movement_started asks only whether the move just commanded began,
+        _travel_under_way only whether travel is, and toggle's ``was_active``
+        (cover_toggle_base) only whether a tap would stop the motor rather than
+        start it.
         """
 
         def pending(task):
@@ -1948,6 +1976,12 @@ class CoverTimeBased(
         # wait_for_relay_feedback parks the start here until that relay's ON echo
         # (or a timeout), instead of the fixed startup-delay sleep. The variable
         # Zigbee round-trip then falls outside the tracked travel (issue #231).
+        if primary_calc is self.travel_calc:
+            parked_travel_target = target
+        elif coupled_calc is self.travel_calc and coupled_target is not None:
+            parked_travel_target = int(coupled_target)
+        else:
+            parked_travel_target = self.travel_calc.current_position()
         feedback_entity = self._consume_feedback_arm()
         if feedback_entity is not None:
             # Stamped here rather than inside the wait: the fallback anchor is
@@ -1963,10 +1997,15 @@ class CoverTimeBased(
                     startup_delay=startup_delay or 0.0,
                 )
             )
+            self._parked_travel_target = parked_travel_target
         else:
-            self._start_movement(startup_delay, start)
+            self._start_movement(
+                startup_delay, start, parked_travel_target=parked_travel_target
+            )
 
-    def _start_movement(self, startup_delay, start_callback):
+    def _start_movement(
+        self, startup_delay, start_callback, *, parked_travel_target=None
+    ):
         """Start position tracking, optionally after a motor startup delay.
 
         If startup_delay is set, the relay is already ON but the motor hasn't
@@ -1979,6 +2018,7 @@ class CoverTimeBased(
                     lambda: self._await_startup_delay(startup_delay), start_callback
                 )
             )
+            self._parked_travel_target = parked_travel_target
         else:
             start_callback()
 
@@ -2020,6 +2060,7 @@ class CoverTimeBased(
             # own task before this one's cancellation handler runs.
             if self._startup_delay_task is asyncio.current_task():
                 self._startup_delay_task = None
+                self._parked_travel_target = None
 
     def _cancel_delay_task(self):
         """Cancel any active delay task."""
@@ -2038,6 +2079,7 @@ class CoverTimeBased(
             )
             self._startup_delay_task.cancel()
             self._startup_delay_task = None
+            self._parked_travel_target = None
             return True
         return False
 

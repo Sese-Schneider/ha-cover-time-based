@@ -398,8 +398,14 @@ class MovementMixin(_MixinBase):
             pre_step_delay,
         )
 
-    async def set_position(self, position, *, recalibrate: bool = True):
+    async def set_position(self, position, *, recalibrate: bool = True) -> bool:
         """Move cover to a designated position.
+
+        Returns True when the cover is now driving toward ``position``, or is
+        at it and the travel position any parked start leaves the cover at is
+        ``position`` too; False when this request gave up: superseded during a
+        settle, overruled by a parked start that leaves travel elsewhere, or too
+        short to be worth moving.
 
         ``recalibrate`` is passed False by exactly one caller,
         ``_maybe_start_recalibrated_leg`` running leg B of a recalibrated
@@ -421,7 +427,7 @@ class MovementMixin(_MixinBase):
             if not await self._stop_and_settle_before_recalibration_drive(
                 SERVICE_OPEN_COVER
             ):
-                return
+                return False
             # Arm only AFTER the drive, never before. _start_recalibration_drive
             # -> _force_full_redrive -> _async_move_to_endpoint funnels through
             # _abandon_active_lifecycle, whose first line is _supersede_movement()
@@ -433,7 +439,7 @@ class MovementMixin(_MixinBase):
             # leg B.
             if await self._start_recalibration_drive("travel"):
                 self._arm_recalibrated_leg(position, "travel")
-                return
+                return True
             self._log(
                 "set_position :: recalibration leg did not start, moving directly"
             )
@@ -458,9 +464,9 @@ class MovementMixin(_MixinBase):
             if not await self._stop_and_settle_before_recalibration_drive(
                 endpoint_command
             ):
-                return
+                return False
             if await self._start_recalibration_drive("travel", target=position):
-                return
+                return True
             self._log(
                 "set_position :: forced endpoint redrive did not start, moving directly"
             )
@@ -477,9 +483,9 @@ class MovementMixin(_MixinBase):
             if not await self._stop_and_settle_before_recalibration_drive(
                 SERVICE_CLOSE_COVER if position == 0 else SERVICE_OPEN_COVER
             ):
-                return
+                return False
             if await self._start_recalibration_drive("travel", target=position):
-                return
+                return True
             self._log(
                 "set_position :: force_endpoint_redrive did not start, moving directly"
             )
@@ -508,7 +514,10 @@ class MovementMixin(_MixinBase):
             command = SERVICE_OPEN_COVER
         else:
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
-            return
+            # A start still parked (e.g. an open waiting out its startup delay)
+            # runs on regardless, so this request is only done if that start
+            # leaves travel here.
+            return self._parked_start_heads_for(target)
 
         closing = command == SERVICE_CLOSE_COVER
 
@@ -517,7 +526,9 @@ class MovementMixin(_MixinBase):
         )
         if not should_proceed:
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
-            return
+            # A parked start in this direction owns the motor; this request is
+            # served only if that start leaves travel at the same target.
+            return self._parked_start_heads_for(target)
 
         # A shared-motor (inline/sequential) tilt move drives the same physical
         # motor as travel, with only tilt_calc traveling. Dual-motor tilt is
@@ -544,10 +555,10 @@ class MovementMixin(_MixinBase):
                 self.tilt_calc.stop()
             await self._async_handle_command(SERVICE_STOP_COVER)
             if not await self._settle_before_reversing():
-                return
+                return False
             current = self.travel_calc.current_position()
             if target == current:
-                return
+                return self._parked_start_heads_for(target)
             # Travel was live when we entered this branch, so the tracker holds
             # a known position after the settle.
             assert current is not None
@@ -567,7 +578,7 @@ class MovementMixin(_MixinBase):
             is_recalibrated_leg=not recalibrate,
         ):
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
-            return
+            return False
 
         self._last_command = command
 
@@ -591,7 +602,7 @@ class MovementMixin(_MixinBase):
             target, command, current, current_tilt
         )
         if started:
-            return
+            return True
 
         # No pre-step took the tilt motor over — see _async_move_to_endpoint's
         # equivalent site.
@@ -615,6 +626,15 @@ class MovementMixin(_MixinBase):
             startup_delay,
             pre_step_delay,
         )
+        return True
+
+    def _parked_start_heads_for(self, target) -> bool:
+        """Whether no start is parked, or the travel position the parked start
+        leaves the cover at is ``target``."""
+        task = self._startup_delay_task
+        if task is None or task.done():
+            return True
+        return self._parked_travel_target == target
 
     async def _command_position_move(self, target, command, already_moving_same_dir):
         """Drive the travel motor for a mid-position ``set_position`` move.

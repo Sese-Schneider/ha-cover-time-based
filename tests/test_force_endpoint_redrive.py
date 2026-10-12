@@ -7,7 +7,6 @@ at that believed endpoint is re-driven for the full travel time (modeled from
 the opposite endpoint) instead of being skipped as a no-op / short resync pulse.
 """
 
-import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -402,10 +401,21 @@ async def test_set_position_non_endpoint_at_believed_position_not_forced(make_co
 
 
 @pytest.mark.asyncio
-async def test_set_position_redrive_not_started_keeps_believed_position(make_cover):
-    """A set_position(100) re-drive that silently does not start (a same-
-    direction startup delay is already pending) must not leave the tracker
-    seeded at the opposite endpoint."""
+@pytest.mark.parametrize(
+    ("endpoint", "state", "command"),
+    [
+        (0, "closed", "async_close_cover"),
+        (100, "open", "async_open_cover"),
+        (0, "closed", "async_set_cover_position"),
+        (100, "open", "async_set_cover_position"),
+    ],
+)
+async def test_redrive_not_started_keeps_believed_position(
+    make_cover, endpoint, state, command
+):
+    """A forced re-drive that silently does not start (a same-direction
+    startup delay is already pending) must not leave the tracker seeded at
+    the opposite endpoint — from the buttons or a set position of 0/100."""
     cover = make_cover(
         force_endpoint_redrive=True,
         cover_entity_id="cover.inner",
@@ -414,22 +424,25 @@ async def test_set_position_redrive_not_started_keeps_believed_position(make_cov
     cover.travel_calc.set_position(50)
 
     with patch.object(cover, "async_write_ha_state"):
-        await cover.async_set_cover_position(position=100)
-        await asyncio.sleep(0.6)
+        await cover.async_set_cover_position(position=endpoint)
+        cover._last_self_command_time = None
         await cover._handle_external_attribute_change(
             SimpleNamespace(
                 data={
                     "entity_id": "cover.inner",
                     "new_state": State(
-                        "cover.inner", "open", {"current_position": 100}
+                        "cover.inner", state, {"current_position": endpoint}
                     ),
                 }
             )
         )
-        assert cover.travel_calc.current_position() == 100
-        await cover.async_set_cover_position(position=100)
+        assert cover.travel_calc.current_position() == endpoint
+        if command == "async_set_cover_position":
+            await cover.async_set_cover_position(position=endpoint)
+        else:
+            await getattr(cover, command)()
 
-    assert cover.travel_calc.current_position() == 100, (
+    assert cover.travel_calc.current_position() == endpoint, (
         "a re-drive that did not start must keep the believed position"
     )
 
@@ -493,51 +506,13 @@ async def test_set_position_redrive_rides_same_direction_tilt_move(make_cover):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("endpoint", "state", "press"),
-    [(0, "closed", "async_close_cover"), (100, "open", "async_open_cover")],
-)
-async def test_button_redrive_not_started_keeps_believed_position(
-    make_cover, endpoint, state, press
-):
-    """The open/close buttons share set_position's guard: a forced re-drive
-    that silently does not start (a same-direction startup delay is already
-    pending) must not leave the tracker seeded at the opposite endpoint."""
-    cover = make_cover(
-        force_endpoint_redrive=True,
-        cover_entity_id="cover.inner",
-        travel_startup_delay=30,
-    )
-    cover.travel_calc.set_position(50)
-
-    with patch.object(cover, "async_write_ha_state"):
-        await cover.async_set_cover_position(position=endpoint)
-        await asyncio.sleep(0.6)
-        await cover._handle_external_attribute_change(
-            SimpleNamespace(
-                data={
-                    "entity_id": "cover.inner",
-                    "new_state": State(
-                        "cover.inner", state, {"current_position": endpoint}
-                    ),
-                }
-            )
-        )
-        assert cover.travel_calc.current_position() == endpoint
-        await getattr(cover, press)()
-
-    assert cover.travel_calc.current_position() == endpoint, (
-        "a re-drive that did not start must keep the believed position"
-    )
-
-
-@pytest.mark.asyncio
+@pytest.mark.parametrize("press", ["async_open_cover", "async_close_cover"])
 @pytest.mark.parametrize(
     ("running", "stop_relay"),
     [(SERVICE_CLOSE_COVER, "switch.open"), (SERVICE_OPEN_COVER, "switch.close")],
 )
 async def test_button_during_shared_motor_tilt_move_stops_not_redrives(
-    make_cover, running, stop_relay
+    make_cover, running, stop_relay, press
 ):
     """Unlike set_position, a button never reaches the forced re-drive while
     a shared-motor tilt move runs: the cover reads as moving, so the press is
@@ -550,7 +525,7 @@ async def test_button_during_shared_motor_tilt_move_stops_not_redrives(
     cover.hass.services.async_call.reset_mock()
 
     with patch.object(cover, "async_write_ha_state"):
-        await cover.async_open_cover()
+        await getattr(cover, press)()
 
     sent = [
         c.args[2]["entity_id"] for c in cover.hass.services.async_call.call_args_list
