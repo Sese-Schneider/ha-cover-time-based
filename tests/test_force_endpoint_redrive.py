@@ -490,3 +490,71 @@ async def test_set_position_redrive_rides_same_direction_tilt_move(make_cover):
 
     cover.hass.services.async_call.assert_not_awaited()
     assert cover.travel_calc.is_opening(), "the re-drive must still be tracked"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("endpoint", "state", "press"),
+    [(0, "closed", "async_close_cover"), (100, "open", "async_open_cover")],
+)
+async def test_button_redrive_not_started_keeps_believed_position(
+    make_cover, endpoint, state, press
+):
+    """The open/close buttons share set_position's guard: a forced re-drive
+    that silently does not start (a same-direction startup delay is already
+    pending) must not leave the tracker seeded at the opposite endpoint."""
+    cover = make_cover(
+        force_endpoint_redrive=True,
+        cover_entity_id="cover.inner",
+        travel_startup_delay=30,
+    )
+    cover.travel_calc.set_position(50)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_set_cover_position(position=endpoint)
+        await asyncio.sleep(0.6)
+        await cover._handle_external_attribute_change(
+            SimpleNamespace(
+                data={
+                    "entity_id": "cover.inner",
+                    "new_state": State(
+                        "cover.inner", state, {"current_position": endpoint}
+                    ),
+                }
+            )
+        )
+        assert cover.travel_calc.current_position() == endpoint
+        await getattr(cover, press)()
+
+    assert cover.travel_calc.current_position() == endpoint, (
+        "a re-drive that did not start must keep the believed position"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("running", "stop_relay"),
+    [(SERVICE_CLOSE_COVER, "switch.open"), (SERVICE_OPEN_COVER, "switch.close")],
+)
+async def test_button_during_shared_motor_tilt_move_stops_not_redrives(
+    make_cover, running, stop_relay
+):
+    """Unlike set_position, a button never reaches the forced re-drive while
+    a shared-motor tilt move runs: the cover reads as moving, so the press is
+    the in-motion stop (a tap of the opposite button on toggle-opposite)."""
+    cover = _inline_toggle_opposite_cover(make_cover)
+    cover.travel_calc.set_position(100)
+    cover.tilt_calc.set_position(50)
+    cover.tilt_calc.start_travel(0 if running == SERVICE_CLOSE_COVER else 100)
+    cover._last_command = running
+    cover.hass.services.async_call.reset_mock()
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_open_cover()
+
+    sent = [
+        c.args[2]["entity_id"] for c in cover.hass.services.async_call.call_args_list
+    ]
+    assert sent == [stop_relay], sent
+    assert not cover.travel_calc.is_traveling()
+    assert not cover.tilt_calc.is_traveling()

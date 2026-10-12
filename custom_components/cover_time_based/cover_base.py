@@ -729,43 +729,50 @@ class CoverTimeBased(
         # opposite-direction startup delay to cancel, or an external sequential
         # close that articulates the slats.
         settled = self._settled_at_endpoint(0)
-        force_redrive = settled and self._force_endpoint_redrive
-        if force_redrive:
+        redrive_started = False
+        if settled and self._force_endpoint_redrive:
             # issue #167: don't trust "already closed" — re-drive the full close
-            # so a remote-opened, no-feedback cover actually closes.
-            await self._force_full_redrive(target=0)
+            # so a remote-opened, no-feedback cover actually closes. Started via
+            # _start_recalibration_drive so a re-drive that never starts keeps
+            # the believed position (#307 follow-up).
+            redrive_started = await self._start_recalibration_drive("travel", target=0)
         elif not settled:
             await self._async_move_to_endpoint(target=0)
-        # Travel was skipped only when settled at 0 without a forced re-drive.
-        skip_travel = settled and not force_redrive
+        skip_travel = settled and not redrive_started
 
+        await self._close_tilt_after_travel_close(travel_skipped=skip_travel)
+
+    async def _close_tilt_after_travel_close(self, *, travel_skipped: bool) -> None:
+        """With close_includes_tilt on, close the slats once a close of travel
+        (the close button, or a set position of 0%) is done.
+
+        ``travel_skipped`` means travel was already settled at 0 and nothing
+        was started, so the slats are driven directly; otherwise travel is in
+        flight and the auto-updater chains the tilt close after it.
+        """
         # Skip inline: its close already drives tilt to 0 via a TiltTo pre-step,
         # so the trailing restore would be a no-op AND would short-circuit the
         # endpoint_runon_time block in auto_stop_if_necessary.
-        if (
+        if not (
             self._close_includes_tilt
             and self._has_tilt_support()
             and not isinstance(self._tilt_strategy, InlineTilt)
             and self.tilt_calc.current_position() not in (None, 0)
         ):
-            if skip_travel:
-                # Already settled at travel=0. The auto-updater isn't running
-                # to consume _tilt_restore_target, so drive tilt directly.
-                self._log(
-                    "async_close_cover :: travel already at 0, closing tilt directly"
-                )
-                await self._async_move_tilt_to_endpoint(target=0)
-            elif self._tilt_restore_target is None:
-                # Travel is in flight via the auto-updater. Set the restore
-                # target so the auto-updater chains _start_tilt_restore after
-                # travel completes. This avoids _abandon_active_lifecycle
-                # cancelling the in-flight travel.
-                #
-                # Guarded on `is None` so we don't overwrite a value that
-                # _plan_tilt_for_travel may already have set (e.g. dual_motor
-                # pre-step path sets _tilt_restore_target = target).
-                self._log("async_close_cover :: scheduling tilt-close after travel")
-                self._tilt_restore_target = 0
+            return
+        if travel_skipped:
+            # The auto-updater isn't running to consume _tilt_restore_target,
+            # so drive tilt directly.
+            self._log("travel already at 0, closing tilt directly")
+            await self._async_move_tilt_to_endpoint(target=0)
+        elif self._tilt_restore_target is None:
+            # Chained by the auto-updater after travel completes; driving tilt
+            # now would have _abandon_active_lifecycle cancel the travel.
+            # Guarded on `is None` so we don't overwrite a value that
+            # _plan_tilt_for_travel may already have set (e.g. dual_motor
+            # pre-step path sets _tilt_restore_target = target).
+            self._log("scheduling tilt-close after travel")
+            self._tilt_restore_target = 0
 
     async def async_open_cover(self, **kwargs):
         """Open the cover fully.
@@ -796,7 +803,7 @@ class CoverTimeBased(
         if settled_open and self._force_endpoint_redrive:
             # issue #167: don't trust "already open" — re-drive the full open,
             # overriding both the command-echo skip and the short resync.
-            await self._force_full_redrive(target=100)
+            await self._start_recalibration_drive("travel", target=100)
             return
         if self._skip_open_resync_at_endpoint() and settled_open:
             self._log("async_open_cover :: already settled at 100, skipping resync")
@@ -1293,9 +1300,9 @@ class CoverTimeBased(
         actually asked for is planned as a separate leg B afterwards (see
         set_position / set_tilt_position). An endpoint travel target (0 or
         100) has no separate leg — driving to it fully IS the whole move — so
-        its callers (the FORCED_ENDPOINT plan and set_position's
-        force_endpoint_redrive path) pass their own ``target`` instead of
-        taking the default (issue #179 finding 3).
+        its callers (the FORCED_ENDPOINT plan, and the force_endpoint_redrive
+        paths in set_position and the open/close buttons) pass their own
+        ``target`` instead of taking the default (issue #179 finding 3).
 
         ``axis`` selects which tracker leg A drives, and with it which
         calculator is snapshotted/restored and which redrive coroutine runs.
@@ -1727,6 +1734,13 @@ class CoverTimeBased(
             position = kwargs[ATTR_POSITION]
             self._log("async_set_cover_position: %d", position)
             await self.set_position(position)
+            if position == 0:
+                # Owner decision (#307 follow-up): 0% closes like the close
+                # button, slats included.
+                if self._settled_at_endpoint(0):
+                    await self._close_tilt_after_travel_close(travel_skipped=True)
+                elif self._movement_in_progress():
+                    await self._close_tilt_after_travel_close(travel_skipped=False)
 
     async def async_set_cover_tilt_position(self, **kwargs):
         """Move the cover tilt to a specific position."""

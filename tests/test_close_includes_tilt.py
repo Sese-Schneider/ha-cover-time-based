@@ -481,3 +481,93 @@ class TestStopOnInMotionClick:
 
         mock_stop.assert_not_awaited()
         mock_move.assert_awaited_once_with(target=expected_target)
+
+
+def _sequential_close_cover(make_cover, close_includes_tilt=True):
+    return make_cover(
+        tilt_time_close=5.0,
+        tilt_time_open=5.0,
+        tilt_mode="sequential_close",
+        close_includes_tilt=close_includes_tilt,
+    )
+
+
+class TestSetPositionZero:
+    """Owner decision 2026-10-12 (#307 follow-up): with close_includes_tilt on,
+    set_cover_position(0) closes the slats too, exactly like the close
+    button — HomeKit, voice assistants and the slider send 0%, not close."""
+
+    @pytest.mark.asyncio
+    async def test_from_open_schedules_tilt_close_after_travel(self, make_cover):
+        cover = _sequential_close_cover(make_cover)
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_position(position=0)
+
+        assert cover.travel_calc.is_closing()
+        assert cover._tilt_restore_target == 0
+
+    @pytest.mark.asyncio
+    async def test_settled_at_zero_closes_tilt_directly(self, make_cover):
+        cover = _sequential_close_cover(make_cover)
+        cover.travel_calc.set_position(0)
+        cover.tilt_calc.set_position(100)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_set_cover_position(position=0)
+
+        mock_tilt.assert_awaited_once_with(target=0)
+
+    @pytest.mark.asyncio
+    async def test_option_off_leaves_tilt(self, make_cover):
+        cover = _sequential_close_cover(make_cover, close_includes_tilt=False)
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_position(position=0)
+
+        assert cover.travel_calc.is_closing()
+        assert cover._tilt_restore_target is None
+
+    @pytest.mark.asyncio
+    async def test_non_zero_target_leaves_tilt(self, make_cover):
+        cover = _sequential_close_cover(make_cover)
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(
+                cover, "_async_move_tilt_to_endpoint", new_callable=AsyncMock
+            ) as mock_tilt,
+        ):
+            await cover.async_set_cover_position(position=10)
+
+        mock_tilt.assert_not_awaited()
+        assert cover._tilt_restore_target is None
+
+    @pytest.mark.asyncio
+    async def test_slats_start_closing_when_travel_reaches_zero(self, make_cover):
+        """End to end through the auto-updater: once the 0% travel arrives,
+        the chained tilt close actually starts."""
+        cover = _sequential_close_cover(make_cover)
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(100)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_set_cover_position(position=0)
+            # Arrive at 0 while still marked as travelling there.
+            cover.travel_calc.set_position(0)
+            cover.travel_calc.start_travel(0)
+            await cover.auto_stop_if_necessary()
+
+        assert cover.tilt_calc.is_traveling(), "the slats must start closing"
+        assert cover.tilt_calc.is_closing()
