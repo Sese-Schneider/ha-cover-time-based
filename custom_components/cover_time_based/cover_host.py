@@ -36,6 +36,7 @@ class _CoverHost:
         _feedback_wait_entity: str | None
         _feedback_wait_future: asyncio.Future | None
         _startup_delay_task: asyncio.Task[Any] | None
+        _parked_travel_target: int | None
         _stop_is_a_tap: bool
         _triggered_externally: bool
         _own_echoes_after_confirming_on: int
@@ -171,7 +172,7 @@ class _CoverHost:
         def _require_movement_target_available(self, target: str | None) -> None: ...
         async def set_position(
             self, position: Any, *, recalibrate: bool = True
-        ) -> None: ...
+        ) -> bool: ...
         async def set_tilt_position(
             self, position: Any, *, recalibrate: bool = True
         ) -> None: ...

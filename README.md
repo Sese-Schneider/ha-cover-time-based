@@ -476,10 +476,12 @@ tilt and travel interact.
 #### Close cover also closes slats
 
 Shown for the **Closes then tilts closed** and **Separate tilt motor** modes,
-and **on** by default. With it on, pressing close in the Home Assistant UI closes
-the cover and then closes the slats, leaving both fully shut. Turn it **off** if
-you would rather have a close move the cover only and leave the slats where they
-are, so you can articulate them separately with the tilt-close button.
+and **on** by default. With it on, pressing close in the Home Assistant UI, or
+setting the position to 0% (as Apple HomeKit, voice assistants and the position
+slider do), closes the cover and then closes the slats, leaving both fully shut.
+Turn it **off** if you would rather have a close move the cover only and leave
+the slats where they are, so you can articulate them separately with the
+tilt-close button.
 
 #### Tilt motor
 
@@ -905,8 +907,8 @@ Home Assistant's cover entity exposes close and open for travel, and close-tilt
 and open-tilt for the slats. Under the sequential tilt modes the integration
 handles each depending on who invoked it:
 
-- **Close from the UI** (`cover.close_cover`): closes the cover, and then
-  articulates the slats closed when
+- **Close from the UI** (`cover.close_cover`, or `cover.set_cover_position`
+  to 0%): closes the cover, and then articulates the slats closed when
   [Close cover also closes slats](#close-cover-also-closes-slats) is on (the
   default for the modes that offer it). Turn that option off for a travel-only
   close.
