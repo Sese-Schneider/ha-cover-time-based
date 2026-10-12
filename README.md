@@ -521,7 +521,9 @@ external remote or wall button**. Such a remote moves the cover without telling
 Home Assistant, so the tracker can believe the cover is closed while it is
 physically open, and the very command that would fix it is the one being skipped.
 With the option on, an endpoint command is always driven for the full travel
-time, which guarantees it reaches the motor. Leave it **off** for covers that
+time, which guarantees it reaches the motor. A request to set the position to 0%
+or 100% counts as an endpoint command too, which matters because Apple HomeKit,
+voice assistants and the position slider send those rather than open or close. Leave it **off** for covers that
 report their own position, where the skip is correct.
 
 > [!NOTE]

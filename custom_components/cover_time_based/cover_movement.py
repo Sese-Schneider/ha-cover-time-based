@@ -464,6 +464,15 @@ class MovementMixin(_MixinBase):
             self._log(
                 "set_position :: forced endpoint redrive did not start, moving directly"
             )
+        elif (
+            self._force_endpoint_redrive
+            and position in (0, 100)
+            and self._settled_at_endpoint(position)
+        ):
+            # issue #307: HomeKit, voice assistants and the slider send
+            # set_cover_position(0/100), not close/open — honour the option here too.
+            await self._force_full_redrive(target=position)
+            return
         self._self_initiated_movement = not self._triggered_externally
         # Capture before _abandon_active_lifecycle resets it — see
         # _release_displaced_tilt_motor.

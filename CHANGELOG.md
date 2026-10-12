@@ -4,6 +4,10 @@
 
 - **A wrapped cover can now appear on the device page of the cover it wraps** ([#304](https://github.com/Sese-Schneider/ha-cover-time-based/issues/304)). Turn on **Show on the wrapped cover's device page** and the time-based cover is listed on that device's page next to the original entity, so you can hide the original and use the time-based cover as your everyday control. It is off by default because, from Home Assistant 2025.8, the cover's name is then shown with the device's name in front of it; renaming the cover in its entity settings sets the name it shows.
 
+### Fixes
+
+- **"Always re-send open/close at the endpoints" now also works when the position is set to 0% or 100%** ([#307](https://github.com/Sese-Schneider/ha-cover-time-based/issues/307)). Apple HomeKit, voice assistants and the position slider ask for a position rather than sending open or close. If Home Assistant already believed the cover was at that position (after a remote had moved it without Home Assistant knowing, say), the request was skipped and the cover did not move, even with the option on. It is now driven for the full travel time, just like open and close. Positions between 1% and 99% behave as before.
+
 ## 4.13.0 (2026-09-27)
 
 ### Features

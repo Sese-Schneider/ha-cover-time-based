@@ -316,3 +316,77 @@ async def test_force_redrive_failing_tilt_prestep_does_not_corrupt_tracker(make_
     assert cover._pending_travel_target is None, cover._pending_travel_target
     assert cover._pending_travel_command is None, cover._pending_travel_command
     assert cover._tilt_restore_target is None, cover._tilt_restore_target
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("endpoint", "command"), [(0, SERVICE_CLOSE_COVER), (100, SERVICE_OPEN_COVER)]
+)
+async def test_set_position_at_believed_endpoint_redrives(
+    make_cover, endpoint, command
+):
+    """issue #307: HomeKit, voice assistants and the dashboard slider send
+    set_cover_position, not open/close. Asking for the endpoint the tracker
+    already believes it is at must re-drive just like open/close does."""
+    cover = make_cover(force_endpoint_redrive=True)  # switch mode
+    cover.travel_calc.set_position(endpoint)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_set_cover_position(position=endpoint)
+
+    assert cover.travel_calc.is_traveling(), "must start a full journey"
+    assert cover._last_command == command
+    cover.hass.services.async_call.assert_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("endpoint", "command"), [(0, SERVICE_CLOSE_COVER), (100, SERVICE_OPEN_COVER)]
+)
+async def test_set_position_at_endpoint_ignore_all_wrapped_redrives(
+    make_cover, endpoint, command
+):
+    """The #307 reporter's setup: a wrapped cover ignoring all device reports."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        ignore_all_reports=True,
+        force_endpoint_redrive=True,
+    )
+    cover.travel_calc.set_position(endpoint)
+    cover.hass.services.async_call.reset_mock()
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_set_cover_position(position=endpoint)
+
+    assert cover.travel_calc.is_traveling()
+    sent = [c.args[1] for c in cover.hass.services.async_call.call_args_list]
+    assert command in sent, sent
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", [0, 100])
+async def test_option_off_set_position_at_endpoint_is_noop(make_cover, endpoint):
+    """Regression guard: with the flag off, set_position to the believed
+    endpoint still sends nothing."""
+    cover = make_cover()
+    cover.travel_calc.set_position(endpoint)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_set_cover_position(position=endpoint)
+
+    assert not cover.travel_calc.is_traveling()
+    cover.hass.services.async_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_set_position_mid_travel_target_not_forced(make_cover):
+    """Only the endpoints are re-driven: a mid-travel target equal to the
+    believed position is still a no-op with the flag on."""
+    cover = make_cover(force_endpoint_redrive=True)
+    cover.travel_calc.set_position(50)
+
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.async_set_cover_position(position=50)
+
+    assert not cover.travel_calc.is_traveling()
+    cover.hass.services.async_call.assert_not_awaited()
