@@ -1,0 +1,91 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Dodaj časovno vodeno senčilo",
+        "description": "Izberite ime za senčilo. Ko ga ustvarite, dodajte kartico **Cover Time Based** na nadzorno ploščo, da nastavite vse možnosti.",
+        "data": {
+          "name": "Naziv"
+        }
+      }
+    }
+  },
+  "issues": {
+    "card_installed": {
+      "title": "Osvežite brskalnik, da se prikaže kartica Cover Time Based",
+      "description": "Kartica nadzorne plošče Cover Time Based je bila nameščena. Home Assistant vire nadzorne plošče naloži samo ob nalaganju strani, zato v že odprtih sejah brskalnika kartica manjka, dokler strani ne naložite znova — pogosto pomaga šele **trda osvežitev**. Naredite trdo osvežitev (**Ctrl+Shift+R** ali **⌘+Shift+R** v sistemu macOS), da se kartica naloži; če še vedno prikazuje napako v konfiguraciji, izpraznite predpomnilnik brskalnika in stran naložite znova. Ko se kartica prikaže, lahko to težavo prezrete."
+    },
+    "deprecated_yaml": {
+      "title": "Konfiguracija YAML je zastarela",
+      "description": "Konfiguracija Cover Time Based z YAML je zastarela in bo v prihodnji različici odstranjena.\n\nOdstranite konfiguracijo YAML in senčila znova ustvarite v uporabniškem vmesniku: **Nastavitve > Naprave in servisi > Pomočniki > Ustvari pomočnika > Cover Time Based**."
+    }
+  },
+  "services": {
+    "set_known_position": {
+      "name": "Nastavi položaj senčila",
+      "description": "Sporoči trenutni položaj senčila. Najprej ustavi motor, če ga Home Assistant še poganja; v načinu z enim gumbom končni položaj znova zasidra tudi sledeno fazo.",
+      "fields": {
+        "position": {
+          "name": "Položaj",
+          "description": "Položaj senčila, med 0 in 100."
+        }
+      }
+    },
+    "set_known_tilt_position": {
+      "name": "Nastavi položaj nagiba senčila",
+      "description": "Interno nastavi znani položaj nagiba senčila.",
+      "fields": {
+        "tilt_position": {
+          "name": "Položaj",
+          "description": "Položaj nagiba senčila, med 0 in 100."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Začni kalibracijo",
+      "description": "Začne kalibracijski preizkus za merjenje časovnega parametra. Senčilo se začne premikati — ko doseže želeni končni položaj, pokličite stop_calibration.",
+      "fields": {
+        "entity_id": {
+          "name": "ID entitete",
+          "description": "Senčilo, ki ga želite kalibrirati"
+        },
+        "attribute": {
+          "name": "Atribut",
+          "description": "Časovni parameter, ki ga želite kalibrirati"
+        },
+        "timeout": {
+          "name": "Časovna omejitev",
+          "description": "Varnostna časovna omejitev v sekundah. Če stop_calibration ni poklican pravočasno, se kalibracija prekliče. Strojni opremi, ki teče, dokler ne prejme ukaza za ustavitev, se pošlje ukaz za ustavitev; strojni opremi, ki se ustavi sama, se ukaz za ustavitev ne pošlje."
+        },
+        "direction": {
+          "name": "Smer",
+          "description": "Smer premikanja med preizkusom. Če ni nastavljena, se samodejno določi glede na trenutni položaj"
+        }
+      }
+    },
+    "stop_calibration": {
+      "name": "Ustavi kalibracijo",
+      "description": "Ustavi aktivni kalibracijski preizkus. Izračuna rezultat in ga shrani v konfiguracijo, razen če je preizkus preklican.",
+      "fields": {
+        "entity_id": {
+          "name": "ID entitete",
+          "description": "Senčilo, ki se kalibrira"
+        },
+        "cancel": {
+          "name": "Prekliči",
+          "description": "Če je vklopljeno, se rezultati preizkusa zavržejo brez shranjevanja"
+        }
+      }
+    },
+    "resync": {
+      "name": "Znova sinhroniziraj",
+      "description": "Znova zasidra sledeni položaj senčila na popolnoma zaprto ali popolnoma odprto, potem ko je bil uporabljen fizični gumb ali radijski (RF) daljinec. V načinu z enim gumbom znova zasidra tudi sledeno fazo, tako kot to stori set_known_position v končnem položaju. Integraciji sporočite dejansko stanje senčila.",
+      "fields": {
+        "state": {
+          "name": "Stanje",
+          "description": "Dejansko trenutno stanje senčila."
+        }
+      }
+    }
+  }
+}
