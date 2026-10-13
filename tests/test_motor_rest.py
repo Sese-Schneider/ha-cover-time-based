@@ -1348,3 +1348,121 @@ async def test_a_late_stop_does_not_count_as_sending_a_newer_one(
     await _rests_then_drives(
         cover, gated_sleep, cover.async_close_cover(), _CLOSE_ON, rest=0.5
     )
+
+
+async def _time_out_a_calibration(cover, calibration_sleep):
+    timing_out = cover._calibration.timeout_task
+    await calibration_sleep.until_parked(timing_out)
+    calibration_sleep.release(timing_out)
+    await timing_out
+    assert cover._calibration is None
+
+
+async def _into_a_minimum_movement_step(cover, clock, calibration_sleep, *, ended):
+    await cover.start_calibration(
+        attribute="min_movement_time", timeout=120.0, direction="close"
+    )
+    pulsing = cover._calibration.automation_task
+    await calibration_sleep.until_parked(pulsing)  # the initial pause
+    calibration_sleep.release(pulsing)
+    await calibration_sleep.until_next_sleep(pulsing)  # inside the step
+    if ended:
+        calibration_sleep.release(pulsing)
+        assert await calibration_sleep.until_next_sleep(pulsing) == (
+            CALIBRATION_STEP_PAUSE
+        )
+
+
+async def _into_a_startup_delay_step(cover, clock, calibration_sleep, *, ended):
+    cover.travel_calc.set_position(100)
+    await cover.start_calibration(
+        attribute="travel_startup_delay", timeout=300.0, direction="close"
+    )
+    stepping = cover._calibration.automation_task
+    await calibration_sleep.until_parked(stepping)  # inside the first step
+    if ended:
+        clock.advance(cover._calibration.step_duration + 0.1)
+        calibration_sleep.release(stepping)
+        assert await calibration_sleep.until_next_sleep(stepping) == (
+            CALIBRATION_STEP_PAUSE
+        )
+
+
+_STEPPED_TESTS = pytest.mark.parametrize(
+    "into_step",
+    [_into_a_minimum_movement_step, _into_a_startup_delay_step],
+    ids=["minimum movement", "startup delay"],
+)
+
+
+def _self_stopping_pulse_cover(make_cover):
+    cover = _cover(
+        make_cover,
+        control_mode="pulse",
+        stop_switch="switch.stop",
+        send_endpoint_stop=False,
+        travel_time_close=10,
+        travel_time_open=10,
+    )
+    assert cover._self_stops_at_endpoints()
+    cover.travel_calc.set_position(60)
+    return cover
+
+
+@_STEPPED_TESTS
+@pytest.mark.asyncio
+async def test_a_calibration_timing_out_during_a_step_stops_the_motor_first(
+    make_cover, clock, gated_sleep, into_step
+):
+    """Pulse hardware that stops itself at its limits keeps running a step
+    nothing stops. The timeout sends that step's stop, and a move the other
+    way rests from it."""
+    cover = _self_stopping_pulse_cover(make_cover)
+    calibration_sleep = _GatedSleep()
+    with patch.object(cover_calibration, "sleep", calibration_sleep):
+        try:
+            await into_step(cover, clock, calibration_sleep, ended=False)
+            mark = _mark(cover)
+            clock.advance(0.6)
+            await _time_out_a_calibration(cover, calibration_sleep)
+            await _yield_turns()
+        finally:
+            await calibration_sleep.close()
+
+    assert ("turn_on", "switch.stop") in relay_calls(cover, mark), (
+        "left the step's motor running"
+    )
+    clock.advance(0.25)
+    mark = _mark(cover)
+    opening = gated_sleep.spawn(cover.async_open_cover())
+    await gated_sleep.until_parked(opening)
+    assert _OPEN_ON not in relay_calls(cover, mark), "drove without resting"
+    assert sum(gated_sleep.slept) >= DIRECTION_CHANGE_DELAY - 0.25 - 1e-6
+    gated_sleep.release()
+    await opening
+    assert _OPEN_ON in relay_calls(cover, mark)
+
+
+@_STEPPED_TESTS
+@pytest.mark.asyncio
+async def test_a_calibration_timing_out_between_steps_sends_no_stop(
+    make_cover, clock, gated_sleep, into_step
+):
+    """Between steps the motor is already stopped, and a stop pulse to it
+    would be a movement command on this hardware."""
+    cover = _self_stopping_pulse_cover(make_cover)
+    calibration_sleep = _GatedSleep()
+    with patch.object(cover_calibration, "sleep", calibration_sleep):
+        try:
+            await into_step(cover, clock, calibration_sleep, ended=True)
+            mark = _mark(cover)
+            clock.advance(0.6)
+            await _time_out_a_calibration(cover, calibration_sleep)
+            await _yield_turns()
+        finally:
+            await calibration_sleep.close()
+
+    assert ("turn_on", "switch.stop") not in relay_calls(cover, mark)
+    await _rests_then_drives(
+        cover, gated_sleep, cover.async_open_cover(), _OPEN_ON, rest=0.4
+    )

@@ -308,12 +308,14 @@ class CalibrationMixin(_MixinBase):
                 )
                 calc.start_travel(target)
                 await self._calibration_drive(move_command)
+                self._calibration.step_running = True
 
                 # Wait for travel calculator to say position reached
                 while calc.current_position() != target:
                     await sleep(0.05)
 
                 await self._calibration_stop()
+                self._calibration.step_running = False
                 calc.stop()
 
                 # Force position — motor fell short due to startup delay
@@ -369,9 +371,11 @@ class CalibrationMixin(_MixinBase):
 
                 step_start = time.monotonic()
                 await self._async_handle_command(move_command)
+                self._calibration.step_running = True
                 elapsed = time.monotonic() - step_start
                 await sleep(max(0, pulse_duration - elapsed))
                 await self._send_travel_stop()
+                self._calibration.step_running = False
                 self.async_write_ha_state()
 
                 await sleep(CALIBRATION_STEP_PAUSE)
@@ -417,14 +421,18 @@ class CalibrationMixin(_MixinBase):
             ):
                 self._calibration.automation_task.cancel()
             try:
-                if self._self_stops_at_endpoints():
-                    # A stop pulse would be a movement command on this
-                    # hardware (#153/#133), so nothing is sent. The motor is
-                    # therefore at the limit only if it was being driven
-                    # continuously towards one. A stepped test's motor is
-                    # either parked in an inter-step pause or still driving a
-                    # step the cancelled automation task never stops, so its
-                    # position is simply unknown and must be left alone. A
+                mid_step = (
+                    self._calibration.step_running
+                    and not self._driven_continuously_to_endpoint()
+                )
+                if self._self_stops_at_endpoints() and not mid_step:
+                    # A stop pulse to a motor that is not running would be a
+                    # movement command on this hardware (#153/#133), so nothing
+                    # is sent. The motor is at the limit only if it was being
+                    # driven continuously towards one; a stepped test's motor
+                    # is parked between steps at an unknown position, which is
+                    # left alone. A step still running gets its stop below,
+                    # which the cancelled automation task never sends. A
                     # timeout is never a user cancel.
                     self._note_travel_motor_stop()
                     if self._driven_continuously_to_endpoint():
