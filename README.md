@@ -341,11 +341,12 @@ slowly.
 > back until the confirmation arrives — or until the wait times out — and only
 > then tapped out, so it cannot be swallowed. A *reversal* is held back the same
 > way: sending the cover the other way before the confirmation has arrived
-> stops it once the relay confirms, counts the run up to that stop, and a
-> position command then waits out the usual settle gap before driving the other
-> way. An open or close the other way then drives the cover the other way; with
+> stops it once the relay confirms, counts the run up to that stop, then waits
+> out the usual settle gap before driving the other way, whether the command was
+> a position or an open or close. With
 > [Reverse on an opposite open/close](#reverse-on-an-opposite-openclose) off, or
-> on a cover with tilt, it only stops the cover and you press it again to drive.
+> on a cover with tilt, an open or close only stops the cover and you press it
+> again to drive.
 
 #### Send stop signal at endpoints
 
@@ -903,6 +904,11 @@ phase; it still applies at the open (100%) endpoint.
 Reversing is never a single step. The motor is stopped, given a moment to come to
 rest, and only then driven the other way. That pause is a fixed **1 second** and
 is not configurable.
+
+The same pause applies when an open, close or position command sends the cover
+the other way less than a second after it stopped, whether it was stopped by the
+stop button, by a wall switch or by reaching the end of its travel. A move
+started from a wall switch never waits, because the motor is already running.
 
 If reversals do not take on your hardware, the setting to change is on the device,
 not here: a momentary relay's own pulse length must be comfortably under a
