@@ -620,6 +620,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
         the position matches and no updater is running.
         """
         self._log("_snap_to_position :: snapping to %d", target)
+        if self.travel_calc.is_traveling():
+            # The device stopped the motor itself.
+            self._note_travel_motor_stop()
         # The device reporting where it ended up, not a command — it must not
         # cancel a reversal waiting out its settle gap.
         await self.set_known_position(position=target, supersede=False)
@@ -934,8 +937,10 @@ class WrappedCoverTimeBased(CoverTimeBased):
         if self.travel_calc.is_traveling():
             self.travel_calc.stop()
             self.stop_auto_updater()
-            if not self._triggered_externally:
-                await self._send_stop()
+            if self._triggered_externally:
+                self._note_travel_motor_stop()
+            else:
+                await self._send_travel_stop()
 
     async def async_set_cover_tilt_position(self, **kwargs):
         """Forward tilt-to-position natively when the wrapped cover can."""

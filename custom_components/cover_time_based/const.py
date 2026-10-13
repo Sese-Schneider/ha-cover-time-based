@@ -34,9 +34,8 @@ DEFAULT_ENDPOINT_RUNON_TIME = 2.0
 # Retained only so configs written while the gap was briefly configurable keep
 # loading — the key is accepted and ignored. See DIRECTION_CHANGE_DELAY.
 CONF_DIRECTION_CHANGE_DELAY = "direction_change_delay"
-# Gap between the stop and the new direction when reversing a moving cover, so
-# the motor comes to rest before being driven the other way. Fixed, and equal
-# to the value every release has used.
+# Gap between stopping a motor and driving it the other way, so it comes to
+# rest first. Fixed, and equal to the value every release has used.
 #
 # It was briefly per-cover configurable (4.9.0 release candidates only, never a
 # promoted release) on the theory that 1.0s was too short for some motors. That

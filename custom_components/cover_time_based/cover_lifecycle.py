@@ -65,9 +65,10 @@ class MovementLifecycleMixin(_MixinBase):
                     return
                 # Move complete: don't re-drive the relay, but a latched relay
                 # (switch mode) must still be de-energized; momentary modes
-                # self-released and no-op in _settle_external_endpoint.
+                # self-released and no-op in _settle_external_endpoint. Sent as
+                # a travel stop, so a move the other way waits for it.
                 was_tilt_motor_move = self._moving_tilt_motor
-                await self._settle_external_endpoint()
+                await self._send_travel_stop(self._settle_external_endpoint)
                 if self._tilt_strategy is not None:
                     self._tilt_strategy.snap_trackers_to_physical(
                         self.travel_calc, self.tilt_calc
@@ -173,6 +174,7 @@ class MovementLifecycleMixin(_MixinBase):
                 # off the exact target (a freeze re-commands the calculated, not
                 # requested, position). Just settle the tracker.
                 self._log("auto_stop_if_necessary :: device self-stops, no relay stop")
+                self._note_travel_motor_stop()
             elif self._has_tilt_motor() and self._moving_tilt_motor:
                 # The completed movement drove the dedicated tilt motor — settle
                 # that motor (skipping the stop at the tilt endpoints), not
@@ -193,6 +195,7 @@ class MovementLifecycleMixin(_MixinBase):
                     " (position=%d), no relay stop",
                     current_travel,
                 )
+                self._note_travel_motor_stop()
             elif (
                 endpoint_applies
                 and self._endpoint_runon_time is not None
@@ -438,6 +441,7 @@ class MovementLifecycleMixin(_MixinBase):
                 "_stop_travel_relay_if_needed :: self-stopped at endpoint,"
                 " skipping stop"
             )
+            self._note_travel_motor_stop()
             return
         await self._async_handle_command(SERVICE_STOP_COVER)
 
@@ -560,6 +564,7 @@ class MovementLifecycleMixin(_MixinBase):
         included, so inferring from it read a genuine stop landing in that gap
         as a device echo and dropped it.
         """
+        self._assumed_start_pending = False
         if supersede:
             self._supersede_movement()
         self._clear_multiphase_tilt_state()

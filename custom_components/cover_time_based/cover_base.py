@@ -5,6 +5,7 @@ import logging
 import time
 from abc import abstractmethod
 from asyncio import sleep
+from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from datetime import timedelta
 from typing import Literal
@@ -202,8 +203,29 @@ class CoverTimeBased(
         self._parked_travel_target: int | None = None
         self._last_command = None
         # Claimed by every command that supersedes an in-flight movement; read
-        # across the settle gap by _settle_before_reversing.
+        # across the settle gap by _settle_before_reversing and
+        # _rest_before_driving.
         self._movement_epoch = 0
+        # The way the travel motor was last driven, until a stop is recorded.
+        self._travel_motor_direction: str | None = None
+        # Counts drives, so a stop that finishes after a newer drive leaves the
+        # newer stop's record alone.
+        self._travel_motor_drives = 0
+        # (monotonic time, direction) of the last travel-motor stop whose rest
+        # before a move the other way has not been waited out yet.
+        self._travel_motor_stop: tuple[float, str] | None = None
+        # The recorded stop has not gone out yet: still being sent, or its send
+        # failed or was cancelled, so a stop sent after it may be the one that
+        # reaches the motor.
+        self._travel_motor_stop_unsent = False
+        # set_position has assumed a start for an unknown position and its
+        # move has not begun yet: that assumed position is not a real one.
+        self._assumed_start_pending = False
+        # One per travel stop being sent, resolved when it has finished: True
+        # once it went out (the rest before a move the other way counts from
+        # then), False if sending it failed or was cancelled. Stops can
+        # overlap (a reversal's stop still waiting when the user presses stop).
+        self._travel_stops_sending: set[asyncio.Future[bool]] = set()
         self._removed = False
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
@@ -450,14 +472,18 @@ class CoverTimeBased(
         # still reaches that limit after removal, so treat the calibrated axis
         # as driving to park its tracker there. A stepped/pulsed test that has
         # not reached its final continuous phase drives only short bursts, so it
-        # is excluded (an overhead step that does run the tracker is caught by
-        # the axis's own is_traveling above).
+        # is excluded.
         calibration = self._calibration
         calibration_tilt = False
         calibration_travel = False
+        # A step still driving the motor is stopped below, so neither axis runs
+        # on to a limit (an overhead step's live tracker included).
+        calibration_step = False
         if calibration is not None and self._driven_continuously_to_endpoint():
             calibration_tilt = calibration.uses_tilt_motor
             calibration_travel = not calibration.uses_tilt_motor
+        elif calibration is not None:
+            calibration_step = calibration.step_running
         tilt_driving = (
             tilt_axis_driving
             or (self._has_tilt_motor() and self._moving_tilt_motor)
@@ -472,6 +498,8 @@ class CoverTimeBased(
             or (deferred and not self._moving_tilt)
             or calibration_travel
         )
+        if calibration_step:
+            tilt_driving = travel_driving = False
         await self._cancel_background_pulses()
         # A start may have reached the relay before its tracker was armed, so
         # hardware that cannot stop itself always receives a stop. On hardware
@@ -508,10 +536,12 @@ class CoverTimeBased(
             # Calibration may drive without a live tracker. Cancelling its
             # safety timeout therefore also requires a stop, unless the motor
             # stops itself at its limit and a stop tap could restart it (#153).
+            # A step still running gets its stop either way: the cancelled
+            # automation task never sends it.
             self._restore_calibration_startup_delay()
             self._cancel_calibration_tasks()
             try:
-                if not stops_itself:
+                if not stops_itself or calibration_step:
                     await self._calibration_stop()
             finally:
                 self._calibration = None
@@ -754,6 +784,10 @@ class CoverTimeBased(
             # so a remote-opened, no-feedback cover actually closes. Started via
             # _start_recalibration_drive so a re-drive that never starts keeps
             # the believed position (#307).
+            if not await self._stop_and_settle_before_recalibration_drive(
+                SERVICE_CLOSE_COVER
+            ):
+                return
             if not await self._start_recalibration_drive("travel", target=0):
                 self._log(
                     "async_close_cover :: force_endpoint_redrive did not start,"
@@ -859,6 +893,10 @@ class CoverTimeBased(
         if settled_open and force_redrive:
             # issue #167: don't trust "already open" — re-drive the full open,
             # overriding both the command-echo skip and the short resync.
+            if not await self._stop_and_settle_before_recalibration_drive(
+                SERVICE_OPEN_COVER
+            ):
+                return
             if not await self._start_recalibration_drive("travel", target=100):
                 self._log(
                     "async_open_cover :: force_endpoint_redrive did not start,"
@@ -899,18 +937,13 @@ class CoverTimeBased(
         reverse_on_opposite_command.
 
         set_position stops, settles and drives the other way, or retargets a
-        move already heading for ``endpoint``. Two cases are stopped and
+        move already heading for ``endpoint``. A start still parked heading
+        away from ``endpoint``, and a cover that has only just left it (the
+        whole-percent tracker still reads ``endpoint``), are stopped and
         settled here instead, returning True so the caller then handles the
         command as it would for a cover stopped where it is, but without a
         forced endpoint re-drive: a reversal stays an ordinary move, as it does
         through set_position(recalibrate=False).
-
-        - a start still parked heading away from ``endpoint``: set_position
-          can cancel it unrun and drive straight back with no settle gap,
-          since the tracker is not running;
-        - a cover that has only just left ``endpoint``: it still reads it on the
-          whole-percent tracker, and set_position treats a target equal to the
-          position as reached and leaves the motor running away.
 
         Returns False when nothing is left to do.
         """
@@ -1273,11 +1306,17 @@ class CoverTimeBased(
         its own counterpart — see
         ``_stop_and_settle_tilt_before_recalibration_drive``.
 
-        Returns False if the movement was superseded during the settle gap.
-        The caller must return immediately rather than fall back to a plain
-        move — something else has already claimed the movement, mirroring
-        the plain path's own ``if not await self._settle_before_reversing():
-        return``.
+        With nothing in flight to reverse, it cuts short any endpoint run-on
+        and waits out the rest from the last stop instead. Both happen here,
+        before the drive seeds the tracker at the opposite endpoint: inside
+        the drive a stop during the rest would read as "did not start", whose
+        rollback and fallback move then undo the stop.
+
+        Returns False if the movement was superseded during the settle gap or
+        the rest. The caller must return immediately rather than fall back to
+        a plain move — something else has already claimed the movement,
+        mirroring the plain path's own ``if not await
+        self._settle_before_reversing(): return``.
         """
         shared_motor_tilt_traveling = (
             self._has_tilt_support()
@@ -1289,7 +1328,15 @@ class CoverTimeBased(
             is_direction_change
             and (self.travel_calc.is_traveling() or shared_motor_tilt_traveling)
         ):
-            return True
+            # Claim the movement before the stop and the rest, as the plain
+            # path does, so a newer command arriving during either wins.
+            self._supersede_movement()
+            epoch = self._movement_epoch
+            if self._cancel_delay_task():
+                await self._async_handle_command(SERVICE_STOP_COVER)
+                if epoch != self._movement_epoch:
+                    return False
+            return await self._rest_before_driving(command)
         self._log(
             "_stop_and_settle_before_recalibration_drive :: reversing"
             " in-flight movement before driving %s",
@@ -1299,7 +1346,11 @@ class CoverTimeBased(
         self.stop_auto_updater()
         if self._has_tilt_support() and self.tilt_calc.is_traveling():
             self.tilt_calc.stop()
+        self._supersede_movement()
+        epoch = self._movement_epoch
         await self._async_handle_command(SERVICE_STOP_COVER)
+        if epoch != self._movement_epoch:
+            return False
         return await self._settle_before_reversing()
 
     async def _stop_and_settle_tilt_before_recalibration_drive(
@@ -1490,12 +1541,14 @@ class CoverTimeBased(
         self._pending_recalibrated_axis = None
         self._recalibration_epoch = None
 
-    async def _direction_change_delay(self):
+    async def _direction_change_delay(self, seconds: float | None = None):
         """Pause between stop and direction change to let the motor settle.
 
         Fixed, not per-cover — see DIRECTION_CHANGE_DELAY in const.py.
+        ``seconds`` is passed only for the remainder _rest_before_driving
+        waits out.
         """
-        await sleep(DIRECTION_CHANGE_DELAY)
+        await sleep(DIRECTION_CHANGE_DELAY if seconds is None else seconds)
 
     @property
     def _triggered_externally(self) -> bool:
@@ -1618,6 +1671,118 @@ class CoverTimeBased(
         if epoch != self._movement_epoch:
             self._log("_settle_before_reversing :: superseded during settle, aborting")
             return False
+        self._travel_motor_stop = None
+        return True
+
+    def _note_travel_motor_driven(self, command: str) -> None:
+        """Remember which way the travel motor is now driven.
+
+        A stop recorded before this is moot: the motor has moved since, and
+        reversing a running motor goes through its own stop and settle.
+        """
+        self._travel_motor_direction = command
+        self._travel_motor_drives += 1
+        self._travel_motor_stop = None
+
+    def _note_travel_motor_stop(self) -> tuple[float, str] | None:
+        """Record that the travel motor has just stopped, for
+        _rest_before_driving, and return the record (None when the motor was
+        not driven since the last stop)."""
+        direction = self._travel_motor_direction
+        if direction is None:
+            return None
+        self._travel_motor_direction = None
+        self._travel_motor_stop = (time.monotonic(), direction)
+        self._travel_motor_stop_unsent = False
+        return self._travel_motor_stop
+
+    async def _send_travel_stop(
+        self, send: Callable[[], Awaitable[None]] | None = None
+    ) -> None:
+        """Send the travel stop, and rest from when it went out.
+
+        ``send`` replaces the plain stop with a mode's own way of stopping (the
+        relay settle at the end of a wall-switch move).
+
+        Recorded before sending too, so a move the other way arriving while a
+        slow relay takes the stop still waits. A resend while the recorded stop
+        has not gone out restarts the rest too: that stop may have been
+        cancelled before it reached the motor. A stop sent to a motor already
+        stopped does not.
+        """
+        if self._note_travel_motor_stop() is not None:
+            self._travel_motor_stop_unsent = True
+        restarts_rest = (
+            self._travel_motor_stop is not None and self._travel_motor_stop_unsent
+        )
+        drives = self._travel_motor_drives
+        sending: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
+        self._travel_stops_sending.add(sending)
+        sent = False
+        try:
+            await (send or self._send_stop)()
+            sent = True
+        finally:
+            sending.set_result(sent)
+            self._travel_stops_sending.discard(sending)
+        stop = self._travel_motor_stop
+        if restarts_rest and stop is not None and self._travel_motor_drives == drives:
+            self._travel_motor_stop = (time.monotonic(), stop[1])
+            self._travel_motor_stop_unsent = False
+
+    async def _rest_before_driving(self, command: str) -> bool:
+        """Wait out what is left of the settle gap before driving ``command``
+        when the travel motor was stopped going the other way less than
+        DIRECTION_CHANGE_DELAY ago; False if this movement was superseded.
+
+        Covers the moves that reach the motor without a reversal's own settle:
+        a newer command arriving inside that settle, a stop followed at once
+        by the other direction, and a parked start cancelled for the other
+        direction. Wall-switch triggers never wait: the hardware is already
+        moving and only the tracker follows it.
+        """
+        if self._triggered_externally:
+            return True
+        epoch = self._movement_epoch
+        rested = None
+        while True:
+            sending = [f for f in self._travel_stops_sending if not f.done()]
+            if sending:
+                # Stops still being sent: the rest counts from when they go out,
+                # and a stop that never went out may have left the motor running.
+                if not all(await asyncio.shield(asyncio.gather(*sending))):
+                    self._log("_rest_before_driving :: the stop was not sent, aborting")
+                    return False
+                if epoch != self._movement_epoch:
+                    self._log(
+                        "_rest_before_driving :: superseded while a stop went out,"
+                        " aborting"
+                    )
+                    return False
+                continue
+            stop = self._travel_motor_stop
+            if stop is None or stop is rested:
+                break
+            stopped_at, direction = stop
+            remaining = DIRECTION_CHANGE_DELAY - (time.monotonic() - stopped_at)
+            if direction == command or remaining <= 0:
+                return True
+            self._log(
+                "_rest_before_driving :: motor stopped %.2fs ago going the other"
+                " way, resting %.2fs",
+                DIRECTION_CHANGE_DELAY - remaining,
+                remaining,
+            )
+            await self._direction_change_delay(remaining)
+            if epoch != self._movement_epoch:
+                self._log(
+                    "_rest_before_driving :: superseded during the rest, aborting"
+                )
+                return False
+            # Rest again if a stop finished or a newer one was recorded meanwhile.
+            rested = stop
+        if rested is not None and self._travel_motor_stop is rested:
+            self._travel_motor_stop = None
         return True
 
     async def _stop_displaced_movement_for_tilt(
@@ -1779,13 +1944,16 @@ class CoverTimeBased(
             # single-motor) keep sending _send_stop, and a genuine dual-motor
             # mid-travel stop (travel_was_moving) still fires. The tilt axis is
             # settled by _tilt_settle below, independently of this.
-            await self._send_stop()
+            await self._send_travel_stop()
         elif tilt_axis_reported and travel_was_moving and self._self_initiated_movement:
             # The TILT relay reported, not the travel relay. The travel motor
             # is one we drive ourselves and nothing external stopped it —
             # suppressing here strands a latched relay (switch mode) or a
             # running motor. Mirror image of _should_stop_tilt_motor.
-            await self._send_stop()
+            await self._send_travel_stop()
+        elif self._triggered_externally:
+            # The hardware stopped the motor itself.
+            self._note_travel_motor_stop()
         if stop_tilt:
             # _tilt_settle, not a bare stop: at 0%/100% the motor is already
             # stopped on its limit switch and a momentary relay re-pulsed there
@@ -2054,6 +2222,7 @@ class CoverTimeBased(
         delay so its position stays put until the pre-step finishes.
         """
 
+        self._assumed_start_pending = False
         if self._removed:
             self._log("_begin_movement :: refused, entity removed")
             return
@@ -2262,19 +2431,24 @@ class CoverTimeBased(
             cmd = "CLOSE"
             self._state = False
             self._last_command = command
+            self._note_travel_motor_driven(command)
             if not suppressed:
                 await self._send_close()
         elif command == SERVICE_OPEN_COVER:
             cmd = "OPEN"
             self._state = True
             self._last_command = command
+            self._note_travel_motor_driven(command)
             if not suppressed:
                 await self._send_open()
         elif command == SERVICE_STOP_COVER:
             cmd = "STOP"
             self._state = True
-            if not suppressed:
-                await self._send_stop()
+            if suppressed:
+                # The hardware stopped the motor itself.
+                self._note_travel_motor_stop()
+            else:
+                await self._send_travel_stop()
 
         # Say whether the relay actually fired. This line is in every debug log
         # users send, and without the marker a command whose pulse went out and
@@ -2310,12 +2484,14 @@ class CoverTimeBased(
         """
         if command == "open":
             self._last_command = SERVICE_OPEN_COVER
+            self._note_travel_motor_driven(SERVICE_OPEN_COVER)
             await self._send_open()
         elif command == "close":
             self._last_command = SERVICE_CLOSE_COVER
+            self._note_travel_motor_driven(SERVICE_CLOSE_COVER)
             await self._send_close()
         elif command == "stop":
-            await self._send_stop()
+            await self._send_travel_stop()
             self._last_command = None
         elif command == "tilt_open":
             await self._send_tilt_open()

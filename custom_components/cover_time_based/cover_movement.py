@@ -133,6 +133,11 @@ class MovementMixin(_MixinBase):
             # Resync: send command + endpoint run-on even though tracker
             # says we're already there. Physical cover may need resyncing.
             self._cancel_delay_task()
+            if not suppress_start_command and not await self._rest_before_driving(
+                command
+            ):
+                await self._release_displaced_tilt_motor(was_tilt_motor_move)
+                return
             self._last_command = command
             await self._async_handle_command(command)
             if self._self_stops_at_endpoints() and self._at_endpoint(target):
@@ -143,6 +148,7 @@ class MovementMixin(_MixinBase):
                     "_async_move_to_endpoint :: motor self-stops at endpoint,"
                     " no relay stop"
                 )
+                self._note_travel_motor_stop()
             elif (
                 self._endpoint_runon_time is not None and self._endpoint_runon_time > 0
             ):
@@ -162,6 +168,10 @@ class MovementMixin(_MixinBase):
         relay_was_on = self._cancel_delay_task()
         if relay_was_on:
             await self._async_handle_command(SERVICE_STOP_COVER)
+
+        if not suppress_start_command and not await self._rest_before_driving(command):
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
+            return
 
         if current is None:
             # Position unknown — assume opposite endpoint so full travel occurs
@@ -506,22 +516,35 @@ class MovementMixin(_MixinBase):
         )
 
         if current is None:
-            # Position unknown — assume opposite endpoint so full travel occurs
+            # Position unknown — assume opposite endpoint so full travel occurs.
+            # set_position, not update_position: the cleared target would
+            # otherwise read as a move already under way, and no relay is sent.
             closing = target <= 50
             command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
             current = 100 if closing else 0
-            self.travel_calc.update_position(current)
+            self.travel_calc.set_position(current)
+            self._assumed_start_pending = True
         elif target < current:
             command = SERVICE_CLOSE_COVER
         elif target > current:
             command = SERVICE_OPEN_COVER
+        elif self.travel_calc.is_opening():
+            # Reads the target on the whole-percent tracker while moving away
+            # from it (e.g. 0, an instant after leaving 0): a reversal, which
+            # stops, settles and then finds the target reached.
+            command = SERVICE_CLOSE_COVER
+        elif self.travel_calc.is_closing():
+            command = SERVICE_OPEN_COVER
         else:
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
-            # Travel still moving (e.g. an open on its first tick, still reading
-            # 0) or a start still parked runs on regardless, so this request
-            # is only done if nothing will take travel elsewhere.
-            return not self.travel_calc.is_traveling() and (
-                self._parked_start_heads_for(target)
+            # Travel is heading neither way. A move from an unknown position
+            # that has assumed its start but not begun yet, or a start still
+            # parked, takes travel elsewhere, so this request is done only if
+            # neither will.
+            return (
+                not self.travel_calc.is_traveling()
+                and not self._assumed_start_pending
+                and self._parked_start_heads_for(target)
             )
 
         closing = command == SERVICE_CLOSE_COVER
@@ -587,6 +610,12 @@ class MovementMixin(_MixinBase):
             current,
             "set_position",
             is_recalibrated_leg=not recalibrate,
+        ):
+            await self._release_displaced_tilt_motor(was_tilt_motor_move)
+            return False
+
+        if not self.travel_calc.is_traveling() and not await self._rest_before_driving(
+            command
         ):
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return False

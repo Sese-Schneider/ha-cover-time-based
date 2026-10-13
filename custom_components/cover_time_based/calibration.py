@@ -48,6 +48,9 @@ class CalibrationState:
     last_pulse_duration: float | None = None
     continuous_start: float | None = None
     move_command: str | None = None
+    # A stepped test's step has driven the motor and its stop has not gone
+    # out: cancelling the test now leaves the motor running.
+    step_running: bool = False
     saved_startup_delay: float | None = None
     timeout_task: Task | None = field(default=None, repr=False)
     automation_task: Task | None = field(default=None, repr=False)

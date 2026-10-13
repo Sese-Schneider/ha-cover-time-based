@@ -408,10 +408,9 @@ async def test_single_button_open_while_opening_presses_nothing():
 
 
 # ---------------------------------------------------------------------------
-# Just after leaving an endpoint the whole-percent tracker still reads it, so
-# set_position(endpoint) alone would find the target reached and leave the
-# motor running away from it. The cover is stopped and settled instead, then
-# the command runs as it would on a cover stopped at that endpoint.
+# Just after leaving an endpoint the whole-percent tracker still reads it. The
+# cover is stopped and settled, then the command runs as it would on a cover
+# stopped at that endpoint.
 # ---------------------------------------------------------------------------
 
 

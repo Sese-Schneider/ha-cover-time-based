@@ -189,7 +189,19 @@ class CalibrationMixin(_MixinBase):
         if self._calibration.uses_tilt_motor:
             await self._send_tilt_stop()
         else:
-            await self._send_stop()
+            await self._send_travel_stop()
+
+    async def _stop_running_calibration_step(self) -> None:
+        """Stop a step the cancelled automation task left driving the motor,
+        and end its move on the tracker as the step itself would have, so the
+        next command does not send a second stop (a restart on toggle)."""
+        assert self._calibration is not None
+        await self._calibration_stop()
+        self._calibration.step_running = False
+        is_tilt = "tilt" in self._calibration.attribute and hasattr(self, "tilt_calc")
+        calc = self.tilt_calc if is_tilt else self.travel_calc
+        if calc.is_traveling():
+            calc.stop()
 
     async def _start_simple_time_test(self, attribute, direction):
         """Start a simple travel/tilt time test by moving the cover."""
@@ -308,12 +320,14 @@ class CalibrationMixin(_MixinBase):
                 )
                 calc.start_travel(target)
                 await self._calibration_drive(move_command)
+                self._calibration.step_running = True
 
                 # Wait for travel calculator to say position reached
                 while calc.current_position() != target:
                     await sleep(0.05)
 
                 await self._calibration_stop()
+                self._calibration.step_running = False
                 calc.stop()
 
                 # Force position — motor fell short due to startup delay
@@ -369,9 +383,11 @@ class CalibrationMixin(_MixinBase):
 
                 step_start = time.monotonic()
                 await self._async_handle_command(move_command)
+                self._calibration.step_running = True
                 elapsed = time.monotonic() - step_start
                 await sleep(max(0, pulse_duration - elapsed))
-                await self._send_stop()
+                await self._send_travel_stop()
+                self._calibration.step_running = False
                 self.async_write_ha_state()
 
                 await sleep(CALIBRATION_STEP_PAUSE)
@@ -417,15 +433,20 @@ class CalibrationMixin(_MixinBase):
             ):
                 self._calibration.automation_task.cancel()
             try:
-                if self._self_stops_at_endpoints():
-                    # A stop pulse would be a movement command on this
-                    # hardware (#153/#133), so nothing is sent. The motor is
-                    # therefore at the limit only if it was being driven
-                    # continuously towards one. A stepped test's motor is
-                    # either parked in an inter-step pause or still driving a
-                    # step the cancelled automation task never stops, so its
-                    # position is simply unknown and must be left alone. A
-                    # timeout is never a user cancel.
+                mid_step = (
+                    self._calibration.step_running
+                    and not self._driven_continuously_to_endpoint()
+                )
+                if mid_step:
+                    await self._stop_running_calibration_step()
+                elif self._self_stops_at_endpoints():
+                    # A stop pulse to a motor that is not running would be a
+                    # movement command on this hardware (#153/#133), so nothing
+                    # is sent. The motor is at the limit only if it was being
+                    # driven continuously towards one; a stepped test's motor
+                    # is parked between steps at an unknown position, which is
+                    # left alone. A timeout is never a user cancel.
+                    self._note_travel_motor_stop()
                     if self._driven_continuously_to_endpoint():
                         self._set_position_after_calibration(self._calibration)
                 else:
@@ -470,9 +491,15 @@ class CalibrationMixin(_MixinBase):
             # Stop the motor. On momentary hardware (toggle/pulse-no-endpoint-stop)
             # the time-test protocol means the motor already self-stopped at its
             # limit — a stop pulse there is a movement command (#153/#133), so skip
-            # it. Cancel always stops: the user is bailing mid-run.
-            if cancel or not self._self_stops_at_endpoints():
+            # it. Cancel always stops: the user is bailing mid-run. So does a
+            # stepped test's step still driving the motor, which the cancelled
+            # automation task never stops.
+            if self._calibration.step_running:
+                await self._stop_running_calibration_step()
+            elif cancel or not self._self_stops_at_endpoints():
                 await self._calibration_stop()
+            # Self-stopping hardware got no stop above: it is at rest.
+            self._note_travel_motor_stop()
 
             if not cancel:
                 value = self._calculate_calibration_result()
