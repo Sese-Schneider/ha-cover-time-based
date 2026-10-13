@@ -3,6 +3,8 @@ set_position (stop, settle, drive the other way) instead of only stopping.
 """
 
 import asyncio
+from contextlib import contextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -375,3 +377,199 @@ async def test_single_button_open_while_opening_presses_nothing():
 
     assert relay_calls(cover, mark) == []
     assert cover.travel_calc.is_opening()
+
+
+# ---------------------------------------------------------------------------
+# Just after leaving an endpoint the whole-percent tracker still reads it, so
+# set_position(endpoint) alone would find the target reached and leave the
+# motor running away from it. The cover is stopped and settled instead, then
+# the command runs as it would on a cover stopped at that endpoint.
+# ---------------------------------------------------------------------------
+
+
+@contextmanager
+def _just_left_endpoint(cover):
+    """Hand-driven tracker clock, settle gap stubbed: yields (now, settle)."""
+    now = [5000.0]
+    with (
+        patch(
+            "custom_components.cover_time_based.travel_calculator.time",
+            SimpleNamespace(monotonic=lambda: now[0]),
+        ),
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
+    ):
+        yield now, settle
+
+
+async def _just_left(cover, now, command, start, run=None):
+    """Start ``command`` from endpoint ``start`` and let 0.1 s of a 30 s
+    travel pass; return the service-call watermark."""
+    cover.travel_calc.set_position(start)
+    await (run(cover, command) if run else getattr(cover, command)())
+    now[0] += 0.1
+    assert cover.travel_calc.current_position() == start
+    assert cover.travel_calc.is_traveling()
+    return len(cover.hass.services.async_call.call_args_list)
+
+
+_OPEN_AFTER_CLOSING = ("async_close_cover", 100, "async_open_cover")
+_CLOSE_AFTER_OPENING = ("async_open_cover", 0, "async_close_cover")
+_SWITCH_STOP = [("turn_off", "switch.close"), ("turn_off", "switch.open")]
+_SWITCH_OPEN = [("turn_off", "switch.close"), ("turn_on", "switch.open")]
+_IDS = ["open-after-closing-from-100", "close-after-opening-from-0"]
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        (_OPEN_AFTER_CLOSING, _SWITCH_STOP + _SWITCH_OPEN),
+        (_CLOSE_AFTER_OPENING, _SWITCH_STOP),
+    ],
+    ids=_IDS,
+)
+@pytest.mark.asyncio
+async def test_switch_opposite_command_just_after_leaving_endpoint_stops(
+    make_cover, case, expected
+):
+    first, start, second = case
+    cover = make_cover(reverse_on_opposite_command=True)
+    stub_switches(cover)
+    with _just_left_endpoint(cover) as (now, settle):
+        mark = await _just_left(cover, now, first, start)
+        await getattr(cover, second)()
+
+        assert relay_calls(cover, mark) == expected
+        settle.assert_awaited_once()
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() == start
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        (
+            _OPEN_AFTER_CLOSING,
+            [
+                ("turn_on", "switch.close"),
+                ("turn_off", "switch.close"),
+                ("turn_on", "switch.open"),
+            ],
+        ),
+        (_CLOSE_AFTER_OPENING, [("turn_on", "switch.open")]),
+    ],
+    ids=_IDS,
+)
+@pytest.mark.asyncio
+async def test_toggle_opposite_command_just_after_leaving_endpoint_stops(
+    make_cover, case, expected
+):
+    """The stop is a pulse on the relay that started the move."""
+    first, start, second = case
+    cover = make_cover(control_mode="toggle", reverse_on_opposite_command=True)
+    stub_switches(cover)
+    with _just_left_endpoint(cover) as (now, settle):
+        mark = await _just_left(cover, now, first, start)
+        await getattr(cover, second)()
+
+        assert relay_calls(cover, mark) == expected
+        settle.assert_awaited_once()
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() == start
+
+
+@pytest.mark.parametrize("case", [_OPEN_AFTER_CLOSING, _CLOSE_AFTER_OPENING], ids=_IDS)
+@pytest.mark.asyncio
+async def test_single_button_opposite_command_just_after_leaving_endpoint_stops(
+    case,
+):
+    """One press stops the cover; the endpoint command adds none."""
+    first, start, second = case
+    cover = _single_button()
+    with (
+        _just_left_endpoint(cover) as (now, settle),
+        patch.object(cover, "start_auto_updater"),
+        single_button_sleep_patch(),
+    ):
+        mark = await _just_left(cover, now, first, start, run=_run_single_button)
+        await _run_single_button(cover, second)
+
+        assert relay_calls(cover, mark) == [
+            ("turn_on", "switch.button"),
+            ("turn_off", "switch.button"),
+        ]
+        settle.assert_awaited_once()
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() == start
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        (
+            _OPEN_AFTER_CLOSING,
+            [("stop_cover", "cover.inner"), ("open_cover", "cover.inner")],
+        ),
+        (_CLOSE_AFTER_OPENING, [("stop_cover", "cover.inner")]),
+    ],
+    ids=_IDS,
+)
+@pytest.mark.parametrize(
+    "features",
+    [_F_OPEN_CLOSE_STOP, _F_OPEN_CLOSE_SET_POSITION_STOP],
+    ids=["open-close-stop", "native-position"],
+)
+@pytest.mark.asyncio
+async def test_wrapped_opposite_command_just_after_leaving_endpoint_stops(
+    make_cover, features, case, expected
+):
+    first, start, second = case
+    cover = _wrapped(make_cover, features)
+    with _just_left_endpoint(cover) as (now, settle):
+        mark = await _just_left(cover, now, first, start)
+        await getattr(cover, second)()
+
+        assert relay_calls(cover, mark) == expected
+        settle.assert_awaited_once()
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() == start
+
+
+@pytest.mark.parametrize(
+    ("command", "start"),
+    [("async_close_cover", 100), ("async_open_cover", 0)],
+    ids=["close-while-closing-from-100", "open-while-opening-from-0"],
+)
+@pytest.mark.asyncio
+async def test_same_direction_command_just_after_leaving_endpoint_carries_on(
+    make_cover, command, start
+):
+    cover = make_cover(reverse_on_opposite_command=True)
+    stub_switches(cover)
+    with _just_left_endpoint(cover) as (now, settle):
+        mark = await _just_left(cover, now, command, start)
+        await getattr(cover, command)()
+
+        assert relay_calls(cover, mark) == []
+        settle.assert_not_awaited()
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc._travel_to_position == 100 - start
+
+
+@pytest.mark.parametrize("case", [_OPEN_AFTER_CLOSING, _CLOSE_AFTER_OPENING], ids=_IDS)
+@pytest.mark.asyncio
+async def test_option_off_opposite_command_just_after_leaving_endpoint_stops(
+    make_cover, case
+):
+    """Control: without the option the in-motion command only stops."""
+    first, start, second = case
+    cover = make_cover()
+    stub_switches(cover)
+    with _just_left_endpoint(cover) as (now, settle):
+        mark = await _just_left(cover, now, first, start)
+        await getattr(cover, second)()
+
+        assert relay_calls(cover, mark) == _SWITCH_STOP
+        settle.assert_not_awaited()
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() == start
