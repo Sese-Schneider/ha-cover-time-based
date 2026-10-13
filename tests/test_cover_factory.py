@@ -19,6 +19,7 @@ from custom_components.cover_time_based.cover import (
     CONF_OPEN_SWITCH_ENTITY_ID,
     CONF_PULSE_TIME,
     CONF_RELAY_REPORTS_OFF,
+    CONF_REVERSE_ON_OPPOSITE_COMMAND,
     CONF_SKIP_STOP_WHEN_IDLE,
     CONF_STOP_SWITCH_ENTITY_ID,
     CONF_TILT_STARTUP_DELAY,
@@ -1086,3 +1087,62 @@ class TestSingleButtonYamlRelayRequirement:
         )
         devices = devices_from_config(config)
         assert isinstance(devices[0], WrappedCoverTimeBased)
+
+
+# ===================================================================
+# reverse_on_opposite_command from YAML
+# ===================================================================
+
+
+def _yaml_reverse(device=None, defaults=None, wrapped=False):
+    """Domain config for one switch (or wrapped) device, run through
+    PLATFORM_SCHEMA so a key the YAML schema rejects fails the test."""
+    dev = {"name": "Test"}
+    if wrapped:
+        dev[CONF_COVER_ENTITY_ID] = "cover.inner"
+    else:
+        dev[CONF_OPEN_SWITCH_ENTITY_ID] = "switch.open"
+        dev[CONF_CLOSE_SWITCH_ENTITY_ID] = "switch.close"
+    dev.update(device or {})
+    raw = {"platform": "cover_time_based", CONF_DEVICES: {"blind1": dev}}
+    if defaults is not None:
+        raw[CONF_DEFAULTS] = defaults
+    return PLATFORM_SCHEMA(raw)
+
+
+class TestYamlReverseOnOppositeCommand:
+    """Reversing is on by default, so YAML covers need the key to turn it off."""
+
+    @pytest.mark.parametrize("wrapped", [False, True])
+    def test_omitted_key_reverses(self, wrapped):
+        devices = devices_from_config(_yaml_reverse(wrapped=wrapped))
+        assert devices[0]._reverse_on_opposite_command is True
+
+    @pytest.mark.parametrize("wrapped", [False, True])
+    def test_device_false_turns_it_off(self, wrapped):
+        devices = devices_from_config(
+            _yaml_reverse(
+                device={CONF_REVERSE_ON_OPPOSITE_COMMAND: False}, wrapped=wrapped
+            )
+        )
+        assert devices[0]._reverse_on_opposite_command is False
+        expected = WrappedCoverTimeBased if wrapped else SwitchModeCover
+        assert isinstance(devices[0], expected)
+
+    @pytest.mark.parametrize("wrapped", [False, True])
+    def test_defaults_false_turns_it_off(self, wrapped):
+        devices = devices_from_config(
+            _yaml_reverse(
+                defaults={CONF_REVERSE_ON_OPPOSITE_COMMAND: False}, wrapped=wrapped
+            )
+        )
+        assert devices[0]._reverse_on_opposite_command is False
+
+    def test_device_true_overrides_defaults_false(self):
+        devices = devices_from_config(
+            _yaml_reverse(
+                device={CONF_REVERSE_ON_OPPOSITE_COMMAND: True},
+                defaults={CONF_REVERSE_ON_OPPOSITE_COMMAND: False},
+            )
+        )
+        assert devices[0]._reverse_on_opposite_command is True

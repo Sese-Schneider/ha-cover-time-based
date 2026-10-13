@@ -1008,6 +1008,7 @@ listed here, use the card.
 | `pulse_time` | float | _Optional_ | Pulse duration in pulse mode; press duration in single button mode. 0.1–10 s. | 1.0 |
 | `relay_reports_off` | boolean | _Optional_ | Toggle mode: set `false` for pulse modules that never report their off. | true |
 | `send_endpoint_stop` | boolean | _Optional_ | Pulse mode: set `false` for auto-stop controllers that reposition on a stop received while stopped. | true |
+| `reverse_on_opposite_command` | boolean | _Optional_ | All modes: set `false` so an open or close sent while the cover is moving only stops it, instead of reversing it. Covers with tilt always just stop. | true |
 | `direction_change_delay` | float | _Deprecated_ | No longer configurable. Accepted and ignored; the reversing pause is fixed at 1.0s. | — |
 
 The cover is unavailable until both `travelling_time_down` and `travelling_time_up` are set.

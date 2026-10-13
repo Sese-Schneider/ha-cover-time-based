@@ -186,12 +186,14 @@ SWITCH_COVER_SCHEMA = {
     vol.Optional(CONF_PULSE_TIME): PULSE_DURATION,
     vol.Optional(CONF_RELAY_REPORTS_OFF): cv.boolean,
     vol.Optional(CONF_SEND_ENDPOINT_STOP): cv.boolean,
+    vol.Optional(CONF_REVERSE_ON_OPPOSITE_COMMAND): cv.boolean,
     **TRAVEL_TIME_SCHEMA,
 }
 
 ENTITY_COVER_SCHEMA = {
     **BASE_DEVICE_SCHEMA,
     vol.Required(CONF_COVER_ENTITY_ID): cv.entity_id,
+    vol.Optional(CONF_REVERSE_ON_OPPOSITE_COMMAND): cv.boolean,
     **TRAVEL_TIME_SCHEMA,
 }
 
@@ -199,6 +201,9 @@ DEFAULTS_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_TRAVEL_MOVES_WITH_TILT, default=False): cv.boolean,
         vol.Optional(CONF_INPUT_MODE): vol.In(INPUT_MODE_VALUES),
+        # No default=: an absent key must fall through to
+        # DEFAULT_REVERSE_ON_OPPOSITE_COMMAND in devices_from_config.
+        vol.Optional(CONF_REVERSE_ON_OPPOSITE_COMMAND): cv.boolean,
         vol.Optional(CONF_TRAVELLING_TIME_DOWN, default=None): NULLABLE_DURATION,
         vol.Optional(CONF_TRAVELLING_TIME_UP, default=None): NULLABLE_DURATION,
         vol.Optional(CONF_TILTING_TIME_DOWN, default=None): NULLABLE_DURATION,
@@ -528,11 +533,19 @@ def devices_from_config(domain_config):
             CONF_SEND_ENDPOINT_STOP, config, defaults, DEFAULT_SEND_ENDPOINT_STOP
         )
         config.pop(CONF_SEND_ENDPOINT_STOP, None)
+        reverse_on_opposite_command = _get_value(
+            CONF_REVERSE_ON_OPPOSITE_COMMAND,
+            config,
+            defaults,
+            DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
+        )
+        config.pop(CONF_REVERSE_ON_OPPOSITE_COMMAND, None)
 
         options[CONF_CONTROL_MODE] = control_mode
         options[CONF_PULSE_TIME] = pulse_time
         options[CONF_RELAY_REPORTS_OFF] = relay_reports_off
         options[CONF_SEND_ENDPOINT_STOP] = send_endpoint_stop
+        options[CONF_REVERSE_ON_OPPOSITE_COMMAND] = reverse_on_opposite_command
 
         if open_switch:
             options[CONF_OPEN_SWITCH_ENTITY_ID] = open_switch
