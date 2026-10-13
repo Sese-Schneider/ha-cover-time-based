@@ -1466,3 +1466,28 @@ async def test_a_calibration_timing_out_between_steps_sends_no_stop(
     await _rests_then_drives(
         cover, gated_sleep, cover.async_open_cover(), _OPEN_ON, rest=0.4
     )
+
+
+@pytest.mark.asyncio
+async def test_finishing_a_minimum_movement_test_during_a_step_stops_the_motor(
+    make_cover, clock, gated_sleep
+):
+    """The user finishes the test as soon as the cover moves, which can be
+    while a step is still driving it. That step's stop must still go out."""
+    cover = _self_stopping_pulse_cover(make_cover)
+    calibration_sleep = _GatedSleep()
+    with patch.object(cover_calibration, "sleep", calibration_sleep):
+        try:
+            await _into_a_minimum_movement_step(
+                cover, clock, calibration_sleep, ended=False
+            )
+            mark = _mark(cover)
+            await cover.stop_calibration()
+            await _yield_turns()
+        finally:
+            await calibration_sleep.close()
+
+    assert ("turn_on", "switch.stop") in relay_calls(cover, mark), (
+        "left the step's motor running"
+    )
+    await _rests_then_drives(cover, gated_sleep, cover.async_open_cover(), _OPEN_ON)

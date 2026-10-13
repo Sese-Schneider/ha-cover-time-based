@@ -479,10 +479,16 @@ class CalibrationMixin(_MixinBase):
             # Stop the motor. On momentary hardware (toggle/pulse-no-endpoint-stop)
             # the time-test protocol means the motor already self-stopped at its
             # limit — a stop pulse there is a movement command (#153/#133), so skip
-            # it. Cancel always stops: the user is bailing mid-run.
-            if cancel or not self._self_stops_at_endpoints():
+            # it. Cancel always stops: the user is bailing mid-run. So does a
+            # stepped test's step still driving the motor, which the cancelled
+            # automation task never stops.
+            if (
+                cancel
+                or not self._self_stops_at_endpoints()
+                or self._calibration.step_running
+            ):
                 await self._calibration_stop()
-            # Self-stopping hardware got no stop above: it stopped at its limit.
+            # Self-stopping hardware got no stop above: it is at rest.
             self._note_travel_motor_stop()
 
             if not cancel:
