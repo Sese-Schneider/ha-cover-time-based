@@ -96,7 +96,8 @@ class TestToggleStopGuard:
 
 
 class TestStopBeforeDirectionChange:
-    """Closing while opening in toggle mode should stop first."""
+    """With "Reverse on an opposite open/close" off, closing while opening in
+    toggle mode stops the cover."""
 
     @pytest.mark.asyncio
     async def test_close_while_opening_stops_first(self, make_cover):

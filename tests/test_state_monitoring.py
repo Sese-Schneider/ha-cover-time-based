@@ -473,7 +473,8 @@ class TestToggleModeExternalStateChange:
 
     @pytest.mark.asyncio
     async def test_ha_ui_open_while_closing_stops(self, make_cover):
-        """HA UI open while closing just stops — does NOT reverse."""
+        """With "Reverse on an opposite open/close" off, an HA UI open while
+        closing just stops — it does NOT reverse."""
         cover = make_cover(
             reverse_on_opposite_command=False, control_mode=CONTROL_MODE_TOGGLE
         )
