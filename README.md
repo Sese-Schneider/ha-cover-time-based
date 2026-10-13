@@ -343,8 +343,9 @@ slowly.
 > way: sending the cover the other way before the confirmation has arrived
 > stops it once the relay confirms, counts the run up to that stop, and a
 > position command then waits out the usual settle gap before driving the other
-> way. An open or close the other way only stops the cover; press it again to
-> drive.
+> way. An open or close the other way then drives the cover the other way; with
+> [Reverse on an opposite open/close](#reverse-on-an-opposite-openclose) off, it
+> only stops the cover and you press it again to drive.
 
 #### Send stop signal at endpoints
 

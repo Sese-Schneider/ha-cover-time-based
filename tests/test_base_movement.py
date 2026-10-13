@@ -138,9 +138,8 @@ class TestWrappedCommandEchoOpenAtEndpoint:
 
 
 class TestCloseStopsOppositeDirection:
-    """UI close while opening just stops — does not reverse. (Reverse is
-    still available via set_cover_position which preserves the legacy
-    stop-then-reverse flow.)"""
+    """With "Reverse on an opposite open/close" off, a UI close while opening
+    just stops — it does not reverse."""
 
     @pytest.mark.asyncio
     async def test_close_while_opening_stops(self, make_cover):
@@ -158,7 +157,8 @@ class TestCloseStopsOppositeDirection:
 
 
 class TestOpenStopsOppositeDirection:
-    """UI open while closing just stops — does not reverse."""
+    """With "Reverse on an opposite open/close" off, a UI open while closing
+    just stops — it does not reverse."""
 
     @pytest.mark.asyncio
     async def test_open_while_closing_stops(self, make_cover):

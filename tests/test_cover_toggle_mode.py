@@ -235,7 +235,7 @@ class TestToggleModeSendStop:
 class TestToggleCloseWhileClosing:
     @pytest.mark.asyncio
     async def test_close_while_closing_stops(self):
-        """In-motion UI click stops the cover (does not re-issue)."""
+        """With the reverse option off, an in-motion UI click stops the cover (does not re-issue)."""
         cover = _make_toggle_cover(reverse_on_opposite_command=False)
 
         # Simulate currently closing (position 100 = fully open)
@@ -254,7 +254,7 @@ class TestToggleCloseWhileClosing:
 class TestToggleOpenWhileOpening:
     @pytest.mark.asyncio
     async def test_open_while_opening_stops(self):
-        """In-motion UI click stops the cover (does not re-issue)."""
+        """With the reverse option off, an in-motion UI click stops the cover (does not re-issue)."""
         cover = _make_toggle_cover(reverse_on_opposite_command=False)
 
         # Simulate currently opening (position 0 = fully closed)

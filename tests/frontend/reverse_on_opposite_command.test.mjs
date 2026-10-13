@@ -1,7 +1,7 @@
 /**
  * reverse_on_opposite_command ("reverse on an opposite open/close") UI.
  *
- * Toggle for every control mode, default off, hidden once a tilt mode is set
+ * Toggle for every control mode, default on, hidden once a tilt mode is set
  * (the option is ignored on covers with tilt). Single-button covers have no
  * tilt, so they always show it. card_render.test.mjs covers the tilt hiding
  * for switch and wrapped mode.

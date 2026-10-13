@@ -589,7 +589,7 @@ async def test_same_direction_command_just_after_leaving_endpoint_carries_on(
 async def test_option_off_opposite_command_just_after_leaving_endpoint_stops(
     make_cover, case
 ):
-    """Control: without the option the in-motion command only stops."""
+    """Control: with the option off the in-motion command only stops."""
     first, start, second = case
     cover = make_cover(reverse_on_opposite_command=False)
     stub_switches(cover)
@@ -798,7 +798,7 @@ async def test_same_direction_command_during_startup_delay_sends_nothing(
 async def test_option_off_opposite_command_during_startup_delay_only_stops(
     make_cover, mode, first, start, second, stop, drive, target
 ):
-    """Control: without the option the parked start is stopped, not reversed."""
+    """Control: with the option off the parked start is stopped, not reversed."""
     cover = make_cover(
         reverse_on_opposite_command=False, control_mode=mode, travel_startup_delay=20
     )
@@ -911,7 +911,7 @@ async def test_same_direction_command_during_relay_feedback_wait_sends_nothing(
 
 @pytest.mark.asyncio
 async def test_option_off_close_during_relay_feedback_wait_only_stops(make_cover):
-    """Control: without the option the parked open is stopped, not reversed."""
+    """Control: with the option off the parked open is stopped, not reversed."""
     cover = make_cover(reverse_on_opposite_command=False, wait_for_relay_feedback=True)
     with _settle_spy(cover) as settled_at:
         mark = await _parked(cover, "async_open_cover", 40)
