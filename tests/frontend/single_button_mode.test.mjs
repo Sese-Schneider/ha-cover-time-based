@@ -128,7 +128,7 @@ test("single_button mode: tilt select is absent even for a stale dual_motor tilt
   expect(card.shadowRoot.querySelector(".dual-motor-config")).toBeNull();
 });
 
-test("single_button mode shows exactly six toggles (the five all-mode ones plus relay_reports_off)", async () => {
+test("single_button mode shows exactly six toggles (the four all-mode ones plus wait_for_relay_feedback and relay_reports_off)", async () => {
   // Confirms only close/stop/tilt were hidden and nothing else was
   // accidentally dropped — plus relay_reports_off, which single_button shares
   // with the toggle modes for hardware pulse modules (#273 follow-up (a)).
