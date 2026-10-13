@@ -558,7 +558,13 @@ class MovementMixin(_MixinBase):
             self.stop_auto_updater()
             if self._has_tilt_support() and self.tilt_calc.is_traveling():
                 self.tilt_calc.stop()
+            # The stop can take a while to send; a command arriving meanwhile
+            # claims the movement and must win over this reversal.
+            epoch = self._movement_epoch
             await self._async_handle_command(SERVICE_STOP_COVER)
+            if epoch != self._movement_epoch:
+                self._log("set_position :: superseded while stopping, aborting")
+                return False
             if not await self._settle_before_reversing():
                 return False
             current = self.travel_calc.current_position()

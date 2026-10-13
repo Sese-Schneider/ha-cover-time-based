@@ -1059,3 +1059,37 @@ async def test_a_stop_while_the_reversal_stop_is_in_flight_wins(make_cover):
         mark_open = ("turn_on", "switch.open")
         assert mark_open not in relay_calls(cover)
         assert not cover.travel_calc.is_traveling()
+
+
+@pytest.mark.asyncio
+async def test_a_stop_while_set_positions_reversal_stop_is_in_flight_wins(make_cover):
+    """set_position's own reversal claims the movement before its stop goes
+    out. A stop pressed while that stop is still being sent must win."""
+    cover = make_cover(reverse_on_opposite_command=False)
+    stub_switches(cover)
+    gate = asyncio.Event()
+    sends = []
+    send_stop = cover._send_stop
+
+    async def slow_first_stop():
+        sends.append(None)
+        if len(sends) == 1:
+            await gate.wait()
+        await send_stop()
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        cover.travel_calc.set_position(60)
+        await cover.set_position(0)
+        with patch.object(cover, "_send_stop", slow_first_stop):
+            reversal = asyncio.ensure_future(cover.set_position(80))
+            await asyncio.sleep(0)
+            assert sends, "the reversal's stop is being sent"
+            await cover.async_stop_cover()
+            gate.set()
+            assert await reversal is False
+
+    assert ("turn_on", "switch.open") not in relay_calls(cover)
+    assert not cover.travel_calc.is_traveling()
