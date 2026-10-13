@@ -576,6 +576,56 @@ async def test_option_off_opposite_command_just_after_leaving_endpoint_stops(
         assert cover.travel_calc.current_position() == start
 
 
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        (_OPEN_AFTER_CLOSING, _SWITCH_STOP + _SWITCH_OPEN),
+        (_CLOSE_AFTER_OPENING, _SWITCH_STOP),
+    ],
+    ids=_IDS,
+)
+@pytest.mark.asyncio
+async def test_always_resend_opposite_command_just_after_leaving_endpoint_is_not_a_redrive(
+    make_cover, case, expected
+):
+    """A reversal stays an ordinary move with "Always re-send" on: no full
+    re-drive modelled from the opposite end."""
+    first, start, second = case
+    cover = make_cover(reverse_on_opposite_command=True, force_endpoint_redrive=True)
+    stub_switches(cover)
+    with _just_left_endpoint(cover) as (now, settle):
+        mark = await _just_left(cover, now, first, start)
+        await getattr(cover, second)()
+
+        assert relay_calls(cover, mark) == expected
+        settle.assert_awaited_once()
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() == start
+
+
+@pytest.mark.parametrize(
+    ("command", "endpoint"),
+    [("async_open_cover", 100), ("async_close_cover", 0)],
+    ids=["open-at-100", "close-at-0"],
+)
+@pytest.mark.asyncio
+async def test_always_resend_still_redrives_a_cover_stopped_at_the_endpoint(
+    make_cover, command, endpoint
+):
+    """Control: with the option on, a command to a cover already stopped at
+    the endpoint is still a full re-drive from the opposite end."""
+    cover = make_cover(reverse_on_opposite_command=True, force_endpoint_redrive=True)
+    stub_switches(cover)
+    with _just_left_endpoint(cover) as (_now, settle):
+        cover.travel_calc.set_position(endpoint)
+        await getattr(cover, command)()
+
+        settle.assert_not_awaited()
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() == 100 - endpoint
+        assert cover.travel_calc._travel_to_position == endpoint
+
+
 # ---------------------------------------------------------------------------
 # A start still parked — waiting out travel_startup_delay or the relay's ON
 # echo — has the relay commanded but the tracker not yet running. An opposite
@@ -874,6 +924,41 @@ async def test_opposite_command_during_startup_delay_from_an_endpoint(
         assert calls[2:] == []
         assert cover._last_command is None
     assert cover.travel_calc.current_position() == start
+
+
+@pytest.mark.parametrize(
+    ("first", "start", "second"),
+    [
+        ("async_close_cover", 100, "async_open_cover"),
+        ("async_open_cover", 0, "async_close_cover"),
+    ],
+    ids=["open-while-close-from-100-parked", "close-while-open-from-0-parked"],
+)
+@pytest.mark.asyncio
+async def test_always_resend_opposite_command_during_startup_delay_from_an_endpoint(
+    make_cover, first, start, second
+):
+    """With "Always re-send" on the reversal is still an ordinary move, not a
+    full re-drive modelled from the opposite end."""
+    cover = make_cover(
+        reverse_on_opposite_command=True,
+        force_endpoint_redrive=True,
+        travel_startup_delay=20,
+    )
+    with _settle_spy(cover) as settled_at:
+        mark = await _parked(cover, first, start)
+        await getattr(cover, second)()
+
+    calls = relay_calls(cover, mark)
+    assert calls[:2] == _SWITCH_STOP_CLOSE
+    assert settled_at == [mark + 2]
+    if second == "async_open_cover":
+        assert calls[2:] == _SWITCH_DRIVE_OPEN
+    else:
+        assert calls[2:] == []
+        assert cover._last_command is None
+    assert cover.travel_calc.current_position() == start
+    assert not cover.travel_calc.is_traveling()
 
 
 async def _run_single_button_leaving_parked(cover, command):

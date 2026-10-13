@@ -708,6 +708,7 @@ class CoverTimeBased(
         """
         self._require_configured()
         self._log("async_close_cover")
+        force_redrive = self._force_endpoint_redrive
         if not self._triggered_externally and (
             self._travel_axis_opening()
             or self._travel_axis_closing()
@@ -720,6 +721,7 @@ class CoverTimeBased(
                 )
                 if not await self._retarget_in_motion_to_endpoint(0):
                     return
+                force_redrive = False
             else:
                 # In-motion UI click stops the cover. Reversing direction
                 # requires a second click after the stop, or use
@@ -748,7 +750,7 @@ class CoverTimeBased(
         # opposite-direction startup delay to cancel, or an external sequential
         # close that articulates the slats.
         settled = self._settled_at_endpoint(0)
-        if settled and self._force_endpoint_redrive:
+        if settled and force_redrive:
             # issue #167: don't trust "already closed" — re-drive the full close
             # so a remote-opened, no-feedback cover actually closes. Started via
             # _start_recalibration_drive so a re-drive that never starts keeps
@@ -761,7 +763,7 @@ class CoverTimeBased(
         elif not settled:
             await self._async_move_to_endpoint(target=0)
         # Travel was skipped only when settled at 0 without a forced re-drive.
-        skip_travel = settled and not self._force_endpoint_redrive
+        skip_travel = settled and not force_redrive
 
         await self._close_tilt_after_travel_close(chain=not skip_travel)
 
@@ -829,6 +831,7 @@ class CoverTimeBased(
         """
         self._require_configured()
         self._log("async_open_cover")
+        force_redrive = self._force_endpoint_redrive
         if not self._triggered_externally and (
             self._travel_axis_opening()
             or self._travel_axis_closing()
@@ -841,6 +844,7 @@ class CoverTimeBased(
                 )
                 if not await self._retarget_in_motion_to_endpoint(100):
                     return
+                force_redrive = False
             else:
                 self._log("async_open_cover :: cover is in motion, stopping")
                 await self.async_stop_cover()
@@ -855,7 +859,7 @@ class CoverTimeBased(
         # re-command as a pointless re-energize rather than a resync (command-
         # echo wrapped, issue #152). Relay modes keep the resync re-drive.
         settled_open = self._settled_at_endpoint(100)
-        if settled_open and self._force_endpoint_redrive:
+        if settled_open and force_redrive:
             # issue #167: don't trust "already open" — re-drive the full open,
             # overriding both the command-echo skip and the short resync.
             if not await self._start_recalibration_drive("travel", target=100):
@@ -900,7 +904,9 @@ class CoverTimeBased(
         set_position stops, settles and drives the other way, or retargets a
         move already heading for ``endpoint``. Two cases are stopped and
         settled here instead, returning True so the caller then handles the
-        command as it would for a cover stopped where it is:
+        command as it would for a cover stopped where it is, but without a
+        forced endpoint re-drive: a reversal stays an ordinary move, as it does
+        through set_position(recalibrate=False).
 
         - a start still parked heading away from ``endpoint``: set_position
           can cancel it unrun and drive straight back with no settle gap,
