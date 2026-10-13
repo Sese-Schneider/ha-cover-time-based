@@ -213,10 +213,11 @@ class CoverTimeBased(
         # set_position has assumed a start for an unknown position and its
         # move has not begun yet: that assumed position is not a real one.
         self._assumed_start_pending = False
-        # Resolved when the travel stop being sent has finished: True once it
-        # went out (the rest before a move the other way counts from then),
-        # False if sending it failed or was cancelled.
-        self._travel_stop_sending: asyncio.Future[bool] | None = None
+        # One per travel stop being sent, resolved when it has finished: True
+        # once it went out (the rest before a move the other way counts from
+        # then), False if sending it failed or was cancelled. Stops can
+        # overlap (a reversal's stop still waiting when the user presses stop).
+        self._travel_stops_sending: set[asyncio.Future[bool]] = set()
         self._removed = False
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
@@ -1685,15 +1686,14 @@ class CoverTimeBased(
         """
         record = self._note_travel_motor_stop()
         sending: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
-        self._travel_stop_sending = sending
+        self._travel_stops_sending.add(sending)
         sent = False
         try:
             await self._send_stop()
             sent = True
         finally:
             sending.set_result(sent)
-            if self._travel_stop_sending is sending:
-                self._travel_stop_sending = None
+            self._travel_stops_sending.discard(sending)
         if record is not None and self._travel_motor_stop is record:
             self._travel_motor_stop = (time.monotonic(), record[1])
 
@@ -1713,11 +1713,11 @@ class CoverTimeBased(
         epoch = self._movement_epoch
         rested = None
         while True:
-            sending = self._travel_stop_sending
-            if sending is not None and not sending.done():
-                # A stop still being sent: the rest counts from when it goes out,
+            sending = [f for f in self._travel_stops_sending if not f.done()]
+            if sending:
+                # Stops still being sent: the rest counts from when they go out,
                 # and a stop that never went out may have left the motor running.
-                if not await asyncio.shield(sending):
+                if not all(await asyncio.shield(asyncio.gather(*sending))):
                     self._log("_rest_before_driving :: the stop was not sent, aborting")
                     return False
                 if epoch != self._movement_epoch:

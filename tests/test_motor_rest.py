@@ -1211,3 +1211,38 @@ async def test_a_stop_that_fails_to_send_does_not_release_a_waiting_move(
         await opening
 
     assert _OPEN_ON not in relay_calls(cover, mark)
+
+
+@pytest.mark.asyncio
+async def test_a_move_waits_for_every_stop_still_being_sent(
+    make_cover, clock, gated_sleep
+):
+    """Two stops can be in flight at once. One finishing first must not let a
+    move the other way drive while the other is still being sent."""
+    cover = _cover(make_cover)
+    cover.travel_calc.set_position(60)
+    await cover.async_close_cover()
+    clock.advance(2)
+    gate, sends, slow = _slow_first_stop(cover)
+    with patch.object(cover, "_send_stop", slow):
+        first = asyncio.ensure_future(cover.async_stop_cover())
+        await _yield_turns()
+        await cover.async_stop_cover()
+        assert len(sends) == 2, "the second stop went out while the first waits"
+        mark = _mark(cover)
+        opening = asyncio.ensure_future(cover.async_open_cover())
+        await _yield_turns()
+
+        assert gated_sleep.slept == [], "rested before the first stop went out"
+
+        clock.advance(0.6)
+        gate.set()
+        await first
+        await _yield_turns()
+
+    assert gated_sleep.slept == [pytest.approx(DIRECTION_CHANGE_DELAY)]
+    assert _OPEN_ON not in relay_calls(cover, mark)
+    clock.advance(DIRECTION_CHANGE_DELAY)
+    gated_sleep.release()
+    await opening
+    assert relay_calls(cover, mark)[-1] == _OPEN_ON
