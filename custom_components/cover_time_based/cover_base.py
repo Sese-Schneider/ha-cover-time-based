@@ -213,6 +213,9 @@ class CoverTimeBased(
         # set_position has assumed a start for an unknown position and its
         # move has not begun yet: that assumed position is not a real one.
         self._assumed_start_pending = False
+        # Resolved when the travel stop being sent has gone out; the rest
+        # before a move the other way counts from then.
+        self._travel_stop_sending: asyncio.Future[None] | None = None
         self._removed = False
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
@@ -1673,7 +1676,14 @@ class CoverTimeBased(
         slow relay takes the stop still waits.
         """
         record = self._note_travel_motor_stop()
-        await self._send_stop()
+        sending = asyncio.get_running_loop().create_future()
+        self._travel_stop_sending = sending
+        try:
+            await self._send_stop()
+        finally:
+            sending.set_result(None)
+            if self._travel_stop_sending is sending:
+                self._travel_stop_sending = None
         if record is not None and self._travel_motor_stop is record:
             self._travel_motor_stop = (time.monotonic(), record[1])
 
@@ -1688,25 +1698,45 @@ class CoverTimeBased(
         direction. Wall-switch triggers never wait: the hardware is already
         moving and only the tracker follows it.
         """
-        stop = self._travel_motor_stop
-        if stop is None or self._triggered_externally:
+        if self._triggered_externally:
             return True
-        stopped_at, direction = stop
-        remaining = DIRECTION_CHANGE_DELAY - (time.monotonic() - stopped_at)
-        if direction == command or remaining <= 0:
-            return True
-        self._log(
-            "_rest_before_driving :: motor stopped %.2fs ago going the other way,"
-            " resting %.2fs",
-            DIRECTION_CHANGE_DELAY - remaining,
-            remaining,
-        )
         epoch = self._movement_epoch
-        await self._direction_change_delay(remaining)
-        if epoch != self._movement_epoch:
-            self._log("_rest_before_driving :: superseded during the rest, aborting")
-            return False
-        self._travel_motor_stop = None
+        rested = None
+        while True:
+            sending = self._travel_stop_sending
+            if sending is not None and not sending.done():
+                # A stop still being sent: the rest counts from when it goes out.
+                await asyncio.shield(sending)
+                if epoch != self._movement_epoch:
+                    self._log(
+                        "_rest_before_driving :: superseded while a stop went out,"
+                        " aborting"
+                    )
+                    return False
+                continue
+            stop = self._travel_motor_stop
+            if stop is None or stop is rested:
+                break
+            stopped_at, direction = stop
+            remaining = DIRECTION_CHANGE_DELAY - (time.monotonic() - stopped_at)
+            if direction == command or remaining <= 0:
+                return True
+            self._log(
+                "_rest_before_driving :: motor stopped %.2fs ago going the other"
+                " way, resting %.2fs",
+                DIRECTION_CHANGE_DELAY - remaining,
+                remaining,
+            )
+            await self._direction_change_delay(remaining)
+            if epoch != self._movement_epoch:
+                self._log(
+                    "_rest_before_driving :: superseded during the rest, aborting"
+                )
+                return False
+            # Rest again if a stop finished or a newer one was recorded meanwhile.
+            rested = stop
+        if rested is not None and self._travel_motor_stop is rested:
+            self._travel_motor_stop = None
         return True
 
     async def _stop_displaced_movement_for_tilt(

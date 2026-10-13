@@ -1064,3 +1064,49 @@ async def test_set_position_from_an_unknown_position_drives_the_motor(
 
     assert relay_calls(cover)[-1] == drive
     assert cover.travel_calc._travel_to_position == target
+
+
+@pytest.mark.asyncio
+async def test_the_rest_runs_from_when_a_slow_stop_finally_goes_out(
+    make_cover, clock, gated_sleep
+):
+    """A move the other way that arrives while the stop is still being sent
+    waits for the stop, then rests the full gap from when it went out."""
+
+    async def _yield():
+        for _ in range(10):
+            await asyncio.sleep(0)
+
+    cover = _cover(make_cover)
+    cover.travel_calc.set_position(60)
+    await cover.async_close_cover()
+    clock.advance(2)
+    stop_gate = asyncio.Event()
+    send_stop = cover._send_stop
+
+    async def slow_stop():
+        await stop_gate.wait()
+        await send_stop()
+
+    with patch.object(cover, "_send_stop", slow_stop):
+        stopping = asyncio.ensure_future(cover.async_stop_cover())
+        await _yield()
+        mark = _mark(cover)
+        opening = asyncio.ensure_future(cover.async_open_cover())
+        await _yield()
+
+        assert gated_sleep.slept == [], "rested before the stop went out"
+
+        clock.advance(0.6)
+        stop_gate.set()
+        await stopping
+        await _yield()
+
+    assert gated_sleep.slept == [pytest.approx(DIRECTION_CHANGE_DELAY)]
+    assert _OPEN_ON not in relay_calls(cover, mark)
+
+    clock.advance(DIRECTION_CHANGE_DELAY)
+    gated_sleep.release()
+    await opening
+
+    assert relay_calls(cover, mark)[-1] == _OPEN_ON
