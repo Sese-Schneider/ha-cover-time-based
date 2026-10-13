@@ -2,6 +2,7 @@
 
 ### Features
 
+- **New translation: Slovenian** ([#311](https://github.com/Sese-Schneider/ha-cover-time-based/issues/311)).
 - **A wrapped cover can now appear on the device page of the cover it wraps** ([#304](https://github.com/Sese-Schneider/ha-cover-time-based/issues/304)). Turn on **Show on the wrapped cover's device page** and the time-based cover is listed on that device's page next to the original entity, so you can hide the original and use the time-based cover as your everyday control. It is off by default because, from Home Assistant 2025.8, the cover's name is then shown with the device's name in front of it; renaming the cover in its entity settings sets the name it shows.
 
 ### Fixes

@@ -2163,6 +2163,186 @@ export const TRANSLATIONS = {
     "hints.none.travel_time_open": "יש ללחוץ על סיום כשהתריס פתוח לגמרי.",
     "hints.min_movement_time": "יש ללחוץ על סיום ברגע שמבחינים שהתריס זז.",
   },
+  sl: {
+    header: "Konfiguracija Cover Time Based",
+    loading: "Nalaganje...",
+    saving: "Shranjevanje...",
+    save_failed: "Shranjevanje ni uspelo — vrednost je povrnjena",
+    confirm_cancel_calibration: "Kalibracija poteka. Ali jo želite preklicati in nadaljevati?",
+    create_new: "+ Ustvari novo entiteto senčila",
+    download_config: "Prenesi konfiguracijo",
+    yaml_warning:
+      "Ta entiteta uporablja konfiguracijo YAML in je ni mogoče nastaviti s to kartico. Preselite jo v uporabniški vmesnik: Nastavitve → Naprave in servisi → Pomočniki → Ustvari pomočnika → Cover Time Based.",
+    load_failed: "Konfiguracije ni bilo mogoče naložiti. Poskusite znova.",
+    admin_required:
+      "Ta kartica zahteva skrbniški račun. Za nastavljanje senčil se prijavite kot skrbnik.",
+    "tabs.device": "Naprava",
+    "tabs.calibration": "Kalibracija",
+    "control_mode.label": "Način upravljanja",
+    "control_mode.wrapped": "Ovij obstoječo entiteto senčila",
+    "control_mode.switch": "Stikalo (trajni vklop)",
+    "control_mode.pulse": "Impulz (kratek pritisk)",
+    "control_mode.toggle": "Preklop (isti gumb)",
+    "control_mode.toggle_opposite": "Preklop (nasprotni gumb)",
+    "control_mode.single_button": "En gumb (izmenično) (Beta)",
+    "control_mode.pulse_time": "Trajanje impulza",
+    "entities.cover_entity": "Entiteta senčila",
+    "position_reporting.label": "Sporočanje položaja",
+    "position_reporting.reliable": "Zanesljiva povratna informacija o položaju",
+    "position_reporting.reliable_helper":
+      "Ovito senčilo sporoča zanesljiv položaj in doseže svoja dejanska končna položaja odprto/zaprto. Privzeta izbira — prava, razen če sledeni položaj odstopa od dejanskega položaja senčila.",
+    "position_reporting.unreliable": "Položaj ni zanesljiv — sledi po času",
+    "position_reporting.unreliable_helper":
+      "Položaju sledi samo po času in prezre položaj, ki ga sporoča ovito senčilo. Vklopite, če osnovno senčilo sporoča nezanesljiv položaj.",
+    "position_reporting.no_endpoints":
+      "Brez dejanskih končnih položajev — ob ustavitvi sporoča odprto/zaprto",
+    "position_reporting.no_endpoints_helper":
+      "Za senčila brez povratne informacije o položaju, ki sporočajo odprto/zaprto, ko se motor ustavi sredi poti, in ne le v fizičnih končnih položajih. Sporočeno stanje zaprto ustavi sledenje na izračunanem položaju, namesto da bi položaj skočil na 0 %.",
+    "position_reporting.command_echo": "Stanje odraža zadnji ukaz",
+    "position_reporting.command_echo_helper":
+      "Vklopite za senčila (npr. nekatere rolete Tuya), katerih stanje odprto/zaprto/neznano je odmev ukaza in ne dejanski končni položaj — ne sporočajo prehoda odpiranja/zapiranja niti položaja. Stanje se obravnava kot ukaz za odpiranje/zapiranje/ustavitev, položaju pa se sledi po času.",
+    "position_reporting.ignore_all": "Prezri vsa poročila naprave",
+    "position_reporting.ignore_all_helper":
+      "Stanju in položaju naprave ni mogoče zaupati. Prezre vse, kar naprava sporoča, in položaju sledi zgolj po časih odpiranja/zapiranja. Home Assistant postane edini način premikanja senčila — upravljanju s stenskim stikalom ali daljincem se ne sledi.",
+    "position_reporting.docs_link": "Preberite več",
+    "entities.force_time_based_position": "Vsili časovno določanje položaja",
+    "entities.force_time_based_position_helper":
+      "Če ovito senčilo podpira nastavljanje položaja, se ukaz za nastavitev položaja privzeto pošlje neposredno njemu. Vklopite, če ga želite namesto tega upravljati s časovno odmerjenim odpiranjem/zapiranjem/ustavljanjem in prezreti njegovo lastno podporo za nastavljanje položaja.",
+    "entities.invert": "Obrni položaj",
+    "entities.invert_helper":
+      "Obrne os položaja: sporoča 100 − položaj ovitega senčila ter zamenja odpiranje in zapiranje. Uporabite za senčila, ki delujejo obratno, npr. tendo, pri kateri osnovna entiteta sporoča odprto = izvlečeno. Velja samo za os položaja; logika nagiba ostane nespremenjena — namenjeno senčilom samo s položajem (tende/rolete), ne pa žaluzijam z nagibnimi lamelami.",
+    "entities.link_to_device": "Prikaži na strani naprave ovitega senčila",
+    "entities.link_to_device_helper":
+      "Doda to senčilo napravi, ki ji pripada ovito senčilo, tako da je navedeno na strani te naprave. Home Assistant lahko nato ime naprave prikaže pred imenom tega senčila. Če želite drugo ime, preimenujte senčilo v nastavitvah njegove entitete.",
+    "entities.switch_entities": "Entitete stikal",
+    "entities.open_switch": "Stikalo za odpiranje",
+    "entities.close_switch": "Stikalo za zapiranje",
+    "entities.stop_switch": "Stikalo za ustavitev",
+    "entities.switch_entities_pulse": "Entitete stikal / skript",
+    "entities.open_switch_pulse": "Stikalo ali skripta za odpiranje",
+    "entities.close_switch_pulse": "Stikalo ali skripta za zapiranje",
+    "entities.stop_switch_pulse": "Stikalo ali skripta za ustavitev",
+    "entities.button_or_script": "Gumb ali skripta",
+    "tilt.label": "Način nagiba",
+    "tilt.none": "Ni podprto",
+    "tilt.sequential_close": "Zapre, nato nagne v zaprto",
+    "tilt.sequential_open": "Zapre, nato nagne v odprto",
+    "tilt.dual_motor": "Ločen motor za nagib",
+    "tilt.inline": "Nagiba se skupaj s pomikom",
+    "tilt_motor.label": "Motor za nagib",
+    "tilt_motor.open_switch": "Stikalo za odpiranje nagiba",
+    "tilt_motor.close_switch": "Stikalo za zapiranje nagiba",
+    "tilt_motor.stop_switch": "Stikalo za ustavitev nagiba",
+    "tilt_motor.label_pulse": "Motor za nagib (stikalo ali skripta)",
+    "tilt_motor.open_switch_pulse": "Stikalo ali skripta za odpiranje nagiba",
+    "tilt_motor.close_switch_pulse": "Stikalo ali skripta za zapiranje nagiba",
+    "tilt_motor.stop_switch_pulse": "Stikalo ali skripta za ustavitev nagiba",
+    "tilt_motor.safe_position": "Varen položaj nagiba",
+    "tilt_motor.safe_position_helper":
+      "Nagib se pred pomikom premakne sem (100 = popolnoma odprto)",
+    "tilt_motor.max_allowed_position":
+      "Največji položaj, pri katerem je nagib dovoljen (neobvezno)",
+    "tilt_motor.max_allowed_helper":
+      "Nagib je dovoljen samo, ko je položaj senčila enak tej vrednosti ali nižji (0 = zaprto, 100 = odprto)",
+    "tilt.close_includes_tilt": "Zapiranje senčila zapre tudi lamele",
+    "tilt.close_includes_tilt_helper": "Pri zapiranju se lamele ob koncu pomika nagnejo v zaprto",
+    "assumed_state.label": "Predpostavljeno stanje",
+    "assumed_state.helper":
+      "Ko je vklopljeno, Home Assistant položaj obravnava kot ocenjen in ohrani aktivna oba gumba, za odpiranje in zapiranje. Izklopite, če zaupate časovnemu izračunu in želite, da uporabniški vmesnik onemogoči dejanja, ki niso na voljo (npr. zapiranje, ko je senčilo že zaprto).",
+    "relay_reports_off.label": "Rele sam sporoči izklop (OFF)",
+    "relay_reports_off.helper":
+      "Pustite vklopljeno za običajne preklopne releje, ki se po impulzu sami izklopijo in to sporočijo. Izklopite za impulzne module s strojnim upravljanjem (npr. Aqara T2), ki impulz ustvarijo interno, vendar nikoli ne sporočijo izklopa, zato entiteta stikala obtiči vklopljena. Ko je izklopljeno, integracija ob vsakem pritisku pošlje samo en ukaz VKLOP (ON) in nikoli IZKLOP (OFF) — tako je vsak pritisk natanko ena čista aktivacija, brez podvojenih ukazov.",
+    "send_endpoint_stop.label": "Pošlji signal za ustavitev v končnih položajih",
+    "send_endpoint_stop.helper":
+      "Ko senčilo doseže popolnoma odprt ali zaprt položaj, se pošlje impulz za ustavitev. Pustite vklopljeno za krmilnike, ki tečejo, dokler ne prejmejo ukaza za ustavitev (sicer se senčilo zatakne in fizični gumbi se nehajo odzivati). Izklopite, če se motor v svojih končnih legah ustavi sam in ga dodatna ustavitev premakne v prednastavljeni/priljubljeni položaj.",
+    "force_endpoint_redrive.label": "V končnih položajih vedno ponovno pošlji odpiranje/zapiranje",
+    "force_endpoint_redrive.helper":
+      "Za senčila brez povratne informacije o položaju, ki jih lahko premika tudi zunanji daljinec, zato lahko Home Assistant napačno misli, da so že popolnoma odprta ali zaprta. Ko je vklopljeno, se ukaz za odpiranje ali zapiranje ali zahteva za nastavitev položaja na 0 % ali 100 % vedno izvaja ves čas pomika, tudi če Home Assistant misli, da je senčilo že tam — tako je zagotovljeno, da ukaz doseže motor. Pustite izklopljeno za senčila, ki sama sporočajo svoj položaj.",
+    "wait_for_relay_feedback.label": "Pred sledenjem počakaj na potrditev releja",
+    "wait_for_relay_feedback.helper":
+      "Časovnik položaja se zažene, ko rele sporoči, da se je vklopil, namesto v trenutku, ko je ukaz poslan. V počasnem ali hladnem omrežju Zigbee/Z-Wave lahko ukaz potrebuje več sekund, da doseže rele; brez te možnosti se ta zakasnitev šteje kot pomik in sledeni položaj prehiteva senčilo. Pustite izklopljeno, razen če položaj odstopa pri senčilih, katerih rele se odziva počasi.",
+    "skip_stop_when_idle.label": "Ne pošlji ustavitve, ko senčilo že miruje",
+    "skip_stop_when_idle.helper":
+      'Za rolete s strojno prednastavljenim priljubljenim položajem "my" (npr. Somfy RTS): pritisk na ustavitev, ko roleta že miruje, jo premakne v ta položaj. Ko je vklopljeno, Home Assistant ustavitve ne posreduje, kadar senčilo že miruje, zato roleta ostane na mestu. Pustite izklopljeno, če želite ohraniti dosedanje delovanje.',
+    "recalibrate_before_position.label": "Pred premikom na položaj popolnoma odpri (Beta)",
+    "recalibrate_before_position.helper":
+      "Za senčila brez povratne informacije o položaju, ki jih lahko premika tudi daljinec. Pred vsakim ukazom za položaj senčilo popolnoma odpre, tako da se premik začne z znanega položaja namesto z ocene, ki se je sčasoma oddaljila od dejanskega. Približno podvoji pot vsakega premika, pri sočasnem ali zaporednem nagibu pa senčilo premakne, ko nastavljate lamele.",
+    "resync.label": "Ponovna sinhronizacija",
+    "resync.helper":
+      "Integraciji sporočite dejanski položaj senčila, potem ko ga je premaknil fizični gumb ali radijski (RF) daljinec. S tem se sledenje znova zasidra in motor ustavi, če ga Home Assistant še poganja; nikoli ga ne zažene.",
+    more_info: "Več informacij",
+    "timing.travel_attribute_header": "Atribut pomika",
+    "timing.tilt_attribute_header": "Atribut nagiba",
+    "timing.value_header": "Vrednost",
+    "timing.not_set": "Ni nastavljeno",
+    "timing.travel_time_close": "Čas pomika (zapiranje)",
+    "timing.travel_time_open": "Čas pomika (odpiranje)",
+    "timing.travel_startup_delay": "Zakasnitev zagona pomika",
+    "timing.tilt_time_close": "Čas nagiba (zapiranje)",
+    "timing.tilt_time_open": "Čas nagiba (odpiranje)",
+    "timing.tilt_startup_delay": "Zakasnitev zagona nagiba",
+    "timing.min_movement_time": "Najkrajši čas premika",
+    "timing.endpoint_runon_time": "Čas dodatnega teka v končnem položaju",
+    "position.label": "Trenutni položaj",
+    "position.helper": "Senčilo premaknite v znani končni položaj, nato nastavite položaj.",
+    "position.unknown": "Neznano",
+    "position.open": "Popolnoma odprto",
+    "position.closed": "Popolnoma zaprto",
+    "position.closed_tilt_open": "Popolnoma zaprto, nagib odprt",
+    "position.closed_tilt_closed": "Popolnoma zaprto, nagib zaprt",
+    "calibration.label": "Kalibracija časov",
+    "calibration.attribute_label": "Atribut",
+    "calibration.start": "Začni",
+    "calibration.active": "Kalibracija poteka",
+    "calibration.step": "Korak {step}",
+    "calibration.final_step": "Zadnji korak",
+    "calibration.cancel": "Prekliči",
+    "calibration.finish": "Končaj",
+    "calibration.set_position_first": "Za začetek kalibracije nastavite položaj.",
+    "controls.cover_label": "Senčilo",
+    "controls.tilt_label": "Nagib",
+    "controls.open": "Odpri",
+    "controls.stop": "Ustavi",
+    "controls.close": "Zapri",
+    "controls.tilt_open": "Odpri nagib",
+    "controls.tilt_stop": "Ustavi nagib",
+    "controls.tilt_close": "Zapri nagib",
+    "hints.sequential_close.travel_time_close":
+      "Začnite s popolnoma odprtim senčilom. Kliknite Končaj, ko je senčilo popolnoma zaprto, preden se lamele začnejo nagibati.",
+    "hints.sequential_close.travel_time_open":
+      "Začnite z zaprtim senčilom in odprtimi lamelami. Kliknite Končaj, ko je senčilo popolnoma odprto.",
+    "hints.sequential_close.tilt_time_close":
+      "Začnite z zaprtim senčilom, vendar odprtimi lamelami. Kliknite Končaj, ko so lamele popolnoma zaprte.",
+    "hints.sequential_close.tilt_time_open":
+      "Začnite z zaprtim senčilom in zaprtimi lamelami. Kliknite Končaj, ko so lamele odprte.",
+    "hints.sequential_open.travel_time_close":
+      "Začnite s popolnoma odprtim senčilom in zaprtimi lamelami. Kliknite Končaj, ko je senčilo popolnoma zaprto, preden se lamele začnejo nagibati v odprto.",
+    "hints.sequential_open.travel_time_open":
+      "Začnite z zaprtim senčilom in zaprtimi lamelami. Kliknite Končaj, ko je senčilo popolnoma odprto.",
+    "hints.sequential_open.tilt_time_close":
+      "Začnite z zaprtim senčilom, vendar odprtimi lamelami. Kliknite Končaj, ko so lamele popolnoma zaprte.",
+    "hints.sequential_open.tilt_time_open":
+      "Začnite z zaprtim senčilom in zaprtimi lamelami. Kliknite Končaj, ko so lamele popolnoma odprte.",
+    "hints.dual_motor.travel_time_close":
+      "Začnite z odprtim senčilom in lamelami v varnem položaju. Kliknite Končaj, ko je senčilo popolnoma zaprto.",
+    "hints.dual_motor.travel_time_open":
+      "Začnite z zaprtim senčilom in lamelami v varnem položaju. Kliknite Končaj, ko je senčilo popolnoma odprto.",
+    "hints.dual_motor.tilt_time_close":
+      "Začnite z zaprtim senčilom in odprtimi lamelami. Kliknite Končaj, ko so lamele popolnoma zaprte.",
+    "hints.dual_motor.tilt_time_open":
+      "Začnite z zaprtim senčilom in zaprtimi lamelami. Kliknite Končaj, ko so lamele popolnoma odprte.",
+    "hints.inline.travel_time_close":
+      "Začnite s popolnoma odprtim senčilom in popolnoma odprtimi lamelami. Kliknite Končaj, ko je oboje popolnoma zaprto.",
+    "hints.inline.travel_time_open":
+      "Začnite s popolnoma zaprtim senčilom in popolnoma zaprtimi lamelami. Kliknite Končaj, ko je oboje popolnoma odprto.",
+    "hints.inline.tilt_time_close":
+      "Začnite s popolnoma odprtimi lamelami. Kliknite Končaj, ko so lamele popolnoma zaprte.",
+    "hints.inline.tilt_time_open":
+      "Začnite s popolnoma zaprtimi lamelami. Kliknite Končaj, ko so lamele popolnoma odprte.",
+    "hints.none.travel_time_close": "Kliknite Končaj, ko je senčilo popolnoma zaprto.",
+    "hints.none.travel_time_open": "Kliknite Končaj, ko je senčilo popolnoma odprto.",
+    "hints.min_movement_time": "Kliknite Končaj takoj, ko opazite, da se senčilo premika.",
+  },
 };
 
 /**
