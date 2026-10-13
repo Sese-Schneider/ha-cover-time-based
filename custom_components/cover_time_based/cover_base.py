@@ -928,7 +928,14 @@ class CoverTimeBased(
             " before handling the command",
             endpoint,
         )
-        await self.async_stop_cover()
+        # Claim before the stop, which can wait on a relay confirmation: a
+        # command arriving during that wait must win over this reversal.
+        self._supersede_movement()
+        epoch = self._movement_epoch
+        await self.async_stop_cover(supersede=False)
+        if epoch != self._movement_epoch:
+            self._log("_retarget_in_motion_to_endpoint :: superseded while stopping")
+            return False
         return await self._settle_before_reversing()
 
     def _settled_at_endpoint(self, endpoint: int) -> bool:

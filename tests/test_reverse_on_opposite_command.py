@@ -1029,3 +1029,33 @@ async def test_single_button_close_during_startup_delay_presses_stop_then_close(
         for task in cover._test_tasks:
             task.cancel()
         await asyncio.gather(*cover._test_tasks, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_a_stop_while_the_reversal_stop_is_in_flight_wins(make_cover):
+    """The reversal claims the movement before its stop, which can wait (for a
+    relay confirmation, say). A stop pressed meanwhile must not be overridden
+    by the reversal resuming after the settle gap."""
+    cover = make_cover()
+    stub_switches(cover)
+    gate = asyncio.Event()
+    calls = []
+
+    async def confirmation():
+        calls.append(None)
+        if len(calls) == 1:
+            await gate.wait()
+
+    with _just_left_endpoint(cover) as (now, _settle):
+        await _just_left(cover, now, "async_close_cover", 100)
+        with patch.object(cover, "_await_confirmation_before_stop", confirmation):
+            reversal = asyncio.ensure_future(cover.async_open_cover())
+            await asyncio.sleep(0)
+            assert calls, "the reversal's stop is waiting"
+            await cover.async_stop_cover()
+            gate.set()
+            await reversal
+
+        mark_open = ("turn_on", "switch.open")
+        assert mark_open not in relay_calls(cover)
+        assert not cover.travel_calc.is_traveling()
