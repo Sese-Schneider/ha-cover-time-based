@@ -173,8 +173,8 @@ async def test_a_cover_without_the_option_set_reverses(make_cover):
 async def test_same_direction_close_sends_nothing_with_recalibrate_before_position(
     make_cover,
 ):
-    """ "Fully open before moving to a position" must not turn a repeated
-    close into a stop and a forced full re-drive from 100."""
+    """With "Fully open before moving to a position" on, a repeated close
+    must not turn into a stop and a forced full re-drive from 100."""
     cover = make_cover(
         reverse_on_opposite_command=True, recalibrate_before_position=True
     )
