@@ -213,9 +213,10 @@ class CoverTimeBased(
         # set_position has assumed a start for an unknown position and its
         # move has not begun yet: that assumed position is not a real one.
         self._assumed_start_pending = False
-        # Resolved when the travel stop being sent has gone out; the rest
-        # before a move the other way counts from then.
-        self._travel_stop_sending: asyncio.Future[None] | None = None
+        # Resolved when the travel stop being sent has finished: True once it
+        # went out (the rest before a move the other way counts from then),
+        # False if sending it failed or was cancelled.
+        self._travel_stop_sending: asyncio.Future[bool] | None = None
         self._removed = False
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
@@ -1310,11 +1311,14 @@ class CoverTimeBased(
             is_direction_change
             and (self.travel_calc.is_traveling() or shared_motor_tilt_traveling)
         ):
+            # Claim the movement before the stop and the rest, as the plain
+            # path does, so a newer command arriving during either wins.
+            self._supersede_movement()
+            epoch = self._movement_epoch
             if self._cancel_delay_task():
                 await self._async_handle_command(SERVICE_STOP_COVER)
-            # Claim the movement before resting, as the plain path does, so a
-            # newer command arriving during the rest wins.
-            self._supersede_movement()
+                if epoch != self._movement_epoch:
+                    return False
             return await self._rest_before_driving(command)
         self._log(
             "_stop_and_settle_before_recalibration_drive :: reversing"
@@ -1325,7 +1329,11 @@ class CoverTimeBased(
         self.stop_auto_updater()
         if self._has_tilt_support() and self.tilt_calc.is_traveling():
             self.tilt_calc.stop()
+        self._supersede_movement()
+        epoch = self._movement_epoch
         await self._async_handle_command(SERVICE_STOP_COVER)
+        if epoch != self._movement_epoch:
+            return False
         return await self._settle_before_reversing()
 
     async def _stop_and_settle_tilt_before_recalibration_drive(
@@ -1676,12 +1684,14 @@ class CoverTimeBased(
         slow relay takes the stop still waits.
         """
         record = self._note_travel_motor_stop()
-        sending = asyncio.get_running_loop().create_future()
+        sending: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
         self._travel_stop_sending = sending
+        sent = False
         try:
             await self._send_stop()
+            sent = True
         finally:
-            sending.set_result(None)
+            sending.set_result(sent)
             if self._travel_stop_sending is sending:
                 self._travel_stop_sending = None
         if record is not None and self._travel_motor_stop is record:
@@ -1705,8 +1715,11 @@ class CoverTimeBased(
         while True:
             sending = self._travel_stop_sending
             if sending is not None and not sending.done():
-                # A stop still being sent: the rest counts from when it goes out.
-                await asyncio.shield(sending)
+                # A stop still being sent: the rest counts from when it goes out,
+                # and a stop that never went out may have left the motor running.
+                if not await asyncio.shield(sending):
+                    self._log("_rest_before_driving :: the stop was not sent, aborting")
+                    return False
                 if epoch != self._movement_epoch:
                     self._log(
                         "_rest_before_driving :: superseded while a stop went out,"

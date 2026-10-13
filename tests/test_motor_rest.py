@@ -1110,3 +1110,104 @@ async def test_the_rest_runs_from_when_a_slow_stop_finally_goes_out(
     await opening
 
     assert relay_calls(cover, mark)[-1] == _OPEN_ON
+
+
+async def _yield_turns():
+    for _ in range(10):
+        await asyncio.sleep(0)
+
+
+def _slow_first_stop(cover, *, fail=False):
+    """Hold the first _send_stop until the returned event is set; with
+    ``fail`` it then raises instead of sending."""
+    gate = asyncio.Event()
+    sends = []
+    send_stop = cover._send_stop
+
+    async def slow():
+        sends.append(None)
+        if len(sends) == 1:
+            await gate.wait()
+            if fail:
+                raise RuntimeError("relay unavailable")
+        await send_stop()
+
+    return gate, sends, slow
+
+
+@pytest.mark.asyncio
+async def test_a_stop_during_a_recalibrating_reversals_stop_wins(make_cover, clock):
+    """Leg A of a recalibrated move reverses a closing cover. A stop pressed
+    while leg A's own stop is still being sent must win."""
+    cover = _cover(make_cover, recalibrate_before_position=True)
+    cover.travel_calc.set_position(60)
+    await cover.async_close_cover()
+    clock.advance(2)
+    gate, sends, slow = _slow_first_stop(cover)
+    with (
+        patch.object(cover, "_send_stop", slow),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        moving = asyncio.ensure_future(cover.set_position(30))
+        await _yield_turns()
+        assert sends, "leg A's stop is being sent"
+        await cover.async_stop_cover()
+        gate.set()
+        assert await moving is False
+
+    assert _OPEN_ON not in relay_calls(cover)
+    assert not cover.travel_calc.is_traveling()
+
+
+@pytest.mark.asyncio
+async def test_a_stop_during_a_recalibrating_moves_run_on_stop_wins(make_cover, clock):
+    """A recalibrated move cuts a pending endpoint run-on short with a stop. A
+    stop pressed while that stop is still being sent must win."""
+    cover = _cover(make_cover, recalibrate_before_position=True)
+    cover.travel_calc.set_position(0)
+    cover._last_command = "close_cover"
+    cover._travel_motor_direction = "close_cover"
+    run_on = asyncio.ensure_future(asyncio.sleep(100))
+    cover._delay_task = run_on
+    gate, sends, slow = _slow_first_stop(cover)
+    try:
+        with (
+            patch.object(cover, "_send_stop", slow),
+            patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+        ):
+            moving = asyncio.ensure_future(cover.set_position(50))
+            await _yield_turns()
+            assert sends, "the run-on stop is being sent"
+            await cover.async_stop_cover()
+            gate.set()
+            assert await moving is False
+    finally:
+        run_on.cancel()
+
+    assert _OPEN_ON not in relay_calls(cover)
+
+
+@pytest.mark.asyncio
+async def test_a_stop_that_fails_to_send_does_not_release_a_waiting_move(
+    make_cover, clock
+):
+    cover = _cover(make_cover)
+    cover.travel_calc.set_position(60)
+    await cover.async_close_cover()
+    clock.advance(2)
+    gate, _sends, slow = _slow_first_stop(cover, fail=True)
+    with (
+        patch.object(cover, "_send_stop", slow),
+        patch.object(cover, "_direction_change_delay", new=AsyncMock()),
+    ):
+        stopping = asyncio.ensure_future(cover.async_stop_cover())
+        await _yield_turns()
+        mark = _mark(cover)
+        opening = asyncio.ensure_future(cover.async_open_cover())
+        await _yield_turns()
+        gate.set()
+        with pytest.raises(RuntimeError):
+            await stopping
+        await opening
+
+    assert _OPEN_ON not in relay_calls(cover, mark)
