@@ -4,7 +4,7 @@
 
 - **New translation: Slovenian** ([#311](https://github.com/Sese-Schneider/ha-cover-time-based/issues/311)).
 - **A wrapped cover can now appear on the device page of the cover it wraps** ([#304](https://github.com/Sese-Schneider/ha-cover-time-based/issues/304)). Turn on **Show on the wrapped cover's device page** and the time-based cover is listed on that device's page next to the original entity, so you can hide the original and use the time-based cover as your everyday control. It is off by default because, from Home Assistant 2025.8, the cover's name is then shown with the device's name in front of it; renaming the cover in its entity settings sets the name it shows.
-- **New "Reverse on an opposite open/close" option.** An open or close sent while the cover is moving re-targets it like set position to 100%/0% does — a command against the current direction stops, settles and drives the other way, one in the same direction lets the move carry on — instead of only stopping it. Helps voice assistants whose bridges send "set to 0%/100%" as plain open/close. Off by default; covers with tilt keep the stop.
+- **New "Reverse on an opposite open/close" option** ([#313](https://github.com/Sese-Schneider/ha-cover-time-based/pull/313)). An open or close sent while the cover is moving re-targets it like set position to 100%/0% does — a command against the current direction stops, settles and drives the other way, one in the same direction lets the move carry on — instead of only stopping it. Helps voice assistants whose bridges send "set to 0%/100%" as plain open/close. Off by default; covers with tilt keep the stop.
 
 ### Fixes
 
