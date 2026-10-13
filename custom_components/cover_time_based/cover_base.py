@@ -204,6 +204,9 @@ class CoverTimeBased(
         # Claimed by every command that supersedes an in-flight movement; read
         # across the settle gap by _settle_before_reversing.
         self._movement_epoch = 0
+        # (monotonic time, direction) of the last travel-motor stop whose rest
+        # before a move the other way has not been waited out yet.
+        self._travel_motor_stop: tuple[float, str] | None = None
         self._removed = False
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
@@ -1618,6 +1621,45 @@ class CoverTimeBased(
         if epoch != self._movement_epoch:
             self._log("_settle_before_reversing :: superseded during settle, aborting")
             return False
+        self._travel_motor_stop = None
+        return True
+
+    def _note_travel_motor_stop(self) -> None:
+        """Remember when the travel motor was stopped, and which way it was
+        going, for _rest_before_driving."""
+        if self._last_command in (SERVICE_OPEN_COVER, SERVICE_CLOSE_COVER):
+            self._travel_motor_stop = (time.monotonic(), self._last_command)
+
+    async def _rest_before_driving(self, command: str) -> bool:
+        """Wait out what is left of the settle gap before driving ``command``
+        when the travel motor was stopped going the other way less than
+        DIRECTION_CHANGE_DELAY ago; False if this movement was superseded.
+
+        Covers the moves that reach the motor without a reversal's own settle:
+        a newer command arriving inside that settle, a stop followed at once
+        by the other direction, and a parked start cancelled for the other
+        direction. Wall-switch triggers never wait: the hardware is already
+        moving and only the tracker follows it.
+        """
+        stop = self._travel_motor_stop
+        if stop is None or self._triggered_externally:
+            return True
+        stopped_at, direction = stop
+        remaining = DIRECTION_CHANGE_DELAY - (time.monotonic() - stopped_at)
+        if direction == command or remaining <= 0:
+            return True
+        self._log(
+            "_rest_before_driving :: motor stopped %.2fs ago going the other way,"
+            " resting %.2fs",
+            DIRECTION_CHANGE_DELAY - remaining,
+            remaining,
+        )
+        epoch = self._movement_epoch
+        await sleep(remaining)
+        if epoch != self._movement_epoch:
+            self._log("_rest_before_driving :: superseded during the rest, aborting")
+            return False
+        self._travel_motor_stop = None
         return True
 
     async def _stop_displaced_movement_for_tilt(
@@ -1779,12 +1821,14 @@ class CoverTimeBased(
             # single-motor) keep sending _send_stop, and a genuine dual-motor
             # mid-travel stop (travel_was_moving) still fires. The tilt axis is
             # settled by _tilt_settle below, independently of this.
+            self._note_travel_motor_stop()
             await self._send_stop()
         elif tilt_axis_reported and travel_was_moving and self._self_initiated_movement:
             # The TILT relay reported, not the travel relay. The travel motor
             # is one we drive ourselves and nothing external stopped it —
             # suppressing here strands a latched relay (switch mode) or a
             # running motor. Mirror image of _should_stop_tilt_motor.
+            self._note_travel_motor_stop()
             await self._send_stop()
         if stop_tilt:
             # _tilt_settle, not a bare stop: at 0%/100% the motor is already
@@ -2273,6 +2317,7 @@ class CoverTimeBased(
         elif command == SERVICE_STOP_COVER:
             cmd = "STOP"
             self._state = True
+            self._note_travel_motor_stop()
             if not suppressed:
                 await self._send_stop()
 
