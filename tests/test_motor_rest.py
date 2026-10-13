@@ -634,6 +634,33 @@ async def test_a_calibration_ended_at_the_limit_leaves_no_direction_for_an_idle_
 
 
 @pytest.mark.asyncio
+async def test_open_straight_after_a_calibration_times_out_at_the_limit_waits(
+    make_cover, clock, gated_sleep
+):
+    """Pulse hardware stops itself at the limit, so the timeout sends nothing."""
+    cover = _cover(
+        make_cover,
+        control_mode="pulse",
+        stop_switch="switch.stop",
+        send_endpoint_stop=False,
+    )
+    cover.travel_calc.set_position(60)
+    calibration_sleep = _GatedSleep()
+    with patch.object(cover_calibration, "sleep", calibration_sleep):
+        try:
+            await cover.start_calibration(attribute="travel_time_close", timeout=120.0)
+            timing_out = cover._calibration.timeout_task
+            await calibration_sleep.until_parked(timing_out)
+            calibration_sleep.release(timing_out)
+            await timing_out
+        finally:
+            await calibration_sleep.close()
+    assert cover._calibration is None
+
+    await _rests_then_drives(cover, gated_sleep, cover.async_open_cover(), _OPEN_ON)
+
+
+@pytest.mark.asyncio
 async def test_the_rest_after_a_minimum_movement_pulse_runs_from_its_stop(
     make_cover, clock, gated_sleep
 ):

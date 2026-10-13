@@ -426,6 +426,7 @@ class CalibrationMixin(_MixinBase):
                     # step the cancelled automation task never stops, so its
                     # position is simply unknown and must be left alone. A
                     # timeout is never a user cancel.
+                    self._note_travel_motor_stop()
                     if self._driven_continuously_to_endpoint():
                         self._set_position_after_calibration(self._calibration)
                 else:
