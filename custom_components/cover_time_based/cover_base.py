@@ -471,14 +471,18 @@ class CoverTimeBased(
         # still reaches that limit after removal, so treat the calibrated axis
         # as driving to park its tracker there. A stepped/pulsed test that has
         # not reached its final continuous phase drives only short bursts, so it
-        # is excluded (an overhead step that does run the tracker is caught by
-        # the axis's own is_traveling above).
+        # is excluded.
         calibration = self._calibration
         calibration_tilt = False
         calibration_travel = False
+        # A step still driving the motor is stopped below, so neither axis runs
+        # on to a limit (an overhead step's live tracker included).
+        calibration_step = False
         if calibration is not None and self._driven_continuously_to_endpoint():
             calibration_tilt = calibration.uses_tilt_motor
             calibration_travel = not calibration.uses_tilt_motor
+        elif calibration is not None:
+            calibration_step = calibration.step_running
         tilt_driving = (
             tilt_axis_driving
             or (self._has_tilt_motor() and self._moving_tilt_motor)
@@ -493,6 +497,8 @@ class CoverTimeBased(
             or (deferred and not self._moving_tilt)
             or calibration_travel
         )
+        if calibration_step:
+            tilt_driving = travel_driving = False
         await self._cancel_background_pulses()
         # A start may have reached the relay before its tracker was armed, so
         # hardware that cannot stop itself always receives a stop. On hardware
@@ -529,10 +535,12 @@ class CoverTimeBased(
             # Calibration may drive without a live tracker. Cancelling its
             # safety timeout therefore also requires a stop, unless the motor
             # stops itself at its limit and a stop tap could restart it (#153).
+            # A step still running gets its stop either way: the cancelled
+            # automation task never sends it.
             self._restore_calibration_startup_delay()
             self._cancel_calibration_tasks()
             try:
-                if not stops_itself:
+                if not stops_itself or calibration_step:
                     await self._calibration_stop()
             finally:
                 self._calibration = None

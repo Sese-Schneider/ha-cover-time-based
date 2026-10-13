@@ -1530,3 +1530,54 @@ async def test_a_startup_delay_step_stopped_early_leaves_the_cover_stopped(
     mark = _mark(cover)
     await _rests_then_drives(cover, gated_sleep, cover.async_open_cover(), _OPEN_ON)
     assert ("turn_on", "switch.close") not in relay_calls(cover, mark)
+
+
+async def _remove_the_entity(cover, _calibration_sleep):
+    await cover.async_will_remove_from_hass()
+
+
+@_STEPPED_TESTS
+@pytest.mark.asyncio
+async def test_removal_during_a_calibration_step_stops_the_motor(
+    make_cover, clock, into_step
+):
+    """A reload (every card save) during a step must not leave the step's
+    motor running to its limit on hardware that stops itself there."""
+    cover = _self_stopping_pulse_cover(make_cover)
+    calibration_sleep = _GatedSleep()
+    with patch.object(cover_calibration, "sleep", calibration_sleep):
+        try:
+            await into_step(cover, clock, calibration_sleep, ended=False)
+            clock.advance(0.3)
+            mark = _mark(cover)
+            await _remove_the_entity(cover, calibration_sleep)
+            await _yield_turns()
+        finally:
+            await calibration_sleep.close()
+
+    assert relay_calls(cover, mark).count(("turn_on", "switch.stop")) == 1, (
+        "left the step's motor running"
+    )
+    assert not cover.travel_calc.is_traveling()
+    assert cover.travel_calc.current_position() not in (0, 100), (
+        "parked at the limit a stopped motor never reached"
+    )
+
+
+@_STEPPED_TESTS
+@pytest.mark.asyncio
+async def test_removal_between_calibration_steps_sends_no_stop(
+    make_cover, clock, into_step
+):
+    cover = _self_stopping_pulse_cover(make_cover)
+    calibration_sleep = _GatedSleep()
+    with patch.object(cover_calibration, "sleep", calibration_sleep):
+        try:
+            await into_step(cover, clock, calibration_sleep, ended=True)
+            mark = _mark(cover)
+            await _remove_the_entity(cover, calibration_sleep)
+            await _yield_turns()
+        finally:
+            await calibration_sleep.close()
+
+    assert ("turn_on", "switch.stop") not in relay_calls(cover, mark)
