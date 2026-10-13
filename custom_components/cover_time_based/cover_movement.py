@@ -988,8 +988,10 @@ class MovementMixin(_MixinBase):
     ):
         """Check if movement time is below minimum. Returns True if movement should be skipped.
 
-        ``is_recalibrated_leg`` marks leg B of a recalibrated move (#179) — the
-        caller passed ``recalibrate=False``. min_movement_time exists to skip
+        ``is_recalibrated_leg`` is fed ``not recalibrate``: True for leg B of a
+        recalibrated move (#179), and for an endpoint re-target from
+        reverse_on_opposite_command, which an endpoint target exempts anyway
+        (see ``set_position``). min_movement_time exists to skip
         pointless motor pulses for imperceptible moves, but by the time leg B
         runs, leg A has already driven the motor a full travel to reach a true
         datum; the second pulse to the position the user actually asked for IS

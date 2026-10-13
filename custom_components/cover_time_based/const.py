@@ -110,9 +110,9 @@ DEFAULT_FORCE_ENDPOINT_REDRIVE = False
 # All modes. When True, open_cover / close_cover commanded while the cover is
 # travelling the *other* way reverses it (stop, settle, drive) the way
 # set_cover_position already does, instead of only stopping it. A command in
-# the direction already travelled keeps the move going. Voice assistants send
-# "open"/"close" (and "set to 0 %/100 %") through these services, where an
-# in-motion stop is not what the user asked for.
+# the direction already travelled keeps the move going. Some voice-assistant
+# bridges send "set to 0%/100%" as a plain open/close, where an in-motion stop
+# is not what the user asked for.
 CONF_REVERSE_ON_OPPOSITE_COMMAND = "reverse_on_opposite_command"
 DEFAULT_REVERSE_ON_OPPOSITE_COMMAND = False
 

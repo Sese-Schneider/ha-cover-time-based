@@ -156,6 +156,7 @@ detail. A blank cell means the option is not shown for that mode.
 | [Resync](#cover_time_basedresync) | | | | | | ✓ |
 | [Assumed state](#assumed-state) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [Always re-send at the endpoints](#always-re-send-openclose-at-the-endpoints) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Reverse on an opposite open/close](#reverse-on-an-opposite-openclose) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [Fully open before position (Beta)](#fully-open-before-moving-to-a-position-beta) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [Tilt](#tilt) | ✓ | ✓ | ✓ | ✓ | ✓ | |
 
@@ -541,19 +542,20 @@ correct.
 
 By default, an **open** or **close** sent while the cover is moving only stops
 it; a second command then drives it. Turn this **on** to have such a command
-re-target the cover instead, exactly like **set position** to 100 % or 0 % does:
+re-target the cover instead, like **set position** to 100% or 0% does:
 a command against the current direction stops the motor, waits a short settle
 gap and drives the other way, and a command in the direction already travelled
 lets the move carry on. This suits voice assistants: some bridges (a Matter
-bridge for Alexa, for example) send "set to 0 % / 100 %" as a plain open or
+bridge for Alexa, for example) send "set to 0%/100%" as a plain open or
 close, so with the option off asking for the opposite direction mid-move only
-stops the cover. Covers with tilt keep the in-motion stop, because the slat
-restore that follows a stop would be skipped, so the switch is hidden for them.
+stops the cover. Leave it **off** to keep the stop-first behaviour. Covers with
+tilt keep the in-motion stop, because the slat restore that follows a stop would
+be skipped, so the switch is hidden for them.
 
 #### Fully open before moving to a position (Beta)
 
-The companion to the option above, for the same hardware, but for **set
-position** rather than open and close. A cover with no feedback that a remote can
+The companion to **Always re-send open/close at the endpoints**, for the same
+hardware, but for **set position** rather than open and close. A cover with no feedback that a remote can
 also move drifts out of sync, so a "go to 40%" command based on a stale guess can
 send it somewhere you did not intend, such as onto an obstruction below. With
 this **on**, every set-position command first drives the cover fully open, the
