@@ -65,10 +65,10 @@ class MovementLifecycleMixin(_MixinBase):
                     return
                 # Move complete: don't re-drive the relay, but a latched relay
                 # (switch mode) must still be de-energized; momentary modes
-                # self-released and no-op in _settle_external_endpoint.
+                # self-released and no-op in _settle_external_endpoint. Sent as
+                # a travel stop, so a move the other way waits for it.
                 was_tilt_motor_move = self._moving_tilt_motor
-                await self._settle_external_endpoint()
-                self._note_travel_motor_stop()
+                await self._send_travel_stop(self._settle_external_endpoint)
                 if self._tilt_strategy is not None:
                     self._tilt_strategy.snap_trackers_to_physical(
                         self.travel_calc, self.tilt_calc

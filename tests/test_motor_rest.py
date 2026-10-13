@@ -1581,3 +1581,91 @@ async def test_removal_between_calibration_steps_sends_no_stop(
             await calibration_sleep.close()
 
     assert ("turn_on", "switch.stop") not in relay_calls(cover, mark)
+
+
+def _slow_first_relay_off(cover):
+    """Hold the first _interlock_off (switch mode's relay turn-off) until the
+    returned event is set."""
+    gate = asyncio.Event()
+    calls = []
+    interlock_off = cover._interlock_off
+
+    async def slow(entity_id):
+        calls.append(entity_id)
+        if len(calls) == 1:
+            await gate.wait()
+        await interlock_off(entity_id)
+
+    return gate, calls, slow
+
+
+async def _wall_switch_close_to_the_bottom(make_cover, clock):
+    cover = _cover(make_cover, travel_time_close=10)
+    cover.travel_calc.set_position(60)
+    await _wall_switch(cover, "switch.close", "off", "on")
+    stub_switches(cover, on=("switch.close",))  # the wall switch latched it
+    assert cover.travel_calc.is_closing()
+    clock.advance(10)
+    return cover
+
+
+@pytest.mark.asyncio
+async def test_open_while_a_wall_switch_move_is_stopped_at_the_end_waits(
+    make_cover, clock, gated_sleep
+):
+    """A wall-switch close reaches the bottom and its latched relay is turned
+    off. An open arriving while that turn-off is still being sent waits for it,
+    then rests the full gap."""
+    cover = await _wall_switch_close_to_the_bottom(make_cover, clock)
+    gate, calls, slow = _slow_first_relay_off(cover)
+    with patch.object(cover, "_interlock_off", slow):
+        arriving = asyncio.ensure_future(cover.auto_stop_if_necessary())
+        await _yield_turns()
+        assert calls == ["switch.open"], "the relay turn-off is being sent"
+        mark = _mark(cover)
+        opening = gated_sleep.spawn(cover.async_open_cover())
+        await _yield_turns()
+
+        assert _OPEN_ON not in relay_calls(cover, mark), "drove before the stop"
+
+        clock.advance(0.3)
+        gate.set()
+        await arriving
+        await gated_sleep.until_parked(opening)
+
+    assert ("turn_off", "switch.close") in relay_calls(cover, mark)
+    assert _OPEN_ON not in relay_calls(cover, mark), "drove without resting"
+    assert gated_sleep.slept == [pytest.approx(DIRECTION_CHANGE_DELAY)]
+    gated_sleep.release()
+    await opening
+    assert relay_calls(cover, mark)[-1] == _OPEN_ON
+
+
+@pytest.mark.asyncio
+async def test_a_wall_switch_drive_during_the_end_stop_is_not_recorded_stopped(
+    make_cover, clock, gated_sleep
+):
+    """The wall switch drives the cover up while the bottom's relay turn-off is
+    still being sent. When that turn-off finishes, the motor now running up must
+    not be recorded as stopped: the next stop has to start the rest."""
+    cover = await _wall_switch_close_to_the_bottom(make_cover, clock)
+    gate, calls, slow = _slow_first_relay_off(cover)
+    with patch.object(cover, "_interlock_off", slow):
+        arriving = asyncio.ensure_future(cover.auto_stop_if_necessary())
+        await _yield_turns()
+        assert calls == ["switch.open"], "the relay turn-off is being sent"
+        await _wall_switch(cover, "switch.open", "off", "on")
+        assert cover.travel_calc.is_opening()
+        gate.set()
+        await arriving
+
+    clock.advance(3)
+    await cover.async_stop_cover()
+    clock.advance(0.25)
+    await _rests_then_drives(
+        cover,
+        gated_sleep,
+        cover.async_close_cover(),
+        _CLOSE_ON,
+        rest=DIRECTION_CHANGE_DELAY - 0.25,
+    )

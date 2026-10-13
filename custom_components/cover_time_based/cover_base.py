@@ -5,6 +5,7 @@ import logging
 import time
 from abc import abstractmethod
 from asyncio import sleep
+from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from datetime import timedelta
 from typing import Literal
@@ -1695,8 +1696,13 @@ class CoverTimeBased(
         self._travel_motor_stop_unsent = False
         return self._travel_motor_stop
 
-    async def _send_travel_stop(self) -> None:
+    async def _send_travel_stop(
+        self, send: Callable[[], Awaitable[None]] | None = None
+    ) -> None:
         """Send the travel stop, and rest from when it went out.
+
+        ``send`` replaces the plain stop with a mode's own way of stopping (the
+        relay settle at the end of a wall-switch move).
 
         Recorded before sending too, so a move the other way arriving while a
         slow relay takes the stop still waits. A resend while the recorded stop
@@ -1714,7 +1720,7 @@ class CoverTimeBased(
         self._travel_stops_sending.add(sending)
         sent = False
         try:
-            await self._send_stop()
+            await (send or self._send_stop)()
             sent = True
         finally:
             sending.set_result(sent)
