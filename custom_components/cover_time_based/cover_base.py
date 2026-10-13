@@ -47,6 +47,7 @@ from .const import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
+    DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     DIRECTION_CHANGE_DELAY,
     RESYNC_POSITIONS,
 )
@@ -157,7 +158,7 @@ class CoverTimeBased(
         wait_for_relay_feedback=False,
         recalibrate_before_position=False,
         skip_stop_when_idle=False,
-        reverse_on_opposite_command=False,
+        reverse_on_opposite_command=DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -723,12 +724,10 @@ class CoverTimeBased(
                     return
                 force_redrive = False
             else:
-                # In-motion UI click stops the cover. Reversing direction
-                # requires a second click after the stop, or use
-                # set_cover_position which keeps its existing stop-then-reverse
-                # behavior. External triggers (wall switches) keep the legacy
-                # "stop and reverse if needed" behavior to honor the physical
-                # user intent. Decisions key off the travel axis so a moving
+                # reverse_on_opposite_command off, or a cover with tilt: an
+                # in-motion command only stops. External triggers (wall
+                # switches) keep their own "stop and reverse if needed" path
+                # below. Decisions key off the travel axis so a moving
                 # independent tilt motor (dual_motor) isn't stopped by a travel
                 # command.
                 self._log("async_close_cover :: cover is in motion, stopping")
@@ -822,12 +821,10 @@ class CoverTimeBased(
     async def async_open_cover(self, **kwargs):
         """Open the cover fully.
 
-        By default an in-motion UI click stops the cover. Reversing direction
-        requires a second click, or use set_cover_position which keeps its existing
-        stop-then-reverse behavior. External triggers (wall switches) keep
-        the legacy "stop and reverse if needed" behavior.
-        With reverse_on_opposite_command an in-motion click re-targets to the
-        endpoint instead (see _retarget_in_motion_to_endpoint).
+        An in-motion command re-targets to the endpoint (see
+        _retarget_in_motion_to_endpoint); with reverse_on_opposite_command off,
+        or on a cover with tilt, it only stops the cover. External triggers
+        (wall switches) keep their own "stop and reverse if needed" path.
         """
         self._require_configured()
         self._log("async_open_cover")

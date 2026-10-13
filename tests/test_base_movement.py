@@ -144,7 +144,7 @@ class TestCloseStopsOppositeDirection:
 
     @pytest.mark.asyncio
     async def test_close_while_opening_stops(self, make_cover):
-        cover = make_cover()
+        cover = make_cover(reverse_on_opposite_command=False)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
         cover._last_command = SERVICE_OPEN_COVER
@@ -162,7 +162,7 @@ class TestOpenStopsOppositeDirection:
 
     @pytest.mark.asyncio
     async def test_open_while_closing_stops(self, make_cover):
-        cover = make_cover()
+        cover = make_cover(reverse_on_opposite_command=False)
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER

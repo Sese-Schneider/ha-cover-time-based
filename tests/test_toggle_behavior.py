@@ -29,7 +29,9 @@ class TestToggleCloseWhileMoving:
 
     @pytest.mark.asyncio
     async def test_close_while_closing_stops(self, make_cover):
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover = make_cover(
+            reverse_on_opposite_command=False, control_mode=CONTROL_MODE_TOGGLE
+        )
 
         # Simulate that the cover is currently closing (position 100 = fully open)
         cover.travel_calc.set_position(100)
@@ -44,7 +46,9 @@ class TestToggleCloseWhileMoving:
 
     @pytest.mark.asyncio
     async def test_open_while_opening_stops(self, make_cover):
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover = make_cover(
+            reverse_on_opposite_command=False, control_mode=CONTROL_MODE_TOGGLE
+        )
 
         # Simulate that the cover is currently opening (position 0 = fully closed)
         cover.travel_calc.set_position(0)

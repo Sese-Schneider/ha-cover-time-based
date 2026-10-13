@@ -107,14 +107,14 @@ DEFAULT_SEND_ENDPOINT_STOP = True
 CONF_FORCE_ENDPOINT_REDRIVE = "force_endpoint_redrive"
 DEFAULT_FORCE_ENDPOINT_REDRIVE = False
 
-# All modes. When True, open_cover / close_cover commanded while the cover is
-# travelling the *other* way reverses it (stop, settle, drive) the way
-# set_cover_position already does, instead of only stopping it. A command in
+# All modes, on by default. When True, open_cover / close_cover commanded while
+# the cover is travelling the *other* way reverses it (stop, settle, drive) the
+# way set_cover_position already does, instead of only stopping it. A command in
 # the direction already travelled keeps the move going. Some voice-assistant
 # bridges send "set to 0%/100%" as a plain open/close, where an in-motion stop
 # is not what the user asked for.
 CONF_REVERSE_ON_OPPOSITE_COMMAND = "reverse_on_opposite_command"
-DEFAULT_REVERSE_ON_OPPOSITE_COMMAND = False
+DEFAULT_REVERSE_ON_OPPOSITE_COMMAND = True
 
 # When True, movement commands wait for the underlying relay to confirm its state
 # change before proceeding. Behaviour is implemented elsewhere; this constant is

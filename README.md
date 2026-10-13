@@ -540,17 +540,19 @@ correct.
 
 #### Reverse on an opposite open/close
 
-By default, an **open** or **close** sent while the cover is moving only stops
-it; a second command then drives it. Turn this **on** to have such a command
-re-target the cover instead, like **set position** to 100% or 0% does:
-a command against the current direction stops the motor, waits a short settle
-gap and drives the other way, and a command in the direction already travelled
-lets the move carry on. This suits voice assistants: some bridges (a Matter
-bridge for Alexa, for example) send "set to 0%/100%" as a plain open or
-close, so with the option off asking for the opposite direction mid-move only
-stops the cover. Leave it **off** to keep the stop-first behaviour. Covers with
-tilt keep the in-motion stop, because the slat restore that follows a stop would
-be skipped, so the switch is hidden for them.
+On by default. An **open** or **close** sent while the cover is moving
+re-targets it, like **set position** to 100% or 0% does: a command against the
+current direction stops the motor, waits a short settle gap and drives the other
+way, and a command in the direction already travelled lets the move carry on.
+This suits voice assistants: some bridges (a Matter bridge for Alexa, for
+example) send "set to 0%/100%" as a plain open or close.
+
+Turn it **off** to have an open or close sent while the cover is moving only stop
+it, with a second command then driving it; this was the behaviour before 4.14.0.
+With the option on, use **stop** to stop a moving cover. Home Assistant's
+**toggle** action stops a moving cover either way. Covers with tilt always keep
+the in-motion stop, because the slat restore that follows a stop would be
+skipped, so the switch is hidden for them.
 
 #### Fully open before moving to a position (Beta)
 

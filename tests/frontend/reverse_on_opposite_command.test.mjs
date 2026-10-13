@@ -56,25 +56,25 @@ for (const mode of ["pulse", "toggle", "toggle_opposite"]) {
 }
 
 for (const mode of ["switch", "wrapped", "single_button"]) {
-  test(`the toggle reflects a stored true (${mode} mode)`, async () => {
-    card = await mount(cfg(mode, { reverse_on_opposite_command: true }));
-    expect(row(card).querySelector("ha-switch").checked).toBe(true);
-  });
-
-  test(`the toggle defaults to off (${mode} mode)`, async () => {
-    card = await mount(cfg(mode));
+  test(`the toggle reflects a stored false (${mode} mode)`, async () => {
+    card = await mount(cfg(mode, { reverse_on_opposite_command: false }));
     expect(row(card).querySelector("ha-switch").checked).toBe(false);
   });
 
-  test(`toggling calls _updateLocal with true (${mode} mode)`, async () => {
+  test(`the toggle defaults to on (${mode} mode)`, async () => {
+    card = await mount(cfg(mode));
+    expect(row(card).querySelector("ha-switch").checked).toBe(true);
+  });
+
+  test(`toggling off calls _updateLocal with false (${mode} mode)`, async () => {
     card = await mount(cfg(mode));
     const captured = [];
     card._updateLocal = (u) => captured.push(u);
 
     const toggle = row(card).querySelector("ha-switch");
-    toggle.checked = true;
+    toggle.checked = false;
     toggle.dispatchEvent(new Event("change"));
 
-    expect(captured).toEqual([{ reverse_on_opposite_command: true }]);
+    expect(captured).toEqual([{ reverse_on_opposite_command: false }]);
   });
 }

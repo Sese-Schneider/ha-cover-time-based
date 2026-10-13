@@ -243,7 +243,7 @@ function renderReverseToggle(card, c) {
     card,
     "reverse_on_opposite_command.label",
     "reverse_on_opposite_command.helper",
-    c.reverse_on_opposite_command === true,
+    c.reverse_on_opposite_command !== false,
     (e) => card._updateLocal({ reverse_on_opposite_command: e.target.checked }),
   );
 }

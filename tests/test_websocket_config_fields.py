@@ -89,7 +89,7 @@ EXPECTED_DEFAULT_CONFIG = {
     "close_includes_tilt": True,
     "assumed_state": True,
     "force_endpoint_redrive": False,
-    "reverse_on_opposite_command": False,
+    "reverse_on_opposite_command": True,
     "wait_for_relay_feedback": False,
     "recalibrate_before_position": False,
     "skip_stop_when_idle": False,
