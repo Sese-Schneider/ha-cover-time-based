@@ -548,7 +548,7 @@ lets the move carry on. This suits voice assistants: some bridges (a Matter
 bridge for Alexa, for example) send "set to 0 % / 100 %" as a plain open or
 close, so with the option off asking for the opposite direction mid-move only
 stops the cover. Covers with tilt keep the in-motion stop, because the slat
-restore that follows a stop would be skipped.
+restore that follows a stop would be skipped, so the switch is hidden for them.
 
 #### Fully open before moving to a position (Beta)
 

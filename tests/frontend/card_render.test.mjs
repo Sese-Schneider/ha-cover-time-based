@@ -1655,3 +1655,43 @@ test("max_tilt_allowed_position ha-input @change with empty string sets field to
   expect(updates.length).toBeGreaterThan(0);
   expect(updates[0]).toMatchObject({ max_tilt_allowed_position: null });
 });
+
+// ---------------------------------------------------------------------------
+// reverse_on_opposite_command is ignored on covers with tilt, so it is hidden
+// ---------------------------------------------------------------------------
+
+const toggleLabels = (card) =>
+  [...card.shadowRoot.querySelectorAll(".toggle-label")].map((el) => el.textContent.trim());
+const REVERSE_LABEL = "Reverse on an opposite open/close";
+
+for (const [name, cfg] of [
+  ["switch", switchCfg],
+  ["wrapped", wrappedCfg],
+]) {
+  test(`${name} mode shows the reverse toggle without tilt`, async () => {
+    card = await mountCard(makeHass(), {
+      selectedEntity: "cover.x",
+      config: cfg({ tilt_mode: "none" }),
+      activeTab: "device",
+    });
+    expect(toggleLabels(card)).toContain(REVERSE_LABEL);
+  });
+
+  test(`${name} mode hides the reverse toggle when a tilt mode is set`, async () => {
+    card = await mountCard(makeHass(), {
+      selectedEntity: "cover.x",
+      config: cfg({ tilt_mode: "sequential_close" }),
+      activeTab: "device",
+    });
+    expect(toggleLabels(card)).not.toContain(REVERSE_LABEL);
+  });
+}
+
+test("single_button mode shows the reverse toggle even with a stale tilt mode", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: singleButtonCfg({ tilt_mode: "dual_motor" }),
+    activeTab: "device",
+  });
+  expect(toggleLabels(card)).toContain(REVERSE_LABEL);
+});
