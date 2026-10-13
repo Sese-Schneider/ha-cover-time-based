@@ -2294,6 +2294,9 @@ export const TRANSLATIONS = {
     "force_endpoint_redrive.label": "V končnih položajih vedno ponovno pošlji odpiranje/zapiranje",
     "force_endpoint_redrive.helper":
       "Za senčila brez povratne informacije o položaju, ki jih lahko premika tudi zunanji daljinec, zato lahko Home Assistant napačno misli, da so že popolnoma odprta ali zaprta. Ko je vklopljeno, se ukaz za odpiranje ali zapiranje ali zahteva za nastavitev položaja na 0 % ali 100 % vedno izvaja ves čas pomika, tudi če Home Assistant misli, da je senčilo že tam — tako je zagotovljeno, da ukaz doseže motor. Pustite izklopljeno za senčila, ki sama sporočajo svoj položaj.",
+    "reverse_on_opposite_command.label": "Ob nasprotnem odpiranju/zapiranju obrni smer",
+    "reverse_on_opposite_command.helper":
+      "Ko se senčilo premika in prispe ukaz za odpiranje ali zapiranje v nasprotni smeri, se smer obrne (ustavitev, kratek premor, pomik nazaj), namesto da se senčilo le ustavi. Ob ukazu v smeri, v kateri se senčilo že premika, se pomik nadaljuje. Uporabno za mostove glasovnih pomočnikov, ki »nastavi na 0 %/100 %« pošiljajo kot navadno odpiranje ali zapiranje. Pustite izklopljeno, če želite ohraniti ustavitev brez obračanja. Senčila z nagibom ohranijo ustavitev.",
     "wait_for_relay_feedback.label": "Pred sledenjem počakaj na potrditev releja",
     "wait_for_relay_feedback.helper":
       "Časovnik položaja se zažene, ko rele sporoči, da se je vklopil, namesto v trenutku, ko je ukaz poslan. V počasnem ali hladnem omrežju Zigbee/Z-Wave lahko ukaz potrebuje več sekund, da doseže rele; brez te možnosti se ta zakasnitev šteje kot pomik in sledeni položaj prehiteva senčilo. Pustite izklopljeno, razen če položaj odstopa pri senčilih, katerih rele se odziva počasi.",
