@@ -564,6 +564,7 @@ class MovementLifecycleMixin(_MixinBase):
         included, so inferring from it read a genuine stop landing in that gap
         as a device echo and dropped it.
         """
+        self._assumed_start_pending = False
         if supersede:
             self._supersede_movement()
         self._clear_multiphase_tilt_state()

@@ -1024,17 +1024,18 @@ async def test_set_position_to_where_a_move_from_unknown_is_seeded_is_not_done(
     cover = _cover(make_cover)
     assert cover.travel_calc.current_position() is None
     gate = asyncio.get_running_loop().create_future()
+    held = asyncio.Event()
     drive = cover._command_position_move
 
     async def held_drive(target, command, already_moving_same_dir):
+        held.set()
         await gate
         await drive(target, command, already_moving_same_dir)
 
     with patch.object(cover, "_command_position_move", held_drive):
         first = asyncio.ensure_future(cover.set_position(80))
         try:
-            while not cover.travel_calc.is_traveling() and not first.done():
-                await asyncio.sleep(0)
+            await asyncio.wait_for(held.wait(), 1)
             assert cover.travel_calc.current_position() == 0
 
             assert await cover.set_position(0) is False
@@ -1043,3 +1044,23 @@ async def test_set_position_to_where_a_move_from_unknown_is_seeded_is_not_done(
             await first
 
     assert cover.travel_calc._travel_to_position == 80
+
+
+@pytest.mark.parametrize(
+    ("target", "drive"),
+    [(70, _OPEN_ON), (30, _CLOSE_ON), (100, _OPEN_ON), (0, _CLOSE_ON)],
+    ids=["70", "30", "100", "0"],
+)
+@pytest.mark.asyncio
+async def test_set_position_from_an_unknown_position_drives_the_motor(
+    make_cover, target, drive
+):
+    """With no known position the move is modelled from the opposite end. The
+    tracker used to read as already moving that way, so no relay was sent."""
+    cover = _cover(make_cover)
+    cover.travel_calc.clear_position()
+
+    assert await cover.set_position(target)
+
+    assert relay_calls(cover)[-1] == drive
+    assert cover.travel_calc._travel_to_position == target

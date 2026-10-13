@@ -210,6 +210,9 @@ class CoverTimeBased(
         # (monotonic time, direction) of the last travel-motor stop whose rest
         # before a move the other way has not been waited out yet.
         self._travel_motor_stop: tuple[float, str] | None = None
+        # set_position has assumed a start for an unknown position and its
+        # move has not begun yet: that assumed position is not a real one.
+        self._assumed_start_pending = False
         self._removed = False
         # Drives the post-travel tilt phase via _start_tilt_restore (consumed
         # by the auto-updater when travel reaches endpoint). Set by:
@@ -2143,6 +2146,7 @@ class CoverTimeBased(
         delay so its position stays put until the pre-step finishes.
         """
 
+        self._assumed_start_pending = False
         if self._removed:
             self._log("_begin_movement :: refused, entity removed")
             return

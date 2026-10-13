@@ -516,11 +516,14 @@ class MovementMixin(_MixinBase):
         )
 
         if current is None:
-            # Position unknown — assume opposite endpoint so full travel occurs
+            # Position unknown — assume opposite endpoint so full travel occurs.
+            # set_position, not update_position: the cleared target would
+            # otherwise read as a move already under way, and no relay is sent.
             closing = target <= 50
             command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
             current = 100 if closing else 0
-            self.travel_calc.update_position(current)
+            self.travel_calc.set_position(current)
+            self._assumed_start_pending = True
         elif target < current:
             command = SERVICE_CLOSE_COVER
         elif target > current:
@@ -534,12 +537,14 @@ class MovementMixin(_MixinBase):
             command = SERVICE_OPEN_COVER
         else:
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
-            # Travel is heading neither way. It still reads as traveling while
-            # a move from an unknown position has seeded the tracker but not
-            # started yet; that move, or a start still parked, takes travel
-            # elsewhere, so this request is done only if neither will.
-            return not self.travel_calc.is_traveling() and (
-                self._parked_start_heads_for(target)
+            # Travel is heading neither way. A move from an unknown position
+            # that has assumed its start but not begun yet, or a start still
+            # parked, takes travel elsewhere, so this request is done only if
+            # neither will.
+            return (
+                not self.travel_calc.is_traveling()
+                and not self._assumed_start_pending
+                and self._parked_start_heads_for(target)
             )
 
         closing = command == SERVICE_CLOSE_COVER

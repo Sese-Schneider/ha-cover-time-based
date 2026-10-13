@@ -54,6 +54,7 @@ class _CoverHost:
         _endpoint_runon_time: float | None
         _min_movement_time: float | None
         _movement_epoch: int
+        _assumed_start_pending: bool
         _moving_tilt: bool
         _moving_tilt_motor: bool
         _close_includes_tilt: bool
