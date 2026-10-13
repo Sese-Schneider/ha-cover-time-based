@@ -1491,3 +1491,42 @@ async def test_finishing_a_minimum_movement_test_during_a_step_stops_the_motor(
         "left the step's motor running"
     )
     await _rests_then_drives(cover, gated_sleep, cover.async_open_cover(), _OPEN_ON)
+
+
+async def _cancel_a_calibration(cover, _calibration_sleep):
+    await cover.stop_calibration(cancel=True)
+
+
+@pytest.mark.parametrize(
+    "end",
+    [_time_out_a_calibration, _cancel_a_calibration],
+    ids=["timed out", "cancelled"],
+)
+@pytest.mark.asyncio
+async def test_a_startup_delay_step_stopped_early_leaves_the_cover_stopped(
+    make_cover, clock, gated_sleep, end
+):
+    """Toggle hardware stops on a second press of the button. Once the step's
+    stop has gone out, Home Assistant must not still think the cover is
+    moving: the next command would press the button again to stop it, and
+    start it instead."""
+    cover = _cover(
+        make_cover, control_mode="toggle", travel_time_close=10, travel_time_open=10
+    )
+    calibration_sleep = _GatedSleep()
+    with patch.object(cover_calibration, "sleep", calibration_sleep):
+        try:
+            await _into_a_startup_delay_step(
+                cover, clock, calibration_sleep, ended=False
+            )
+            mark = _mark(cover)
+            await end(cover, calibration_sleep)
+            await _yield_turns()
+        finally:
+            await calibration_sleep.close()
+
+    assert relay_calls(cover, mark) == [("turn_on", "switch.close")]
+    assert not cover.travel_calc.is_traveling()
+    mark = _mark(cover)
+    await _rests_then_drives(cover, gated_sleep, cover.async_open_cover(), _OPEN_ON)
+    assert ("turn_on", "switch.close") not in relay_calls(cover, mark)
