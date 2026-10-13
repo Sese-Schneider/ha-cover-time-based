@@ -2213,7 +2213,7 @@ export const TRANSLATIONS = {
       "Obrne os položaja: sporoča 100 − položaj ovitega senčila ter zamenja odpiranje in zapiranje. Uporabite za senčila, ki delujejo obratno, npr. tendo, pri kateri osnovna entiteta sporoča odprto = izvlečeno. Velja samo za os položaja; logika nagiba ostane nespremenjena — namenjeno senčilom samo s položajem (tende/rolete), ne pa žaluzijam z nagibnimi lamelami.",
     "entities.link_to_device": "Prikaži na strani naprave ovitega senčila",
     "entities.link_to_device_helper":
-      "To senčilo doda napravi, ki ji pripada ovito senčilo, tako da je navedeno na strani te naprave. Home Assistant lahko nato pred ime tega senčila prikaže ime naprave. Če želite drugo ime, preimenujte senčilo v nastavitvah njegove entitete.",
+      "Doda to senčilo napravi, ki ji pripada ovito senčilo, tako da je navedeno na strani te naprave. Home Assistant lahko nato ime naprave prikaže pred imenom tega senčila. Če želite drugo ime, preimenujte senčilo v nastavitvah njegove entitete.",
     "entities.switch_entities": "Entitete stikal",
     "entities.open_switch": "Stikalo za odpiranje",
     "entities.close_switch": "Stikalo za zapiranje",

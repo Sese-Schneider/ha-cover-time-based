@@ -23,7 +23,7 @@
   "services": {
     "set_known_position": {
       "name": "Nastavi položaj senčila",
-      "description": "Sporoči trenutni položaj senčila. Najprej ustavi motor, če ga Home Assistant še poganja; v načinu z enim gumbom končni položaj znova zasidra tudi sledeno fazo.",
+      "description": "Integraciji sporoči trenutni položaj senčila. Najprej ustavi motor, če ga Home Assistant še poganja; v načinu z enim gumbom končni položaj znova zasidra tudi sledeno fazo.",
       "fields": {
         "position": {
           "name": "Položaj",
