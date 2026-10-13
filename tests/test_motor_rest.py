@@ -15,6 +15,7 @@ from homeassistant.const import SERVICE_STOP_COVER
 from custom_components.cover_time_based import (
     cover_base,
     cover_calibration,
+    cover_lifecycle,
     travel_calculator,
 )
 from custom_components.cover_time_based.calibration import CALIBRATION_STEP_PAUSE
@@ -1246,3 +1247,104 @@ async def test_a_move_waits_for_every_stop_still_being_sent(
     gated_sleep.release()
     await opening
     assert relay_calls(cover, mark)[-1] == _OPEN_ON
+
+
+@pytest.mark.asyncio
+async def test_the_rest_runs_from_a_resent_stop_when_the_run_on_stop_was_cancelled(
+    make_cover, clock, gated_sleep
+):
+    """The endpoint run-on's stop is cut off mid-send by an open, which sends
+    the stop again. The rest counts from when that second stop went out, not
+    from when the cancelled one started."""
+    cover = _cover(make_cover, endpoint_runon_time=2, travel_time_close=10)
+    cover.travel_calc.set_position(60)
+    await cover.async_close_cover()
+    clock.advance(6)
+    run_on_sleep = _GatedSleep()
+    send_stop = cover._send_stop
+    gates = []
+
+    async def slow_stop():
+        gate = asyncio.Event()
+        gates.append(gate)
+        await gate.wait()
+        await send_stop()
+
+    with (
+        patch.object(cover_lifecycle, "sleep", run_on_sleep),
+        patch.object(cover, "_send_stop", slow_stop),
+    ):
+        try:
+            await cover.auto_stop_if_necessary()
+            run_on = cover._delay_task
+            await run_on_sleep.until_parked(run_on)
+            run_on_sleep.release(run_on)
+            await _yield_turns()
+            assert len(gates) == 1, "the run-on's stop is being sent"
+
+            clock.advance(0.3)
+            mark = _mark(cover)
+            opening = gated_sleep.spawn(cover.async_open_cover())
+            await _yield_turns()
+            assert run_on.cancelled()
+            assert len(gates) == 2, "the open sends the stop again"
+
+            clock.advance(0.8)
+            gates[1].set()
+            await gated_sleep.until_parked(opening)
+        finally:
+            await run_on_sleep.close()
+
+    assert ("turn_off", "switch.close") in relay_calls(cover, mark)
+    assert _OPEN_ON not in relay_calls(cover, mark), "drove straight after the stop"
+    assert gated_sleep.slept == [pytest.approx(DIRECTION_CHANGE_DELAY)]
+    clock.advance(DIRECTION_CHANGE_DELAY)
+    gated_sleep.release()
+    await opening
+    assert relay_calls(cover, mark)[-1] == _OPEN_ON
+
+
+@pytest.mark.asyncio
+async def test_a_late_stop_does_not_count_as_sending_a_newer_one(
+    make_cover, clock, gated_sleep
+):
+    """A stop still being sent when the wall switch drives the motor again
+    finishes after a newer stop has been recorded. It must not mark that newer
+    stop as gone out: if the newer stop is then cancelled, the stop sent after
+    it is the one the rest counts from."""
+    cover = _cover(make_cover)
+    cover.travel_calc.set_position(60)
+    await cover.async_close_cover()
+    clock.advance(2)
+    send_stop = cover._send_stop
+    gates = []
+
+    async def slow_first_two_stops():
+        if len(gates) < 2:
+            gate = asyncio.Event()
+            gates.append(gate)
+            await gate.wait()
+        await send_stop()
+
+    with patch.object(cover, "_send_stop", slow_first_two_stops):
+        older = asyncio.ensure_future(cover.async_stop_cover())
+        await _yield_turns()
+        await _wall_switch(cover, "switch.open", "off", "on")
+        assert cover.travel_calc.is_opening()
+        newer = asyncio.ensure_future(cover.async_stop_cover())
+        await _yield_turns()
+        assert len(gates) == 2, "both stops are being sent"
+
+        clock.advance(0.3)
+        gates[0].set()
+        await older
+        newer.cancel()
+        with suppress(asyncio.CancelledError):
+            await newer
+        clock.advance(0.3)
+        await cover.async_stop_cover()
+        clock.advance(0.5)
+
+    await _rests_then_drives(
+        cover, gated_sleep, cover.async_close_cover(), _CLOSE_ON, rest=0.5
+    )

@@ -207,9 +207,16 @@ class CoverTimeBased(
         self._movement_epoch = 0
         # The way the travel motor was last driven, until a stop is recorded.
         self._travel_motor_direction: str | None = None
+        # Counts drives, so a stop that finishes after a newer drive leaves the
+        # newer stop's record alone.
+        self._travel_motor_drives = 0
         # (monotonic time, direction) of the last travel-motor stop whose rest
         # before a move the other way has not been waited out yet.
         self._travel_motor_stop: tuple[float, str] | None = None
+        # The recorded stop has not gone out yet: still being sent, or its send
+        # failed or was cancelled, so a stop sent after it may be the one that
+        # reaches the motor.
+        self._travel_motor_stop_unsent = False
         # set_position has assumed a start for an unknown position and its
         # move has not begun yet: that assumed position is not a real one.
         self._assumed_start_pending = False
@@ -1665,6 +1672,7 @@ class CoverTimeBased(
         reversing a running motor goes through its own stop and settle.
         """
         self._travel_motor_direction = command
+        self._travel_motor_drives += 1
         self._travel_motor_stop = None
 
     def _note_travel_motor_stop(self) -> tuple[float, str] | None:
@@ -1676,15 +1684,24 @@ class CoverTimeBased(
             return None
         self._travel_motor_direction = None
         self._travel_motor_stop = (time.monotonic(), direction)
+        self._travel_motor_stop_unsent = False
         return self._travel_motor_stop
 
     async def _send_travel_stop(self) -> None:
         """Send the travel stop, and rest from when it went out.
 
         Recorded before sending too, so a move the other way arriving while a
-        slow relay takes the stop still waits.
+        slow relay takes the stop still waits. A resend while the recorded stop
+        has not gone out restarts the rest too: that stop may have been
+        cancelled before it reached the motor. A stop sent to a motor already
+        stopped does not.
         """
-        record = self._note_travel_motor_stop()
+        if self._note_travel_motor_stop() is not None:
+            self._travel_motor_stop_unsent = True
+        restarts_rest = (
+            self._travel_motor_stop is not None and self._travel_motor_stop_unsent
+        )
+        drives = self._travel_motor_drives
         sending: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
         self._travel_stops_sending.add(sending)
         sent = False
@@ -1694,8 +1711,10 @@ class CoverTimeBased(
         finally:
             sending.set_result(sent)
             self._travel_stops_sending.discard(sending)
-        if record is not None and self._travel_motor_stop is record:
-            self._travel_motor_stop = (time.monotonic(), record[1])
+        stop = self._travel_motor_stop
+        if restarts_rest and stop is not None and self._travel_motor_drives == drives:
+            self._travel_motor_stop = (time.monotonic(), stop[1])
+            self._travel_motor_stop_unsent = False
 
     async def _rest_before_driving(self, command: str) -> bool:
         """Wait out what is left of the settle gap before driving ``command``
