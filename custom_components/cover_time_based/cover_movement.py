@@ -408,16 +408,18 @@ class MovementMixin(_MixinBase):
         parked start that leaves travel elsewhere, or too short to be worth
         moving.
 
-        ``recalibrate`` is passed False by exactly one caller,
-        ``_maybe_start_recalibrated_leg`` running leg B of a recalibrated
-        move (issue #179), to stop this call from arming a leg of its own on
-        top of one that already ran. It has a second, less obvious
-        consequence: it also exempts the move from ``min_movement_time`` (see
-        ``_is_movement_too_short``'s ``is_recalibrated_leg`` parameter, which
-        is fed ``not recalibrate``) — leg A has already driven the motor a
-        full travel, so leg B's own pulse is the point of the operation, not
-        a redundant nudge to skip. A future caller passing ``recalibrate=False``
-        for an unrelated reason would silently get that exemption too.
+        ``recalibrate`` is passed False by two callers.
+        ``_maybe_start_recalibrated_leg`` runs leg B of a recalibrated move
+        (issue #179) and must not arm a leg of its own on top of one that
+        already ran. An in-motion open/close with reverse_on_opposite_command
+        re-targets to 0/100 and must stay an ordinary move: as a forced
+        endpoint re-drive, a repeated close would restart the travel from
+        the opposite end. False also exempts the move from
+        ``min_movement_time`` (see ``_is_movement_too_short``'s
+        ``is_recalibrated_leg`` parameter, which is fed ``not recalibrate``):
+        leg B's pulse is the point of the operation, and an endpoint target
+        is exempt anyway. A new caller passing ``recalibrate=False`` gets that
+        exemption too.
         """
         plan = self._recalibration_plan(recalibrate, position, axis="travel")
         if plan is RecalibrationPlan.TWO_LEG:

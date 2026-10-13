@@ -720,7 +720,7 @@ class CoverTimeBased(
                     "async_close_cover :: in motion, re-targeting to 0"
                     " (reverse_on_opposite_command)"
                 )
-                await self.set_position(0)
+                await self.set_position(0, recalibrate=False)
                 return
             # In-motion UI click stops the cover. Reversing direction requires
             # a second click after the stop, or use set_cover_position which
@@ -838,7 +838,7 @@ class CoverTimeBased(
                     "async_open_cover :: in motion, re-targeting to 100"
                     " (reverse_on_opposite_command)"
                 )
-                await self.set_position(100)
+                await self.set_position(100, recalibrate=False)
                 return
             self._log("async_open_cover :: cover is in motion, stopping")
             await self.async_stop_cover()
