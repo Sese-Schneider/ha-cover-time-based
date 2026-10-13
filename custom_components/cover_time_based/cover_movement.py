@@ -148,6 +148,7 @@ class MovementMixin(_MixinBase):
                     "_async_move_to_endpoint :: motor self-stops at endpoint,"
                     " no relay stop"
                 )
+                self._note_travel_motor_stop()
             elif (
                 self._endpoint_runon_time is not None and self._endpoint_runon_time > 0
             ):
@@ -533,9 +534,10 @@ class MovementMixin(_MixinBase):
             command = SERVICE_OPEN_COVER
         else:
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
-            # Travel still moving (e.g. an open on its first tick, still reading
-            # 0) or a start still parked runs on regardless, so this request
-            # is only done if nothing will take travel elsewhere.
+            # Travel is heading neither way. It still reads as traveling while
+            # a move from an unknown position has seeded the tracker but not
+            # started yet; that move, or a start still parked, takes travel
+            # elsewhere, so this request is done only if neither will.
             return not self.travel_calc.is_traveling() and (
                 self._parked_start_heads_for(target)
             )

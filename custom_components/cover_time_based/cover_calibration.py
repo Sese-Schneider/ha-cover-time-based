@@ -189,7 +189,7 @@ class CalibrationMixin(_MixinBase):
         if self._calibration.uses_tilt_motor:
             await self._send_tilt_stop()
         else:
-            await self._send_stop()
+            await self._send_travel_stop()
 
     async def _start_simple_time_test(self, attribute, direction):
         """Start a simple travel/tilt time test by moving the cover."""
@@ -371,7 +371,7 @@ class CalibrationMixin(_MixinBase):
                 await self._async_handle_command(move_command)
                 elapsed = time.monotonic() - step_start
                 await sleep(max(0, pulse_duration - elapsed))
-                await self._send_stop()
+                await self._send_travel_stop()
                 self.async_write_ha_state()
 
                 await sleep(CALIBRATION_STEP_PAUSE)
@@ -473,6 +473,8 @@ class CalibrationMixin(_MixinBase):
             # it. Cancel always stops: the user is bailing mid-run.
             if cancel or not self._self_stops_at_endpoints():
                 await self._calibration_stop()
+            # Self-stopping hardware got no stop above: it stopped at its limit.
+            self._note_travel_motor_stop()
 
             if not cancel:
                 value = self._calculate_calibration_result()

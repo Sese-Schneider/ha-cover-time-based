@@ -55,6 +55,7 @@ class NativePositionDriver(PositionDriver):
         cover._log(
             "_command_position_move :: forwarding set_cover_position(%d)", position
         )
+        cover._note_travel_motor_driven(command)
         await cover._call_set_cover_position(position)
 
 

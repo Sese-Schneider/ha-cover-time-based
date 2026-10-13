@@ -306,8 +306,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             # (travel_was_moving) still fires. See CoverTimeBased.async_stop_cover.
             # (Toggle modes are always momentary, so _self_stops_at_endpoints is
             # True here; the term mirrors the base gate.)
-            self._note_travel_motor_stop()
-            await self._send_stop()
+            await self._send_travel_stop()
         elif (
             tilt_axis_reported
             and travel_was_moving
@@ -318,8 +317,10 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             # is one we drive ourselves and nothing external stopped it —
             # suppressing here strands a latched relay (switch mode) or a
             # running motor. Mirror image of _should_stop_tilt_motor.
+            await self._send_travel_stop()
+        elif self._triggered_externally:
+            # The hardware stopped the motor itself.
             self._note_travel_motor_stop()
-            await self._send_stop()
         if stop_tilt:
             # See CoverTimeBased.async_stop_cover — endpoint-safe teardown.
             await self._tilt_settle()
@@ -369,7 +370,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         if command in ("open", "close"):
             opposite = SERVICE_CLOSE_COVER if command == "open" else SERVICE_OPEN_COVER
             if self._last_command == opposite:
-                await self._send_stop()
+                await self._send_travel_stop()
                 await self._direction_change_delay()
         elif command in ("tilt_open", "tilt_close"):
             opposite_dir = "close" if command == "tilt_open" else "open"
