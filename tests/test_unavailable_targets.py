@@ -259,7 +259,11 @@ class TestMovementStartGating:
     async def test_in_motion_open_resolves_to_stop_even_if_open_target_unavailable(
         self, make_cover
     ):
-        cover = make_cover(open_switch="switch.open", close_switch="switch.close")
+        cover = make_cover(
+            reverse_on_opposite_command=False,
+            open_switch="switch.open",
+            close_switch="switch.close",
+        )
         _set_target_states(cover, {"switch.open": STATE_UNAVAILABLE})
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel(100)  # opening

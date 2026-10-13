@@ -156,6 +156,7 @@ detail. A blank cell means the option is not shown for that mode.
 | [Resync](#cover_time_basedresync) | | | | | | ✓ |
 | [Assumed state](#assumed-state) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [Always re-send at the endpoints](#always-re-send-openclose-at-the-endpoints) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [Reverse on an opposite open/close](#reverse-on-an-opposite-openclose) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [Fully open before position (Beta)](#fully-open-before-moving-to-a-position-beta) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [Tilt](#tilt) | ✓ | ✓ | ✓ | ✓ | ✓ | |
 
@@ -342,8 +343,9 @@ slowly.
 > way: sending the cover the other way before the confirmation has arrived
 > stops it once the relay confirms, counts the run up to that stop, and a
 > position command then waits out the usual settle gap before driving the other
-> way. An open or close the other way only stops the cover; press it again to
-> drive.
+> way. An open or close the other way then drives the cover the other way; with
+> [Reverse on an opposite open/close](#reverse-on-an-opposite-openclose) off, or
+> on a cover with tilt, it only stops the cover and you press it again to drive.
 
 #### Send stop signal at endpoints
 
@@ -503,7 +505,7 @@ the sequential modes is described under
 
 ### Options for every cover
 
-These three options are available whatever the Control Mode.
+These four options are available whatever the Control Mode.
 
 #### Assumed state
 
@@ -537,10 +539,26 @@ correct.
 > be well off. Let a re-drive run all the way to the endpoint, where the position
 > resyncs, rather than stopping it mid-travel.
 
+#### Reverse on an opposite open/close
+
+On by default. An **open** or **close** sent while the cover is moving
+re-targets it, like **set position** to 100% or 0% does: a command against the
+current direction stops the motor, waits a short settle gap and drives the other
+way, and a command in the direction already travelled lets the move carry on.
+This suits voice assistants: some bridges (a Matter bridge for Alexa, for
+example) send "set to 0%/100%" as a plain open or close.
+
+Turn it **off** to have an open or close sent while the cover is moving only stop
+it, with a second command then driving it; this was the behaviour before 4.14.0.
+With the option on, use **stop** to stop a moving cover. Home Assistant's
+**toggle** action stops a moving cover either way. Covers with tilt always keep
+the in-motion stop, because the slat restore that follows a stop would be
+skipped, so the switch is hidden for them.
+
 #### Fully open before moving to a position (Beta)
 
-The companion to the option above, for the same hardware, but for **set
-position** rather than open and close. A cover with no feedback that a remote can
+The companion to **Always re-send open/close at the endpoints**, for the same
+hardware, but for **set position** rather than open and close. A cover with no feedback that a remote can
 also move drifts out of sync, so a "go to 40%" command based on a stale guess can
 send it somewhere you did not intend, such as onto an obstruction below. With
 this **on**, every set-position command first drives the cover fully open, the
@@ -990,6 +1008,7 @@ listed here, use the card.
 | `pulse_time` | float | _Optional_ | Pulse duration in pulse mode; press duration in single button mode. 0.1–10 s. | 1.0 |
 | `relay_reports_off` | boolean | _Optional_ | Toggle mode: set `false` for pulse modules that never report their off. | true |
 | `send_endpoint_stop` | boolean | _Optional_ | Pulse mode: set `false` for auto-stop controllers that reposition on a stop received while stopped. | true |
+| `reverse_on_opposite_command` | boolean | _Optional_ | All modes: set `false` so an open or close sent while the cover is moving only stops it, instead of reversing it. Covers with tilt always just stop. | true |
 | `direction_change_delay` | float | _Deprecated_ | No longer configurable. Accepted and ignored; the reversing pause is fixed at 1.0s. | — |
 
 The cover is unavailable until both `travelling_time_down` and `travelling_time_up` are set.

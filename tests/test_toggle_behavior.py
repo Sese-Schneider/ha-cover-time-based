@@ -25,11 +25,13 @@ from custom_components.cover_time_based.cover import (
 
 
 class TestToggleCloseWhileMoving:
-    """In-motion UI clicks stop the cover (do not re-issue same direction)."""
+    """With the reverse option off, in-motion UI clicks stop the cover (do not re-issue same direction)."""
 
     @pytest.mark.asyncio
     async def test_close_while_closing_stops(self, make_cover):
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover = make_cover(
+            reverse_on_opposite_command=False, control_mode=CONTROL_MODE_TOGGLE
+        )
 
         # Simulate that the cover is currently closing (position 100 = fully open)
         cover.travel_calc.set_position(100)
@@ -44,7 +46,9 @@ class TestToggleCloseWhileMoving:
 
     @pytest.mark.asyncio
     async def test_open_while_opening_stops(self, make_cover):
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover = make_cover(
+            reverse_on_opposite_command=False, control_mode=CONTROL_MODE_TOGGLE
+        )
 
         # Simulate that the cover is currently opening (position 0 = fully closed)
         cover.travel_calc.set_position(0)
@@ -92,11 +96,14 @@ class TestToggleStopGuard:
 
 
 class TestStopBeforeDirectionChange:
-    """Closing while opening in toggle mode should stop first."""
+    """With "Reverse on an opposite open/close" off, closing while opening in
+    toggle mode stops the cover."""
 
     @pytest.mark.asyncio
     async def test_close_while_opening_stops_first(self, make_cover):
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover = make_cover(
+            control_mode=CONTROL_MODE_TOGGLE, reverse_on_opposite_command=False
+        )
 
         # Simulate that the cover is currently opening (position 0 = fully closed)
         cover.travel_calc.set_position(0)
@@ -116,7 +123,9 @@ class TestStopBeforeDirectionChange:
 
     @pytest.mark.asyncio
     async def test_open_while_closing_stops_first(self, make_cover):
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        cover = make_cover(
+            control_mode=CONTROL_MODE_TOGGLE, reverse_on_opposite_command=False
+        )
 
         # Simulate that the cover is currently closing (position 100 = fully open)
         cover.travel_calc.set_position(100)

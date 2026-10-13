@@ -408,16 +408,18 @@ class MovementMixin(_MixinBase):
         parked start that leaves travel elsewhere, or too short to be worth
         moving.
 
-        ``recalibrate`` is passed False by exactly one caller,
-        ``_maybe_start_recalibrated_leg`` running leg B of a recalibrated
-        move (issue #179), to stop this call from arming a leg of its own on
-        top of one that already ran. It has a second, less obvious
-        consequence: it also exempts the move from ``min_movement_time`` (see
-        ``_is_movement_too_short``'s ``is_recalibrated_leg`` parameter, which
-        is fed ``not recalibrate``) — leg A has already driven the motor a
-        full travel, so leg B's own pulse is the point of the operation, not
-        a redundant nudge to skip. A future caller passing ``recalibrate=False``
-        for an unrelated reason would silently get that exemption too.
+        ``recalibrate`` is passed False by two callers.
+        ``_maybe_start_recalibrated_leg`` runs leg B of a recalibrated move
+        (issue #179) and must not arm a leg of its own on top of one that
+        already ran. An in-motion open/close with reverse_on_opposite_command
+        re-targets to 0/100 and must stay an ordinary move: as a forced
+        endpoint re-drive, a repeated close would restart the travel from
+        the opposite end. False also exempts the move from
+        ``min_movement_time`` (see ``_is_movement_too_short``'s
+        ``is_recalibrated_leg`` parameter, which is fed ``not recalibrate``):
+        leg B's pulse is the point of the operation, and an endpoint target
+        is exempt anyway. A new caller passing ``recalibrate=False`` gets that
+        exemption too.
         """
         plan = self._recalibration_plan(recalibrate, position, axis="travel")
         if plan is RecalibrationPlan.TWO_LEG:
@@ -556,7 +558,13 @@ class MovementMixin(_MixinBase):
             self.stop_auto_updater()
             if self._has_tilt_support() and self.tilt_calc.is_traveling():
                 self.tilt_calc.stop()
+            # The stop can take a while to send; a command arriving meanwhile
+            # claims the movement and must win over this reversal.
+            epoch = self._movement_epoch
             await self._async_handle_command(SERVICE_STOP_COVER)
+            if epoch != self._movement_epoch:
+                self._log("set_position :: superseded while stopping, aborting")
+                return False
             if not await self._settle_before_reversing():
                 return False
             current = self.travel_calc.current_position()
@@ -986,8 +994,10 @@ class MovementMixin(_MixinBase):
     ):
         """Check if movement time is below minimum. Returns True if movement should be skipped.
 
-        ``is_recalibrated_leg`` marks leg B of a recalibrated move (#179) — the
-        caller passed ``recalibrate=False``. min_movement_time exists to skip
+        ``is_recalibrated_leg`` is fed ``not recalibrate``: True for leg B of a
+        recalibrated move (#179), and for an endpoint re-target from
+        reverse_on_opposite_command, which an endpoint target exempts anyway
+        (see ``set_position``). min_movement_time exists to skip
         pointless motor pulses for imperceptible moves, but by the time leg B
         runs, leg A has already driven the motor a full travel to reach a true
         datum; the second pulse to the position the user actually asked for IS

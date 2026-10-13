@@ -31,12 +31,10 @@ def _get_cover_entity(hass: HomeAssistant):
 async def test_toggle_in_motion_close_stops(
     hass: HomeAssistant, setup_input_booleans, mock_clock
 ):
-    """Toggle mode: UI close_cover while opening just stops (no reverse).
-
-    Reversing direction now requires either a second click or a
-    set_cover_position call (which keeps its stop-then-reverse behavior).
-    """
+    """Toggle mode with "Reverse on an opposite open/close" off: UI close_cover
+    while opening just stops (no reverse)."""
     options = {
+        "reverse_on_opposite_command": False,
         "control_mode": "toggle",
         "open_switch_entity_id": "input_boolean.open_switch",
         "close_switch_entity_id": "input_boolean.close_switch",
@@ -79,6 +77,54 @@ async def test_toggle_in_motion_close_stops(
     # Cover should be stopped, not closing
     assert not cover.is_opening
     assert not cover.is_closing
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_toggle_in_motion_close_reverses_by_default(
+    hass: HomeAssistant, setup_input_booleans, mock_clock
+):
+    """Toggle mode, option not stored: UI close_cover while opening reverses."""
+    options = {
+        "control_mode": "toggle",
+        "open_switch_entity_id": "input_boolean.open_switch",
+        "close_switch_entity_id": "input_boolean.close_switch",
+        "travel_time_open": 10.0,
+        "travel_time_close": 10.0,
+        "endpoint_runon_time": 0,
+        "pulse_time": 0,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=2, title="Test Cover", data={}, options=options
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    cover = _get_cover_entity(hass)
+
+    await cover.set_known_position(position=50)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "cover", "open_cover", {"entity_id": "cover.test_cover"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert cover.is_opening
+
+    mock_clock.advance(2.0)
+    async_fire_time_changed(
+        hass, dt_util.utcnow() + timedelta(seconds=2), fire_all=True
+    )
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "cover", "close_cover", {"entity_id": "cover.test_cover"}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+    assert cover.is_closing
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()

@@ -236,6 +236,18 @@ export function renderControlMode(card, c) {
   `;
 }
 
+// The backend ignores reverse_on_opposite_command on covers with tilt.
+function renderReverseToggle(card, c) {
+  if (c.control_mode !== "single_button" && (c.tilt_mode || "none") !== "none") return "";
+  return renderToggleWithHelp(
+    card,
+    "reverse_on_opposite_command.label",
+    "reverse_on_opposite_command.helper",
+    c.reverse_on_opposite_command !== false,
+    (e) => card._updateLocal({ reverse_on_opposite_command: e.target.checked }),
+  );
+}
+
 export function renderToggleWithHelp(card, labelKey, helperKey, checked, onChange) {
   const open = card._openHelp === helperKey;
   return html`
@@ -396,6 +408,7 @@ export function renderInputEntities(card, c) {
           c.force_endpoint_redrive === true,
           (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
         )}
+        ${renderReverseToggle(card, c)}
         ${renderToggleWithHelp(
           card,
           "recalibrate_before_position.label",
@@ -503,6 +516,7 @@ export function renderInputEntities(card, c) {
         c.force_endpoint_redrive === true,
         (e) => card._updateLocal({ force_endpoint_redrive: e.target.checked }),
       )}
+      ${renderReverseToggle(card, c)}
       ${
         // Every relay-driven mode confirms via a relay ON echo; wrapped covers
         // drive an underlying cover entity, so there is no relay to wait on.

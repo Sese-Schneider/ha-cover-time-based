@@ -661,7 +661,9 @@ class TestRelayFeedbackGuards:
 
     @pytest.mark.asyncio
     async def test_reverse_during_wait_cancels_wait_and_stops(self, make_cover):
-        cover = make_cover(wait_for_relay_feedback=True)
+        cover = make_cover(
+            reverse_on_opposite_command=False, wait_for_relay_feedback=True
+        )
         stub_switches(cover)
         cover.travel_calc.set_position(50)
 
@@ -1634,13 +1636,14 @@ class TestRelayFeedbackToggleReversal:
     """
 
     @staticmethod
-    async def _park_open_midway(make_cover, control_mode="toggle"):
+    async def _park_open_midway(make_cover, control_mode="toggle", **kwargs):
         return await _park_open(
             make_cover,
             control_mode,
             position=50,
             travel_time_open=10,
             travel_time_close=10,
+            **kwargs,
         )
 
     @pytest.mark.asyncio
@@ -1728,7 +1731,9 @@ class TestRelayFeedbackToggleReversal:
     ):
         """An endpoint command the other way stops the parked move (a second
         press then drives it) — and that stop is deferred like any other."""
-        cover = await self._park_open_midway(make_cover)
+        cover = await self._park_open_midway(
+            make_cover, reverse_on_opposite_command=False
+        )
         reversal = asyncio.ensure_future(cover.async_close_cover())
         await _turns()
         assert cover.hass.services.async_call.await_count == 0

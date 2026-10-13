@@ -39,6 +39,7 @@ def _make_toggle_cover(
     tilt_close_switch=None,
     tilt_stop_switch=None,
     relay_reports_off=True,
+    reverse_on_opposite_command=True,
 ):
     """Create a ToggleModeCover wired to a mock hass."""
     cover = ToggleModeCover(
@@ -60,6 +61,7 @@ def _make_toggle_cover(
         tilt_close_switch=tilt_close_switch,
         tilt_stop_switch=tilt_stop_switch,
         relay_reports_off=relay_reports_off,
+        reverse_on_opposite_command=reverse_on_opposite_command,
     )
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
@@ -233,8 +235,8 @@ class TestToggleModeSendStop:
 class TestToggleCloseWhileClosing:
     @pytest.mark.asyncio
     async def test_close_while_closing_stops(self):
-        """In-motion UI click stops the cover (does not re-issue)."""
-        cover = _make_toggle_cover()
+        """With the reverse option off, an in-motion UI click stops the cover (does not re-issue)."""
+        cover = _make_toggle_cover(reverse_on_opposite_command=False)
 
         # Simulate currently closing (position 100 = fully open)
         cover.travel_calc.set_position(100)
@@ -252,8 +254,8 @@ class TestToggleCloseWhileClosing:
 class TestToggleOpenWhileOpening:
     @pytest.mark.asyncio
     async def test_open_while_opening_stops(self):
-        """In-motion UI click stops the cover (does not re-issue)."""
-        cover = _make_toggle_cover()
+        """With the reverse option off, an in-motion UI click stops the cover (does not re-issue)."""
+        cover = _make_toggle_cover(reverse_on_opposite_command=False)
 
         # Simulate currently opening (position 0 = fully closed)
         cover.travel_calc.set_position(0)

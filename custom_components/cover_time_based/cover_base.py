@@ -38,6 +38,7 @@ from .const import (
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_MIN_MOVEMENT_TIME,
     CONF_RECALIBRATE_BEFORE_POSITION,
+    CONF_REVERSE_ON_OPPOSITE_COMMAND,
     CONF_TILT_MODE,
     CONF_TILT_STARTUP_DELAY,
     CONF_TILT_TIME_CLOSE,
@@ -46,6 +47,7 @@ from .const import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
+    DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     DIRECTION_CHANGE_DELAY,
     RESYNC_POSITIONS,
 )
@@ -156,6 +158,7 @@ class CoverTimeBased(
         wait_for_relay_feedback=False,
         recalibrate_before_position=False,
         skip_stop_when_idle=False,
+        reverse_on_opposite_command=DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     ):
         """Initialize the cover."""
         self._unique_id = device_id
@@ -164,6 +167,7 @@ class CoverTimeBased(
         self._wait_for_relay_feedback = wait_for_relay_feedback
         self._recalibrate_before_position = recalibrate_before_position
         self._skip_stop_when_idle = skip_stop_when_idle
+        self._reverse_on_opposite_command = reverse_on_opposite_command
 
         self._tilt_strategy = tilt_strategy
         # Keep the raw configured mode so calibration can still pick the right
@@ -678,6 +682,7 @@ class CoverTimeBased(
         attr[CONF_FORCE_ENDPOINT_REDRIVE] = self._force_endpoint_redrive
         attr[CONF_WAIT_FOR_RELAY_FEEDBACK] = self._wait_for_relay_feedback
         attr[CONF_RECALIBRATE_BEFORE_POSITION] = self._recalibrate_before_position
+        attr[CONF_REVERSE_ON_OPPOSITE_COMMAND] = self._reverse_on_opposite_command
         if self._calibration is not None:
             attr["calibration_active"] = True
             attr["calibration_attribute"] = self._calibration.attribute
@@ -704,19 +709,30 @@ class CoverTimeBased(
         """
         self._require_configured()
         self._log("async_close_cover")
+        force_redrive = self._force_endpoint_redrive
         if not self._triggered_externally and (
-            self._travel_axis_opening() or self._travel_axis_closing()
+            self._travel_axis_opening()
+            or self._travel_axis_closing()
+            or self._parked_start_reverses_to(0)
         ):
-            # In-motion UI click stops the cover. Reversing direction requires
-            # a second click after the stop, or use set_cover_position which
-            # keeps its existing stop-then-reverse behavior. External triggers
-            # (wall switches) keep the legacy "stop and reverse if needed"
-            # behavior to honor the physical user intent. Decisions key off the
-            # travel axis so a moving independent tilt motor (dual_motor) isn't
-            # stopped by a travel command.
-            self._log("async_close_cover :: cover is in motion, stopping")
-            await self.async_stop_cover()
-            return
+            if self._reverses_on_opposite_command():
+                self._log(
+                    "async_close_cover :: in motion, re-targeting to 0"
+                    " (reverse_on_opposite_command)"
+                )
+                if not await self._retarget_in_motion_to_endpoint(0):
+                    return
+                force_redrive = False
+            else:
+                # reverse_on_opposite_command off, or a cover with tilt: an
+                # in-motion command only stops. External triggers (wall
+                # switches) keep their own "stop and reverse if needed" path
+                # below. Decisions key off the travel axis so a moving
+                # independent tilt motor (dual_motor) isn't stopped by a travel
+                # command.
+                self._log("async_close_cover :: cover is in motion, stopping")
+                await self.async_stop_cover()
+                return
         if self._triggered_externally and self._travel_axis_opening():
             # External trigger: stop the opposite-direction motion, settle,
             # then proceed with close (legacy reverse behavior).
@@ -733,7 +749,7 @@ class CoverTimeBased(
         # opposite-direction startup delay to cancel, or an external sequential
         # close that articulates the slats.
         settled = self._settled_at_endpoint(0)
-        if settled and self._force_endpoint_redrive:
+        if settled and force_redrive:
             # issue #167: don't trust "already closed" — re-drive the full close
             # so a remote-opened, no-feedback cover actually closes. Started via
             # _start_recalibration_drive so a re-drive that never starts keeps
@@ -746,7 +762,7 @@ class CoverTimeBased(
         elif not settled:
             await self._async_move_to_endpoint(target=0)
         # Travel was skipped only when settled at 0 without a forced re-drive.
-        skip_travel = settled and not self._force_endpoint_redrive
+        skip_travel = settled and not force_redrive
 
         await self._close_tilt_after_travel_close(chain=not skip_travel)
 
@@ -805,19 +821,31 @@ class CoverTimeBased(
     async def async_open_cover(self, **kwargs):
         """Open the cover fully.
 
-        In-motion UI click stops the cover. Reversing direction requires a
-        second click, or use set_cover_position which keeps its existing
-        stop-then-reverse behavior. External triggers (wall switches) keep
-        the legacy "stop and reverse if needed" behavior.
+        An in-motion command re-targets to the endpoint (see
+        _retarget_in_motion_to_endpoint); with reverse_on_opposite_command off,
+        or on a cover with tilt, it only stops the cover. External triggers
+        (wall switches) keep their own "stop and reverse if needed" path.
         """
         self._require_configured()
         self._log("async_open_cover")
+        force_redrive = self._force_endpoint_redrive
         if not self._triggered_externally and (
-            self._travel_axis_opening() or self._travel_axis_closing()
+            self._travel_axis_opening()
+            or self._travel_axis_closing()
+            or self._parked_start_reverses_to(100)
         ):
-            self._log("async_open_cover :: cover is in motion, stopping")
-            await self.async_stop_cover()
-            return
+            if self._reverses_on_opposite_command():
+                self._log(
+                    "async_open_cover :: in motion, re-targeting to 100"
+                    " (reverse_on_opposite_command)"
+                )
+                if not await self._retarget_in_motion_to_endpoint(100):
+                    return
+                force_redrive = False
+            else:
+                self._log("async_open_cover :: cover is in motion, stopping")
+                await self.async_stop_cover()
+                return
         if self._triggered_externally and self._travel_axis_closing():
             self._log("async_open_cover :: external open while closing, reversing")
             # Reversal prelude, not a halt command — see async_close_cover.
@@ -828,7 +856,7 @@ class CoverTimeBased(
         # re-command as a pointless re-energize rather than a resync (command-
         # echo wrapped, issue #152). Relay modes keep the resync re-drive.
         settled_open = self._settled_at_endpoint(100)
-        if settled_open and self._force_endpoint_redrive:
+        if settled_open and force_redrive:
             # issue #167: don't trust "already open" — re-drive the full open,
             # overriding both the command-echo skip and the short resync.
             if not await self._start_recalibration_drive("travel", target=100):
@@ -841,6 +869,74 @@ class CoverTimeBased(
             self._log("async_open_cover :: already settled at 100, skipping resync")
             return
         await self._async_move_to_endpoint(target=100)
+
+    def _reverses_on_opposite_command(self) -> bool:
+        """Whether an in-motion open/close re-targets instead of stopping.
+
+        reverse_on_opposite_command applies to the travel axis only: covers
+        with tilt keep the in-motion stop, whose tilt restore bookkeeping an
+        endpoint re-target through set_position would bypass.
+        """
+        return self._reverse_on_opposite_command and not self._has_tilt_support()
+
+    def _parked_start_reverses_to(self, endpoint: int) -> bool:
+        """Whether reverse_on_opposite_command applies to a start still parked
+        (travel_startup_delay or a relay-feedback wait) that heads away from
+        ``endpoint``: the relay is commanded but the tracker is not running.
+        """
+        task = self._startup_delay_task
+        away = SERVICE_OPEN_COVER if endpoint == 0 else SERVICE_CLOSE_COVER
+        return (
+            self._reverses_on_opposite_command()
+            and task is not None
+            and not task.done()
+            and not self.travel_calc.is_traveling()
+            and self._last_command == away
+        )
+
+    async def _retarget_in_motion_to_endpoint(self, endpoint: int) -> bool:
+        """Re-target an in-motion open/close to ``endpoint`` (0 or 100) for
+        reverse_on_opposite_command.
+
+        set_position stops, settles and drives the other way, or retargets a
+        move already heading for ``endpoint``. Two cases are stopped and
+        settled here instead, returning True so the caller then handles the
+        command as it would for a cover stopped where it is, but without a
+        forced endpoint re-drive: a reversal stays an ordinary move, as it does
+        through set_position(recalibrate=False).
+
+        - a start still parked heading away from ``endpoint``: set_position
+          can cancel it unrun and drive straight back with no settle gap,
+          since the tracker is not running;
+        - a cover that has only just left ``endpoint``: it still reads it on the
+          whole-percent tracker, and set_position treats a target equal to the
+          position as reached and leaves the motor running away.
+
+        Returns False when nothing is left to do.
+        """
+        leaving = (
+            self._travel_axis_opening()
+            if endpoint == 0
+            else self._travel_axis_closing()
+        )
+        just_left = leaving and self.travel_calc.current_position() == endpoint
+        if not (just_left or self._parked_start_reverses_to(endpoint)):
+            await self.set_position(endpoint, recalibrate=False)
+            return False
+        self._log(
+            "_retarget_in_motion_to_endpoint :: heading away from %d, stopping"
+            " before handling the command",
+            endpoint,
+        )
+        # Claim before the stop, which can wait on a relay confirmation: a
+        # command arriving during that wait must win over this reversal.
+        self._supersede_movement()
+        epoch = self._movement_epoch
+        await self.async_stop_cover(supersede=False)
+        if epoch != self._movement_epoch:
+            self._log("_retarget_in_motion_to_endpoint :: superseded while stopping")
+            return False
+        return await self._settle_before_reversing()
 
     def _settled_at_endpoint(self, endpoint: int) -> bool:
         """Return True when the tracker is stopped exactly at ``endpoint`` (0 or

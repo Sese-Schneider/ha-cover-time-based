@@ -454,10 +454,11 @@ class TestToggleModeExternalStateChange:
 
     @pytest.mark.asyncio
     async def test_ha_ui_close_while_opening_stops(self, make_cover):
-        """HA UI close while opening just stops — does NOT reverse. Reversing
-        now requires a second click, or use set_cover_position which keeps
-        the legacy stop-then-reverse flow."""
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        """With "Reverse on an opposite open/close" off, an HA UI close while
+        opening just stops — it does NOT reverse."""
+        cover = make_cover(
+            reverse_on_opposite_command=False, control_mode=CONTROL_MODE_TOGGLE
+        )
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_up()
         cover._last_command = SERVICE_OPEN_COVER
@@ -472,8 +473,11 @@ class TestToggleModeExternalStateChange:
 
     @pytest.mark.asyncio
     async def test_ha_ui_open_while_closing_stops(self, make_cover):
-        """HA UI open while closing just stops — does NOT reverse."""
-        cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
+        """With "Reverse on an opposite open/close" off, an HA UI open while
+        closing just stops — it does NOT reverse."""
+        cover = make_cover(
+            reverse_on_opposite_command=False, control_mode=CONTROL_MODE_TOGGLE
+        )
         cover.travel_calc.set_position(50)
         cover.travel_calc.start_travel_down()
         cover._last_command = SERVICE_CLOSE_COVER

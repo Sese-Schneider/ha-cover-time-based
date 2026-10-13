@@ -1,5 +1,11 @@
 ## 4.14.0 (unreleased)
 
+### ⚠ Breaking changes
+
+- **An open or close sent while the cover is moving now reverses it** ([#305](https://github.com/Sese-Schneider/ha-cover-time-based/pull/305), [#313](https://github.com/Sese-Schneider/ha-cover-time-based/pull/313)), contributed by [@nsmy76](https://github.com/nsmy76). It re-targets the cover like set position to 100%/0% does: a command against the current direction stops, settles and drives the other way, and one in the same direction lets the move carry on. Before, either command only stopped the cover, so asking a voice assistant for the opposite direction mid-move stopped it instead. To stop a moving cover, use stop (Home Assistant's toggle action also still stops it). Covers with tilt still only stop.
+
+  **Migration:** no action is required. To keep the old behaviour, turn off the new **Reverse on an opposite open/close** switch in the cover's settings (in YAML, `reverse_on_opposite_command: false`).
+
 ### Features
 
 - **New translation: Slovenian** ([#311](https://github.com/Sese-Schneider/ha-cover-time-based/issues/311)).

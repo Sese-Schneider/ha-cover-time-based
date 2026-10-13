@@ -493,8 +493,9 @@ async def test_wrapped_snap_does_not_claim_the_movement(make_cover):
 # ---------------------------------------------------------------------------
 # The external-trigger reversals (wall switch / remote), which reach the same
 # settle gap from async_close_cover and async_open_cover rather than from
-# set_position. A UI click on a moving cover just stops it; only these external
-# entry points keep the legacy stop-and-reverse.
+# set_position. A UI click on a moving cover stops it only when "Reverse on an
+# opposite open/close" is off or the cover has tilt; these external entry points
+# always stop and reverse.
 # ---------------------------------------------------------------------------
 
 

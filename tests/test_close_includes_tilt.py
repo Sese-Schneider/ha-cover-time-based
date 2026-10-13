@@ -530,11 +530,10 @@ class TestUnaffectedStrategies:
 
 
 class TestStopOnInMotionClick:
-    """Clicking close_cover or open_cover while the cover is moving (in any
-    direction) should stop the cover and return — not re-issue the command
-    and not chain a direction-change reversal. Reversing requires a second
-    click, or use set_cover_position which keeps its existing
-    stop-then-reverse behavior."""
+    """With "Reverse on an opposite open/close" off, clicking close_cover or
+    open_cover while the cover is moving (in any direction) stops the cover
+    and returns — it does not re-issue the command or chain a
+    direction-change reversal."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -549,7 +548,7 @@ class TestStopOnInMotionClick:
     async def test_in_motion_click_stops(
         self, make_cover, start_pos, start_dir, method
     ):
-        cover = make_cover()
+        cover = make_cover(reverse_on_opposite_command=False)
         cover.travel_calc.set_position(start_pos)
         if start_dir == "down":
             cover.travel_calc.start_travel_down()

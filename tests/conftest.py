@@ -14,6 +14,7 @@ from custom_components.cover_time_based.const import (
     CONF_POSITION_REPORTING,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
+    CONF_REVERSE_ON_OPPOSITE_COMMAND,
     CONF_SEND_ENDPOINT_STOP,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
 )
@@ -120,6 +121,7 @@ def make_cover(make_hass, _mock_position_store):
         recalibrate_before_position=None,
         relay_reports_off=None,
         invert=None,
+        reverse_on_opposite_command=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -201,6 +203,8 @@ def make_cover(make_hass, _mock_position_store):
             options[CONF_RELAY_REPORTS_OFF] = relay_reports_off
         if invert is not None:
             options[CONF_INVERT] = invert
+        if reverse_on_opposite_command is not None:
+            options[CONF_REVERSE_ON_OPPOSITE_COMMAND] = reverse_on_opposite_command
 
         cover = _create_cover_from_options(
             options,
