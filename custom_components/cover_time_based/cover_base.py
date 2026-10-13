@@ -709,7 +709,9 @@ class CoverTimeBased(
         self._require_configured()
         self._log("async_close_cover")
         if not self._triggered_externally and (
-            self._travel_axis_opening() or self._travel_axis_closing()
+            self._travel_axis_opening()
+            or self._travel_axis_closing()
+            or self._parked_start_reverses_to(0)
         ):
             if self._reverses_on_opposite_command():
                 self._log(
@@ -828,7 +830,9 @@ class CoverTimeBased(
         self._require_configured()
         self._log("async_open_cover")
         if not self._triggered_externally and (
-            self._travel_axis_opening() or self._travel_axis_closing()
+            self._travel_axis_opening()
+            or self._travel_axis_closing()
+            or self._parked_start_reverses_to(100)
         ):
             if self._reverses_on_opposite_command():
                 self._log(
@@ -874,29 +878,51 @@ class CoverTimeBased(
         """
         return self._reverse_on_opposite_command and not self._has_tilt_support()
 
+    def _parked_start_reverses_to(self, endpoint: int) -> bool:
+        """Whether reverse_on_opposite_command applies to a start still parked
+        (travel_startup_delay or a relay-feedback wait) that heads away from
+        ``endpoint``: the relay is commanded but the tracker is not running.
+        """
+        task = self._startup_delay_task
+        away = SERVICE_OPEN_COVER if endpoint == 0 else SERVICE_CLOSE_COVER
+        return (
+            self._reverses_on_opposite_command()
+            and task is not None
+            and not task.done()
+            and not self.travel_calc.is_traveling()
+            and self._last_command == away
+        )
+
     async def _retarget_in_motion_to_endpoint(self, endpoint: int) -> bool:
         """Re-target an in-motion open/close to ``endpoint`` (0 or 100) for
         reverse_on_opposite_command.
 
         set_position stops, settles and drives the other way, or retargets a
-        move already heading for ``endpoint``. But a cover that has only just
-        left ``endpoint`` still reads it on the whole-percent tracker, and
-        set_position treats a target equal to the position as reached and
-        leaves the motor running away. In that case stop and settle here, and
-        return True: the caller then handles the command as it would for a
-        cover stopped at ``endpoint``. Returns False when nothing is left to do.
+        move already heading for ``endpoint``. Two cases are stopped and
+        settled here instead, returning True so the caller then handles the
+        command as it would for a cover stopped where it is:
+
+        - a start still parked heading away from ``endpoint``: set_position
+          can cancel it unrun and drive straight back with no settle gap,
+          since the tracker is not running;
+        - a cover that has only just left ``endpoint``: it still reads it on the
+          whole-percent tracker, and set_position treats a target equal to the
+          position as reached and leaves the motor running away.
+
+        Returns False when nothing is left to do.
         """
         leaving = (
             self._travel_axis_opening()
             if endpoint == 0
             else self._travel_axis_closing()
         )
-        if not (leaving and self.travel_calc.current_position() == endpoint):
+        just_left = leaving and self.travel_calc.current_position() == endpoint
+        if not (just_left or self._parked_start_reverses_to(endpoint)):
             await self.set_position(endpoint, recalibrate=False)
             return False
         self._log(
-            "_retarget_in_motion_to_endpoint :: just left %d, stopping before"
-            " handling the command",
+            "_retarget_in_motion_to_endpoint :: heading away from %d, stopping"
+            " before handling the command",
             endpoint,
         )
         await self.async_stop_cover()

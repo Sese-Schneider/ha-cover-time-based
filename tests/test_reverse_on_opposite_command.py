@@ -4,6 +4,7 @@ set_position (stop, settle, drive the other way) instead of only stopping.
 
 import asyncio
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -301,7 +302,7 @@ async def test_wrapped_with_native_position_reverses_through_set_cover_position(
     assert cover.travel_calc.is_opening()
 
 
-def _single_button():
+def _single_button(travel_startup_delay=None):
     cover = SingleButtonModeCover(
         device_id="test_sb",
         name="Test SB",
@@ -310,7 +311,7 @@ def _single_button():
         travel_time_open=30,
         tilt_time_close=None,
         tilt_time_open=None,
-        travel_startup_delay=None,
+        travel_startup_delay=travel_startup_delay,
         tilt_startup_delay=None,
         endpoint_runon_time=None,
         min_movement_time=None,
@@ -573,3 +574,344 @@ async def test_option_off_opposite_command_just_after_leaving_endpoint_stops(
         settle.assert_not_awaited()
         assert not cover.travel_calc.is_traveling()
         assert cover.travel_calc.current_position() == start
+
+
+# ---------------------------------------------------------------------------
+# A start still parked — waiting out travel_startup_delay or the relay's ON
+# echo — has the relay commanded but the tracker not yet running. An opposite
+# command must still stop, settle and drive the other way; a same-direction
+# one must leave the parked start alone.
+# ---------------------------------------------------------------------------
+
+
+@contextmanager
+def _settle_spy(cover):
+    """Stub the settle gap, recording how many service calls preceded it."""
+    at = []
+
+    async def _settle():
+        at.append(len(cover.hass.services.async_call.call_args_list))
+
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch.object(cover, "_direction_change_delay", new=_settle),
+    ):
+        yield at
+
+
+async def _parked(cover, command, start):
+    """Start ``command`` from ``start`` and leave it parked; return the
+    service-call watermark."""
+    stub_switches(cover)
+    cover.travel_calc.set_position(start)
+    await getattr(cover, command)()
+    await asyncio.sleep(0)
+    task = cover._startup_delay_task
+    assert task is not None and not task.done()
+    assert not cover.travel_calc.is_traveling()
+    return len(cover.hass.services.async_call.call_args_list)
+
+
+_SWITCH_STOP_CLOSE = [("turn_off", "switch.close"), ("turn_off", "switch.open")]
+_SWITCH_STOP_OPEN = _SWITCH_STOP_CLOSE
+_SWITCH_DRIVE_OPEN = [("turn_off", "switch.close"), ("turn_on", "switch.open")]
+_SWITCH_DRIVE_CLOSE = [("turn_off", "switch.open"), ("turn_on", "switch.close")]
+
+# (control mode, first, start, second, stop calls, drive calls, new target)
+_PARKED_REVERSALS = [
+    (
+        "switch",
+        "async_close_cover",
+        60,
+        "async_open_cover",
+        _SWITCH_STOP_CLOSE,
+        _SWITCH_DRIVE_OPEN,
+        100,
+    ),
+    (
+        "switch",
+        "async_open_cover",
+        40,
+        "async_close_cover",
+        _SWITCH_STOP_OPEN,
+        _SWITCH_DRIVE_CLOSE,
+        0,
+    ),
+    (
+        "toggle",
+        "async_close_cover",
+        60,
+        "async_open_cover",
+        [("turn_on", "switch.close")],
+        [("turn_off", "switch.close"), ("turn_on", "switch.open")],
+        100,
+    ),
+    (
+        "toggle",
+        "async_open_cover",
+        40,
+        "async_close_cover",
+        [("turn_on", "switch.open")],
+        [("turn_off", "switch.open"), ("turn_on", "switch.close")],
+        0,
+    ),
+]
+_PARKED_IDS = [
+    "switch-open-while-close-parked",
+    "switch-close-while-open-parked",
+    "toggle-open-while-close-parked",
+    "toggle-close-while-open-parked",
+]
+
+
+@pytest.mark.parametrize(
+    ("mode", "first", "start", "second", "stop", "drive", "target"),
+    _PARKED_REVERSALS,
+    ids=_PARKED_IDS,
+)
+@pytest.mark.asyncio
+async def test_opposite_command_during_startup_delay_stops_settles_and_reverses(
+    make_cover, mode, first, start, second, stop, drive, target
+):
+    cover = make_cover(
+        control_mode=mode, reverse_on_opposite_command=True, travel_startup_delay=20
+    )
+    with _settle_spy(cover) as settled_at:
+        mark = await _parked(cover, first, start)
+        await getattr(cover, second)()
+
+    assert relay_calls(cover, mark) == stop + drive
+    assert settled_at == [mark + len(stop)], "settle between the stop and the drive"
+    command = "open_cover" if target == 100 else "close_cover"
+    assert cover._last_command == command
+    assert cover._parked_travel_target == target
+    assert cover.travel_calc.current_position() == start
+
+
+@pytest.mark.parametrize("mode", ["switch", "toggle"])
+@pytest.mark.parametrize(
+    ("command", "start", "target"),
+    [("async_close_cover", 60, 0), ("async_open_cover", 40, 100)],
+    ids=["close-while-close-parked", "open-while-open-parked"],
+)
+@pytest.mark.asyncio
+async def test_same_direction_command_during_startup_delay_sends_nothing(
+    make_cover, mode, command, start, target
+):
+    cover = make_cover(
+        control_mode=mode, reverse_on_opposite_command=True, travel_startup_delay=20
+    )
+    with _settle_spy(cover) as settled_at:
+        mark = await _parked(cover, command, start)
+        task = cover._startup_delay_task
+        await getattr(cover, command)()
+
+    assert relay_calls(cover, mark) == []
+    assert settled_at == []
+    assert cover._startup_delay_task is task
+    assert cover._parked_travel_target == target
+
+
+@pytest.mark.parametrize(
+    ("mode", "first", "start", "second", "stop", "drive", "target"),
+    _PARKED_REVERSALS,
+    ids=_PARKED_IDS,
+)
+@pytest.mark.asyncio
+async def test_option_off_opposite_command_during_startup_delay_only_stops(
+    make_cover, mode, first, start, second, stop, drive, target
+):
+    """Control: without the option the parked start is stopped, not reversed."""
+    cover = make_cover(control_mode=mode, travel_startup_delay=20)
+    with _settle_spy(cover) as settled_at:
+        mark = await _parked(cover, first, start)
+        await getattr(cover, second)()
+
+    assert relay_calls(cover, mark) == stop
+    assert settled_at == []
+    assert cover._last_command is None
+    assert cover._startup_delay_task is None
+
+
+def _echo(entity_id, old, new):
+    """A relay state-change event as HA fires it."""
+    states = []
+    for value in (old, new):
+        st = MagicMock()
+        st.state = value
+        st.attributes = {}
+        st.last_changed = datetime.now(UTC)
+        states.append(st)
+    event = MagicMock()
+    event.data = {
+        "entity_id": entity_id,
+        "old_state": states[0],
+        "new_state": states[1],
+    }
+    return event
+
+
+@pytest.mark.parametrize(
+    ("first", "start", "second", "stop", "drive", "target"),
+    [p[1:] for p in _PARKED_REVERSALS if p[0] == "switch"],
+    ids=[i for i in _PARKED_IDS if i.startswith("switch")],
+)
+@pytest.mark.asyncio
+async def test_switch_opposite_command_during_relay_feedback_wait_reverses(
+    make_cover, first, start, second, stop, drive, target
+):
+    """Switch relays de-energise to stop, so nothing waits for the echo."""
+    cover = make_cover(reverse_on_opposite_command=True, wait_for_relay_feedback=True)
+    driven = "switch.open" if target == 100 else "switch.close"
+    with _settle_spy(cover) as settled_at:
+        mark = await _parked(cover, first, start)
+        assert cover._feedback_wait_entity is not None
+        await getattr(cover, second)()
+        await asyncio.sleep(0)
+
+    assert relay_calls(cover, mark) == stop + drive
+    assert settled_at == [mark + len(stop)]
+    assert cover._last_command == ("open_cover" if target == 100 else "close_cover")
+    assert cover._feedback_wait_entity == driven
+
+
+@pytest.mark.asyncio
+async def test_toggle_close_during_relay_feedback_wait_taps_stop_after_the_echo_then_closes(
+    make_cover,
+):
+    """The stop tap is held until the open relay confirms (issue #268); the
+    close drive follows the settle gap."""
+    cover = make_cover(
+        control_mode="toggle",
+        reverse_on_opposite_command=True,
+        wait_for_relay_feedback=True,
+    )
+    with _settle_spy(cover) as settled_at:
+        mark = await _parked(cover, "async_open_cover", 40)
+        assert cover._feedback_wait_entity == "switch.open"
+        reversal = asyncio.ensure_future(cover.async_close_cover())
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert relay_calls(cover, mark) == [], "no tap before the relay confirms"
+        assert not reversal.done()
+
+        await cover._async_switch_state_changed(_echo("switch.open", "off", "on"))
+        await asyncio.wait_for(reversal, 1.0)
+        await asyncio.sleep(0)
+
+    assert relay_calls(cover, mark) == [
+        ("turn_on", "switch.open"),
+        ("turn_off", "switch.open"),
+        ("turn_on", "switch.close"),
+    ]
+    assert settled_at == [mark + 1]
+    assert cover._last_command == "close_cover"
+    assert cover._feedback_wait_entity == "switch.close"
+
+
+@pytest.mark.parametrize("mode", ["switch", "toggle"])
+@pytest.mark.asyncio
+async def test_same_direction_command_during_relay_feedback_wait_sends_nothing(
+    make_cover, mode
+):
+    cover = make_cover(
+        control_mode=mode,
+        reverse_on_opposite_command=True,
+        wait_for_relay_feedback=True,
+    )
+    with _settle_spy(cover) as settled_at:
+        mark = await _parked(cover, "async_open_cover", 40)
+        task = cover._startup_delay_task
+        await cover.async_open_cover()
+
+    assert relay_calls(cover, mark) == []
+    assert settled_at == []
+    assert cover._startup_delay_task is task
+    assert cover._feedback_wait_entity == "switch.open"
+
+
+@pytest.mark.asyncio
+async def test_option_off_close_during_relay_feedback_wait_only_stops(make_cover):
+    """Control: without the option the parked open is stopped, not reversed."""
+    cover = make_cover(wait_for_relay_feedback=True)
+    with _settle_spy(cover) as settled_at:
+        mark = await _parked(cover, "async_open_cover", 40)
+        await cover.async_close_cover()
+        await asyncio.sleep(0)
+
+    assert relay_calls(cover, mark) == _SWITCH_STOP_OPEN
+    assert settled_at == []
+    assert cover._last_command is None
+    assert cover._feedback_wait_entity is None
+
+
+@pytest.mark.parametrize(
+    ("first", "start", "second"),
+    [
+        ("async_close_cover", 100, "async_open_cover"),
+        ("async_open_cover", 0, "async_close_cover"),
+    ],
+    ids=["open-while-close-from-100-parked", "close-while-open-from-0-parked"],
+)
+@pytest.mark.asyncio
+async def test_opposite_command_during_startup_delay_from_an_endpoint(
+    make_cover, first, start, second
+):
+    """Parked at the endpoint it is leaving: stopped and settled, then handled
+    as a command to a cover stopped there (open re-drives, close at 0 is a
+    no-op)."""
+    cover = make_cover(reverse_on_opposite_command=True, travel_startup_delay=20)
+    with _settle_spy(cover) as settled_at:
+        mark = await _parked(cover, first, start)
+        await getattr(cover, second)()
+
+    calls = relay_calls(cover, mark)
+    assert calls[:2] == _SWITCH_STOP_CLOSE
+    assert settled_at == [mark + 2]
+    if second == "async_open_cover":
+        assert calls[2:] == _SWITCH_DRIVE_OPEN
+    else:
+        assert calls[2:] == []
+        assert cover._last_command is None
+    assert cover.travel_calc.current_position() == start
+
+
+async def _run_single_button_leaving_parked(cover, command):
+    """Run ``command`` and the presses it schedules, leaving a parked start
+    (which would otherwise be awaited for its whole delay) pending."""
+    await getattr(cover, command)()
+    while pending := [
+        t for t in cover._test_tasks if t is not cover._startup_delay_task
+    ]:
+        for task in pending:
+            cover._test_tasks.remove(task)
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_single_button_close_during_startup_delay_presses_stop_then_close():
+    """A stop press, then a close press. The presses run as their own
+    sequenced task, so only that the settle ran is asserted, not its place."""
+    cover = _single_button(travel_startup_delay=20)
+    try:
+        with (
+            _settle_spy(cover) as settled_at,
+            patch.object(cover, "start_auto_updater"),
+            single_button_sleep_patch(),
+        ):
+            cover.travel_calc.set_position(40)
+            await _run_single_button_leaving_parked(cover, "async_open_cover")
+            assert cover._startup_delay_task is not None
+            assert not cover._startup_delay_task.done()
+            mark = len(cover.hass.services.async_call.call_args_list)
+            await _run_single_button_leaving_parked(cover, "async_close_cover")
+
+        press = [("turn_on", "switch.button"), ("turn_off", "switch.button")]
+        assert relay_calls(cover, mark) == press * 2
+        assert len(settled_at) == 1
+        assert cover._last_command == "close_cover"
+        assert cover._parked_travel_target == 0
+    finally:
+        for task in cover._test_tasks:
+            task.cancel()
+        await asyncio.gather(*cover._test_tasks, return_exceptions=True)
