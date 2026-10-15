@@ -1,3 +1,9 @@
+## 4.15.0 (unreleased)
+
+### Fixes
+
+- **With "Reverse on an opposite open/close" off, setting the position to 0% while the cover is opening, or to 100% while it is closing, now only stops it** ([#317](https://github.com/Sese-Schneider/ha-cover-time-based/issues/317)), as an open or close does. Apple HomeKit, some voice assistants and the position slider open and close a cover this way, so tapping a moving cover in the Home app sent it the other way instead of stopping it. A position between the ends still sends a moving cover there.
+
 ## 4.14.0 (2026-10-13)
 
 ### ⚠ Breaking changes
