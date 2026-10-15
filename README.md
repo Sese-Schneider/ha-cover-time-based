@@ -346,8 +346,8 @@ slowly.
 > a position or an open or close. With
 > [Reverse on an opposite open/close](#reverse-on-an-opposite-openclose) off, an
 > open or close, or a position of 0% or 100% against the direction of travel,
-> only stops the cover and you press it again to drive; on a cover with tilt, an
-> open or close only stops it.
+> only stops the cover, and a second command then drives it; on a cover with
+> tilt, an open or close only stops it.
 
 #### Send stop signal at endpoints
 
@@ -552,13 +552,15 @@ example) send "set to 0%/100%" as a plain open or close.
 
 Turn it **off** to have an open or close sent while the cover is moving only stop
 it, with a second command then driving it; this was the behaviour before 4.14.0.
-Off, it also covers **set position** to 0% while the cover is opening, or to
-100% while it is closing: that only stops the cover too, because Apple HomeKit
-and some voice assistants open and close a cover that way. A position between
-the ends still re-targets a moving cover. With the option on, use **stop** to stop a moving cover. Home Assistant's
-**toggle** action stops a moving cover either way. Covers with tilt always keep
-the in-motion stop, because the slat restore that follows a stop would be
-skipped, so the switch is hidden for them.
+With it off, **set position** to 0% while the cover is opening, or to 100% while
+it is closing, only stops the cover too, because Apple HomeKit, some voice
+assistants and the position slider open and close a cover that way. A position
+between the ends still re-targets a moving cover. With the option on, use
+**stop** to stop a moving cover. Home Assistant's **toggle** action stops a
+moving cover either way.
+Covers with tilt always keep the in-motion stop for an open or close, because the
+slat restore that follows a stop would be skipped; a position of 0% or 100% still
+re-targets them. The switch is hidden for them.
 
 #### Fully open before moving to a position (Beta)
 
@@ -1018,7 +1020,7 @@ listed here, use the card.
 | `pulse_time` | float | _Optional_ | Pulse duration in pulse mode; press duration in single button mode. 0.1–10 s. | 1.0 |
 | `relay_reports_off` | boolean | _Optional_ | Toggle mode: set `false` for pulse modules that never report their off. | true |
 | `send_endpoint_stop` | boolean | _Optional_ | Pulse mode: set `false` for auto-stop controllers that reposition on a stop received while stopped. | true |
-| `reverse_on_opposite_command` | boolean | _Optional_ | All modes: set `false` so an open or close sent while the cover is moving only stops it, instead of reversing it. Covers with tilt always just stop. | true |
+| `reverse_on_opposite_command` | boolean | _Optional_ | All modes: set `false` so an open or close sent while the cover is moving, or a position of 0% or 100% against its direction of travel, only stops it instead of reversing it. Covers with tilt always just stop on an open or close. | true |
 | `direction_change_delay` | float | _Deprecated_ | No longer configurable. Accepted and ignored; the reversing pause is fixed at 1.0s. | — |
 
 The cover is unavailable until both `travelling_time_down` and `travelling_time_up` are set.

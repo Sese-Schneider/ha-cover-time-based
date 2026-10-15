@@ -1,5 +1,7 @@
 """reverse_on_opposite_command: an in-motion open/close re-targets through
 set_position (stop, settle, drive the other way) instead of only stopping.
+With the option off, an in-motion open/close, or set_cover_position(0/100)
+against the direction of travel, only stops (#317).
 """
 
 import asyncio
@@ -264,8 +266,10 @@ _F_OPEN_CLOSE_STOP = 1 | 2 | 8
 _F_OPEN_CLOSE_SET_POSITION_STOP = 1 | 2 | 4 | 8
 
 
-def _wrapped(make_cover, features):
-    cover = make_cover(cover_entity_id="cover.inner", reverse_on_opposite_command=True)
+def _wrapped(make_cover, features, *, reverse=True):
+    cover = make_cover(
+        cover_entity_id="cover.inner", reverse_on_opposite_command=reverse
+    )
     st = MagicMock()
     st.state = "open"
     st.attributes = {"supported_features": features}
@@ -1106,15 +1110,33 @@ _SET_100_WHILE_CLOSING = ("async_close_cover", 60, 100)
 _SET_IDS = ["0-while-opening", "100-while-closing"]
 
 
+_PULSE_STOP = [*_SWITCH_STOP, ("turn_on", "switch.stop")]
+
+# (control mode, extra cover options, case, stop calls)
+_SET_ENDPOINT_STOPS = [
+    ("switch", {}, _SET_0_WHILE_OPENING, _SWITCH_STOP),
+    ("switch", {}, _SET_100_WHILE_CLOSING, _SWITCH_STOP),
+    ("toggle", {}, _SET_0_WHILE_OPENING, [("turn_on", "switch.open")]),
+    ("toggle", {}, _SET_100_WHILE_CLOSING, [("turn_on", "switch.close")]),
+    ("pulse", {"stop_switch": "switch.stop"}, _SET_0_WHILE_OPENING, _PULSE_STOP),
+    ("pulse", {"stop_switch": "switch.stop"}, _SET_100_WHILE_CLOSING, _PULSE_STOP),
+]
+
+
 @pytest.mark.parametrize(
-    "case", [_SET_0_WHILE_OPENING, _SET_100_WHILE_CLOSING], ids=_SET_IDS
+    ("mode", "options", "case", "stop"),
+    _SET_ENDPOINT_STOPS,
+    ids=[
+        f"{mode}-{_SET_IDS[case is _SET_100_WHILE_CLOSING]}"
+        for mode, _, case, _ in _SET_ENDPOINT_STOPS
+    ],
 )
 @pytest.mark.asyncio
 async def test_option_off_set_position_to_opposite_endpoint_only_stops(
-    make_cover, case
+    make_cover, mode, options, case, stop
 ):
     first, start, endpoint = case
-    cover = make_cover(reverse_on_opposite_command=False)
+    cover = make_cover(control_mode=mode, reverse_on_opposite_command=False, **options)
     with (
         patch.object(cover, "async_write_ha_state"),
         patch.object(cover, "_direction_change_delay", new=AsyncMock()) as settle,
@@ -1122,7 +1144,7 @@ async def test_option_off_set_position_to_opposite_endpoint_only_stops(
         mark = await _moving(cover, first, start)
         await cover.async_set_cover_position(position=endpoint)
 
-    assert relay_calls(cover, mark) == _SWITCH_STOP
+    assert relay_calls(cover, mark) == stop
     settle.assert_not_awaited()
     assert not cover.travel_calc.is_traveling()
     assert cover.travel_calc.current_position() == start
@@ -1133,8 +1155,7 @@ async def test_option_off_wrapped_set_position_0_while_opening_only_stops(
     make_cover,
 ):
     """The reporter's setup: a wrapped Somfy RTS cover driven from HomeKit."""
-    cover = _wrapped(make_cover, _F_OPEN_CLOSE_STOP)
-    cover._reverse_on_opposite_command = False
+    cover = _wrapped(make_cover, _F_OPEN_CLOSE_STOP, reverse=False)
     cover.travel_calc.set_position(25)
     with (
         patch.object(cover, "async_write_ha_state"),
@@ -1225,23 +1246,58 @@ async def test_option_off_set_position_to_endpoint_just_left_only_stops(
         assert cover.travel_calc.current_position() == start
 
 
+# (control mode, first, start, stop calls, endpoint): the endpoint is the
+# reversal target of the matching _PARKED_REVERSALS case.
+_PARKED_SET_ENDPOINT = [(p[0], p[1], p[2], p[4], p[6]) for p in _PARKED_REVERSALS]
+_PARKED_SET_IDS = [
+    f"{mode}-{endpoint}-while-{'close' if endpoint == 100 else 'open'}-parked"
+    for mode, _, _, _, endpoint in _PARKED_SET_ENDPOINT
+]
+
+
 @pytest.mark.parametrize(
-    ("first", "start", "endpoint"),
-    [("async_open_cover", 40, 0), ("async_close_cover", 60, 100)],
-    ids=["0-while-open-parked", "100-while-close-parked"],
+    ("mode", "first", "start", "stop", "endpoint"),
+    _PARKED_SET_ENDPOINT,
+    ids=_PARKED_SET_IDS,
 )
 @pytest.mark.asyncio
 async def test_option_off_set_position_to_opposite_endpoint_during_startup_delay_only_stops(
-    make_cover, first, start, endpoint
+    make_cover, mode, first, start, stop, endpoint
 ):
-    cover = make_cover(reverse_on_opposite_command=False, travel_startup_delay=20)
+    cover = make_cover(
+        reverse_on_opposite_command=False, control_mode=mode, travel_startup_delay=20
+    )
     with _settle_spy(cover) as settled_at:
         mark = await _parked(cover, first, start)
         await cover.async_set_cover_position(position=endpoint)
 
-    assert relay_calls(cover, mark) == _SWITCH_STOP_CLOSE
+    assert relay_calls(cover, mark) == stop
     assert settled_at == []
     assert cover._last_command is None
+    assert cover._startup_delay_task is None
+    assert cover.travel_calc.current_position() == start
+
+
+@pytest.mark.parametrize(
+    ("first", "start", "stop", "endpoint"),
+    [p[1:] for p in _PARKED_SET_ENDPOINT if p[0] == "switch"],
+    ids=[i for i in _PARKED_SET_IDS if i.startswith("switch")],
+)
+@pytest.mark.asyncio
+async def test_option_off_set_position_to_opposite_endpoint_during_relay_feedback_wait_only_stops(
+    make_cover, first, start, stop, endpoint
+):
+    cover = make_cover(reverse_on_opposite_command=False, wait_for_relay_feedback=True)
+    with _settle_spy(cover) as settled_at:
+        mark = await _parked(cover, first, start)
+        assert cover._feedback_wait_entity is not None
+        await cover.async_set_cover_position(position=endpoint)
+        await asyncio.sleep(0)
+
+    assert relay_calls(cover, mark) == stop
+    assert settled_at == []
+    assert cover._last_command is None
+    assert cover._feedback_wait_entity is None
     assert cover._startup_delay_task is None
     assert cover.travel_calc.current_position() == start
 
