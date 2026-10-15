@@ -344,9 +344,10 @@ slowly.
 > stops it once the relay confirms, counts the run up to that stop, then waits
 > out the usual settle gap before driving the other way, whether the command was
 > a position or an open or close. With
-> [Reverse on an opposite open/close](#reverse-on-an-opposite-openclose) off, or
-> on a cover with tilt, an open or close only stops the cover and you press it
-> again to drive.
+> [Reverse on an opposite open/close](#reverse-on-an-opposite-openclose) off, an
+> open or close, or a position of 0% or 100% against the direction of travel,
+> only stops the cover and you press it again to drive; on a cover with tilt, an
+> open or close only stops it.
 
 #### Send stop signal at endpoints
 
@@ -551,7 +552,10 @@ example) send "set to 0%/100%" as a plain open or close.
 
 Turn it **off** to have an open or close sent while the cover is moving only stop
 it, with a second command then driving it; this was the behaviour before 4.14.0.
-With the option on, use **stop** to stop a moving cover. Home Assistant's
+Off, it also covers **set position** to 0% while the cover is opening, or to
+100% while it is closing: that only stops the cover too, because Apple HomeKit
+and some voice assistants open and close a cover that way. A position between
+the ends still re-targets a moving cover. With the option on, use **stop** to stop a moving cover. Home Assistant's
 **toggle** action stops a moving cover either way. Covers with tilt always keep
 the in-motion stop, because the slat restore that follows a stop would be
 skipped, so the switch is hidden for them.

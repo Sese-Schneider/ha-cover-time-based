@@ -922,15 +922,36 @@ class CoverTimeBased(
         (travel_startup_delay or a relay-feedback wait) that heads away from
         ``endpoint``: the relay is commanded but the tracker is not running.
         """
+        return (
+            self._reverses_on_opposite_command()
+            and self._parked_start_heads_away_from(endpoint)
+        )
+
+    def _parked_start_heads_away_from(self, endpoint: int) -> bool:
+        """Whether a start still parked (travel_startup_delay or a
+        relay-feedback wait) heads away from ``endpoint``."""
         task = self._startup_delay_task
         away = SERVICE_OPEN_COVER if endpoint == 0 else SERVICE_CLOSE_COVER
         return (
-            self._reverses_on_opposite_command()
-            and task is not None
+            task is not None
             and not task.done()
             and not self.travel_calc.is_traveling()
             and self._last_command == away
         )
+
+    def _stops_instead_of_reversing_to(self, endpoint: int) -> bool:
+        """Whether set_cover_position(``endpoint``) only stops the cover, as an
+        opposite close/open does with reverse_on_opposite_command off: HomeKit
+        closes and opens a cover with set_cover_position(0/100) (#317).
+        """
+        if self._reverse_on_opposite_command or self._has_tilt_support():
+            return False
+        leaving = (
+            self._travel_axis_opening()
+            if endpoint == 0
+            else self._travel_axis_closing()
+        )
+        return leaving or self._parked_start_heads_away_from(endpoint)
 
     async def _retarget_in_motion_to_endpoint(self, endpoint: int) -> bool:
         """Re-target an in-motion open/close to ``endpoint`` (0 or 100) for
@@ -2027,6 +2048,14 @@ class CoverTimeBased(
         if ATTR_POSITION in kwargs:
             position = kwargs[ATTR_POSITION]
             self._log("async_set_cover_position: %d", position)
+            if position in (0, 100) and self._stops_instead_of_reversing_to(position):
+                self._log(
+                    "async_set_cover_position :: heading away from %d, stopping"
+                    " (reverse_on_opposite_command off)",
+                    position,
+                )
+                await self.async_stop_cover()
+                return
             if await self.set_position(position) and position == 0:
                 # 0% closes like the close button, slats included (#307).
                 await self._close_tilt_after_travel_close(
