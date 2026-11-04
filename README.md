@@ -2,7 +2,7 @@
 
 A Home Assistant integration that controls and tracks a cover's position using travel time.
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Sese-Schneider&repository=ha-cover-time-based&category=integration)
+[![Marketplace and HACS](https://img.shields.io/badge/Marketplace%20and%20HACS-Default-41BDF5.svg?style=for-the-badge)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Sese-Schneider&repository=ha-cover-time-based&category=integration)
 [![Active Installations][installations-shield]](https://analytics.home-assistant.io/)
 [![GitHub Release][releases-shield]][releases]
 [![License][license-shield]](LICENSE)
@@ -65,12 +65,19 @@ component by davidramosweb.
 
 ## Installation
 
-This integration is available through [HACS](https://hacs.xyz/). In HACS, search
-for **Cover time based** and install it, then restart Home Assistant.
+On Home Assistant 2026.11 or newer, go to **Settings → Marketplace**, search for
+**Cover Time Based** and select **Install**, then restart Home Assistant. The
+Marketplace is built into Home Assistant, so you don't need to install anything
+separately. The first time you open it, it shows a warning that you need to
+accept before you can install anything.
 
-Alternatively, click the button below:
+On Home Assistant 2026.10 or older, search for **Cover Time Based** in
+[HACS](https://hacs.xyz/) and install it from there, then restart Home
+Assistant.
 
-[![Open the Cover Time Based repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Sese-Schneider&repository=ha-cover-time-based&category=integration)
+This button opens Cover Time Based on either version:
+
+[![Open the Cover Time Based repository in your Home Assistant instance.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Sese-Schneider&repository=ha-cover-time-based&category=integration)
 
 ## Quick start
 
@@ -258,9 +265,12 @@ time-based cover as your everyday control.
 It is off by default because joining a device can change the cover's name.
 From Home Assistant 2025.8, an entity on a device is shown with the device's
 name in front of its own, so a cover called "Lounge Timed" on a device called
-"Lounge blind motor" shows as "Lounge blind motor Lounge Timed". To choose a
-different name, rename the cover in its entity settings; that name is always
-used as it is.
+"Lounge blind motor" shows as "Lounge blind motor Lounge Timed". You can rename
+the cover in its entity settings. Up to Home Assistant 2026.10, that name is used
+as it is. From Home Assistant 2026.11, the device's name stays in front of it
+too, so renaming the cover to "Lounge shade" shows "Lounge blind motor Lounge
+shade". If you want the cover to show only its own name there, leave this switch
+off.
 
 If the wrapped cover belongs to no device, the switch has no effect. The link
 is worked out when the cover starts, so if the wrapped cover later moves to a

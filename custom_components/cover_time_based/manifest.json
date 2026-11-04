@@ -2,6 +2,7 @@
   "domain": "cover_time_based",
   "name": "Cover Time Based",
   "after_dependencies": ["lovelace"],
+  "categories": ["helpers", "blinds_curtains"],
   "codeowners": ["@Sese-Schneider", "@clintongormley"],
   "config_flow": true,
   "dependencies": ["http"],

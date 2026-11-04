@@ -1,7 +1,13 @@
 ## 4.15.0 (unreleased)
 
+### Features
+
+- **The README now explains installing from the Marketplace**, which replaces HACS in Home Assistant 2026.11. HACS is still the way to install on Home Assistant 2026.10 and older.
+
 ### Fixes
 
+- **The "close includes tilt" switch in the configuration card has its label back on Home Assistant 2026.11**, where the label had disappeared. You can click the label to flip the switch.
+- **The configuration card's title now shows the same name as the rest of Home Assistant**, which from 2026.11 has the device's name in front of a cover that belongs to a device.
 - **The Endpoint run-on time can now be changed on a wrapped cover set to "State mirrors the last command"** ([#323](https://github.com/Sese-Schneider/ha-cover-time-based/issues/323)). These covers have always used it, 2 seconds by default, before sending the stop at 0% and 100%, but the card did not show the field. It now appears on the Calibration tab.
 
 ## 4.14.1 (2026-10-15)
