@@ -62,6 +62,10 @@ export const cardStyles = css`
         color: var(--primary-text-color);
       }
 
+      .toggle-label-clickable {
+        cursor: pointer;
+      }
+
       .toggle-with-help .toggle-switch {
         margin-inline-start: auto;
       }

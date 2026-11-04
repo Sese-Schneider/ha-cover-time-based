@@ -89,6 +89,12 @@ export function renderEntityPicker(card) {
   `;
 }
 
+function entityTitle(card) {
+  const stateObj = card._getEntityState();
+  const name = stateObj && card.hass.formatEntityName?.(stateObj);
+  return name || stateObj?.attributes?.friendly_name || card._selectedEntity;
+}
+
 export function renderConfigSections(card) {
   const c = card._config;
   const calibrating = card._isCalibrating();
@@ -99,7 +105,7 @@ export function renderConfigSections(card) {
       <div class="entity-info-row">
         <div>
           <strong>
-            ${card._getEntityState()?.attributes?.friendly_name || card._selectedEntity}
+            ${entityTitle(card)}
           </strong>
           <span class="entity-id">${card._selectedEntity}</span>
         </div>
@@ -624,13 +630,19 @@ export function renderTiltSupport(card, c) {
       ${
         tiltMode === "sequential_close" || tiltMode === "dual_motor"
           ? html`
-            <div class="inline-field">
-              <ha-formfield .label=${card._t("tilt.close_includes_tilt")}>
-                <ha-switch
-                  .checked=${c.close_includes_tilt !== false}
-                  @change=${(e) => card._updateLocal({ close_includes_tilt: e.target.checked })}
-                ></ha-switch>
-              </ha-formfield>
+            <div class="inline-field toggle-with-help">
+              <span
+                class="toggle-label toggle-label-clickable"
+                @click=${() => card._updateLocal({ close_includes_tilt: c.close_includes_tilt === false })}
+              >
+                ${card._t("tilt.close_includes_tilt")}
+              </span>
+              <ha-switch
+                class="toggle-switch"
+                aria-label=${card._t("tilt.close_includes_tilt")}
+                .checked=${c.close_includes_tilt !== false}
+                @change=${(e) => card._updateLocal({ close_includes_tilt: e.target.checked })}
+              ></ha-switch>
             </div>
           `
           : ""
