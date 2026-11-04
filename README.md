@@ -215,10 +215,13 @@ Because a **State mirrors the last command** cover has no endpoint feedback, and
 in practice drives a motor with no internal limit switch, the integration also
 sends an explicit **stop** when the cover reaches 0% or 100% rather than assuming
 the motor stops itself there. It treats an open or close command issued while the
-cover is already parked at that endpoint as doing nothing. Set
-[Endpoint run-on time](#endpoint-run-on-time) to 0 for such a motor, so it is
-de-energised the instant it reaches the endpoint. If the cover can also be moved
-by an external remote, so "already parked there" may not be true, turn on
+cover is already parked at that endpoint as doing nothing. The stop waits for the
+[Endpoint run-on time](#endpoint-run-on-time), which the Calibration tab shows for
+these covers. Set it to 0 for a motor with no limit switch, so it is de-energised
+the instant it reaches the endpoint. Keep it above 0 if the motor has limit
+switches but its relay still needs the stop, so the motor reaches its limit first.
+If the cover can also be moved by an external remote, so "already parked there"
+may not be true, turn on
 [Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints)
 to drive the command through anyway.
 
@@ -647,10 +650,12 @@ In **Switch** mode, though, the direction relay is latched on for the whole
 movement and has to be switched off at the endpoint. Because tracking is
 approximate, the relay is held on for an extra **Endpoint run-on time** (default
 **2 seconds**) so the motor reaches the limit before power is cut. This value
-applies in Switch mode, and in Pulse mode when
+applies in Switch mode, in Pulse mode when
 [Send stop signal at endpoints](#send-stop-signal-at-endpoints) is on, where it
-delays the stop pulse by the same amount. You type it in on the Calibration tab;
-it is not one of the measured timings.
+delays the stop pulse by the same amount, and on a wrapped cover set to
+[State mirrors the last command](#position-reporting), where it delays the stop
+sent to that cover. You type it in on the Calibration tab; it is not one of the
+measured timings.
 
 [Single button](#controlling-a-cover-with-a-single-button) mode reuses the same
 value differently: there is no relay to hold, since the motor self-stops, so

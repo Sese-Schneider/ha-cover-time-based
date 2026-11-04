@@ -189,7 +189,8 @@ class MovementLifecycleMixin(_MixinBase):
                 # so skip the relay stop and any run-on; just settle the
                 # tracker. The run-on (below) is therefore reached only by
                 # hardware that does NOT self-stop at its endpoints — switch
-                # mode, and pulse with send_endpoint_stop enabled.
+                # mode, pulse with send_endpoint_stop enabled, and command-echo
+                # wrapped covers.
                 self._log(
                     "auto_stop_if_necessary :: motor self-stops at endpoint"
                     " (position=%d), no relay stop",

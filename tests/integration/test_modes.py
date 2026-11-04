@@ -6,7 +6,7 @@ Tests toggle mode stop-before-reverse and pulse mode relay pulsing.
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -356,6 +356,60 @@ async def test_same_direction_retarget_does_not_repulse(
     assert not cover.is_closing
     assert cover.current_cover_position == 30
     assert send_close.call_count == 1
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_mirroring_wrapped_cover_uses_its_configured_run_on(
+    hass: HomeAssistant, mock_clock
+):
+    """A run-on saved for a wrapped cover whose state mirrors the last command
+    reaches the running cover and delays the stop after a real close (#323)."""
+    hass.states.async_set("cover.inner", "unknown")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=4,
+        title="Test Cover",
+        data={},
+        options={
+            "control_mode": "wrapped",
+            "cover_entity_id": "cover.inner",
+            "travel_time_open": 10.0,
+            "travel_time_close": 10.0,
+            "position_reporting": "command_echo",
+            "endpoint_runon_time": 0.5,
+        },
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    cover = _get_cover_entity(hass)
+    await cover.set_known_position(position=100)
+    await hass.async_block_till_done()
+
+    sleep = AsyncMock()
+    with (
+        patch("custom_components.cover_time_based.cover_lifecycle.sleep", sleep),
+        patch.object(cover, "_send_close", new=AsyncMock()),
+        patch.object(cover, "_send_stop", new=AsyncMock()) as send_stop,
+    ):
+        await hass.services.async_call(
+            "cover", "close_cover", {"entity_id": "cover.test_cover"}, blocking=True
+        )
+        await hass.async_block_till_done()
+        send_stop.assert_not_awaited()
+
+        mock_clock.advance(11.0)
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=11), fire_all=True
+        )
+        await hass.async_block_till_done()
+
+    sleep.assert_awaited_once_with(0.5)
+    send_stop.assert_awaited_once()
+    assert cover.current_cover_position == 0
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()

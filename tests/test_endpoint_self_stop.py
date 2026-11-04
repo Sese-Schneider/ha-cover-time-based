@@ -581,6 +581,40 @@ async def test_wrapped_command_echo_reaching_endpoint_sends_stop(make_cover):
     await _cancel_tasks(cover)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("endpoint", "command"), [(0, SERVICE_CLOSE_COVER), (100, SERVICE_OPEN_COVER)]
+)
+async def test_wrapped_command_echo_holds_the_stop_for_its_run_on(
+    make_cover, endpoint, command
+):
+    """The card offers the run-on for a command-echo wrapped cover because the
+    stop at an endpoint waits for it, at either end, with the tracked position
+    held at the endpoint (issue #323)."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        reports_command_not_endpoint=True,
+        endpoint_runon_time=0.5,
+    )
+    cover._self_initiated_movement = True
+    cover._last_command = command
+    cover.travel_calc.set_position(endpoint)
+
+    cover.hass.services.async_call.reset_mock()
+    sleep = AsyncMock()
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch("custom_components.cover_time_based.cover_lifecycle.sleep", sleep),
+    ):
+        await cover.auto_stop_if_necessary()
+        assert not _cover_calls(cover, "stop_cover")
+        await cover._delay_task
+
+    sleep.assert_awaited_once_with(0.5)
+    assert len(_cover_calls(cover, "stop_cover")) == 1
+    assert cover.travel_calc.current_position() == endpoint
+
+
 # ===================================================================
 # Tilt endpoints (dual-motor: separate tilt motor with its own limits)
 # ===================================================================

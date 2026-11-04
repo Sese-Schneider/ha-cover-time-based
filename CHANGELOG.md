@@ -1,3 +1,9 @@
+## 4.15.0 (unreleased)
+
+### Fixes
+
+- **The Endpoint run-on time can now be changed on a wrapped cover set to "State mirrors the last command"** ([#323](https://github.com/Sese-Schneider/ha-cover-time-based/issues/323)). These covers have always used it, 2 seconds by default, before sending the stop at 0% and 100%, but the card did not show the field. It now appears on the Calibration tab.
+
 ## 4.14.1 (2026-10-15)
 
 ### Fixes
