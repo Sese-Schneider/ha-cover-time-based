@@ -107,12 +107,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        id: install
+        # An unreleased HA must not block a PR, even when it will not install. The
+        # later steps need the install, so they check this step's outcome.
+        continue-on-error: ${{ matrix.ha-channel == 'beta' || matrix.ha-channel == 'dev' }}
         run: |
           python -m pip install --upgrade pip
           case "${{ matrix.ha-channel }}" in
             stable|beta|dev)
               # Picks the version, installs it with its test harness, and fails
-              # the job if it does not end up on that version.
+              # if it does not end up on that version.
               python scripts/ci_ha_install.py "${{ matrix.ha-channel }}"
               ;;
             *)
@@ -124,8 +128,13 @@ jobs:
           esac
           python -c "from homeassistant.const import __version__; print(__version__)"
 
+      - name: Warn when an unreleased Home Assistant cannot be installed
+        if: steps.install.outcome == 'failure'
+        run: echo "::warning::Could not install Home Assistant ${{ matrix.ha-channel }}"
+
       - name: Run tests
         id: pytest
+        if: steps.install.outcome == 'success'
         # An unreleased HA must not block a PR. This sits on the step because
         # job-level continue-on-error still fails a required check.
         continue-on-error: ${{ matrix.ha-channel == 'beta' || matrix.ha-channel == 'dev' }}
