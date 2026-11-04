@@ -1,6 +1,6 @@
 """Integration test fixtures for cover_time_based.
 
-Uses pytest-homeassistant-custom-component for a real HA instance.
+Uses the HA test harness (see tests/ha_harness.py) for a real HA instance.
 input_boolean entities simulate physical relay switches.
 """
 
@@ -13,9 +13,9 @@ import pytest
 from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.cover_time_based import travel_calculator
+from tests.ha_harness import MockConfigEntry
 from tests.helpers import FakeClock
 
 DOMAIN = "cover_time_based"

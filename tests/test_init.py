@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.helpers.issue_registry import IssueSeverity
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.cover_time_based import (
     _CARD_BASE_URL,
@@ -24,6 +23,7 @@ from custom_components.cover_time_based.card_resources import (
     async_register_card_resource,
 )
 from custom_components.cover_time_based.const import DOMAIN
+from tests.ha_harness import MockConfigEntry
 
 
 class FakeResources:

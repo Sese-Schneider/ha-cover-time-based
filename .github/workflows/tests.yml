@@ -89,17 +89,15 @@ jobs:
       fail-fast: false
       matrix:
         # Each HA channel runs on the lowest Python its HA pin supports.
-        # stable + dev track current HA, which (2026.3+) requires Python 3.14.
-        # minimum pins our declared floor (HA 2025.2.0); its pytest-homeassistant-
-        # custom-component only supports 3.13, so that leg stays on 3.13 to keep
-        # proving the floor still works. (pytest-homeassistant-custom-component
-        # capped at 3.13 can't resolve HA past 2026.2.x, which is why stable must
-        # run on 3.14 to actually exercise the latest HA.)
+        # stable, beta and dev track current HA, which (2026.3+) requires
+        # Python 3.14. minimum pins our declared floor (HA 2025.2.0); its
+        # pytest-homeassistant-custom-component only supports 3.13, so that leg
+        # stays on 3.13 to keep proving the floor still works.
         include:
           - { ha-channel: stable, python-version: "3.14" }
+          - { ha-channel: beta, python-version: "3.14" }
           - { ha-channel: dev, python-version: "3.14" }
           - { ha-channel: minimum, python-version: "3.13" }
-    continue-on-error: ${{ matrix.ha-channel == 'dev' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -108,32 +106,34 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies (stable)
-        if: matrix.ha-channel == 'stable'
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # pytest-homeassistant-custom-component pins the latest stable HA it
-          # supports (2026.6.x on Python 3.14) along with its whole pytest stack,
-          # so this single install is sufficient.
-          python -m pip install pytest-homeassistant-custom-component
-
-      - name: Install dependencies (dev)
-        if: matrix.ha-channel == 'dev'
-        run: |
-          python -m pip install --upgrade pip
-          # Newest release including prereleases -> dev/beta HA.
-          python -m pip install --pre pytest-homeassistant-custom-component
-
-      - name: Install dependencies (minimum)
-        if: matrix.ha-channel == 'minimum'
-        run: |
-          python -m pip install --upgrade pip
-          # Our declared floor: this pin resolves HA 2025.2.0 (matches hacs.json),
-          # the oldest HA we commit to supporting. Supports Python 3.13.
-          python -m pip install "pytest-homeassistant-custom-component==0.13.210"
+          case "${{ matrix.ha-channel }}" in
+            stable|beta|dev)
+              # Picks the version, installs it with its test harness, and fails
+              # the job if it does not end up on that version.
+              python scripts/ci_ha_install.py "${{ matrix.ha-channel }}"
+              ;;
+            *)
+              # Our declared floor: this pin resolves HA 2025.2.0 (matches
+              # hacs.json), the oldest HA we commit to supporting. Supports
+              # Python 3.13.
+              python -m pip install "pytest-homeassistant-custom-component==0.13.210"
+              ;;
+          esac
+          python -c "from homeassistant.const import __version__; print(__version__)"
 
       - name: Run tests
+        id: pytest
+        # An unreleased HA must not block a PR. This sits on the step because
+        # job-level continue-on-error still fails a required check.
+        continue-on-error: ${{ matrix.ha-channel == 'beta' || matrix.ha-channel == 'dev' }}
         run: pytest tests/ -v
+
+      - name: Warn when an unreleased Home Assistant fails the suite
+        if: steps.pytest.outcome == 'failure'
+        run: echo "::warning::Pytest failed on Home Assistant ${{ matrix.ha-channel }}"
 
   frontend:
     needs: changes

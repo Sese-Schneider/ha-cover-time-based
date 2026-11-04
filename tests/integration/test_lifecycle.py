@@ -9,7 +9,8 @@ from homeassistant.components.cover import ATTR_CURRENT_POSITION, CoverEntityFea
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.entity_component import DATA_INSTANCES
-from pytest_homeassistant_custom_component.common import (
+
+from tests.ha_harness import (
     MockConfigEntry,
     mock_restore_cache,
 )

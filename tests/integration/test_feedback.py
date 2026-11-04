@@ -12,7 +12,8 @@ from datetime import timedelta
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_component import DATA_INSTANCES
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+from tests.ha_harness import async_fire_time_changed
 
 
 def _get_cover_entity(hass: HomeAssistant):

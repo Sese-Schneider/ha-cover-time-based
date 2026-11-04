@@ -11,14 +11,14 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-)
 
 from custom_components.cover_time_based.device_link import (
     LINK_BY_DEVICE_ENTRY,
     ONE_OWNER_DEVICES,
+)
+from tests.ha_harness import (
+    MockConfigEntry,
+    async_fire_time_changed,
 )
 
 DOMAIN = "cover_time_based"
