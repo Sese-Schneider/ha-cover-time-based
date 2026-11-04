@@ -323,8 +323,8 @@ async def test_toggle_ignores_send_endpoint_stop(make_cover):
 
 @pytest.mark.asyncio
 async def test_wrapped_ignores_send_endpoint_stop(make_cover):
-    """A wrapped (non-native-position) cover self-stops at endpoints regardless
-    of the option."""
+    """A reliable-reporting wrapped (non-native-position) cover self-stops at
+    endpoints regardless of the option."""
     cover = make_cover(cover_entity_id="cover.inner", send_endpoint_stop=False)
     assert cover._self_stops_at_endpoints() is True
 

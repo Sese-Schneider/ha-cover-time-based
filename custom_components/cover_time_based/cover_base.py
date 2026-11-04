@@ -1182,10 +1182,11 @@ class CoverTimeBased(
         (``_self_stops_at_endpoints`` True) the wrong duration from an
         ordinary timed move is masked: ``auto_stop_if_necessary`` skips the
         explicit stop there, so the relay stays live and the motor runs into
-        its limit regardless of the computed duration. Switch mode does not
-        self-stop — its relay is latched for the computed duration and cut by
-        an explicit stop at the end of it — so drift there strands the cover
-        short of the endpoint. Routing every mode through ``FORCED_ENDPOINT``
+        its limit regardless of the computed duration. Where it is False
+        (switch, pulse with ``send_endpoint_stop``, command-echo wrapped
+        covers) an explicit stop cuts the move at the end of the computed
+        duration, so drift strands the cover short of the endpoint. Routing
+        every mode through ``FORCED_ENDPOINT``
         fixes this uniformly, and is a no-op change on hardware where the bug
         was already masked.
 
@@ -1198,9 +1199,9 @@ class CoverTimeBased(
         ``FORCED_ENDPOINT``, not ``NONE``, for exactly the reason spelled out
         above for travel: ``NONE`` is an ordinary timed move computed from the
         BELIEVED tilt position, and the masking that makes that survive on
-        self-stopping hardware is absent in switch mode and in pulse with the
-        default ``send_endpoint_stop`` — there ``_tilt_settle`` de-energises
-        the tilt relay on time and the motor never stalls. A believed-90 → 100
+        self-stopping hardware is absent wherever ``_self_stops_at_endpoints()``
+        is False — there ``_tilt_settle`` sends the tilt stop on time and the
+        motor never stalls. A believed-90 → 100
         move is then a 10%-of-tilt-time nudge; if the real tilt were at 20 it
         lands at ~30. Routed through ``_force_full_tilt_redrive(target)``, it
         runs the full tilt time from the opposite tilt endpoint and stalls
@@ -1959,11 +1960,11 @@ class CoverTimeBased(
             # tilt_command_for) while the travel motor is idle, so an ungated
             # _send_stop pulses a stopped travel motor — a movement command on
             # toggle (#153), a go-to-favourite on pulse send_endpoint_stop=False
-            # (#133). Everything else is unchanged: switch mode
-            # (_self_stops_at_endpoints False) always de-energizes its latched
-            # relay; non-dual-motor covers (no _has_tilt_motor — wrapped,
-            # single-motor) keep sending _send_stop, and a genuine dual-motor
-            # mid-travel stop (travel_was_moving) still fires. The tilt axis is
+            # (#133). Everything else is unchanged: hardware that does not
+            # self-stop (_self_stops_at_endpoints False) always gets the stop;
+            # covers with no dedicated tilt motor keep sending _send_stop, and
+            # a genuine dual-motor mid-travel stop (travel_was_moving) still
+            # fires. The tilt axis is
             # settled by _tilt_settle below, independently of this.
             await self._send_travel_stop()
         elif tilt_axis_reported and travel_was_moving and self._self_initiated_movement:

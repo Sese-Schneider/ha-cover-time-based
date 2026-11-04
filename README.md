@@ -215,10 +215,13 @@ Because a **State mirrors the last command** cover has no endpoint feedback, and
 in practice drives a motor with no internal limit switch, the integration also
 sends an explicit **stop** when the cover reaches 0% or 100% rather than assuming
 the motor stops itself there. It treats an open or close command issued while the
-cover is already parked at that endpoint as doing nothing. Set
-[Endpoint run-on time](#endpoint-run-on-time) to 0 for such a motor, so it is
-de-energised the instant it reaches the endpoint. If the cover can also be moved
-by an external remote, so "already parked there" may not be true, turn on
+cover is already parked at that endpoint as doing nothing. The stop waits for the
+[Endpoint run-on time](#endpoint-run-on-time), which the Calibration tab shows for
+these covers. Set it to 0 for a motor with no limit switch, so it is de-energised
+the instant it reaches the endpoint. Keep it above 0 if the motor has limit
+switches but its relay still needs the stop, so the motor reaches its limit first.
+If the cover can also be moved by an external remote, so "already parked there"
+may not be true, turn on
 [Always re-send open/close at the endpoints](#always-re-send-openclose-at-the-endpoints)
 to drive the command through anyway.
 
@@ -612,7 +615,7 @@ Most timings can be measured for you:
 | **Travel time (open)** | Seconds for the cover to open fully. | — |
 | **Travel startup delay** | Compensates for the motor's start-up lag. See [Startup delay](#startup-delay). | not set |
 | **Minimum movement time** | Blocks movements too short to physically move the cover. See [Minimum movement time](#minimum-movement-time). | not set |
-| **Endpoint run-on time** | Extra relay time at the endpoints so the motor reaches its limit (in Single button mode, a settle wait instead). Typed in rather than measured. See [Endpoint run-on time](#endpoint-run-on-time). | 2.0 |
+| **Endpoint run-on time** | Extra relay time at the endpoints so the motor reaches its limit (in Single button mode, a settle wait instead; on a wrapped cover set to **State mirrors the last command**, a delay before the stop). Typed in rather than measured. See [Endpoint run-on time](#endpoint-run-on-time). | 2.0 |
 
 The cover shows as unavailable until both travel times are set.
 
@@ -647,10 +650,12 @@ In **Switch** mode, though, the direction relay is latched on for the whole
 movement and has to be switched off at the endpoint. Because tracking is
 approximate, the relay is held on for an extra **Endpoint run-on time** (default
 **2 seconds**) so the motor reaches the limit before power is cut. This value
-applies in Switch mode, and in Pulse mode when
+applies in Switch mode, in Pulse mode when
 [Send stop signal at endpoints](#send-stop-signal-at-endpoints) is on, where it
-delays the stop pulse by the same amount. You type it in on the Calibration tab;
-it is not one of the measured timings.
+delays the stop pulse by the same amount, and on a wrapped cover set to
+[State mirrors the last command](#position-reporting), where it delays the stop
+sent to that cover. You type it in on the Calibration tab; it is not one of the
+measured timings.
 
 [Single button](#controlling-a-cover-with-a-single-button) mode reuses the same
 value differently: there is no relay to hold, since the motor self-stops, so
@@ -877,7 +882,7 @@ profiles use timed tilt movements because the reported angle cannot be trusted.
 <summary><strong>How endpoints stop in each mode</strong></summary>
 
 The tracker resyncs whenever the cover reaches an endpoint, but how the motor is
-stopped there depends on the mode:
+stopped there after a move Home Assistant started depends on the mode:
 
 - **Switch** mode holds the latched relay on for the
   [Endpoint run-on time](#endpoint-run-on-time), then switches it off.
@@ -889,11 +894,13 @@ stopped there depends on the mode:
   extra movement and resyncs the tracker for free. (In Toggle mode a stop pulse on
   an already-stopped motor would restart it.)
 - A wrapped cover set to **State mirrors the last command** is the exception among
-  wrapped covers: it _is_ sent an explicit stop, as described above.
+  wrapped covers: it _is_ sent an explicit stop after the Endpoint run-on time, as
+  described above.
 
-A **separate tilt motor** is handled the same way at its own tilt endpoints: no
-stop except in Switch mode, and in Pulse mode when the send-stop option is on.
-Mid-tilt positions are always stopped, since nothing self-stops there.
+A **separate tilt motor** gets no stop at its own tilt endpoints except in Switch
+mode, in Pulse mode when the send-stop option is on, and on a wrapped cover set to
+**State mirrors the last command**. There the stop is sent on arrival, with no
+run-on. Mid-tilt positions are always stopped, since nothing self-stops there.
 
 One subtlety with shared-motor tilt: a tilt move made while the cover is parked at
 a travel endpoint drives the motor _off_ its limit switch, so it will not

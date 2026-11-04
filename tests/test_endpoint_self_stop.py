@@ -1,14 +1,14 @@
 """Endpoint self-stop behaviour.
 
 Motors with internal limit switches self-stop at the physical endpoints
-(0% / 100%). For every relay mode whose relays are momentary or delegated
-(toggle, pulse, wrapped) the integration must therefore NOT send a stop at
-an endpoint — the motor has already stopped, and a stop there is at best
+(0% / 100%). For modes whose relays are momentary or delegated the
+integration must therefore NOT send a stop at an endpoint — the motor has already stopped, and a stop there is at best
 redundant and at worst (toggle) re-pulses the relay and restarts the motor.
 
-Switch mode is the exception: its direction relay is latched ON for the
+Switch mode is an exception: its direction relay is latched ON for the
 whole travel, so reaching an endpoint must still de-energize it. Switch
-mode therefore keeps both the endpoint stop and endpoint run-on.
+mode therefore keeps both the endpoint stop and endpoint run-on. So do
+pulse with ``send_endpoint_stop`` on and command-echo wrapped covers.
 
 Mid-travel stops (position 1..99) are unaffected in every mode — nothing
 self-stops there, so the timed stop is essential.
@@ -581,6 +581,41 @@ async def test_wrapped_command_echo_reaching_endpoint_sends_stop(make_cover):
     await _cancel_tasks(cover)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("endpoint", "command"), [(0, SERVICE_CLOSE_COVER), (100, SERVICE_OPEN_COVER)]
+)
+async def test_wrapped_command_echo_holds_the_stop_for_its_run_on(
+    make_cover, endpoint, command
+):
+    """The card offers the run-on for a command-echo wrapped cover because the
+    stop at an endpoint waits for it, at either end, with the tracked position
+    held at the endpoint (issue #323)."""
+    cover = make_cover(
+        cover_entity_id="cover.inner",
+        reports_command_not_endpoint=True,
+        endpoint_runon_time=0.5,
+    )
+    cover._self_initiated_movement = True
+    cover._last_command = command
+    cover.travel_calc.set_position(endpoint)
+
+    cover.hass.services.async_call.reset_mock()
+    sleep = AsyncMock()
+    with (
+        patch.object(cover, "async_write_ha_state"),
+        patch("custom_components.cover_time_based.cover_lifecycle.sleep", sleep),
+    ):
+        await cover.auto_stop_if_necessary()
+        assert not _cover_calls(cover, "stop_cover")
+        await cover._delay_task
+
+    sleep.assert_awaited_once_with(0.5)
+    assert len(_cover_calls(cover, "stop_cover")) == 1
+    assert cover.travel_calc.current_position() == endpoint
+    await _cancel_tasks(cover)
+
+
 # ===================================================================
 # Tilt endpoints (dual-motor: separate tilt motor with its own limits)
 # ===================================================================
@@ -1051,7 +1086,7 @@ async def test_stop_during_tilt_then_travel_still_runs_on(make_cover):
 #
 # #125 (above) fixed inline tilt at an endpoint for the *latched* modes
 # (switch), whose _self_stops_at_endpoints() is False — those hit the
-# run-on branch. The *self-stopping* modes (toggle/pulse/wrapped), whose
+# run-on branch. The *self-stopping* modes, whose
 # _self_stops_at_endpoints() is True, hit the earlier self-stop branch,
 # which skipped the stop on the assumption the motor sits against its
 # limit. But an inline tilt move drives the motor *off* the limit to

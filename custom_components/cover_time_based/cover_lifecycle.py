@@ -64,8 +64,8 @@ class MovementLifecycleMixin(_MixinBase):
                     await self._start_pending_tilt()
                     return
                 # Move complete: don't re-drive the relay, but a latched relay
-                # (switch mode) must still be de-energized; momentary modes
-                # self-released and no-op in _settle_external_endpoint. Sent as
+                # (switch mode) must still be de-energized;
+                # _settle_external_endpoint does what each mode needs. Sent as
                 # a travel stop, so a move the other way waits for it.
                 was_tilt_motor_move = self._moving_tilt_motor
                 await self._send_travel_stop(self._settle_external_endpoint)
@@ -189,7 +189,8 @@ class MovementLifecycleMixin(_MixinBase):
                 # so skip the relay stop and any run-on; just settle the
                 # tracker. The run-on (below) is therefore reached only by
                 # hardware that does NOT self-stop at its endpoints — switch
-                # mode, and pulse with send_endpoint_stop enabled.
+                # mode, pulse with send_endpoint_stop enabled, and command-echo
+                # wrapped covers.
                 self._log(
                     "auto_stop_if_necessary :: motor self-stops at endpoint"
                     " (position=%d), no relay stop",
@@ -239,14 +240,14 @@ class MovementLifecycleMixin(_MixinBase):
 
         Roller-shutter motors have internal limit switches that halt the motor
         at fully-open/closed on their own. For modes whose relays are momentary
-        or delegated (toggle, pulse, wrapped), the stop we would otherwise send
+        or delegated, the stop we would otherwise send
         at 0%/100% is therefore redundant — and for toggle actively harmful, as
         re-pulsing the direction relay restarts the already-stopped motor. Such
         modes return True so auto-stop skips the relay stop (and run-on) at an
         endpoint while still stopping mid-travel, where nothing self-stops.
 
-        Switch mode overrides this to False: its direction relay is latched ON
-        for the whole travel, so reaching an endpoint must still de-energize it.
+        Switch mode, pulse with ``send_endpoint_stop`` and command-echo wrapped
+        covers override this to False.
         """
         return True
 
@@ -280,8 +281,8 @@ class MovementLifecycleMixin(_MixinBase):
 
         Mirrors the travel endpoint logic: at the tilt endpoints (0%/100%) the
         tilt motor self-stops on its own limit, so the stop is skipped (and for
-        toggle a re-pulse would restart it) — except in switch mode, whose
-        latched tilt relay must still be de-energized. Mid-tilt always stops.
+        toggle a re-pulse would restart it) — except on hardware that does not
+        self-stop. Mid-tilt always stops.
         """
         current_tilt = (
             self.tilt_calc.current_position() if self._has_tilt_support() else None
@@ -316,11 +317,12 @@ class MovementLifecycleMixin(_MixinBase):
 
         Auto-stop skips the relay stop for externally-triggered movements
         (``_self_initiated_movement`` False): the trigger came from outside HA,
-        and for momentary modes (pulse/toggle/wrapped) the relay was a brief
+        and for momentary modes (toggle/wrapped) the relay was a brief
         pulse that has already self-released — there is nothing to de-energize,
         so they keep this no-op. Switch mode latches its direction relay ON for
         the whole travel, so it overrides this to turn the relay off (only if
         still on); otherwise the relay stays energized at the endpoint forever.
+        Pulse overrides it to send its stop when ``send_endpoint_stop`` is on.
         """
         return
 
@@ -427,8 +429,8 @@ class MovementLifecycleMixin(_MixinBase):
         Momentary hardware self-stops at its limits, and a 'stop' pulse to a
         stopped motor is a movement command (#153) or a go-to-favourite (#133).
         Skip when the travel axis never ran under this lifecycle, or when it is
-        settled at an endpoint the motor self-stopped at. Switch mode
-        (_self_stops_at_endpoints False) always de-energizes.
+        settled at an endpoint the motor self-stopped at. Hardware that does
+        not self-stop (_self_stops_at_endpoints False) always gets the stop.
         """
         if not self._self_stops_at_endpoints():
             await self._async_handle_command(SERVICE_STOP_COVER)
