@@ -1,6 +1,7 @@
 """Integration tests for mode-specific behavior.
 
-Tests toggle mode stop-before-reverse and pulse mode relay pulsing.
+Tests toggle mode stop-before-reverse, pulse mode relay pulsing and the run-on
+of a wrapped cover whose state mirrors the last command.
 """
 
 from __future__ import annotations

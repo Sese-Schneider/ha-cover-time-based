@@ -1070,12 +1070,12 @@ class TestCalibrationStopIdempotent:
 
     The travel/tilt-time protocol is "press Finish when the cover reaches the
     endpoint" — the motor has already self-stopped at its limit an instant
-    earlier on momentary hardware (toggle/pulse/wrapped). Sending a stop there
+    earlier on momentary hardware. Sending a stop there
     is itself a movement command: on toggle-opposite it pulses the *opposite*
     relay = drives off (#153); on toggle same-button it restarts the motor; on
     pulse with send_endpoint_stop=False it's a go-to-favourite reposition
-    (#133). Switch mode's latched relay is the one case that must still be
-    de-energized, and cancel always stops regardless of hardware — the user is
+    (#133). Hardware that does not self-stop still gets the stop, and cancel
+    always stops regardless of hardware — the user is
     bailing mid-run and a running untracked motor is the worse failure.
     """
 

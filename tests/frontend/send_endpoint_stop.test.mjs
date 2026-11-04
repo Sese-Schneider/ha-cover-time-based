@@ -164,7 +164,7 @@ test("toggle mode hides the endpoint run-on row (4 travel rows)", async () => {
   expect(timingInputCount(card)).toBe(4);
 });
 
-test("wrapped mode hides the endpoint run-on row (4 travel rows)", async () => {
+test("wrapped cover with no stored position reporting hides the endpoint run-on row (4 travel rows)", async () => {
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: wrappedCfg(),
@@ -199,11 +199,13 @@ test("choosing 'State mirrors the last command' reveals the endpoint run-on row"
   card = await mountCard(makeHass(), {
     selectedEntity: "cover.x",
     config: wrappedCfg(),
-    activeTab: "timing",
+    activeTab: "device",
   });
-  expect(timingInputCount(card)).toBe(4);
 
-  card._onPositionReportingChange({ target: { value: "command_echo" } });
+  const select = card.shadowRoot.querySelector("#position-reporting-select");
+  select.value = "command_echo";
+  select.dispatchEvent(new Event("change"));
+  card._activeTab = "timing";
   await card.updateComplete;
 
   expect(timingInputCount(card)).toBe(5);
