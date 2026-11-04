@@ -1,12 +1,13 @@
 /**
  * The close-includes-tilt switch and its label, on a Home Assistant without
  * ha-formfield (removed in 2026.11).
+ *
+ * Run: npm run test:fe -- tests/frontend/close_includes_tilt_label.test.mjs
  */
 
 import { test, expect, afterEach, vi } from "vitest";
 import { makeHass } from "./helpers/hass.mjs";
 import { mountCard, defineHaStubs, toggleByLabel } from "./helpers/mount.mjs";
-import { translate } from "../../custom_components/cover_time_based/frontend/translations.js";
 
 defineHaStubs();
 let card;
@@ -16,7 +17,7 @@ afterEach(() => {
   card = null;
 });
 
-const LABEL = translate("en", "tilt.close_includes_tilt");
+const LABEL = "Close cover also closes slats";
 
 async function mountTiltCard(over = {}) {
   card = await mountCard(makeHass(), {

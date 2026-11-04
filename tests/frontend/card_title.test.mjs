@@ -1,4 +1,8 @@
-/** The selected cover's name at the top of the configuration card. */
+/**
+ * The selected cover's name at the top of the configuration card.
+ *
+ * Run: npm run test:fe -- tests/frontend/card_title.test.mjs
+ */
 
 import { test, expect, afterEach, vi } from "vitest";
 import { makeHass } from "./helpers/hass.mjs";

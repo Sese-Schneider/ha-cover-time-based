@@ -88,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Each HA channel runs on the lowest Python its HA pin supports.
+        # Each HA channel runs on the lowest Python it supports.
         # stable, beta and dev track current HA, which (2026.3+) requires
         # Python 3.14. minimum pins our declared floor (HA 2025.2.0); its
         # pytest-homeassistant-custom-component only supports 3.13, so that leg

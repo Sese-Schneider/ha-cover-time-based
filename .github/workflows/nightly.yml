@@ -1,15 +1,14 @@
 name: Nightly (latest deps)
 
 # Exercises the integration against the newest upstream dependencies every day,
-# separately from PR CI (.github/workflows/tests.yml), which pins specific HA
-# channels. This is the early-warning system for HA-side drift: it installs the
-# newest stable, beta and dev HA with their test harness and runs the suite. A
-# failure on any of the three fails the run, and a job that does not end up on
-# the HA version it asked for fails too.
+# separately from PR CI (.github/workflows/tests.yml). This is the early-warning
+# system for HA-side drift: it installs the newest stable, beta and dev HA with
+# their test harness and runs the suite. A failure on any of the three fails the
+# run, and a job that does not end up on the HA version it asked for fails too.
 #
 # hassfest + HACS already validate daily in hassfest.yml and hacs.yml (same
 # @master/@main actions on a cron), so this workflow only adds the
-# pytest-against-latest leg they don't cover.
+# pytest-against-latest legs they don't cover.
 
 on:
   schedule:
