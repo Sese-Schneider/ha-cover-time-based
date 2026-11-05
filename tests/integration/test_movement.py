@@ -14,11 +14,11 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_component import DATA_INSTANCES
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import (
+
+from tests.ha_harness import (
     MockConfigEntry,
     async_fire_time_changed,
 )
-
 from tests.helpers import FakeClock
 
 from .conftest import DOMAIN

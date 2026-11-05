@@ -9,7 +9,8 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from tests.ha_harness import MockConfigEntry
 
 from .conftest import DOMAIN
 

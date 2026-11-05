@@ -8,17 +8,18 @@ from datetime import timedelta
 import homeassistant.util.dt as dt_util
 import pytest
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import MAJOR_VERSION, MINOR_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-)
 
 from custom_components.cover_time_based.device_link import (
     LINK_BY_DEVICE_ENTRY,
     ONE_OWNER_DEVICES,
+)
+from tests.ha_harness import (
+    MockConfigEntry,
+    async_fire_time_changed,
 )
 
 DOMAIN = "cover_time_based"
@@ -503,4 +504,9 @@ async def test_newer_home_assistant_puts_the_device_name_in_front(
 
     er.async_get(hass).async_update_entity(ours.entity_id, name="Lounge shade")
     await hass.async_block_till_done()
-    assert hass.states.get(ours.entity_id).attributes["friendly_name"] == "Lounge shade"
+    renamed = (
+        "Lounge blind motor Lounge shade"
+        if (MAJOR_VERSION, MINOR_VERSION) >= (2026, 11)
+        else "Lounge shade"
+    )
+    assert hass.states.get(ours.entity_id).attributes["friendly_name"] == renamed

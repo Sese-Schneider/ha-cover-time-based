@@ -28,8 +28,8 @@
     an emergency with `git push --no-verify`.
 - Before creating a PR run `ruff check .`, `ruff format .`, `npx pyright`, and
     for the card `npm run lint` and `npm run format:check`.
-- CI runs the tests against stable, dev and minimum (HA 2025.2.0) channels;
-    the hook only runs against the locally installed HA.
+- CI runs the tests against stable, beta, dev and minimum (HA 2025.2.0)
+    channels; the hook only runs against the locally installed HA.
 - New user-facing strings must be translated into every language: backend in
     `strings.json` + `translations/<lang>.json`, card in
     `frontend/translations.js`. See `TRANSLATING.md`.
