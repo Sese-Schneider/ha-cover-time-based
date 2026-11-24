@@ -26,7 +26,7 @@ import { loadSelectedEntity, saveSelectedEntity } from "./selection-storage.js";
 import { translate } from "./translations.js";
 import { loadDismissedLangs, persistLangDismissed } from "./language-banner.js";
 import { cardStyles } from "./card-styles.js";
-import { renderCard } from "./card-render.js";
+import { renderCard, favouriteGesture } from "./card-render.js";
 import { buildConfigExport, exportFilename, downloadJson } from "./config-export.js";
 
 class CoverTimeBasedCard extends LitElement {
@@ -224,6 +224,8 @@ class CoverTimeBasedCard extends LitElement {
       ["#position-select", this._knownPosition],
       ["#control-mode-select", this._config?.control_mode || "switch"],
       ["#tilt-mode-select", this._config?.tilt_mode || "none"],
+      ["#favourite-gesture-select", this._config ? favouriteGesture(this._config) : "none"],
+      ["#favourite-action-select", this._config?.favourite_action || "track"],
     ];
     for (const [sel, value] of syncs) {
       const el = this.shadowRoot?.querySelector(sel);

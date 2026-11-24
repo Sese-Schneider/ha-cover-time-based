@@ -102,6 +102,26 @@ export const EN = {
   "recalibrate_before_position.label": "Fully open before moving to a position (Beta)",
   "recalibrate_before_position.helper":
     "For covers with no position feedback that a remote can also move. Drives the cover fully open before each position command, so the move starts from a known position instead of a drifted guess. Roughly doubles the travel of every move, and on inline or sequential tilt it moves the cover when you adjust the slats.",
+  "favourite.label": "Favourite position",
+  "favourite.helper":
+    "A position the cover can be sent to in one step. Some motors store a favourite of their own and go to it when both buttons are held: set the same position here so the cover can follow that move, or have a plain motor driven there on the same gesture.",
+  "favourite.position": "Position",
+  "favourite.tilt": "Tilt",
+  "favourite.unset_hint": "Leave empty for no favourite.",
+  "favourite.use_current": "Use current position",
+  "favourite.gesture": "Recalled by",
+  "favourite.gesture_none": "The action only",
+  "favourite.gesture_both_inputs": "Both inputs held on",
+  "favourite.gesture_entity": "An entity holding a state",
+  "favourite.trigger_entity": "Trigger entity",
+  "favourite.trigger_state": "State",
+  "favourite.hold_time": "Hold time",
+  "favourite.action": "On the gesture",
+  "favourite.action_track": "Follow the motor, send nothing",
+  "favourite.action_drive": "Move the cover there",
+  "favourite.action_helper":
+    "Follow: the motor goes to its own favourite and the cover only tracks it. Move: the motor has no favourite, so the cover drives it there.",
+  "favourite.tilt_motor_note": "With a separate tilt motor, following tracks the travel only.",
   "resync.label": "Resync",
   "resync.helper":
     "Tell the integration the cover's true position after it was moved by the physical button or an RF remote. This re-anchors tracking and stops the motor if Home Assistant is still driving it; it never starts one.",
@@ -287,6 +307,27 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Abrir totalmente antes de mover para uma posição (Beta)",
     "recalibrate_before_position.helper":
       "Para estores sem retorno de posição que também podem ser movidos por um telecomando. Antes de cada comando de definir posição, move primeiro o estore para totalmente aberto, para que o movimento comece a partir de uma posição conhecida em vez de uma estimativa desviada. Isto duplica, grosso modo, o tempo de deslocamento de cada movimento e, na inclinação durante o deslocamento ou na inclinação sequencial, ajustar as lâminas também move o estore.",
+    "favourite.label": "Posição favorita",
+    "favourite.helper":
+      "Uma posição para a qual o estore pode ser enviado de uma só vez. Alguns motores guardam a sua própria favorita e vão até ela quando os dois botões são mantidos premidos: defina aqui a mesma posição para que o estore acompanhe esse movimento, ou para que um motor simples seja levado até lá com o mesmo gesto.",
+    "favourite.position": "Posição",
+    "favourite.tilt": "Inclinação",
+    "favourite.unset_hint": "Deixe vazio para não ter favorita.",
+    "favourite.use_current": "Usar a posição atual",
+    "favourite.gesture": "Chamada por",
+    "favourite.gesture_none": "Apenas a ação",
+    "favourite.gesture_both_inputs": "Ambas as entradas mantidas ligadas",
+    "favourite.gesture_entity": "Uma entidade que mantém um estado",
+    "favourite.trigger_entity": "Entidade de acionamento",
+    "favourite.trigger_state": "Estado",
+    "favourite.hold_time": "Tempo de pressão",
+    "favourite.action": "Com o gesto",
+    "favourite.action_track": "Acompanhar o motor, sem enviar nada",
+    "favourite.action_drive": "Mover o estore até lá",
+    "favourite.action_helper":
+      "Acompanhar: o motor vai para a sua própria favorita e o estore apenas o segue. Mover: o motor não tem favorita, por isso o estore leva-o até lá.",
+    "favourite.tilt_motor_note":
+      "Com um motor de inclinação separado, o acompanhamento segue apenas o curso.",
     "resync.label": "Ressincronizar",
     "resync.helper":
       "Indica à integração a posição real do estore depois de ter sido movido pelo botão físico ou por um telecomando RF. Isto reancora o rastreio da posição e para o motor se o Home Assistant ainda o estiver a acionar; nunca o põe em movimento.",
@@ -471,6 +512,27 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Otwórz w pełni przed przejściem do pozycji (Beta)",
     "recalibrate_before_position.helper":
       "Dla rolet bez informacji zwrotnej o pozycji, które mogą być poruszane również pilotem. Przed każdym poleceniem ustawienia pozycji najpierw otwiera roletę w pełni, dzięki czemu ruch zaczyna się od znanej pozycji, a nie od nieaktualnego przybliżenia. Z grubsza podwaja czas ruchu przy każdym przesunięciu, a przy nachyleniu w trakcie ruchu lub nachyleniu sekwencyjnym regulacja listew porusza także samą roletę.",
+    "favourite.label": "Ulubiona pozycja",
+    "favourite.helper":
+      "Pozycja, do której roletę można wysłać jednym krokiem. Niektóre silniki zapamiętują własną ulubioną pozycję i jadą do niej po przytrzymaniu obu przycisków: ustaw tu tę samą pozycję, aby roleta śledziła ten ruch albo aby zwykły silnik był tam doprowadzany tym samym gestem.",
+    "favourite.position": "Pozycja",
+    "favourite.tilt": "Nachylenie",
+    "favourite.unset_hint": "Pozostaw puste, aby nie mieć ulubionej pozycji.",
+    "favourite.use_current": "Użyj bieżącej pozycji",
+    "favourite.gesture": "Wywoływana przez",
+    "favourite.gesture_none": "Tylko akcję",
+    "favourite.gesture_both_inputs": "Oba wejścia przytrzymane włączone",
+    "favourite.gesture_entity": "Encję utrzymującą stan",
+    "favourite.trigger_entity": "Encja wyzwalająca",
+    "favourite.trigger_state": "Stan",
+    "favourite.hold_time": "Czas przytrzymania",
+    "favourite.action": "Po geście",
+    "favourite.action_track": "Śledź silnik, niczego nie wysyłaj",
+    "favourite.action_drive": "Przesuń tam roletę",
+    "favourite.action_helper":
+      "Śledź: silnik jedzie do własnej ulubionej pozycji, a roleta tylko to śledzi. Przesuń: silnik nie ma ulubionej pozycji, więc roleta go tam doprowadza.",
+    "favourite.tilt_motor_note":
+      "Przy osobnym silniku nachylenia śledzenie obejmuje tylko przesuw.",
     "resync.label": "Resynchronizacja",
     "resync.helper":
       "Poinformuj integrację o rzeczywistej pozycji rolety po tym, jak została poruszona fizycznym przyciskiem lub pilotem RF. To ponownie zakotwicza śledzenie pozycji i zatrzymuje silnik, jeśli Home Assistant nadal nim steruje; nigdy go nie uruchamia.",
@@ -655,6 +717,27 @@ export const TRANSLATIONS = {
       "Vor einer Positionsfahrt zuerst vollständig öffnen (Beta)",
     "recalibrate_before_position.helper":
       "Für Rollläden ohne Positionsrückmeldung, die sich auch per Fernbedienung bewegen lassen. Fährt den Rollladen vor jedem Positionsbefehl zuerst vollständig auf, sodass die Fahrt von einer bekannten Position statt von einer abgedrifteten Schätzung beginnt. Verdoppelt dadurch etwa die Fahrzeit jeder Fahrt, und bei Neigung während der Fahrt oder bei sequenzieller Neigung bewegt sich der Rollladen mit, sobald du die Lamellen verstellst.",
+    "favourite.label": "Favoritenposition",
+    "favourite.helper":
+      "Eine Position, die der Rollladen in einem Schritt anfahren kann. Manche Motoren speichern einen eigenen Favoriten und fahren ihn an, wenn beide Tasten gehalten werden: Stelle hier dieselbe Position ein, damit der Rollladen dieser Fahrt folgt oder ein einfacher Motor mit derselben Geste dorthin gefahren wird.",
+    "favourite.position": "Position",
+    "favourite.tilt": "Neigung",
+    "favourite.unset_hint": "Leer lassen für keinen Favoriten.",
+    "favourite.use_current": "Aktuelle Position verwenden",
+    "favourite.gesture": "Aufgerufen durch",
+    "favourite.gesture_none": "Nur die Aktion",
+    "favourite.gesture_both_inputs": "Beide Eingänge gehalten",
+    "favourite.gesture_entity": "Eine Entität, die einen Zustand hält",
+    "favourite.trigger_entity": "Auslöser-Entität",
+    "favourite.trigger_state": "Zustand",
+    "favourite.hold_time": "Haltezeit",
+    "favourite.action": "Bei der Geste",
+    "favourite.action_track": "Dem Motor folgen, nichts senden",
+    "favourite.action_drive": "Den Rollladen dorthin fahren",
+    "favourite.action_helper":
+      "Folgen: Der Motor fährt seinen eigenen Favoriten an und der Rollladen verfolgt nur mit. Fahren: Der Motor hat keinen Favoriten, also fährt der Rollladen ihn dorthin.",
+    "favourite.tilt_motor_note":
+      "Mit einem separaten Neigungsmotor wird beim Folgen nur die Fahrt verfolgt.",
     "resync.label": "Neuausrichtung",
     "resync.helper":
       "Teile der Integration die tatsächliche Position des Rollladens mit, nachdem er über die physische Taste oder eine RF-Fernbedienung bewegt wurde. Dies verankert die Positionsverfolgung neu und stoppt den Motor, falls Home Assistant ihn noch ansteuert; gestartet wird er dabei nie.",
@@ -842,6 +925,27 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Apri completamente prima di spostare in posizione (Beta)",
     "recalibrate_before_position.helper":
       "Per le tapparelle senza retroazione di posizione che possono essere spostate anche da un telecomando. Porta la tapparella in apertura completa prima di ogni comando di posizionamento, così il movimento parte da una posizione nota anziché da una stima alla deriva. Raddoppia circa il tempo di corsa di ogni movimento e, con l'inclinazione durante la corsa o quella sequenziale, muove la tapparella anche quando regoli le lamelle.",
+    "favourite.label": "Posizione preferita",
+    "favourite.helper":
+      "Una posizione a cui la tapparella può essere mandata in un solo passo. Alcuni motori memorizzano una propria preferita e la raggiungono quando si tengono premuti i due pulsanti: imposta qui la stessa posizione perché la tapparella segua quel movimento, oppure perché un motore semplice venga portato lì con lo stesso gesto.",
+    "favourite.position": "Posizione",
+    "favourite.tilt": "Inclinazione",
+    "favourite.unset_hint": "Lascia vuoto per non avere una preferita.",
+    "favourite.use_current": "Usa la posizione attuale",
+    "favourite.gesture": "Richiamata da",
+    "favourite.gesture_none": "Solo l'azione",
+    "favourite.gesture_both_inputs": "Entrambi gli ingressi tenuti attivi",
+    "favourite.gesture_entity": "Un'entità che mantiene uno stato",
+    "favourite.trigger_entity": "Entità di attivazione",
+    "favourite.trigger_state": "Stato",
+    "favourite.hold_time": "Tempo di tenuta",
+    "favourite.action": "Con il gesto",
+    "favourite.action_track": "Segui il motore, non inviare nulla",
+    "favourite.action_drive": "Porta lì la tapparella",
+    "favourite.action_helper":
+      "Segui: il motore va alla propria preferita e la tapparella si limita a seguirlo. Porta: il motore non ha una preferita, quindi è la tapparella a portarlo lì.",
+    "favourite.tilt_motor_note":
+      "Con un motore di inclinazione separato, il seguire riguarda solo la corsa.",
     "resync.label": "Risincronizza",
     "resync.helper":
       "Comunica all'integrazione la posizione reale della tapparella dopo che è stata mossa con il pulsante fisico o un telecomando RF. Questo riancora il tracciamento della posizione e ferma il motore se Home Assistant lo sta ancora comandando; non lo avvia mai.",
@@ -1026,6 +1130,27 @@ export const TRANSLATIONS = {
       "Volledig openen voordat naar een positie wordt bewogen (Beta)",
     "recalibrate_before_position.helper":
       "Voor rolluiken zonder positieterugkoppeling die ook door een afstandsbediening bewogen kunnen worden. Beweegt het rolluik vóór elk positiecommando eerst volledig open, zodat de beweging start vanaf een bekende positie in plaats van een afgedwaalde schatting. Verdubbelt daarmee ongeveer de looptijd van elke beweging, en bij kantelen tijdens de beweging of sequentieel kantelen beweegt het rolluik mee zodra je de lamellen verstelt.",
+    "favourite.label": "Favoriete positie",
+    "favourite.helper":
+      "Een positie waar het rolluik in één stap naartoe kan. Sommige motoren onthouden een eigen favoriet en gaan ernaartoe als beide knoppen worden vastgehouden: stel hier dezelfde positie in zodat het rolluik die beweging volgt, of zodat een gewone motor er met hetzelfde gebaar naartoe wordt gestuurd.",
+    "favourite.position": "Positie",
+    "favourite.tilt": "Kanteling",
+    "favourite.unset_hint": "Laat leeg voor geen favoriet.",
+    "favourite.use_current": "Huidige positie gebruiken",
+    "favourite.gesture": "Opgeroepen door",
+    "favourite.gesture_none": "Alleen de actie",
+    "favourite.gesture_both_inputs": "Beide ingangen ingeschakeld gehouden",
+    "favourite.gesture_entity": "Een entiteit die een status vasthoudt",
+    "favourite.trigger_entity": "Triggerentiteit",
+    "favourite.trigger_state": "Status",
+    "favourite.hold_time": "Vasthoudtijd",
+    "favourite.action": "Bij het gebaar",
+    "favourite.action_track": "De motor volgen, niets versturen",
+    "favourite.action_drive": "Het rolluik ernaartoe sturen",
+    "favourite.action_helper":
+      "Volgen: de motor gaat naar zijn eigen favoriet en het rolluik volgt alleen. Sturen: de motor heeft geen favoriet, dus het rolluik stuurt hem ernaartoe.",
+    "favourite.tilt_motor_note":
+      "Met een aparte kantelmotor wordt bij volgen alleen de loop gevolgd.",
     "resync.label": "Hersynchroniseren",
     "resync.helper":
       "Vertel de integratie de werkelijke positie van het rolluik nadat het met de fysieke knop of een RF-afstandsbediening is bewogen. Dit verankert het volgen van de positie opnieuw en stopt de motor als Home Assistant die nog aanstuurt; hij wordt er nooit door gestart.",
@@ -1209,6 +1334,27 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Ouvrir complètement avant d'aller à une position (Bêta)",
     "recalibrate_before_position.helper":
       "Pour les volets sans retour de position qu'une télécommande peut aussi actionner. Ouvre complètement le volet avant chaque commande de position, afin que le mouvement parte d'une position connue plutôt que d'une estimation partie à la dérive. Cela double à peu près la course de chaque mouvement et, avec une inclinaison pendant la course ou une inclinaison séquentielle, le volet bouge lorsque vous réglez les lames.",
+    "favourite.label": "Position favorite",
+    "favourite.helper":
+      "Une position vers laquelle le volet peut être envoyé en une seule étape. Certains moteurs mémorisent leur propre favorite et s'y rendent quand les deux boutons sont maintenus : réglez ici la même position pour que le volet suive ce mouvement, ou pour qu'un moteur simple y soit amené avec le même geste.",
+    "favourite.position": "Position",
+    "favourite.tilt": "Inclinaison",
+    "favourite.unset_hint": "Laissez vide pour ne pas avoir de favorite.",
+    "favourite.use_current": "Utiliser la position actuelle",
+    "favourite.gesture": "Rappelée par",
+    "favourite.gesture_none": "L'action uniquement",
+    "favourite.gesture_both_inputs": "Les deux entrées maintenues actives",
+    "favourite.gesture_entity": "Une entité qui garde un état",
+    "favourite.trigger_entity": "Entité de déclenchement",
+    "favourite.trigger_state": "État",
+    "favourite.hold_time": "Durée de maintien",
+    "favourite.action": "Lors du geste",
+    "favourite.action_track": "Suivre le moteur, ne rien envoyer",
+    "favourite.action_drive": "Y amener le volet",
+    "favourite.action_helper":
+      "Suivre : le moteur va à sa propre favorite et le volet se contente de le suivre. Amener : le moteur n'a pas de favorite, c'est donc le volet qui l'y amène.",
+    "favourite.tilt_motor_note":
+      "Avec un moteur d'inclinaison séparé, le suivi ne concerne que la course.",
     "resync.label": "Resynchroniser",
     "resync.helper":
       "Indiquez à l'intégration la position réelle du volet après qu'il a été actionné par le bouton physique ou une télécommande RF. Cela réancre le suivi de position et arrête le moteur si Home Assistant le pilote encore ; il n'est jamais démarré.",
@@ -1392,6 +1538,27 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Abrir totalmente antes de mover a una posición (Beta)",
     "recalibrate_before_position.helper":
       "Para persianas sin realimentación de posición que un mando a distancia también puede mover. Abre la persiana por completo antes de cada comando de posición, para que el movimiento parta de una posición conocida en lugar de una estimación desviada. Duplica aproximadamente el recorrido de cada movimiento y, con la inclinación durante el recorrido o la inclinación secuencial, mueve la persiana cuando ajustas las lamas.",
+    "favourite.label": "Posición favorita",
+    "favourite.helper":
+      "Una posición a la que la persiana puede enviarse en un solo paso. Algunos motores guardan su propia favorita y van a ella cuando se mantienen pulsados los dos botones: configura aquí la misma posición para que la persiana siga ese movimiento, o para que un motor sencillo sea llevado allí con el mismo gesto.",
+    "favourite.position": "Posición",
+    "favourite.tilt": "Inclinación",
+    "favourite.unset_hint": "Déjalo vacío para no tener favorita.",
+    "favourite.use_current": "Usar la posición actual",
+    "favourite.gesture": "Se activa con",
+    "favourite.gesture_none": "Solo la acción",
+    "favourite.gesture_both_inputs": "Ambas entradas mantenidas activas",
+    "favourite.gesture_entity": "Una entidad que mantiene un estado",
+    "favourite.trigger_entity": "Entidad de activación",
+    "favourite.trigger_state": "Estado",
+    "favourite.hold_time": "Tiempo de pulsación",
+    "favourite.action": "Con el gesto",
+    "favourite.action_track": "Seguir al motor, sin enviar nada",
+    "favourite.action_drive": "Llevar la persiana allí",
+    "favourite.action_helper":
+      "Seguir: el motor va a su propia favorita y la persiana solo lo sigue. Llevar: el motor no tiene favorita, así que la persiana lo lleva allí.",
+    "favourite.tilt_motor_note":
+      "Con un motor de inclinación independiente, el seguimiento solo abarca el recorrido.",
     "resync.label": "Resincronizar",
     "resync.helper":
       "Indica a la integración la posición real de la persiana después de haberla movido con el botón físico o un mando a distancia RF. Esto reancla el seguimiento de la posición y detiene el motor si Home Assistant todavía lo está accionando; nunca lo pone en marcha.",
@@ -1578,6 +1745,27 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Obre del tot abans de moure's a una posició (Beta)",
     "recalibrate_before_position.helper":
       "Per a persianes sense realimentació de posició que un comandament a distància també pot moure. Obre la persiana del tot abans de cada ordre de posició, perquè el moviment parteixi d'una posició coneguda en lloc d'una estimació desviada. Duplica aproximadament el recorregut de cada moviment i, amb la inclinació durant el recorregut o la inclinació seqüencial, mou la persiana quan ajustes les lamel·les.",
+    "favourite.label": "Posició preferida",
+    "favourite.helper":
+      "Una posició a la qual la persiana es pot enviar en un sol pas. Alguns motors desen la seva pròpia preferida i hi van quan es mantenen premuts els dos botons: defineix aquí la mateixa posició perquè la persiana segueixi aquest moviment, o perquè un motor senzill hi sigui portat amb el mateix gest.",
+    "favourite.position": "Posició",
+    "favourite.tilt": "Inclinació",
+    "favourite.unset_hint": "Deixa-ho buit per no tenir preferida.",
+    "favourite.use_current": "Fes servir la posició actual",
+    "favourite.gesture": "S'activa amb",
+    "favourite.gesture_none": "Només l'acció",
+    "favourite.gesture_both_inputs": "Les dues entrades mantingudes actives",
+    "favourite.gesture_entity": "Una entitat que manté un estat",
+    "favourite.trigger_entity": "Entitat d'activació",
+    "favourite.trigger_state": "Estat",
+    "favourite.hold_time": "Temps de pulsació",
+    "favourite.action": "Amb el gest",
+    "favourite.action_track": "Segueix el motor, no enviïs res",
+    "favourite.action_drive": "Porta-hi la persiana",
+    "favourite.action_helper":
+      "Segueix: el motor va a la seva pròpia preferida i la persiana només el segueix. Porta: el motor no té preferida, així que la persiana l'hi porta.",
+    "favourite.tilt_motor_note":
+      "Amb un motor d'inclinació separat, el seguiment només inclou el recorregut.",
     "resync.label": "Resincronitza",
     "resync.helper":
       "Indica a la integració la posició real de la persiana després d'haver-la mogut amb el botó físic o un comandament a distància RF. Això reancora el seguiment de la posició i atura el motor si Home Assistant encara l'està accionant; mai no el posa en marxa.",
@@ -1762,6 +1950,26 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Před přesunem na pozici plně otevřít (Beta)",
     "recalibrate_before_position.helper":
       "Pro rolety bez zpětné vazby pozice, kterými může pohybovat i dálkový ovladač. Před každým příkazem na pozici roletu plně otevře, takže pohyb začíná ze známé pozice místo z odchýleného odhadu. Zhruba zdvojnásobí dráhu každého pohybu a u současného nebo sekvenčního náklonu pohne roletou, když upravujete lamely.",
+    "favourite.label": "Oblíbená pozice",
+    "favourite.helper":
+      "Pozice, na kterou lze roletu poslat jedním krokem. Některé motory si pamatují vlastní oblíbenou pozici a najedou na ni při podržení obou tlačítek: nastavte zde stejnou pozici, aby roleta tento pohyb sledovala, nebo aby byl obyčejný motor stejným gestem na tuto pozici doveden.",
+    "favourite.position": "Pozice",
+    "favourite.tilt": "Náklon",
+    "favourite.unset_hint": "Ponechte prázdné, pokud oblíbenou pozici nechcete.",
+    "favourite.use_current": "Použít aktuální pozici",
+    "favourite.gesture": "Vyvolána",
+    "favourite.gesture_none": "Pouze akcí",
+    "favourite.gesture_both_inputs": "Oběma vstupy drženými zapnuté",
+    "favourite.gesture_entity": "Entitou, která drží stav",
+    "favourite.trigger_entity": "Spouštěcí entita",
+    "favourite.trigger_state": "Stav",
+    "favourite.hold_time": "Doba podržení",
+    "favourite.action": "Při gestu",
+    "favourite.action_track": "Sledovat motor, nic neposílat",
+    "favourite.action_drive": "Přesunout tam roletu",
+    "favourite.action_helper":
+      "Sledovat: motor jede na vlastní oblíbenou pozici a roleta ho pouze sleduje. Přesunout: motor oblíbenou pozici nemá, takže ho tam roleta dovede.",
+    "favourite.tilt_motor_note": "Se samostatným motorem náklonu se sleduje pouze pojezd.",
     "resync.label": "Resynchronizace",
     "resync.helper":
       "Sdělte integraci skutečnou polohu rolety poté, co byla pohnuta fyzickým tlačítkem nebo RF dálkovým ovladačem. Tím se znovu ukotví sledování polohy a zastaví se motor, pokud jej Home Assistant stále ovládá; nikdy jej tím nespustí.",
@@ -1944,6 +2152,26 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Potpuno otvori pre pomeranja na poziciju (Beta)",
     "recalibrate_before_position.helper":
       "Za roletne bez povratne informacije o poziciji koje daljinski upravljač takođe može da pomera. Pre svake komande za poziciju roletnu potpuno otvara, pa kretanje počinje od poznate pozicije umesto od izmaknute procene. Otprilike udvostručuje kretanje pri svakom pomeranju, a kod istovremenog ili sekvencijalnog nagiba pomera roletnu kada podešavate lamele.",
+    "favourite.label": "Omiljena pozicija",
+    "favourite.helper":
+      "Pozicija na koju roletna može da se pošalje u jednom koraku. Neki motori pamte sopstvenu omiljenu poziciju i idu na nju kada se oba tastera drže pritisnuta: podesite ovde istu poziciju da bi roletna pratila to kretanje, ili da bi običan motor bio doveden tamo istim gestom.",
+    "favourite.position": "Pozicija",
+    "favourite.tilt": "Nagib",
+    "favourite.unset_hint": "Ostavite prazno ako ne želite omiljenu poziciju.",
+    "favourite.use_current": "Koristi trenutnu poziciju",
+    "favourite.gesture": "Poziva se",
+    "favourite.gesture_none": "Samo akcijom",
+    "favourite.gesture_both_inputs": "Sa oba ulaza koja se drže uključena",
+    "favourite.gesture_entity": "Entitetom koji zadržava stanje",
+    "favourite.trigger_entity": "Entitet okidača",
+    "favourite.trigger_state": "Stanje",
+    "favourite.hold_time": "Vreme držanja",
+    "favourite.action": "Na gest",
+    "favourite.action_track": "Prati motor, ne šalji ništa",
+    "favourite.action_drive": "Pomeri roletnu tamo",
+    "favourite.action_helper":
+      "Prati: motor ide na sopstvenu omiljenu poziciju, a roletna ga samo prati. Pomeri: motor nema omiljenu poziciju, pa ga roletna dovodi tamo.",
+    "favourite.tilt_motor_note": "Sa zasebnim motorom nagiba prati se samo hod.",
     "resync.label": "Ponovna sinhronizacija",
     "resync.helper":
       "Recite integraciji stvarnu poziciju roletne nakon što je pomerena fizičkim dugmetom ili RF daljinskim upravljačem. Ovo ponovo usidrava praćenje pozicije i zaustavlja motor ako njime Home Assistant i dalje upravlja; nikada ga ne pokreće.",
@@ -2123,6 +2351,26 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "פתיחה מלאה לפני מעבר למיקום (בטא)",
     "recalibrate_before_position.helper":
       "לתריסים ללא משוב מיקום שגם שלט רחוק יכול להזיז. פותח את התריס לגמרי לפני כל פקודת מיקום, כך שהתנועה מתחילה ממיקום ידוע ולא מהערכה שסטתה. מכפיל בערך את התנועה של כל הזזה, ובהטיה משולבת או רציפה הוא מזיז את התריס כשמכוונים את הרפפות.",
+    "favourite.label": "מיקום מועדף",
+    "favourite.helper":
+      "מיקום שאליו אפשר לשלוח את התריס בצעד אחד. מנועים מסוימים שומרים מיקום מועדף משלהם ונעים אליו כששני הלחצנים מוחזקים: הגדירו כאן את אותו מיקום כדי שהתריס יעקוב אחרי התנועה, או כדי שמנוע פשוט יובא לשם באותה מחווה.",
+    "favourite.position": "מיקום",
+    "favourite.tilt": "הטיה",
+    "favourite.unset_hint": "השאירו ריק כדי שלא יהיה מיקום מועדף.",
+    "favourite.use_current": "שימוש במיקום הנוכחי",
+    "favourite.gesture": "מופעל על ידי",
+    "favourite.gesture_none": "הפעולה בלבד",
+    "favourite.gesture_both_inputs": "שתי הכניסות מוחזקות פעילות",
+    "favourite.gesture_entity": "ישות שמחזיקה במצב",
+    "favourite.trigger_entity": "ישות מפעילה",
+    "favourite.trigger_state": "מצב",
+    "favourite.hold_time": "זמן החזקה",
+    "favourite.action": "בעת המחווה",
+    "favourite.action_track": "לעקוב אחרי המנוע, לא לשלוח דבר",
+    "favourite.action_drive": "להזיז את התריס לשם",
+    "favourite.action_helper":
+      "מעקב: המנוע נע למיקום המועדף שלו והתריס רק עוקב. הזזה: למנוע אין מיקום מועדף, ולכן התריס מביא אותו לשם.",
+    "favourite.tilt_motor_note": "עם מנוע הטיה נפרד, המעקב כולל רק את המהלך.",
     "resync.label": "סנכרון מחדש",
     "resync.helper":
       "מדווח לשילוב על המיקום האמיתי של התריס לאחר שהוזז בלחצן הפיזי או בשלט רחוק RF. פעולה זו מעגנת מחדש את המעקב ועוצרת את המנוע אם Home Assistant עדיין מפעיל אותו; היא לעולם אינה מפעילה מנוע.",
@@ -2306,6 +2554,26 @@ export const TRANSLATIONS = {
     "recalibrate_before_position.label": "Pred premikom na položaj popolnoma odpri (Beta)",
     "recalibrate_before_position.helper":
       "Za senčila brez povratne informacije o položaju, ki jih lahko premika tudi daljinec. Pred vsakim ukazom za položaj senčilo popolnoma odpre, tako da se premik začne z znanega položaja namesto z ocene, ki se je sčasoma oddaljila od dejanskega. Približno podvoji pot vsakega premika, pri sočasnem ali zaporednem nagibu pa senčilo premakne, ko nastavljate lamele.",
+    "favourite.label": "Priljubljeni položaj",
+    "favourite.helper":
+      "Položaj, na katerega je senčilo mogoče poslati v enem koraku. Nekateri motorji si zapomnijo svoj priljubljeni položaj in se nanj premaknejo, ko držite oba gumba: tukaj nastavite isti položaj, da senčilo sledi temu gibanju ali da se navaden motor z isto gesto pripelje tja.",
+    "favourite.position": "Položaj",
+    "favourite.tilt": "Naklon",
+    "favourite.unset_hint": "Pustite prazno, če priljubljenega položaja ne želite.",
+    "favourite.use_current": "Uporabi trenutni položaj",
+    "favourite.gesture": "Prikliče ga",
+    "favourite.gesture_none": "Samo dejanje",
+    "favourite.gesture_both_inputs": "Oba vhoda, držana vklopljena",
+    "favourite.gesture_entity": "Entiteta, ki zadrži stanje",
+    "favourite.trigger_entity": "Sprožilna entiteta",
+    "favourite.trigger_state": "Stanje",
+    "favourite.hold_time": "Čas držanja",
+    "favourite.action": "Ob gesti",
+    "favourite.action_track": "Sledi motorju, ne pošiljaj ničesar",
+    "favourite.action_drive": "Premakni senčilo tja",
+    "favourite.action_helper":
+      "Sledi: motor gre na svoj priljubljeni položaj in senčilo mu le sledi. Premakni: motor nima priljubljenega položaja, zato ga senčilo pripelje tja.",
+    "favourite.tilt_motor_note": "Pri ločenem motorju za naklon sledenje zajema samo hod.",
     "resync.label": "Ponovna sinhronizacija",
     "resync.helper":
       "Integraciji sporočite dejanski položaj senčila, potem ko ga je premaknil fizični gumb ali radijski (RF) daljinec. S tem se sledenje znova zasidra in motor ustavi, če ga Home Assistant še poganja; nikoli ga ne zažene.",

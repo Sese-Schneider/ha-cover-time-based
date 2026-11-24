@@ -150,6 +150,7 @@ export function renderConfigSections(card) {
             ${renderControlMode(card, c)} ${renderInputEntities(card, c)}
             ${renderTiltSupport(card, c)}
             ${renderTiltMotorSection(card, c)}
+            ${renderFavourite(card, c)}
             ${c.control_mode === "single_button" ? renderResyncControl(card) : ""}
           </fieldset>
         `
@@ -726,6 +727,170 @@ export function renderTiltMotorSection(card, c) {
           },
         })}
       </div>
+    </div>
+  `;
+}
+
+// Modes whose open and close inputs are two entities a gesture can read.
+const BOTH_INPUTS_MODES = ["switch", "pulse", "toggle", "toggle_opposite"];
+
+export function coverHasTilt(c) {
+  return c.control_mode !== "single_button" && (c.tilt_mode || "none") !== "none";
+}
+
+// The stored gesture, as the select shows it. "Both inputs" on a mode that has
+// no such pair is inert on the backend, so the select reads "none" for it.
+export function favouriteGesture(c) {
+  const gesture = c.favourite_gesture || "none";
+  if (gesture === "both_inputs" && !BOTH_INPUTS_MODES.includes(c.control_mode || "switch")) {
+    return "none";
+  }
+  return gesture;
+}
+
+export function renderFavourite(card, c) {
+  const hasTilt = coverHasTilt(c);
+  const hasFavourite =
+    c.favourite_position != null || (hasTilt && c.favourite_tilt_position != null);
+  const gesture = favouriteGesture(c);
+  const action = c.favourite_action || "track";
+  const bothInputs = BOTH_INPUTS_MODES.includes(c.control_mode || "switch");
+  const attributes = card._getEntityState()?.attributes;
+  const currentPosition = attributes?.current_position;
+  const currentTilt = attributes?.current_tilt_position;
+
+  const onPercent = (key) => (e) => {
+    const raw = e.target.value.trim();
+    if (raw === "") {
+      card._updateLocal({ [key]: null });
+      return;
+    }
+    const value = parseInt(raw);
+    if (!isNaN(value) && value >= 0 && value <= 100) {
+      card._updateLocal({ [key]: value });
+    }
+  };
+  const percentField = (labelKey, key) =>
+    renderTextfield({
+      type: "number",
+      min: "0",
+      max: "100",
+      step: "1",
+      suffix: "%",
+      label: card._t(labelKey),
+      value: c[key] != null ? String(c[key]) : "",
+      onChange: onPercent(key),
+    });
+  const option = (prefix, selected, value) => html`
+    <option value=${value} ?selected=${selected === value}>
+      ${card._t(`${prefix}_${value}`)}
+    </option>
+  `;
+
+  return html`
+    <div class="section favourite">
+      <div class="field-label">${card._t("favourite.label")}</div>
+      <div class="helper-text">
+        ${card._t("favourite.helper")} ${card._t("favourite.unset_hint")}
+      </div>
+      <div class="favourite-fields">
+        ${percentField("favourite.position", "favourite_position")}
+        ${hasTilt ? percentField("favourite.tilt", "favourite_tilt_position") : ""}
+      </div>
+      <div class="button-row">
+        <ha-button
+          id="favourite-use-current"
+          ?disabled=${currentPosition == null}
+          @click=${() =>
+            card._updateLocal({
+              favourite_position: currentPosition,
+              ...(hasTilt && currentTilt != null ? { favourite_tilt_position: currentTilt } : {}),
+            })}
+          >${card._t("favourite.use_current")}</ha-button
+        >
+      </div>
+      ${
+        hasFavourite
+          ? html`
+            <div class="field-label favourite-sub-label">${card._t("favourite.gesture")}</div>
+            <select
+              class="ha-select"
+              id="favourite-gesture-select"
+              @change=${(e) => card._updateLocal({ favourite_gesture: e.target.value })}
+            >
+              ${option("favourite.gesture", gesture, "none")}
+              ${bothInputs ? option("favourite.gesture", gesture, "both_inputs") : ""}
+              ${option("favourite.gesture", gesture, "entity")}
+            </select>
+          `
+          : ""
+      }
+      ${
+        hasFavourite && gesture === "entity"
+          ? html`
+            <div class="entity-grid inline-field">
+              <ha-entity-picker
+                id="favourite-trigger-entity"
+                .hass=${card.hass}
+                .value=${c.favourite_trigger_entity_id || ""}
+                label=${card._t("favourite.trigger_entity")}
+                @value-changed=${(e) =>
+                  card._onSwitchEntityChange("favourite_trigger_entity_id", e)}
+              ></ha-entity-picker>
+              ${renderTextfield({
+                type: "text",
+                min: "",
+                max: "",
+                step: "",
+                label: card._t("favourite.trigger_state"),
+                value: c.favourite_trigger_state || "",
+                onChange: (e) =>
+                  card._updateLocal({ favourite_trigger_state: e.target.value.trim() || null }),
+              })}
+            </div>
+          `
+          : ""
+      }
+      ${
+        hasFavourite && gesture !== "none"
+          ? html`
+            <div class="inline-field">
+              ${renderTextfield({
+                type: "number",
+                min: "0.5",
+                max: "60",
+                step: "0.5",
+                suffix: "s",
+                label: card._t("favourite.hold_time"),
+                value: String(c.favourite_hold_time ?? 3),
+                onChange: (e) => {
+                  const value = parseFloat(e.target.value);
+                  if (!isNaN(value) && value > 0) {
+                    card._updateLocal({ favourite_hold_time: value });
+                  }
+                },
+              })}
+            </div>
+            <div class="field-label favourite-sub-label">${card._t("favourite.action")}</div>
+            <select
+              class="ha-select"
+              id="favourite-action-select"
+              @change=${(e) => card._updateLocal({ favourite_action: e.target.value })}
+            >
+              ${option("favourite.action", action, "track")}
+              ${option("favourite.action", action, "drive")}
+            </select>
+            <div class="helper-text">
+              ${card._t("favourite.action_helper")}
+              ${
+                action === "track" && c.tilt_mode === "dual_motor"
+                  ? card._t("favourite.tilt_motor_note")
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
     </div>
   `;
 }

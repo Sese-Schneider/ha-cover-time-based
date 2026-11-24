@@ -285,6 +285,23 @@ export const cardStyles = css`
         margin-top: 8px;
       }
 
+      /* Favourite position */
+      .favourite-fields {
+        display: flex;
+        gap: 16px;
+        margin-top: 8px;
+      }
+
+      .favourite-fields ha-textfield,
+      .favourite-fields ha-input {
+        flex: 1;
+      }
+
+      .favourite .button-row,
+      .favourite-sub-label {
+        margin-top: 12px;
+      }
+
       ha-textfield {
         --mdc-text-field-fill-color: transparent;
       }

@@ -626,8 +626,11 @@ The slats are reached with the configured tilt mode. With a separate tilt motor
 a tracked favourite follows the travel only, because a gesture on the travel
 inputs says nothing about the other motor.
 
-These options are not in the configuration card yet. They can be set with the
-`cover_time_based/update_config` websocket command.
+In the configuration card the favourite has its own section on the Device tab.
+**Use current position** copies the position and tilt the cover is showing, so
+you can move the cover to the motor's favourite once and store it. The gesture
+and its settings appear once a favourite is set, and **Both inputs** is offered
+only in the modes that have an open and a close entity.
 
 ## Calibration
 
