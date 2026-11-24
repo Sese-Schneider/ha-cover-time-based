@@ -795,6 +795,7 @@ export function renderFavourite(card, c) {
         ${percentField("favourite.position", "favourite_position")}
         ${hasTilt ? percentField("favourite.tilt", "favourite_tilt_position") : ""}
       </div>
+      ${hasTilt ? html`<div class="helper-text">${card._t("favourite.fields_hint")}</div>` : ""}
       <div class="button-row">
         <ha-button
           id="favourite-use-current"

@@ -62,6 +62,7 @@ function change(el, value) {
 test("with no favourite only the position is offered", async () => {
   await mount(toggleCfg());
   expect(fields(card)).toHaveLength(1);
+  expect(section(card).textContent).not.toContain("or both");
   expect(gestureSelect(card)).toBeNull();
   expect(actionSelect(card)).toBeNull();
 });
@@ -69,6 +70,13 @@ test("with no favourite only the position is offered", async () => {
 test("a cover with slats also offers the tilt", async () => {
   await mount(toggleCfg({ tilt_mode: "sequential_open" }));
   expect(fields(card)).toHaveLength(2);
+  expect(section(card).textContent).toContain("Set the position, the tilt, or both.");
+});
+
+test("the tilt alone is a favourite too", async () => {
+  await mount(toggleCfg({ tilt_mode: "sequential_open", favourite_tilt_position: 30 }));
+  expect(gestureSelect(card)).not.toBeNull();
+  expect(section(card).querySelector("#favourite-clear").hasAttribute("disabled")).toBe(false);
 });
 
 test("typing a position stores it, clearing it removes the favourite", async () => {
