@@ -14,12 +14,24 @@ from homeassistant.helpers import entity_registry as er
 
 from .calibration import CALIBRATABLE_ATTRIBUTES
 from .const import (
+    CONF_FAVOURITE_ACTION,
+    CONF_FAVOURITE_GESTURE,
+    CONF_FAVOURITE_HOLD_TIME,
+    CONF_FAVOURITE_POSITION,
+    CONF_FAVOURITE_TILT_POSITION,
+    CONF_FAVOURITE_TRIGGER_ENTITY_ID,
+    CONF_FAVOURITE_TRIGGER_STATE,
     CONF_LINK_TO_DEVICE,
     CONF_REVERSE_ON_OPPOSITE_COMMAND,
+    DEFAULT_FAVOURITE_ACTION,
+    DEFAULT_FAVOURITE_GESTURE,
+    DEFAULT_FAVOURITE_HOLD_TIME,
     DEFAULT_LINK_TO_DEVICE,
     DEFAULT_POSITION_REPORTING,
     DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     DOMAIN,
+    FAVOURITE_ACTION_VALUES,
+    FAVOURITE_GESTURE_VALUES,
     POSITION_REPORTING_VALUES,
 )
 from .cover import (
@@ -251,6 +263,34 @@ _CONFIG_FIELDS: tuple[_ConfigField, ...] = (
     ),
     _ConfigField(
         "link_to_device", CONF_LINK_TO_DEVICE, _BOOL, default=DEFAULT_LINK_TO_DEVICE
+    ),
+    _ConfigField("favourite_position", CONF_FAVOURITE_POSITION, _PERCENT_OR_NONE),
+    _ConfigField(
+        "favourite_tilt_position", CONF_FAVOURITE_TILT_POSITION, _PERCENT_OR_NONE
+    ),
+    _ConfigField(
+        "favourite_gesture",
+        CONF_FAVOURITE_GESTURE,
+        vol.Any(None, vol.In(FAVOURITE_GESTURE_VALUES)),
+        default=DEFAULT_FAVOURITE_GESTURE,
+    ),
+    _ConfigField(
+        "favourite_trigger_entity_id", CONF_FAVOURITE_TRIGGER_ENTITY_ID, _ENTITY
+    ),
+    _ConfigField(
+        "favourite_trigger_state", CONF_FAVOURITE_TRIGGER_STATE, vol.Any(str, None)
+    ),
+    _ConfigField(
+        "favourite_hold_time",
+        CONF_FAVOURITE_HOLD_TIME,
+        _DELAY,
+        default=DEFAULT_FAVOURITE_HOLD_TIME,
+    ),
+    _ConfigField(
+        "favourite_action",
+        CONF_FAVOURITE_ACTION,
+        vol.Any(None, vol.In(FAVOURITE_ACTION_VALUES)),
+        default=DEFAULT_FAVOURITE_ACTION,
     ),
 )
 

@@ -94,6 +94,13 @@ EXPECTED_DEFAULT_CONFIG = {
     "recalibrate_before_position": False,
     "skip_stop_when_idle": False,
     "link_to_device": False,
+    "favourite_position": None,
+    "favourite_tilt_position": None,
+    "favourite_gesture": "none",
+    "favourite_trigger_entity_id": None,
+    "favourite_trigger_state": None,
+    "favourite_hold_time": 3.0,
+    "favourite_action": "track",
 }
 
 # The exact ws_key -> conf_key mapping every persisted field goes through.
@@ -131,6 +138,13 @@ EXPECTED_FIELD_MAP = {
     "close_includes_tilt": CONF_CLOSE_INCLUDES_TILT,
     "assumed_state": CONF_ASSUMED_STATE,
     "link_to_device": CONF_LINK_TO_DEVICE,
+    "favourite_position": "favourite_position",
+    "favourite_tilt_position": "favourite_tilt_position",
+    "favourite_gesture": "favourite_gesture",
+    "favourite_trigger_entity_id": "favourite_trigger_entity_id",
+    "favourite_trigger_state": "favourite_trigger_state",
+    "favourite_hold_time": "favourite_hold_time",
+    "favourite_action": "favourite_action",
 }
 
 # The complete set of keys the update_config schema declares: the fixed frame

@@ -730,7 +730,7 @@ class TestAsyncSetupPlatform:
         assert len(added_entities) == 1
         assert isinstance(added_entities[0], SwitchModeCover)
         # Should register services
-        assert platform.async_register_entity_service.call_count == 3
+        assert platform.async_register_entity_service.call_count == 4
 
 
 # ===================================================================
@@ -770,7 +770,7 @@ class TestAsyncSetupEntry:
 
         assert len(added_entities) == 1
         assert added_entities[0].name == "My Cover"
-        assert platform.async_register_entity_service.call_count == 3
+        assert platform.async_register_entity_service.call_count == 4
 
 
 # ===================================================================

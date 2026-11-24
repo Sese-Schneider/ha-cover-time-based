@@ -86,6 +86,10 @@
           "description": "The cover's true current state."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Go to favourite",
+      "description": "Move the cover to the favourite position and tilt set in its configuration."
     }
   }
 }

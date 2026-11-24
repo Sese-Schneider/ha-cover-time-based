@@ -509,6 +509,15 @@ class SwitchEchoMixin(_MixinBase):
         # correct intent of ours.
         self._relay_intent.pop(entity_id, None)
 
+        # Both inputs held on is a gesture of its own (the favourite), not an
+        # open and a close. Claimed here so no mode has to know about it.
+        self._triggered_externally = True
+        try:
+            if await self._favourite_intercepts_input(entity_id, old_val, new_val):
+                return
+        finally:
+            self._triggered_externally = False
+
         # External state change (physical button / remote / HA button).
         # Delegate to mode-specific handlers which start/stop position
         # tracking normally via async_open_cover / async_close_cover etc.

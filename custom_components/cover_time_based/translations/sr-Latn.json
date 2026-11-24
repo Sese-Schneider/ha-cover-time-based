@@ -86,6 +86,10 @@
           "description": "Stvarno trenutno stanje roletne."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Idi na omiljeni položaj",
+      "description": "Pomera roletnu u omiljeni položaj i nagib podešene u njenoj konfiguraciji."
     }
   }
 }

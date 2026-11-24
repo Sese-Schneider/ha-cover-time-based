@@ -31,6 +31,13 @@ from .const import (
     CONF_COVER_ENTITY_ID,
     CONF_DIRECTION_CHANGE_DELAY,
     CONF_ENDPOINT_RUNON_TIME,
+    CONF_FAVOURITE_ACTION,
+    CONF_FAVOURITE_GESTURE,
+    CONF_FAVOURITE_HOLD_TIME,
+    CONF_FAVOURITE_POSITION,
+    CONF_FAVOURITE_TILT_POSITION,
+    CONF_FAVOURITE_TRIGGER_ENTITY_ID,
+    CONF_FAVOURITE_TRIGGER_STATE,
     CONF_FORCE_ENDPOINT_REDRIVE,
     CONF_FORCE_TIME_BASED_POSITION,
     CONF_INVERT,
@@ -58,6 +65,9 @@ from .const import (
     DEFAULT_ASSUMED_STATE,
     DEFAULT_CLOSE_INCLUDES_TILT,
     DEFAULT_ENDPOINT_RUNON_TIME,
+    DEFAULT_FAVOURITE_ACTION,
+    DEFAULT_FAVOURITE_GESTURE,
+    DEFAULT_FAVOURITE_HOLD_TIME,
     DEFAULT_FORCE_ENDPOINT_REDRIVE,
     DEFAULT_FORCE_TIME_BASED_POSITION,
     DEFAULT_INVERT,
@@ -121,6 +131,7 @@ DEFAULT_PULSE_TIME = 1.0
 SERVICE_SET_KNOWN_POSITION = "set_known_position"
 SERVICE_SET_KNOWN_TILT_POSITION = "set_known_tilt_position"
 SERVICE_RESYNC = "resync"
+SERVICE_GO_TO_FAVOURITE = "go_to_favourite"
 
 # ---------------------------------------------------------------------------
 # Schema definitions
@@ -414,6 +425,19 @@ def _create_cover_from_options(options, device_id="", name=""):
         "reverse_on_opposite_command": options.get(
             CONF_REVERSE_ON_OPPOSITE_COMMAND, DEFAULT_REVERSE_ON_OPPOSITE_COMMAND
         ),
+        "favourite_position": options.get(CONF_FAVOURITE_POSITION),
+        "favourite_tilt_position": options.get(CONF_FAVOURITE_TILT_POSITION),
+        "favourite_gesture": options.get(
+            CONF_FAVOURITE_GESTURE, DEFAULT_FAVOURITE_GESTURE
+        ),
+        "favourite_trigger_entity_id": options.get(CONF_FAVOURITE_TRIGGER_ENTITY_ID),
+        "favourite_trigger_state": options.get(CONF_FAVOURITE_TRIGGER_STATE),
+        "favourite_hold_time": options.get(
+            CONF_FAVOURITE_HOLD_TIME, DEFAULT_FAVOURITE_HOLD_TIME
+        ),
+        "favourite_action": options.get(
+            CONF_FAVOURITE_ACTION, DEFAULT_FAVOURITE_ACTION
+        ),
     }
 
     if control_mode == CONTROL_MODE_WRAPPED:
@@ -636,6 +660,9 @@ def _register_services(platform):
     )
     platform.async_register_entity_service(
         SERVICE_RESYNC, RESYNC_SCHEMA, "async_resync"
+    )
+    platform.async_register_entity_service(
+        SERVICE_GO_TO_FAVOURITE, {}, "async_go_to_favourite"
     )
 
     hass = platform.hass

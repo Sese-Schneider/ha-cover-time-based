@@ -86,6 +86,10 @@
           "description": "Lo stato reale attuale della tapparella."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Vai alla preferita",
+      "description": "Porta la tapparella alla posizione e all'inclinazione preferite impostate nella sua configurazione."
     }
   }
 }

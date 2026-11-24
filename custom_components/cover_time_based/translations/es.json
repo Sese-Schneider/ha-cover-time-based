@@ -86,6 +86,10 @@
           "description": "El estado real actual de la persiana."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Ir a la favorita",
+      "description": "Mueve la persiana a la posición y la inclinación favoritas definidas en su configuración."
     }
   }
 }

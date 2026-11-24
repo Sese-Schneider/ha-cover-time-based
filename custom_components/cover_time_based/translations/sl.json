@@ -86,6 +86,10 @@
           "description": "Dejansko trenutno stanje senčila."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Pojdi na priljubljeni položaj",
+      "description": "Premakne senčilo v priljubljeni položaj in naklon, nastavljena v njegovi konfiguraciji."
     }
   }
 }

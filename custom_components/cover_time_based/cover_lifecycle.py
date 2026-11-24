@@ -93,6 +93,8 @@ class MovementLifecycleMixin(_MixinBase):
                 # point is that it cannot rot.
                 self._disarm_recalibrated_leg()
                 await self._async_persist_position()
+                # A tracked favourite whose slats move after its travel.
+                await self._continue_tracked_favourite()
                 return
 
             if self._tilt_restore_active:

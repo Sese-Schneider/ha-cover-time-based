@@ -107,3 +107,9 @@ resync:
               value: closed
             - label: "Open"
               value: open
+
+go_to_favourite:
+  target:
+    entity:
+      domain: cover
+      integration: cover_time_based

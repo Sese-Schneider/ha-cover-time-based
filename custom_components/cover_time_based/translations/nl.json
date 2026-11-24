@@ -86,6 +86,10 @@
           "description": "De werkelijke huidige status van het rolluik."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Ga naar favoriet",
+      "description": "Beweegt de bedekking naar de favoriete positie en kanteling uit de configuratie."
     }
   }
 }

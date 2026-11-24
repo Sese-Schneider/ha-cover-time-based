@@ -86,6 +86,10 @@
           "description": "O estado real atual do estore."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Ir para a favorita",
+      "description": "Move a persiana para a posição e a inclinação favoritas definidas na sua configuração."
     }
   }
 }

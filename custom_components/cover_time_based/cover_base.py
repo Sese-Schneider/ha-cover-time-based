@@ -48,12 +48,16 @@ from .const import (
     CONF_TRAVEL_TIME_CLOSE,
     CONF_TRAVEL_TIME_OPEN,
     CONF_WAIT_FOR_RELAY_FEEDBACK,
+    DEFAULT_FAVOURITE_ACTION,
+    DEFAULT_FAVOURITE_GESTURE,
+    DEFAULT_FAVOURITE_HOLD_TIME,
     DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     DIRECTION_CHANGE_DELAY,
     RESYNC_POSITIONS,
 )
 from .cover_calibration import CalibrationMixin
 from .cover_echo_filter import SwitchEchoMixin
+from .cover_favourite import FavouriteMixin
 from .cover_lifecycle import MovementLifecycleMixin
 from .cover_movement import MovementMixin
 from .position_storage import async_get_position_store
@@ -99,6 +103,7 @@ class CoverTimeBased(
     SwitchEchoMixin,
     MovementMixin,
     MovementLifecycleMixin,
+    FavouriteMixin,
     CoverEntity,
     RestoreEntity,
 ):
@@ -160,8 +165,24 @@ class CoverTimeBased(
         recalibrate_before_position=False,
         skip_stop_when_idle=False,
         reverse_on_opposite_command=DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
+        favourite_position=None,
+        favourite_tilt_position=None,
+        favourite_gesture=DEFAULT_FAVOURITE_GESTURE,
+        favourite_trigger_entity_id=None,
+        favourite_trigger_state=None,
+        favourite_hold_time=DEFAULT_FAVOURITE_HOLD_TIME,
+        favourite_action=DEFAULT_FAVOURITE_ACTION,
     ):
         """Initialize the cover."""
+        self._init_favourite(
+            position=favourite_position,
+            tilt_position=favourite_tilt_position,
+            gesture=favourite_gesture,
+            trigger_entity_id=favourite_trigger_entity_id,
+            trigger_state=favourite_trigger_state,
+            hold_time=favourite_hold_time,
+            action=favourite_action,
+        )
         self._unique_id = device_id
         self._assumed_state = assumed_state
         self._force_endpoint_redrive = force_endpoint_redrive
@@ -414,6 +435,7 @@ class CoverTimeBased(
                         self._async_switch_state_changed,
                     )
                 )
+        self._favourite_added_to_hass()
 
     async def _cancel_background_pulses(self) -> None:
         """Cancel any background relay-pulse / press-sequence work on removal.
@@ -446,6 +468,7 @@ class CoverTimeBased(
         self._supersede_movement()
         self._clear_multiphase_tilt_state()
         self.stop_auto_updater()
+        self._favourite_will_remove()
         for unsub in self._state_listener_unsubs:
             unsub()
         self._state_listener_unsubs.clear()

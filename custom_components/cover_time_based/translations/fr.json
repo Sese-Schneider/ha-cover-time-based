@@ -86,6 +86,10 @@
           "description": "L'état réel actuel du volet."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Aller à la position favorite",
+      "description": "Déplace le volet vers la position et l'inclinaison favorites définies dans sa configuration."
     }
   }
 }

@@ -86,6 +86,10 @@
           "description": "Der tatsächliche aktuelle Zustand des Rollladens."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Zur Favoritenposition fahren",
+      "description": "Fährt die Abdeckung in die in ihrer Konfiguration festgelegte Favoritenposition und -neigung."
     }
   }
 }

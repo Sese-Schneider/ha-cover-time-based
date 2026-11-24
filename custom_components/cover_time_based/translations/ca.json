@@ -86,6 +86,10 @@
           "description": "L'estat real actual de la persiana."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Ves a la preferida",
+      "description": "Mou la persiana a la posició i la inclinació preferides definides a la seva configuració."
     }
   }
 }

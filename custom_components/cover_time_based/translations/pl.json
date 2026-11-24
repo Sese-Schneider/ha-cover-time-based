@@ -86,6 +86,10 @@
           "description": "Rzeczywisty aktualny stan rolety."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Przejdź do ulubionej",
+      "description": "Przesuwa roletę do ulubionej pozycji i nachylenia ustawionych w jej konfiguracji."
     }
   }
 }

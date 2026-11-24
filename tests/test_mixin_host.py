@@ -1,6 +1,6 @@
 """The shared ``_CoverHost`` typing surface must stay typing-only.
 
-The movement, lifecycle, calibration and switch-echo mixins declare the members
+The movement, lifecycle, calibration, switch-echo and favourite mixins declare the members
 of ``CoverTimeBased`` they borrow via a single ``_CoverHost`` stub, named as a
 base only under ``TYPE_CHECKING``. If that conditional base ever leaks into a
 real inheritance, ``_CoverHost`` would join the runtime MRO and the mixins would
@@ -11,6 +11,7 @@ that regression is caught.
 from custom_components.cover_time_based import (
     cover_calibration,
     cover_echo_filter,
+    cover_favourite,
     cover_lifecycle,
     cover_movement,
 )
@@ -21,12 +22,14 @@ MIXIN_MODULES = (
     cover_lifecycle,
     cover_echo_filter,
     cover_calibration,
+    cover_favourite,
 )
 MIXINS = (
     cover_movement.MovementMixin,
     cover_lifecycle.MovementLifecycleMixin,
     cover_echo_filter.SwitchEchoMixin,
     cover_calibration.CalibrationMixin,
+    cover_favourite.FavouriteMixin,
 )
 
 
@@ -49,10 +52,11 @@ def test_cover_host_stays_out_of_the_runtime_mro():
     mro_names = [cls.__name__ for cls in CoverTimeBased.__mro__]
     assert "_CoverHost" not in mro_names
     # The documented mixin order is preserved.
-    assert mro_names[:5] == [
+    assert mro_names[:6] == [
         "CoverTimeBased",
         "CalibrationMixin",
         "SwitchEchoMixin",
         "MovementMixin",
         "MovementLifecycleMixin",
+        "FavouriteMixin",
     ]

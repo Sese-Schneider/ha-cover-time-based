@@ -178,3 +178,48 @@ DEFAULT_SKIP_STOP_WHEN_IDLE = False
 # cover's name, so turning it on for existing covers would rename them.
 CONF_LINK_TO_DEVICE = "link_to_device"
 DEFAULT_LINK_TO_DEVICE = False
+
+# Favourite position. Many dry-contact motors store a favourite ("my") position
+# and go to it when both of their inputs are held closed for a few seconds. The
+# cover keeps that pair (position, and optionally tilt) so it can follow the
+# move, and can drive a plain motor there on the same gesture. Unset by
+# default: with no favourite configured nothing below does anything.
+CONF_FAVOURITE_POSITION = "favourite_position"
+CONF_FAVOURITE_TILT_POSITION = "favourite_tilt_position"
+
+# What recalls the favourite from the hardware side.
+#   none         — only the go_to_favourite service.
+#   both_inputs  — the open and close inputs both on for the hold time.
+#   entity       — a trigger entity holding a given state for the hold time
+#                  (e.g. a button-action sensor reading "stop").
+CONF_FAVOURITE_GESTURE = "favourite_gesture"
+FAVOURITE_GESTURE_NONE = "none"
+FAVOURITE_GESTURE_BOTH_INPUTS = "both_inputs"
+FAVOURITE_GESTURE_ENTITY = "entity"
+FAVOURITE_GESTURE_VALUES = (
+    FAVOURITE_GESTURE_NONE,
+    FAVOURITE_GESTURE_BOTH_INPUTS,
+    FAVOURITE_GESTURE_ENTITY,
+)
+DEFAULT_FAVOURITE_GESTURE = FAVOURITE_GESTURE_NONE
+
+CONF_FAVOURITE_TRIGGER_ENTITY_ID = "favourite_trigger_entity_id"
+CONF_FAVOURITE_TRIGGER_STATE = "favourite_trigger_state"
+
+# How long the gesture has to be held. Motors differ; 3 s is a common value.
+CONF_FAVOURITE_HOLD_TIME = "favourite_hold_time"
+DEFAULT_FAVOURITE_HOLD_TIME = 3.0
+
+# What the gesture does once recognised.
+#   track — the motor moves by itself: follow it, send nothing.
+#   drive — the motor has no favourite of its own: move the cover there.
+CONF_FAVOURITE_ACTION = "favourite_action"
+FAVOURITE_ACTION_TRACK = "track"
+FAVOURITE_ACTION_DRIVE = "drive"
+FAVOURITE_ACTION_VALUES = (FAVOURITE_ACTION_TRACK, FAVOURITE_ACTION_DRIVE)
+DEFAULT_FAVOURITE_ACTION = FAVOURITE_ACTION_TRACK
+
+# A press that turns out to be the first half of a both-inputs gesture has
+# already been followed as an ordinary open or close. If the second input
+# arrives within this window the tracker is put back where it was.
+FAVOURITE_GESTURE_ROLLBACK_WINDOW = 1.0

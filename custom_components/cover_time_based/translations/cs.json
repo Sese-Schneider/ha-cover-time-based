@@ -86,6 +86,10 @@
           "description": "Skutečný aktuální stav rolety."
         }
       }
+    },
+    "go_to_favourite": {
+      "name": "Přejít na oblíbenou",
+      "description": "Přesune roletu do oblíbené polohy a náklonu nastavených v její konfiguraci."
     }
   }
 }

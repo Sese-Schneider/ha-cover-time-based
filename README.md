@@ -591,6 +591,44 @@ the change. On the inline and sequential tilt modes, where the slats share the
 travel motor, it also means adjusting the slats moves the whole cover. This
 feature is new and its behaviour may still change.
 
+#### Favourite position
+
+Many motors with dry-contact inputs store a favourite ("my") position and go to
+it when both inputs are held closed for a few seconds. The motor only knows a
+point on its own run, so the cover stores what that point means: a **favourite
+position** and, for covers with slats, a **favourite tilt**. Both are optional
+and unset by default, and with neither set nothing here does anything.
+
+The favourite can be recalled in three ways:
+
+- The [`go_to_favourite`](#cover_time_basedgo_to_favourite) action, which always
+  moves the cover there.
+- **Both inputs** (`favourite_gesture: both_inputs`): the open and close
+  entities both on for the hold time. Releasing early cancels it.
+- **A trigger entity** (`favourite_gesture: entity`): the entity in
+  `favourite_trigger_entity_id` holding the state in `favourite_trigger_state`
+  for the hold time. Use this for a wrapped cover, or for a relay module that
+  reports "both buttons pressed" on a sensor of its own.
+
+What a recognised gesture does is set by `favourite_action`:
+
+- `track` (default): the motor is already moving to its own favourite, so the
+  cover sends nothing and runs its position and slats to the favourite, as it
+  follows any other press of a wall button. The two presses that start the
+  gesture are not read as an open and a close.
+- `drive`: the motor has no favourite of its own, so the cover moves it there.
+  This gives a plain motor the same gesture as one with a built-in favourite.
+
+`favourite_hold_time` is how long the gesture must be held, 3 seconds by default.
+Set it to what your motor needs.
+
+The slats are reached with the configured tilt mode. With a separate tilt motor
+a tracked favourite follows the travel only, because a gesture on the travel
+inputs says nothing about the other motor.
+
+These options are not in the configuration card yet. They can be set with the
+`cover_time_based/update_config` websocket command.
+
 ## Calibration
 
 The **Calibration** tab is where you tell the integration where the cover is now
@@ -783,6 +821,11 @@ Add a second button with `state: open` (and an "open" icon) for the other
 direction. Older Home Assistant versions use `action: call-service` and
 `service: cover_time_based.resync` in place of `perform-action`/`perform_action`
 — the current names are aliases of those legacy ones, so either form works.
+
+### `cover_time_based.go_to_favourite`
+
+Moves the cover to its [favourite position](#favourite-position) and tilt. It
+takes no fields, and fails if the cover has no favourite configured.
 
 ## Troubleshooting
 

@@ -1,3 +1,9 @@
+## 4.16.0 (unreleased)
+
+### Features
+
+- **A cover can have a favourite position** ([#329](https://github.com/Sese-Schneider/ha-cover-time-based/issues/329)). Motors with a built-in favourite go to it when both inputs are held for a few seconds; the cover can now follow that move instead of staying where it was, and can drive a plain motor to the same position on the same gesture. The new `go_to_favourite` action recalls it from Home Assistant. The options are not in the configuration card yet.
+
 ## 4.15.0 (2026-11-05)
 
 ### Features
