@@ -818,7 +818,9 @@ export function renderFavourite(card, c) {
       ${
         hasFavourite
           ? html`
-            <div class="field-label favourite-sub-label">${card._t("favourite.gesture")}</div>
+            <label class="favourite-caption" for="favourite-gesture-select"
+              >${card._t("favourite.gesture")}</label
+            >
             <select
               class="ha-select"
               id="favourite-gesture-select"
@@ -877,7 +879,9 @@ export function renderFavourite(card, c) {
                 },
               })}
             </div>
-            <div class="field-label favourite-sub-label">${card._t("favourite.action")}</div>
+            <label class="favourite-caption" for="favourite-action-select"
+              >${card._t("favourite.action")}</label
+            >
             <select
               class="ha-select"
               id="favourite-action-select"

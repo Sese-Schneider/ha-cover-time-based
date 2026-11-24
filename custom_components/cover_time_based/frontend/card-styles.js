@@ -297,9 +297,25 @@ export const cardStyles = css`
         flex: 1;
       }
 
-      .favourite .button-row,
-      .favourite-sub-label {
+      .favourite .button-row {
         margin-top: 12px;
+      }
+
+      /* The gesture's selects are fields of this one section, not sections of
+         their own: a small caption, as on the text fields around them. */
+      .favourite-caption {
+        display: block;
+        margin: 12px 0 4px;
+        font-size: 12px;
+        color: var(--secondary-text-color, #727272);
+      }
+
+      .favourite .helper-text {
+        margin-top: 4px;
+      }
+
+      .favourite > .helper-text:first-of-type {
+        margin-top: -4px;
       }
 
       ha-textfield {

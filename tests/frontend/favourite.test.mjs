@@ -105,6 +105,18 @@ test("a wrapped cover has no pair of inputs to hold", async () => {
   expect(actionSelect(card)).toBeNull();
 });
 
+test("the gesture fields are captioned fields, not headings of their own", async () => {
+  await mount(toggleCfg({ favourite_position: 0, favourite_gesture: "both_inputs" }));
+  const headings = [...section(card).querySelectorAll(".field-label")];
+  expect(headings.map((el) => el.textContent.trim())).toEqual(["Favourite position"]);
+  const captions = [...section(card).querySelectorAll("label.favourite-caption")];
+  expect(captions.map((el) => el.textContent.trim())).toEqual(["Recalled by", "On the gesture"]);
+  expect(captions.map((el) => el.getAttribute("for"))).toEqual([
+    "favourite-gesture-select",
+    "favourite-action-select",
+  ]);
+});
+
 test("choosing a gesture stores it", async () => {
   await mount(toggleCfg({ favourite_position: 0 }));
   const captured = capture(card);
