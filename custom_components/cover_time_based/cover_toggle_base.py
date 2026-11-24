@@ -15,13 +15,16 @@ stale-reappearance guard, direction-change orchestration and the shared
 open/close/tilt-open/tilt-close relay commands — lives here.
 """
 
+import asyncio
 import time
+from asyncio import sleep
 
 from homeassistant.const import (
     SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
 )
 
+from .const import ECHO_PENDING_WINDOW
 from .cover_switch import SwitchCoverTimeBased
 
 
@@ -42,9 +45,26 @@ class ToggleBaseCover(SwitchCoverTimeBased):
     # (see _pulse_relay).
     _own_echoes_after_confirming_on = 0
 
-    def __init__(self, relay_reports_off=True, **kwargs):
+    def __init__(
+        self,
+        relay_reports_off=True,
+        release_relay_after_pulse=False,
+        pulse_time=1.0,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self._relay_reports_off = relay_reports_off
+        # Releasing is a turn_off, which hardware that never reports its OFF
+        # reads as another activation pulse (see _turn_off_relay).
+        self._release_relay_after_pulse = (
+            release_relay_after_pulse and relay_reports_off
+        )
+        self._pulse_time = pulse_time
+        # entity_id -> the in-flight release task for that relay.
+        self._release_tasks: dict[str, asyncio.Task] = {}
+        if self._release_relay_after_pulse:
+            # The release's OFF follows the confirming ON of every pulse.
+            self._own_echoes_after_confirming_on = 1
         self._last_external_toggle_time = {}
         self._last_tilt_direction = None
 
@@ -152,6 +172,16 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         whole feedback wait (issue #231). The no-rising-edge branch marks
         nothing and never arms — there is no echo to gate on.
         """
+        # A release still pending from an earlier pulse will not fire: this
+        # pulse releases the relay itself, or schedules a release of its own.
+        self._cancel_relay_release(entity_id)
+        # The release of this pulse is one more echo, arriving a pulse later.
+        release_echoes = 1 if self._release_relay_after_pulse else 0
+        window = (
+            self._held_echo_window(self._pulse_time)
+            if release_echoes
+            else ECHO_PENDING_WINDOW
+        )
         is_on = self._switch_is_on(entity_id)
         if self._relay_reports_off and is_on:
             # Relay reports ON and we trust that report: release it first so the
@@ -163,7 +193,10 @@ class ToggleBaseCover(SwitchCoverTimeBased):
                 entity_id,
             )
             self._mark_driving_relay_pending(
-                entity_id, expected_transitions=2, arm=arm_feedback
+                entity_id,
+                expected_transitions=2 + release_echoes,
+                arm=arm_feedback,
+                base_timeout=window,
             )
             await self._turn_off_relay(entity_id)
         elif not is_on:
@@ -174,7 +207,10 @@ class ToggleBaseCover(SwitchCoverTimeBased):
                 entity_id,
             )
             self._mark_driving_relay_pending(
-                entity_id, expected_transitions=1, arm=arm_feedback
+                entity_id,
+                expected_transitions=1 + release_echoes,
+                arm=arm_feedback,
+                base_timeout=window,
             )
         else:
             # relay_reports_off is disabled and the relay still *reports* ON
@@ -197,6 +233,60 @@ class ToggleBaseCover(SwitchCoverTimeBased):
             {"entity_id": entity_id},
             stop=stop,
         )
+        if release_echoes:
+            self._schedule_relay_release(entity_id, stop=stop)
+
+    # --- Release after the pulse (release_relay_after_pulse) -----------------
+
+    async def _release_after_pulse(self, entity_id):
+        """Turn a pulsed relay OFF again once the pulse time has passed."""
+        try:
+            await sleep(self._pulse_time)
+            await self._turn_off_relay(entity_id)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            # Only clear the registry if we are still the registered task; a
+            # re-pulse may already have replaced us with a newer release.
+            if self._release_tasks.get(entity_id) is asyncio.current_task():
+                self._release_tasks.pop(entity_id, None)
+
+    def _schedule_relay_release(self, entity_id, stop=False) -> None:
+        """Schedule the deferred ``turn_off`` for a relay we just pulsed ON."""
+        # A removed entity's driving turn_on was refused by _call_service, so
+        # the relay is not ON; a stop pulse is exempt and still needs releasing.
+        if self._removed and not stop:
+            return
+        self._release_tasks[entity_id] = self.hass.async_create_task(
+            self._release_after_pulse(entity_id)
+        )
+
+    def _cancel_relay_release(self, entity_id) -> bool:
+        """Cancel a relay's pending release, dropping the echo counted for it.
+
+        Returns True when a live release was cancelled. Its ``turn_off`` will
+        never fire, so its pre-counted OFF echo would otherwise orphan a
+        pending count and swallow the next genuine press.
+        """
+        task = self._release_tasks.pop(entity_id, None)
+        if task is not None and not task.done():
+            task.cancel()
+            self._unmark_switch_pending(entity_id, 1)
+            return True
+        return False
+
+    async def _cancel_background_pulses(self) -> None:
+        """On removal, cancel every pending release and turn its relay off.
+
+        A relay caught mid-pulse is ON with its OFF still scheduled; cancelling
+        the task alone would leave it latched ON.
+        """
+        pending = list(self._release_tasks.items())
+        self._release_tasks.clear()
+        for entity_id, task in pending:
+            if not task.done():
+                task.cancel()
+            await self._turn_off_relay(entity_id)
 
     async def _turn_off_relay(self, entity_id):
         """The single, gated path for every toggle-mode ``turn_off``.
@@ -234,6 +324,7 @@ class ToggleBaseCover(SwitchCoverTimeBased):
         a ``turn_off`` on a relay already reporting OFF produces no state change
         to filter.
         """
+        self._cancel_relay_release(entity_id)
         if self._relay_reports_off and self._switch_is_on(entity_id):
             self._mark_switch_pending(entity_id, 1)
         await self._turn_off_relay(entity_id)

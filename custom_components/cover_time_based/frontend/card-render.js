@@ -1,6 +1,6 @@
 import { html } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 import { renderTextfield } from "./textfield-render.js";
-import { switchPickerDomains, showsPulseTime } from "./entity-filter.js";
+import { switchPickerDomains, showsPulseTime, offersRelayRelease } from "./entity-filter.js";
 import { STEPPED_CALIBRATION_ATTRIBUTES, TIMING_ATTRIBUTES } from "./constants.js";
 import { renderLanguageBanner, GITHUB_REPO_URL } from "./language-banner.js";
 
@@ -195,7 +195,7 @@ export function renderConfigSections(card) {
 
 export function renderControlMode(card, c) {
   const mode = c.control_mode || "switch";
-  const showPulseTime = showsPulseTime(mode);
+  const showPulseTime = showsPulseTime(mode, c);
 
   return html`
     <div class="section">
@@ -494,6 +494,17 @@ export function renderInputEntities(card, c) {
               "relay_reports_off.helper",
               c.relay_reports_off !== false,
               (e) => card._updateLocal({ relay_reports_off: e.target.checked }),
+            )
+          : ""
+      }
+      ${
+        offersRelayRelease(c)
+          ? renderToggleWithHelp(
+              card,
+              "release_relay_after_pulse.label",
+              "release_relay_after_pulse.helper",
+              c.release_relay_after_pulse === true,
+              (e) => card._updateLocal({ release_relay_after_pulse: e.target.checked }),
             )
           : ""
       }

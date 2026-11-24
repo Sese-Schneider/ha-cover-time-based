@@ -38,6 +38,7 @@ from .const import (
     CONF_POSITION_REPORTING,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
+    CONF_RELEASE_RELAY_AFTER_PULSE,
     CONF_REVERSE_ON_OPPOSITE_COMMAND,
     CONF_SEND_ENDPOINT_STOP,
     CONF_SKIP_STOP_WHEN_IDLE,
@@ -63,6 +64,7 @@ from .const import (
     DEFAULT_INVERT,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
+    DEFAULT_RELEASE_RELAY_AFTER_PULSE,
     DEFAULT_REVERSE_ON_OPPOSITE_COMMAND,
     DEFAULT_SEND_ENDPOINT_STOP,
     DEFAULT_SKIP_STOP_WHEN_IDLE,
@@ -449,6 +451,10 @@ def _create_cover_from_options(options, device_id="", name=""):
             relay_reports_off=options.get(
                 CONF_RELAY_REPORTS_OFF, DEFAULT_RELAY_REPORTS_OFF
             ),
+            release_relay_after_pulse=options.get(
+                CONF_RELEASE_RELAY_AFTER_PULSE, DEFAULT_RELEASE_RELAY_AFTER_PULSE
+            ),
+            pulse_time=pulse_time,
             **switch_args,
         )
     elif control_mode == CONTROL_MODE_TOGGLE_OPPOSITE:
@@ -456,6 +462,10 @@ def _create_cover_from_options(options, device_id="", name=""):
             relay_reports_off=options.get(
                 CONF_RELAY_REPORTS_OFF, DEFAULT_RELAY_REPORTS_OFF
             ),
+            release_relay_after_pulse=options.get(
+                CONF_RELEASE_RELAY_AFTER_PULSE, DEFAULT_RELEASE_RELAY_AFTER_PULSE
+            ),
+            pulse_time=pulse_time,
             **switch_args,
         )
     elif control_mode == CONTROL_MODE_SINGLE_BUTTON:

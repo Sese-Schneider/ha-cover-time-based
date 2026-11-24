@@ -49,10 +49,25 @@ export function switchLabelKey(baseKey, controlMode) {
  * Pulse mode holds the relay ON for that long; single-button mode holds the
  * button for that long on every press. Toggle relays are momentary and
  * self-releasing — the integration sends a single turn_on and never holds
- * the relay — so pulse_time is irrelevant there.
+ * the relay — so pulse_time is irrelevant there, unless the cover is told to
+ * turn the relay off itself (see releasesRelayAfterPulse).
  */
-export function showsPulseTime(controlMode) {
-  return TIMED_PRESS_MODES.has(controlMode);
+export function showsPulseTime(controlMode, config) {
+  return TIMED_PRESS_MODES.has(controlMode) || releasesRelayAfterPulse(config);
+}
+
+const TOGGLE_MODES = new Set(["toggle", "toggle_opposite"]);
+
+/** Whether the "Turn the relay off after the pulse" option applies at all. */
+export function offersRelayRelease(config) {
+  // The release is a turn_off, which hardware that never reports its OFF reads
+  // as another activation pulse.
+  return TOGGLE_MODES.has(config?.control_mode) && config?.relay_reports_off !== false;
+}
+
+/** Whether this cover turns its toggle relay off after the pulse time. */
+export function releasesRelayAfterPulse(config) {
+  return offersRelayRelease(config) && config?.release_relay_after_pulse === true;
 }
 
 // CoverEntityFeature bit flags.

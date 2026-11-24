@@ -39,6 +39,7 @@ from .cover import (
     CONF_PULSE_TIME,
     CONF_RECALIBRATE_BEFORE_POSITION,
     CONF_RELAY_REPORTS_OFF,
+    CONF_RELEASE_RELAY_AFTER_PULSE,
     CONF_SAFE_TILT_POSITION,
     CONF_SEND_ENDPOINT_STOP,
     CONF_SKIP_STOP_WHEN_IDLE,
@@ -69,6 +70,7 @@ from .cover import (
     DEFAULT_PULSE_TIME,
     DEFAULT_RECALIBRATE_BEFORE_POSITION,
     DEFAULT_RELAY_REPORTS_OFF,
+    DEFAULT_RELEASE_RELAY_AFTER_PULSE,
     DEFAULT_SEND_ENDPOINT_STOP,
     DEFAULT_SKIP_STOP_WHEN_IDLE,
     DEFAULT_WAIT_FOR_RELAY_FEEDBACK,
@@ -145,6 +147,12 @@ _CONFIG_FIELDS: tuple[_ConfigField, ...] = (
         CONF_RELAY_REPORTS_OFF,
         _BOOL,
         default=DEFAULT_RELAY_REPORTS_OFF,
+    ),
+    _ConfigField(
+        "release_relay_after_pulse",
+        CONF_RELEASE_RELAY_AFTER_PULSE,
+        _BOOL,
+        default=DEFAULT_RELEASE_RELAY_AFTER_PULSE,
     ),
     _ConfigField(
         "send_endpoint_stop",

@@ -1,3 +1,9 @@
+## 4.16.0 (unreleased)
+
+### Features
+
+- **The Toggle modes can turn the relay off again after the pulse** ([#331](https://github.com/Sese-Schneider/ha-cover-time-based/issues/331)). They expect a relay that releases itself and only turn it on, so an ordinary relay stayed on after a command from Home Assistant. With the new **Turn the relay off after the pulse** switch on, the relay is turned off once the pulse time has passed. Off by default.
+
 ## 4.15.0 (2026-11-05)
 
 ### Features

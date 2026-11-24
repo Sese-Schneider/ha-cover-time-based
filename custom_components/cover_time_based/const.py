@@ -87,6 +87,14 @@ DEFAULT_ASSUMED_STATE = True
 CONF_RELAY_REPORTS_OFF = "relay_reports_off"
 DEFAULT_RELAY_REPORTS_OFF = True
 
+# Toggle modes only. Off by default: a toggle relay is expected to release
+# itself after its own brief pulse, so only a turn_on is sent. When True the
+# relay is an ordinary one that stays on until told otherwise, and the cover
+# turns it off again after the pulse time, as pulse mode does. Needs a relay
+# that reports its OFF (relay_reports_off), since the release is a turn_off.
+CONF_RELEASE_RELAY_AFTER_PULSE = "release_relay_after_pulse"
+DEFAULT_RELEASE_RELAY_AFTER_PULSE = False
+
 # Pulse mode only. When True (default) the integration sends the dedicated stop
 # pulse when the cover reaches an endpoint (0%/100%) — required by latching
 # controllers that keep running until they receive a stop (issue #129).
