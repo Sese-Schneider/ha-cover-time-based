@@ -175,6 +175,26 @@ test("use current position copies what the cover reports", async () => {
   expect(captured).toEqual([{ favourite_position: 42, favourite_tilt_position: 10 }]);
 });
 
+test("remove the favourite clears the position and the tilt", async () => {
+  await mount(
+    toggleCfg({
+      tilt_mode: "sequential_open",
+      favourite_position: 0,
+      favourite_tilt_position: 0,
+    }),
+  );
+  const captured = capture(card);
+
+  section(card).querySelector("#favourite-clear").click();
+
+  expect(captured).toEqual([{ favourite_position: null, favourite_tilt_position: null }]);
+});
+
+test("there is nothing to remove while no favourite is set", async () => {
+  await mount(toggleCfg());
+  expect(section(card).querySelector("#favourite-clear").hasAttribute("disabled")).toBe(true);
+});
+
 test("use current position is unavailable while the position is unknown", async () => {
   await mount(toggleCfg());
   expect(section(card).querySelector("#favourite-use-current").hasAttribute("disabled")).toBe(true);

@@ -790,9 +790,7 @@ export function renderFavourite(card, c) {
   return html`
     <div class="section favourite">
       <div class="field-label">${card._t("favourite.label")}</div>
-      <div class="helper-text">
-        ${card._t("favourite.helper")} ${card._t("favourite.unset_hint")}
-      </div>
+      <div class="helper-text">${card._t("favourite.helper")}</div>
       <div class="favourite-fields">
         ${percentField("favourite.position", "favourite_position")}
         ${hasTilt ? percentField("favourite.tilt", "favourite_tilt_position") : ""}
@@ -807,6 +805,13 @@ export function renderFavourite(card, c) {
               ...(hasTilt && currentTilt != null ? { favourite_tilt_position: currentTilt } : {}),
             })}
           >${card._t("favourite.use_current")}</ha-button
+        >
+        <ha-button
+          id="favourite-clear"
+          ?disabled=${!hasFavourite}
+          @click=${() =>
+            card._updateLocal({ favourite_position: null, favourite_tilt_position: null })}
+          >${card._t("favourite.clear")}</ha-button
         >
       </div>
       ${

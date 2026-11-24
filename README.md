@@ -628,7 +628,8 @@ inputs says nothing about the other motor.
 
 In the configuration card the favourite has its own section on the Device tab.
 **Use current position** copies the position and tilt the cover is showing, so
-you can move the cover to the motor's favourite once and store it. The gesture
+you can move the cover to the motor's favourite once and store it, and **Remove
+the favourite** clears it. The gesture
 and its settings appear once a favourite is set, and **Both inputs** is offered
 only in the modes that have an open and a close entity.
 
