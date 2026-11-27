@@ -41,9 +41,10 @@ class TimedPositionDriver(PositionDriver):
 class NativePositionDriver(PositionDriver):
     """Native position: forward set_cover_position; the device holds itself.
 
-    Forwarding fires unconditionally, including on a same-direction retarget
-    (the device changes course to the new target) — which is why
-    ``already_moving_same_dir`` is ignored here, unlike the timed path.
+    Forwarding fires on every self-initiated move, including a same-direction
+    retarget (the device changes course to the new target) — which is why
+    ``already_moving_same_dir`` is ignored here, unlike the timed path. An
+    externally triggered move is only tracked and forwards nothing.
     """
 
     holds_itself = True
@@ -52,10 +53,19 @@ class NativePositionDriver(PositionDriver):
         cover = self._cover
         cover._require_movement_target_available(cover._cover_entity_id)
         position = round(target)
+        cover._note_travel_motor_driven(command)
+        if cover._triggered_externally:
+            # The device is already on its way there by itself (a tracked
+            # favourite): only the tracker follows, as on the timed path,
+            # where an externally triggered move switches no relay.
+            cover._log(
+                "_command_position_move :: tracked move to %d, nothing forwarded",
+                position,
+            )
+            return
         cover._log(
             "_command_position_move :: forwarding set_cover_position(%d)", position
         )
-        cover._note_travel_motor_driven(command)
         await cover._call_set_cover_position(position)
 
 
