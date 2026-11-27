@@ -11,6 +11,7 @@ from homeassistant.components.cover import (
 )
 from homeassistant.const import (
     ATTR_SUPPORTED_FEATURES,
+    SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
     STATE_CLOSED,
     STATE_CLOSING,
@@ -329,17 +330,27 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return False
         return time.monotonic() - self._last_self_command_time < _BOUNCE_GRACE_PERIOD
 
-    async def _handle_external_state_change(self, entity_id, old_val, new_val):
+    async def _handle_external_state_change(
+        self, entity_id, old_val, new_val, *, new_state: State | None = None
+    ):
         """Handle state changes on the wrapped cover entity.
 
         Mirrors the inner cover's state transitions — start, stop, and
         direction changes. When the wrapped cover settles into a stopped
-        state we snap to its reported position; for covers without a
-        current_position attribute we fall back to stopping the tracker.
-        On settle we also snap tilt to the wrapped cover's reported tilt
+        state, or (unknown_is_stop profile) goes from opening/closing to
+        unknown, we snap to its reported position; covers without a
+        current_position attribute fall back to _stop_without_position, which
+        stops the tracker unless a start of ours is waiting that the report
+        does not end.
+        On an open/closed settle (not the unknown path) we also snap tilt to
+        the wrapped cover's reported tilt
         (native-tilt covers only, via _maybe_snap_to_reported_tilt).
         When self._invert is set, the underlying's opening/closing are
         interpreted as our close/open (swapped).
+
+        ``new_state`` is the event's state. Positions are read from it: the
+        handler runs after the event, so the state machine may already hold a
+        newer state. None (a direct call) reads the state machine.
         """
         # The underlying is a dumb relay whose every report is untrustworthy
         # (issue #248): ignore state, transitions and position alike and track
@@ -474,9 +485,11 @@ class WrappedCoverTimeBased(CoverTimeBased):
             # (100%, when inverted). Trust a position it actually reports; keep
             # the position we tracked before it dropped out otherwise (#160).
             came_back = self._came_back_online(old_val)
-            target = self._wrapped_reported_position(trust_closed=not came_back)
+            target = self._wrapped_reported_position(
+                trust_closed=not came_back, state=new_state
+            )
             if target is not None:
-                await self._snap_to_position(target)
+                await self._snap_to_position(target, stopped_from=old_val)
             elif came_back:
                 # Deliberately not async_stop_cover: a travel still running
                 # when the entity dropped out keeps running here. Its motor
@@ -488,12 +501,23 @@ class WrappedCoverTimeBased(CoverTimeBased):
                     " reporting no position, keeping the tracked position"
                 )
             elif old_val in _MOVING_STATES:
-                self._log(
-                    "_handle_external_state_change :: wrapped cover stopped,"
-                    " no position info"
+                await self._stop_without_position(old_val, "stopped")
+            await self._maybe_snap_to_reported_tilt(state=new_state)
+        elif (
+            new_val == STATE_UNKNOWN
+            and old_val in _MOVING_STATES
+            and self._reporting.unknown_after_move_is_stop
+        ):
+            # No tilt snap: _wrapped_features() is None while the entity reads unknown.
+            target = self._wrapped_reported_position(
+                trust_closed=False, state=new_state
+            )
+            if target is not None:
+                await self._snap_to_position(target, stopped_from=old_val)
+            else:
+                await self._stop_without_position(
+                    old_val, "stopped partway (reported unknown)"
                 )
-                await self.async_stop_cover(supersede=False)
-            await self._maybe_snap_to_reported_tilt()
 
     async def _handle_command_state(self, new_val: str) -> None:
         """Reinterpret the wrapped entity's state as a command echo.
@@ -611,22 +635,90 @@ class WrappedCoverTimeBased(CoverTimeBased):
             await self._snap_to_position(target)
         await self._maybe_snap_to_reported_tilt(state=new_state)
 
-    async def _snap_to_position(self, target: int) -> None:
+    async def _snap_to_position(
+        self, target: int, *, stopped_from: str | None = None
+    ) -> None:
         """Snap our tracker to a known position.
 
         Always goes through set_known_position so that a still-running
         auto-updater is stopped even when our calculated position happens to
         match the target at this instant; the caller skips the call only when
         the position matches and no updater is running.
+
+        ``stopped_from`` is the state the device left for the one it settled
+        in. See _report_ends_parked_start for when that ends a move of ours
+        still waiting out its startup delay.
         """
         self._log("_snap_to_position :: snapping to %d", target)
-        if self.travel_calc.is_traveling():
+        ends_parked_start = self._report_ends_parked_start(stopped_from)
+        if ends_parked_start:
+            self._log("_snap_to_position :: device stopped during startup delay")
+            self._cancel_startup_delay_task()
+        if self.travel_calc.is_traveling() or ends_parked_start:
             # The device stopped the motor itself.
             self._note_travel_motor_stop()
+        # A start still parked is our command in flight: the echo guard, a
+        # direction change and a later stop report all need its direction.
+        task = self._startup_delay_task
+        if task is None or task.done():
+            self._last_command = None
         # The device reporting where it ended up, not a command — it must not
         # cancel a reversal waiting out its settle gap.
         await self.set_known_position(position=target, supersede=False)
-        self._last_command = None
+
+    async def _stop_without_position(self, stopped_from: str, how: str) -> None:
+        """Stop the tracker for a stop report that carries no position.
+
+        A start still parked that the report does not end (see
+        _report_ends_parked_start) is left to run: its command already went
+        out and its auto-stop is the only stop the device gets.
+        """
+        task = self._startup_delay_task
+        if (
+            task is not None
+            and not task.done()
+            and not self._report_ends_parked_start(stopped_from)
+        ):
+            self._log(
+                "_handle_external_state_change :: wrapped cover %s after %s,"
+                " no position info; keeping the start waiting out its"
+                " startup delay",
+                how,
+                stopped_from,
+            )
+            return
+        self._log(
+            "_handle_external_state_change :: wrapped cover %s, no position info",
+            how,
+        )
+        await self.async_stop_cover(supersede=False)
+
+    def _report_ends_parked_start(self, stopped_from: str | None) -> bool:
+        """Whether a settle report ends the move whose start is still parked.
+
+        Left armed, the start would set the tracker travelling after the stop
+        is recorded while the device stands still. Only a stop that follows
+        movement the way that move goes ends it. One following movement the
+        other way is the late end of the move before a reversal. One following
+        any other state (a stopped one, a reappearance, or none at all for an
+        attribute-only report) shows no stop of a move: a position-only cover
+        starting to move reports closed -> open. Either way our start has yet
+        to run, and its auto-stop is the only stop the device gets. A parked
+        start on a separate tilt motor is left alone: the cover's state speaks
+        for its travel motor.
+        """
+        task = self._startup_delay_task
+        if (
+            task is None
+            or task.done()
+            or self._moving_tilt_motor
+            or stopped_from not in _MOVING_STATES
+        ):
+            return False
+        reported_open = (stopped_from == STATE_OPENING) != self._invert
+        return self._last_command == (
+            SERVICE_OPEN_COVER if reported_open else SERVICE_CLOSE_COVER
+        )
 
     def _is_stale_reappearance(self, old_val, new_val) -> bool:
         """A command-echo cover coming back online is not issuing a command.

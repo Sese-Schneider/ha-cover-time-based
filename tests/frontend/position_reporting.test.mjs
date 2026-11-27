@@ -2,8 +2,8 @@
  * Position reporting dropdown (wrapped covers) — issue #238.
  *
  * One "Position reporting" <select> reads and writes the single persisted
- * `position_reporting` enum (reliable/unreliable/no_endpoints/command_echo/
- * ignore_all) — no derivation from booleans.
+ * `position_reporting` enum (reliable/unknown_is_stop/unreliable/no_endpoints/
+ * command_echo/ignore_all) — no derivation from booleans.
  *
  * Run: npm run test:fe -- tests/frontend/position_reporting.test.mjs
  */
@@ -61,7 +61,29 @@ test("defaults to the reliable profile", async () => {
   expect(selectedValue(select(card))).toBe("reliable");
 });
 
-for (const value of ["unreliable", "no_endpoints", "command_echo", "ignore_all"]) {
+test("offers every profile, unknown_is_stop right after reliable", async () => {
+  card = await mountCard(makeHass(), {
+    selectedEntity: "cover.x",
+    config: wrappedCfg(),
+    activeTab: "device",
+  });
+  expect([...select(card).options].map((o) => o.value)).toEqual([
+    "reliable",
+    "unknown_is_stop",
+    "unreliable",
+    "no_endpoints",
+    "command_echo",
+    "ignore_all",
+  ]);
+});
+
+for (const value of [
+  "unknown_is_stop",
+  "unreliable",
+  "no_endpoints",
+  "command_echo",
+  "ignore_all",
+]) {
   test(`shows ${value} from position_reporting`, async () => {
     card = await mountCard(makeHass(), {
       selectedEntity: "cover.x",
@@ -72,7 +94,7 @@ for (const value of ["unreliable", "no_endpoints", "command_echo", "ignore_all"]
   });
 }
 
-for (const value of ["reliable", "no_endpoints", "ignore_all", "command_echo"]) {
+for (const value of ["reliable", "unknown_is_stop", "no_endpoints", "ignore_all", "command_echo"]) {
   test(`selecting ${value} writes position_reporting only`, async () => {
     card = await mountCard(makeHass(), {
       selectedEntity: "cover.x",

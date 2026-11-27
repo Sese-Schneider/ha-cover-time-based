@@ -363,7 +363,7 @@ export function renderPositionReporting(card, c) {
         id="position-reporting-select"
         @change=${card._onPositionReportingChange}
       >
-        ${opt("reliable")} ${opt("unreliable")} ${opt("no_endpoints")}
+        ${opt("reliable")} ${opt("unknown_is_stop")} ${opt("unreliable")} ${opt("no_endpoints")}
         ${opt("command_echo")} ${opt("ignore_all")}
       </select>
     </div>

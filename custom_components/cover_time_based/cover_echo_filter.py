@@ -551,7 +551,9 @@ class SwitchEchoMixin(_MixinBase):
                     entity_id, old_val, new_val
                 )
             else:
-                await self._handle_external_state_change(entity_id, old_val, new_val)
+                await self._handle_external_state_change(
+                    entity_id, old_val, new_val, new_state=new_state
+                )
         except CoverNotConfiguredError as err:
             # Caught here, not checked before dispatch, so the mode handler's
             # relay interlock and position resync still run. Raised from an

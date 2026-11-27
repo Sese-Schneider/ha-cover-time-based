@@ -3,6 +3,14 @@
 ### Features
 
 - **The Toggle modes can turn the relay off again after the pulse** ([#331](https://github.com/Sese-Schneider/ha-cover-time-based/issues/331), [#332](https://github.com/Sese-Schneider/ha-cover-time-based/pull/332)), contributed by [@tegola](https://github.com/tegola). They expect a relay that releases itself and only turn it on, so an ordinary relay stayed on after a command from Home Assistant. With the new **Turn the relay off after the pulse** switch on, the relay is turned off once the pulse time has passed. Off by default.
+- **A new Position reporting profile for wrapped covers, "Reliable, but shows unknown when stopped partway"** ([#328](https://github.com/Sese-Schneider/ha-cover-time-based/issues/328), [#335](https://github.com/Sese-Schneider/ha-cover-time-based/pull/335)). A cover that reports "unknown" when stopped mid-travel, as Fibaro / Yubii Home covers do, now has its tracked position stop there instead of running on to the endpoint.
+
+### Fixes
+
+- **A wrapped cover with a Travel startup delay that reports it has stopped just after a command now stays where it reports** ([#335](https://github.com/Sese-Schneider/ha-cover-time-based/pull/335)). If the cover stopped before the delay had passed, the tracked position jumped to the reported one and then started moving towards the target anyway, although the cover was standing still.
+- **A wrapped cover with a Travel startup delay no longer loses track of a move when it reports a stop with no position** ([#335](https://github.com/Sese-Schneider/ha-cover-time-based/pull/335)). A late stop report from the move before, arriving while a move the other way waited out its delay, or a travel report while a separate tilt motor's move waited, cancelled the waiting move. The tracked position stayed put while the cover ran past the target with no automatic stop.
+- **A wrapped cover that reports a stop is now tracked at the position it reported in that stop** ([#335](https://github.com/Sese-Schneider/ha-cover-time-based/pull/335)), not at a newer reading that arrived straight after it.
+- **A wrapped cover with a Travel startup delay no longer ignores a change of direction just after it reports its position** ([#335](https://github.com/Sese-Schneider/ha-cover-time-based/pull/335)). If the cover sent an updated position while it was still waiting out the **Travel startup delay**, a close after an open (or an open after a close), or a new position the other way, was ignored until the delay had passed. So was the cover reporting that it had started moving the other way. The tracked position then ran on towards the first target.
 
 ## 4.15.0 (2026-11-05)
 

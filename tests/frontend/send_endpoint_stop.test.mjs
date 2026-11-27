@@ -173,7 +173,7 @@ test("wrapped cover with no stored position reporting hides the endpoint run-on 
   expect(timingInputCount(card)).toBe(4);
 });
 
-test.each(["reliable", "unreliable", "no_endpoints", "ignore_all"])(
+test.each(["reliable", "unknown_is_stop", "unreliable", "no_endpoints", "ignore_all"])(
   "wrapped cover with %s position reporting hides the endpoint run-on row",
   async (position_reporting) => {
     card = await mountCard(makeHass(), {

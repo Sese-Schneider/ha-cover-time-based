@@ -1,9 +1,9 @@
 """Position-reporting trust policy for wrapped covers.
 
 A wrapped cover trusts the underlying entity's reports to a degree named by
-one enum profile. PositionReportingPolicy states that trust as six predicates
-so the decision sites in cover_wrapped.py read one policy instead of
-re-deciding from four raw booleans in their own order.
+one enum profile. PositionReportingPolicy states that trust as five stored
+and two derived predicates, so the decision sites in cover_wrapped.py read one
+policy instead of re-deciding from raw booleans in their own order.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from .const import (
     POSITION_REPORTING_IGNORE_ALL,
     POSITION_REPORTING_NO_ENDPOINTS,
     POSITION_REPORTING_RELIABLE,
+    POSITION_REPORTING_UNKNOWN_IS_STOP,
     POSITION_REPORTING_UNRELIABLE,
 )
 
@@ -28,6 +29,7 @@ class PositionReportingPolicy:
     trusts_endpoint_states: bool  # trust open/closed as real endpoints
     state_is_command: bool  # the wrapped state IS a command echo, not a reading
     ignores_all_transitions: bool  # ignore state/attribute changes entirely
+    unknown_after_move_is_stop: bool  # opening/closing -> unknown is a stop
 
     @property
     def trusts_tilt_attr(self) -> bool:
@@ -42,14 +44,16 @@ class PositionReportingPolicy:
         return not (self.state_is_command or self.ignores_all_transitions)
 
 
-RELIABLE = PositionReportingPolicy(True, True, False, False)
-UNRELIABLE = PositionReportingPolicy(False, True, False, False)
-NO_ENDPOINTS = PositionReportingPolicy(True, False, False, False)
-COMMAND_ECHO = PositionReportingPolicy(False, False, True, False)
-IGNORE_ALL = PositionReportingPolicy(False, False, False, True)
+RELIABLE = PositionReportingPolicy(True, True, False, False, False)
+UNKNOWN_IS_STOP = PositionReportingPolicy(True, True, False, False, True)
+UNRELIABLE = PositionReportingPolicy(False, True, False, False, False)
+NO_ENDPOINTS = PositionReportingPolicy(True, False, False, False, False)
+COMMAND_ECHO = PositionReportingPolicy(False, False, True, False, False)
+IGNORE_ALL = PositionReportingPolicy(False, False, False, True, False)
 
 _BY_PROFILE = {
     POSITION_REPORTING_RELIABLE: RELIABLE,
+    POSITION_REPORTING_UNKNOWN_IS_STOP: UNKNOWN_IS_STOP,
     POSITION_REPORTING_UNRELIABLE: UNRELIABLE,
     POSITION_REPORTING_NO_ENDPOINTS: NO_ENDPOINTS,
     POSITION_REPORTING_COMMAND_ECHO: COMMAND_ECHO,

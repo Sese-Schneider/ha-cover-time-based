@@ -9,13 +9,22 @@ External state changes only start tracking movement — they never auto-stop,
 since we can't reliably know when the motor stopped from switch state alone.
 """
 
+import asyncio
 import contextlib
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.components.cover import ATTR_CURRENT_POSITION
-from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+from homeassistant.components.cover import (
+    ATTR_CURRENT_POSITION,
+    ATTR_CURRENT_TILT_POSITION,
+    CoverEntityFeature,
+)
+from homeassistant.const import (
+    ATTR_SUPPORTED_FEATURES,
+    SERVICE_CLOSE_COVER,
+    SERVICE_OPEN_COVER,
+)
 
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
@@ -622,10 +631,10 @@ class TestWrappedCoverExternalStateChange:
 
     @pytest.mark.asyncio
     async def test_opening_to_unknown_does_not_stop(self, make_cover):
-        """Stateless covers transition to 'unknown' while still moving.
-
-        opening->unknown must NOT be treated as an external stop, because
-        'unknown' means 'no state feedback', not 'stopped'.
+        """Under Reliable (the default), opening->unknown is not a stop: some
+        covers (Somfy RTS via Overkiz) report 'unknown' while still moving
+        (#60). Covers where it does mean stopped opt in with the
+        unknown_is_stop profile.
         """
         cover = make_cover(cover_entity_id="cover.inner")
         cover.travel_calc.set_position(50)
@@ -1160,7 +1169,7 @@ class TestToggleE2EThroughStateListener:
                 _make_state_event("switch.open", "on", "off")
             )
 
-        handler.assert_awaited_once_with("switch.open", "on", "off")
+        handler.assert_awaited_once_with("switch.open", "on", "off", new_state=ANY)
 
     @pytest.mark.asyncio
     async def test_triggered_externally_during_handler(self, make_cover):
@@ -1168,7 +1177,7 @@ class TestToggleE2EThroughStateListener:
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         captured_flag = None
 
-        async def capture_flag(*_args):
+        async def capture_flag(*_args, **_kwargs):
             nonlocal captured_flag
             captured_flag = cover._triggered_externally
 
@@ -1330,7 +1339,7 @@ class TestStartupReappearanceNotTreatedAsPress:
                 _make_state_event("switch.open", "off", "on")
             )
 
-        handler.assert_awaited_once_with("switch.open", "off", "on")
+        handler.assert_awaited_once_with("switch.open", "off", "on", new_state=ANY)
 
     @pytest.mark.asyncio
     async def test_dual_relay_reappearance_no_phantom_reverse(self, make_cover):
@@ -1378,7 +1387,9 @@ class TestStartupReappearanceNotTreatedAsPress:
                 _make_state_event("switch.open", "unavailable", "on")
             )
 
-        handler.assert_awaited_once_with("switch.open", "unavailable", "on")
+        handler.assert_awaited_once_with(
+            "switch.open", "unavailable", "on", new_state=ANY
+        )
 
 
 # ===================================================================
@@ -1826,7 +1837,9 @@ class TestCalibrationSuppressesExternalState:
             )
 
         # Handler should be called (not suppressed by calibration)
-        handler.assert_awaited_once_with("cover.inner", "open", "closing")
+        handler.assert_awaited_once_with(
+            "cover.inner", "open", "closing", new_state=ANY
+        )
 
 
 # ===================================================================
@@ -2441,3 +2454,651 @@ class TestWrappedCoverReappearance:
         open_mock.assert_not_awaited()
         close_mock.assert_not_awaited()
         assert cover.travel_calc.current_position() == 0
+
+
+# ===================================================================
+# position_reporting = unknown_is_stop (issue #328)
+# ===================================================================
+
+
+def _unknown_is_stop_cover(make_cover, **kwargs):
+    return make_cover(
+        cover_entity_id="cover.inner", reporting_profile="unknown_is_stop", **kwargs
+    )
+
+
+async def _external_change(cover, old_val, new_val):
+    """Call the handler the way the dispatcher does, flagged as external."""
+    cover._triggered_externally = True
+    try:
+        await cover._handle_external_state_change("cover.inner", old_val, new_val)
+    finally:
+        cover._triggered_externally = False
+
+
+async def _dispatch_late(cover, old_val, new_val):
+    """Dispatch a state event that is neither our own echo nor a bounce.
+
+    As in Home Assistant, the event carries the attributes of the state the
+    state machine holds (set with _set_wrapped_state).
+    """
+    cover._clear_pending_switch("cover.inner")
+    cover._last_self_command_time = None
+    stored = cover.hass.states.get("cover.inner")
+    attributes = getattr(stored, "attributes", None)
+    await cover._async_switch_state_changed(
+        _make_state_event(
+            "cover.inner",
+            old_val,
+            new_val,
+            new_attributes=attributes if isinstance(attributes, dict) else None,
+        )
+    )
+
+
+def _stop_calls(cover):
+    return [
+        c
+        for c in cover.hass.services.async_call.call_args_list
+        if c.args[1] == "stop_cover"
+    ]
+
+
+class TestUnknownAfterMoveIsStop:
+    """A cover that reports `unknown` when stopped partway (Fibaro / Yubii)."""
+
+    @pytest.mark.asyncio
+    async def test_opening_to_unknown_stops(self, make_cover):
+        cover = _unknown_is_stop_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await _external_change(cover, "opening", "unknown")
+
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_closing_to_unknown_stops(self, make_cover):
+        cover = _unknown_is_stop_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await _external_change(cover, "closing", "unknown")
+
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_inverted_closing_to_unknown_stops(self, make_cover):
+        cover = _unknown_is_stop_cover(make_cover, invert=True)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await _external_change(cover, "closing", "unknown")
+
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.parametrize("old_val", ["unavailable", "open", "closed"])
+    @pytest.mark.asyncio
+    async def test_unknown_from_a_non_moving_state_does_not_stop(
+        self, make_cover, old_val
+    ):
+        cover = _unknown_is_stop_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await _external_change(cover, old_val, "unknown")
+
+        assert cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_unknown_stop_sends_no_stop_to_device(self, make_cover):
+        cover = _unknown_is_stop_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await _dispatch_late(cover, "opening", "unknown")
+
+        assert not cover.travel_calc.is_traveling()
+        assert _stop_calls(cover) == []
+
+    @pytest.mark.asyncio
+    async def test_closed_still_snaps_to_zero(self, make_cover):
+        cover = _unknown_is_stop_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_down()
+        cover._last_command = SERVICE_CLOSE_COVER
+        _set_wrapped_state(cover, "closed", current_position=None)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await _external_change(cover, "closing", "closed")
+
+        assert cover.travel_calc.current_position() == 0
+        assert not cover.travel_calc.is_traveling()
+
+    def test_unknown_is_stop_self_stops_at_endpoints(self, make_cover):
+        cover = _unknown_is_stop_cover(make_cover)
+        assert cover._self_stops_at_endpoints() is True
+
+    @pytest.mark.asyncio
+    async def test_reported_position_on_unknown_is_trusted(self, make_cover):
+        cover = _unknown_is_stop_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+        _set_wrapped_state(cover, "unknown", current_position=70)
+
+        with patch.object(cover, "async_write_ha_state"):
+            await _external_change(cover, "opening", "unknown")
+
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() == 70
+
+    @pytest.mark.asyncio
+    async def test_late_stop_echo_after_ha_stop_is_harmless(self, make_cover):
+        cover = _unknown_is_stop_cover(make_cover)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.async_stop_cover()
+            stopped_at = cover.travel_calc.current_position()
+            stops_sent = len(_stop_calls(cover))
+
+            await _dispatch_late(cover, "opening", "unknown")
+
+        assert not cover.travel_calc.is_traveling()
+        assert cover.travel_calc.current_position() == stopped_at
+        assert len(_stop_calls(cover)) == stops_sent
+
+    @pytest.mark.asyncio
+    async def test_wall_stop_during_own_timed_move(self, make_cover):
+        cover = _unknown_is_stop_cover(make_cover, force_time_based_position=True)
+        cover.travel_calc.set_position(50)
+        unsubscribe = MagicMock()
+
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_schedule_update_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_base.async_track_time_interval",
+                return_value=unsubscribe,
+            ),
+        ):
+            await cover.async_set_cover_position(position=80)
+            assert cover.travel_calc.is_traveling()
+            assert cover._unsubscribe_auto_updater is unsubscribe
+
+            await _dispatch_late(cover, "opening", "unknown")
+
+            assert not cover.travel_calc.is_traveling()
+            assert _stop_calls(cover) == []
+            # The updater tick is what would spawn the auto-stop at 80; with it
+            # unsubscribed no stop can follow.
+            unsubscribe.assert_called_once()
+            assert cover._unsubscribe_auto_updater is None
+
+    @pytest.mark.asyncio
+    async def test_inline_tilt_stops_on_unknown(self, make_cover):
+        cover = _unknown_is_stop_cover(
+            make_cover, tilt_mode="inline", tilt_time_close=5, tilt_time_open=5
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover.tilt_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+
+        with patch.object(cover, "async_write_ha_state"):
+            await _external_change(cover, "opening", "unknown")
+
+        assert not cover.travel_calc.is_traveling()
+        assert not cover.tilt_calc.is_traveling()
+
+
+class TestStopReportReadsItsOwnState:
+    """A stop report is judged by the state it carries. The handler runs after
+    the event, so the state machine may already hold a newer state."""
+
+    @pytest.mark.parametrize(
+        "profile,stopped_state",
+        [("unknown_is_stop", "unknown"), ("reliable", "open")],
+    )
+    @pytest.mark.asyncio
+    async def test_snaps_to_the_reported_position_not_a_newer_one(
+        self, make_cover, profile, stopped_state
+    ):
+        cover = make_cover(cover_entity_id="cover.inner", reporting_profile=profile)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+        # The state machine already holds the cover moving again at 75%.
+        _set_wrapped_state(cover, "opening", current_position=75)
+        cover._last_self_command_time = None
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_switch_state_changed(
+                _make_state_event(
+                    "cover.inner",
+                    "opening",
+                    stopped_state,
+                    new_attributes={ATTR_CURRENT_POSITION: 55},
+                )
+            )
+
+        assert cover.travel_calc.current_position() == 55
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.parametrize("invert,expected", [(False, 0), (True, 100)])
+    @pytest.mark.asyncio
+    async def test_snaps_to_the_reported_closed_not_a_newer_state(
+        self, make_cover, invert, expected
+    ):
+        """No position attribute: the closed fallback must come from the
+        event's state too."""
+        cover = make_cover(
+            cover_entity_id="cover.inner", reporting_profile="reliable", invert=invert
+        )
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+        _set_wrapped_state(cover, "opening", current_position=75)
+        cover._last_self_command_time = None
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_switch_state_changed(
+                _make_state_event("cover.inner", "opening", "closed")
+            )
+
+        assert cover.travel_calc.current_position() == expected
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_snaps_tilt_to_the_reported_tilt_not_a_newer_one(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            tilt_mode="inline",
+            tilt_time_close=5,
+            tilt_time_open=5,
+        )
+        features = (
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.SET_TILT_POSITION
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(60)
+        newer = _set_wrapped_state(cover, "opening", current_position=90)
+        newer.attributes[ATTR_SUPPORTED_FEATURES] = features
+        newer.attributes[ATTR_CURRENT_TILT_POSITION] = 80
+        cover._last_self_command_time = None
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_switch_state_changed(
+                _make_state_event(
+                    "cover.inner",
+                    "opening",
+                    "open",
+                    new_attributes={
+                        ATTR_SUPPORTED_FEATURES: features,
+                        ATTR_CURRENT_POSITION: 100,
+                        ATTR_CURRENT_TILT_POSITION: 45,
+                    },
+                )
+            )
+
+        assert cover.tilt_calc.current_position() == 45
+
+
+class TestReportedStopDuringStartupDelay:
+    """The device reports it has stopped while our own move is still waiting
+    out travel_startup_delay: once the stop is recorded, with or without a
+    position, the parked start must not set the tracker travelling again. A
+    stop report ends the parked
+    start only when the cover had reported moving the same way; any other stop
+    or position-only report leaves it, because the start's automatic stop is
+    the only stop the cover gets."""
+
+    STARTUP_DELAY = 0.3
+
+    @contextlib.contextmanager
+    def _no_ha(self, cover):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_schedule_update_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_base.async_track_time_interval",
+                return_value=MagicMock(),
+            ),
+        ):
+            yield
+
+    def _cover(self, make_cover, profile, **kwargs):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            reporting_profile=profile,
+            force_time_based_position=True,
+            travel_startup_delay=self.STARTUP_DELAY,
+            **kwargs,
+        )
+        cover.travel_calc.set_position(50)
+        _set_wrapped_state(cover, "open", current_position=50)
+        return cover
+
+    @staticmethod
+    async def _move_to(cover, position):
+        await cover.async_set_cover_position(position=position)
+        parked = cover._startup_delay_task
+        assert parked is not None
+        assert not parked.done()
+        return parked
+
+    @staticmethod
+    def _parked_reversal(cover):
+        parked = cover._startup_delay_task
+        assert parked is not None
+        return parked
+
+    @staticmethod
+    async def _run_out(parked):
+        """Wait until the parked start has either run or been cancelled."""
+        with contextlib.suppress(asyncio.CancelledError):
+            await parked
+
+    @pytest.mark.parametrize(
+        "profile,invert,moving_state,stopped_state,reported",
+        [
+            ("unknown_is_stop", False, "opening", "unknown", 30),
+            ("reliable", False, "opening", "open", 30),
+            ("reliable", True, "closing", "open", 70),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_stop_after_moving_our_way_drops_the_parked_start(
+        self, make_cover, profile, invert, moving_state, stopped_state, reported
+    ):
+        cover = self._cover(make_cover, profile, invert=invert)
+        with self._no_ha(cover):
+            parked = await self._move_to(cover, 80)
+            _set_wrapped_state(cover, stopped_state, current_position=reported)
+            await _dispatch_late(cover, moving_state, stopped_state)
+            await self._run_out(parked)
+
+        assert parked.cancelled()
+        assert cover.travel_calc.current_position() == 30
+        assert not cover.travel_calc.is_traveling()
+        assert cover._startup_delay_task is None
+        # The device stopped the motor it was driving open, so a close right
+        # after must wait out the reversal settle.
+        assert cover._travel_motor_stop is not None
+        assert cover._travel_motor_stop[1] == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_stop_after_moving_the_other_way_keeps_the_parked_start(
+        self, make_cover
+    ):
+        """A stop following a closing report is the late end of the move
+        before ours; our open has yet to start and still has to be tracked."""
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            parked = await self._move_to(cover, 80)
+            _set_wrapped_state(cover, "open", current_position=30)
+            await _dispatch_late(cover, "closing", "open")
+            await self._run_out(parked)
+
+        assert cover.travel_calc.is_traveling()
+
+    # Closing as well as opening: a previous state that is not a moving one
+    # (closed, or none at all) would otherwise read as the cover closing.
+    _OUR_MOVES = pytest.mark.parametrize(
+        "target,reported", [(80, 51), (20, 49)], ids=["open", "close"]
+    )
+
+    @_OUR_MOVES
+    @pytest.mark.asyncio
+    async def test_stopped_to_stopped_keeps_the_parked_start(
+        self, make_cover, target, reported
+    ):
+        """closed -> open with a position is a position-only cover starting to
+        move, not stopping; the start's auto-stop is the only stop it gets."""
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            parked = await self._move_to(cover, target)
+            _set_wrapped_state(cover, "open", current_position=reported)
+            await _dispatch_late(cover, "closed", "open")
+            await self._run_out(parked)
+
+        assert cover.travel_calc.is_traveling()
+
+    @_OUR_MOVES
+    @pytest.mark.asyncio
+    async def test_attribute_only_report_keeps_the_parked_start(
+        self, make_cover, target, reported
+    ):
+        """A position-only cover's attribute report inside the startup window
+        says nothing about a stop; the start's auto-stop must survive."""
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            parked = await self._move_to(cover, target)
+            cover._last_self_command_time = None
+            _set_wrapped_state(cover, "open", current_position=reported)
+            await cover._handle_external_attribute_change(
+                _make_attribute_event("cover.inner", "open", reported)
+            )
+            await self._run_out(parked)
+
+        assert cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_travel_report_leaves_a_parked_tilt_motor_start(self, make_cover):
+        """A dual-motor tilt move also records open/close as its last command,
+        but the cover's opening -> open speaks for the travel motor; the tilt
+        open already went out and its tracker must still run."""
+        cover = self._cover(
+            make_cover,
+            "reliable",
+            tilt_mode="dual_motor",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_startup_delay=self.STARTUP_DELAY,
+        )
+        cover.tilt_calc.set_position(50)
+        with self._no_ha(cover):
+            await cover.async_set_cover_tilt_position(tilt_position=80)
+            assert cover._moving_tilt_motor
+            parked = cover._startup_delay_task
+            assert parked is not None
+            assert not parked.done()
+            _set_wrapped_state(cover, "open", current_position=50)
+            await _dispatch_late(cover, "opening", "open")
+            await self._run_out(parked)
+
+        assert cover.tilt_calc.is_traveling()
+
+    @staticmethod
+    async def _attribute_report(cover, position):
+        cover._last_self_command_time = None
+        _set_wrapped_state(cover, "open", current_position=position)
+        await cover._handle_external_attribute_change(
+            _make_attribute_event("cover.inner", "open", position)
+        )
+        assert cover._startup_delay_task is not None
+        assert not cover._startup_delay_task.done()
+
+    @pytest.mark.parametrize(
+        "profile,stopped_state",
+        [("unknown_is_stop", "unknown"), ("reliable", "open")],
+    )
+    @pytest.mark.asyncio
+    async def test_stop_after_an_attribute_report_drops_the_parked_start(
+        self, make_cover, profile, stopped_state
+    ):
+        """The attribute report keeps the parked start; it must still know
+        which way that start goes, so the stop that follows ends it."""
+        cover = self._cover(make_cover, profile)
+        with self._no_ha(cover):
+            parked = await self._move_to(cover, 80)
+            await self._attribute_report(cover, 51)
+            _set_wrapped_state(cover, stopped_state, current_position=55)
+            await _dispatch_late(cover, "opening", stopped_state)
+            await self._run_out(parked)
+
+        assert parked.cancelled()
+        assert cover.travel_calc.current_position() == 55
+        assert not cover.travel_calc.is_traveling()
+        assert cover._startup_delay_task is None
+
+    # An attribute report in between must not hide which way the parked open
+    # goes: the close has to be handled exactly as it is without one.
+    _WITH_ATTRIBUTE_REPORT = pytest.mark.parametrize(
+        "attribute_report", [False, True], ids=["plain", "after_attribute_report"]
+    )
+
+    @_WITH_ATTRIBUTE_REPORT
+    @pytest.mark.asyncio
+    async def test_close_asked_for_while_our_open_is_parked_reverses(
+        self, make_cover, attribute_report
+    ):
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            await self._move_to(cover, 80)
+            if attribute_report:
+                await self._attribute_report(cover, 51)
+            await cover.async_close_cover()
+            await self._run_out(self._parked_reversal(cover))
+
+        assert _stop_calls(cover)
+        assert cover.travel_calc.is_closing()
+
+    @_WITH_ATTRIBUTE_REPORT
+    @pytest.mark.asyncio
+    async def test_position_the_other_way_while_our_open_is_parked_reverses(
+        self, make_cover, attribute_report
+    ):
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            await self._move_to(cover, 80)
+            if attribute_report:
+                await self._attribute_report(cover, 51)
+            await cover.async_set_cover_position(position=20)
+            await self._run_out(self._parked_reversal(cover))
+
+        assert cover.travel_calc.is_closing()
+
+    @_WITH_ATTRIBUTE_REPORT
+    @pytest.mark.asyncio
+    async def test_close_reported_while_our_open_is_parked_drops_it(
+        self, make_cover, attribute_report
+    ):
+        """Not our own echo: the cover reports moving the other way."""
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            parked = await self._move_to(cover, 80)
+            if attribute_report:
+                await self._attribute_report(cover, 51)
+            await _dispatch_late(cover, "open", "closing")
+            assert cover._startup_delay_task is None
+            await self._run_out(parked)
+
+        assert parked.cancelled()
+
+        assert not cover.travel_calc.is_traveling()
+
+    # A stop report that carries no position takes the other branch of the
+    # handler: the same rule must decide whether it ends the parked start.
+    _NO_POSITION_STOPS = pytest.mark.parametrize(
+        "profile,stopped_state",
+        [("unknown_is_stop", "unknown"), ("reliable", "open")],
+    )
+
+    @pytest.mark.parametrize(
+        "profile,invert,moving_state,stopped_state",
+        [
+            ("unknown_is_stop", False, "opening", "unknown"),
+            ("reliable", False, "opening", "open"),
+            ("reliable", True, "closing", "open"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_positionless_stop_after_moving_our_way_drops_the_parked_start(
+        self, make_cover, profile, invert, moving_state, stopped_state
+    ):
+        cover = self._cover(make_cover, profile, invert=invert)
+        with self._no_ha(cover):
+            parked = await self._move_to(cover, 80)
+            _set_wrapped_state(cover, stopped_state)
+            await _dispatch_late(cover, moving_state, stopped_state)
+            await self._run_out(parked)
+
+        assert parked.cancelled()
+        assert cover.travel_calc.current_position() == 50
+        assert not cover.travel_calc.is_traveling()
+        assert cover._startup_delay_task is None
+        assert _stop_calls(cover) == []
+        assert cover._travel_motor_stop is not None
+        assert cover._travel_motor_stop[1] == SERVICE_OPEN_COVER
+
+    @pytest.mark.parametrize(
+        "profile,invert,moving_state,stopped_state",
+        [
+            ("unknown_is_stop", False, "closing", "unknown"),
+            ("reliable", False, "closing", "open"),
+            ("reliable", True, "opening", "open"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_positionless_stop_after_moving_the_other_way_keeps_the_parked_start(
+        self, make_cover, profile, invert, moving_state, stopped_state
+    ):
+        """The late stop report of an earlier close (a hub that reports a
+        stop seconds after it happened) must not cancel our open: the open
+        already went to the device and its auto-stop is the only stop the
+        device gets."""
+        cover = self._cover(make_cover, profile, invert=invert)
+        with self._no_ha(cover):
+            parked = await self._move_to(cover, 80)
+            _set_wrapped_state(cover, stopped_state)
+            await _dispatch_late(cover, moving_state, stopped_state)
+            await self._run_out(parked)
+
+        assert not parked.cancelled()
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc.is_opening()
+        assert cover._unsubscribe_auto_updater is not None
+
+    @_NO_POSITION_STOPS
+    @pytest.mark.asyncio
+    async def test_positionless_travel_report_leaves_a_parked_tilt_motor_start(
+        self, make_cover, profile, stopped_state
+    ):
+        cover = self._cover(
+            make_cover,
+            profile,
+            tilt_mode="dual_motor",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_startup_delay=self.STARTUP_DELAY,
+        )
+        cover.tilt_calc.set_position(50)
+        with self._no_ha(cover):
+            await cover.async_set_cover_tilt_position(tilt_position=80)
+            assert cover._moving_tilt_motor
+            parked = cover._startup_delay_task
+            assert parked is not None
+            assert not parked.done()
+            _set_wrapped_state(cover, stopped_state)
+            await _dispatch_late(cover, "opening", stopped_state)
+            await self._run_out(parked)
+
+        assert not parked.cancelled()
+        assert cover.tilt_calc.is_traveling()
