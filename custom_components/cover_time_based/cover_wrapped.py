@@ -494,6 +494,21 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 )
                 await self.async_stop_cover(supersede=False)
             await self._maybe_snap_to_reported_tilt()
+        elif (
+            new_val == STATE_UNKNOWN
+            and old_val in _MOVING_STATES
+            and self._reporting.unknown_after_move_is_stop
+        ):
+            target = self._wrapped_reported_position(trust_closed=False)
+            if target is not None:
+                await self._snap_to_position(target)
+            else:
+                self._log(
+                    "_handle_external_state_change :: wrapped cover stopped"
+                    " partway (reported unknown), no position info"
+                )
+                await self.async_stop_cover(supersede=False)
+            await self._maybe_snap_to_reported_tilt()
 
     async def _handle_command_state(self, new_val: str) -> None:
         """Reinterpret the wrapped entity's state as a command echo.

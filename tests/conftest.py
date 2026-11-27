@@ -122,6 +122,7 @@ def make_cover(make_hass, _mock_position_store):
         relay_reports_off=None,
         invert=None,
         reverse_on_opposite_command=None,
+        reporting_profile=None,
     ):
         if cover_entity_id is not None:
             options = {
@@ -193,6 +194,8 @@ def make_cover(make_hass, _mock_position_store):
                 reports_command_not_endpoint=bool(reports_command_not_endpoint),
                 ignore_all_reports=bool(ignore_all_reports),
             )
+        if reporting_profile is not None:
+            options[CONF_POSITION_REPORTING] = reporting_profile
         if force_endpoint_redrive is not None:
             options[CONF_FORCE_ENDPOINT_REDRIVE] = force_endpoint_redrive
         if wait_for_relay_feedback is not None:

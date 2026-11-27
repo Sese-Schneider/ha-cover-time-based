@@ -362,6 +362,30 @@ class TestPositionReportingRoundTrip:
         ):
             assert legacy not in new_options
 
+    @pytest.mark.asyncio
+    async def test_update_config_persists_unknown_is_stop(self):
+        msg = {
+            "id": 1,
+            "type": "cover_time_based/update_config",
+            "entity_id": ENTITY_ID,
+            "position_reporting": "unknown_is_stop",
+        }
+        # Through the real schema, so the value must be a declared choice.
+        validated = ws_update_config._ws_schema(msg)
+
+        hass, _, entity_reg = _make_hass(
+            options={CONF_CONTROL_MODE: CONTROL_MODE_WRAPPED}
+        )
+        conn = _make_connection()
+        with patch(
+            "custom_components.cover_time_based.websocket_api.er.async_get",
+            return_value=entity_reg,
+        ):
+            await _ws_update_config(hass, conn, validated)
+
+        new_options = hass.config_entries.async_update_entry.call_args[1]["options"]
+        assert new_options[CONF_POSITION_REPORTING] == "unknown_is_stop"
+
     def test_update_config_rejects_unknown_position_reporting(self):
         """An unknown position_reporting value must fail schema validation."""
         import voluptuous as vol

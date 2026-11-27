@@ -9,13 +9,14 @@ from custom_components.cover_time_based.position_reporting import (
     PositionReportingPolicy,
 )
 
-# profile value -> the six predicates, in field order.
+# profile value -> the seven predicates, in field order.
 EXPECTED = {
-    "reliable": (True, True, True, False, False, True),
-    "unreliable": (False, True, False, False, False, True),
-    "no_endpoints": (True, False, True, False, False, True),
-    "command_echo": (False, False, False, True, False, False),
-    "ignore_all": (False, False, False, False, True, False),
+    "reliable": (True, True, True, False, False, True, False),
+    "unreliable": (False, True, False, False, False, True, False),
+    "no_endpoints": (True, False, True, False, False, True, False),
+    "command_echo": (False, False, False, True, False, False, False),
+    "ignore_all": (False, False, False, False, True, False, False),
+    "unknown_is_stop": (True, True, True, False, False, True, True),
 }
 
 
@@ -27,6 +28,7 @@ def _as_tuple(p: PositionReportingPolicy):
         p.state_is_command,
         p.ignores_all_transitions,
         p.permits_native,
+        p.unknown_after_move_is_stop,
     )
 
 
