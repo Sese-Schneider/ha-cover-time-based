@@ -882,6 +882,11 @@ the final state once it settles. In that case the position cannot be tracked
 during the movement, but it snaps to the wrapped entity's reported position once
 it settles.
 
+If your device reports `unknown`, rather than `open`, when it is stopped partway
+from a wall switch or its own app, the tracker misses the stop and runs on to the
+endpoint. Set [Position reporting](#position-reporting) to **Reliable, but shows
+unknown when stopped partway**.
+
 If instead your device reports `closed` or `unknown` the moment a command is
 issued, so that a manual stop mid-travel is wrongly reported as fully closed, set
 [Position reporting](#position-reporting) to **State mirrors the last command** to

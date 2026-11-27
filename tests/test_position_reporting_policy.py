@@ -9,14 +9,14 @@ from custom_components.cover_time_based.position_reporting import (
     PositionReportingPolicy,
 )
 
-# profile value -> the seven predicates, in field order.
+# profile value -> the seven predicates, in _as_tuple order.
 EXPECTED = {
     "reliable": (True, True, True, False, False, True, False),
+    "unknown_is_stop": (True, True, True, False, False, True, True),
     "unreliable": (False, True, False, False, False, True, False),
     "no_endpoints": (True, False, True, False, False, True, False),
     "command_echo": (False, False, False, True, False, False, False),
     "ignore_all": (False, False, False, False, True, False, False),
-    "unknown_is_stop": (True, True, True, False, False, True, True),
 }
 
 

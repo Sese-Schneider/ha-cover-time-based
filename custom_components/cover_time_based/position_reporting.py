@@ -46,19 +46,19 @@ class PositionReportingPolicy:
 
 
 RELIABLE = PositionReportingPolicy(True, True, False, False)
+UNKNOWN_IS_STOP = PositionReportingPolicy(True, True, False, False, True)
 UNRELIABLE = PositionReportingPolicy(False, True, False, False)
 NO_ENDPOINTS = PositionReportingPolicy(True, False, False, False)
 COMMAND_ECHO = PositionReportingPolicy(False, False, True, False)
 IGNORE_ALL = PositionReportingPolicy(False, False, False, True)
-UNKNOWN_IS_STOP = PositionReportingPolicy(True, True, False, False, True)
 
 _BY_PROFILE = {
     POSITION_REPORTING_RELIABLE: RELIABLE,
+    POSITION_REPORTING_UNKNOWN_IS_STOP: UNKNOWN_IS_STOP,
     POSITION_REPORTING_UNRELIABLE: UNRELIABLE,
     POSITION_REPORTING_NO_ENDPOINTS: NO_ENDPOINTS,
     POSITION_REPORTING_COMMAND_ECHO: COMMAND_ECHO,
     POSITION_REPORTING_IGNORE_ALL: IGNORE_ALL,
-    POSITION_REPORTING_UNKNOWN_IS_STOP: UNKNOWN_IS_STOP,
 }
 
 

@@ -334,7 +334,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
 
         Mirrors the inner cover's state transitions — start, stop, and
         direction changes. When the wrapped cover settles into a stopped
-        state we snap to its reported position; for covers without a
+        state, or (unknown_is_stop profile) goes from opening/closing to
+        unknown, we snap to its reported position; for covers without a
         current_position attribute we fall back to stopping the tracker.
         On settle we also snap tilt to the wrapped cover's reported tilt
         (native-tilt covers only, via _maybe_snap_to_reported_tilt).
@@ -508,7 +509,6 @@ class WrappedCoverTimeBased(CoverTimeBased):
                     " partway (reported unknown), no position info"
                 )
                 await self.async_stop_cover(supersede=False)
-            await self._maybe_snap_to_reported_tilt()
 
     async def _handle_command_state(self, new_val: str) -> None:
         """Reinterpret the wrapped entity's state as a command echo.
