@@ -338,19 +338,19 @@ class WrappedCoverTimeBased(CoverTimeBased):
         Mirrors the inner cover's state transitions — start, stop, and
         direction changes. When the wrapped cover settles into a stopped
         state, or (unknown_is_stop profile) goes from opening/closing to
-        unknown, we snap to its reported position; for covers without a
-        current_position attribute we fall back to stopping the tracker
-        (_stop_without_position).
+        unknown, we snap to its reported position; covers without a
+        current_position attribute fall back to _stop_without_position, which
+        stops the tracker unless a start of ours is waiting that the report
+        does not end.
         On an open/closed settle (not the unknown path) we also snap tilt to
         the wrapped cover's reported tilt
         (native-tilt covers only, via _maybe_snap_to_reported_tilt).
         When self._invert is set, the underlying's opening/closing are
         interpreted as our close/open (swapped).
 
-        ``new_state`` is the event's state. Positions are read from it, not
-        the state machine, which can already hold a newer state: Home
-        Assistant queues a state change made while another is handed out.
-        None (a direct call) reads the state machine.
+        ``new_state`` is the event's state. Positions are read from it: the
+        handler runs after the event, so the state machine may already hold a
+        newer state. None (a direct call) reads the state machine.
         """
         # The underlying is a dumb relay whose every report is untrustworthy
         # (issue #248): ignore state, transitions and position alike and track
@@ -696,11 +696,11 @@ class WrappedCoverTimeBased(CoverTimeBased):
     def _report_ends_parked_start(self, stopped_from: str | None) -> bool:
         """Whether a settle report ends the move whose start is still parked.
 
-        Left armed, the start would set the tracker travelling after the snap
-        while the device stands still. Only a stop that follows movement the
-        way that move goes ends it. One following movement the other way is
-        the late end of the move before a reversal. One following any other
-        state (a stopped one, a reappearance, or none at all for an
+        Left armed, the start would set the tracker travelling after the stop
+        is recorded while the device stands still. Only a stop that follows
+        movement the way that move goes ends it. One following movement the
+        other way is the late end of the move before a reversal. One following
+        any other state (a stopped one, a reappearance, or none at all for an
         attribute-only report) shows no stop of a move: a position-only cover
         starting to move reports closed -> open. Either way our start has yet
         to run, and its auto-stop is the only stop the device gets. A parked
