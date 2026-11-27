@@ -144,16 +144,41 @@ def entity_removals(hass: HomeAssistant) -> list[dict]:
     return removals
 
 
+# Debug-mode asyncio warns whenever one step runs long, which a busy CI runner
+# does at random. Only that message is dropped: asyncio's other warnings and
+# errors (a lost task exception, say) still fail the test.
+_ASYNCIO_SLOW_STEP = "Executing %s took %.3f seconds"
+
+
+def _noisy(records):
+    return [
+        f"{r.name}: {r.getMessage()}"
+        for r in records
+        if r.levelno >= logging.WARNING
+        and r.name not in _UNRELATED_LOGGERS
+        and not (r.name == "asyncio" and r.msg == _ASYNCIO_SLOW_STEP)
+    ]
+
+
 @pytest.fixture
 def no_warnings(caplog):
     """Fail if the test body logs anything at warning or above (deprecations too)."""
     yield
-    noisy = [
-        f"{r.name}: {r.getMessage()}"
-        for r in caplog.get_records("call")
-        if r.levelno >= logging.WARNING and r.name not in _UNRELATED_LOGGERS
-    ]
-    assert noisy == []
+    assert _noisy(caplog.get_records("call")) == []
+
+
+def _asyncio_record(msg, *args, level=logging.WARNING):
+    return logging.LogRecord("asyncio", level, __file__, 0, msg, args, None)
+
+
+def test_a_slow_step_on_the_ci_runner_is_not_a_warning_of_ours():
+    slow = _asyncio_record("Executing %s took %.3f seconds", "<Task finished>", 0.155)
+    assert _noisy([slow]) == []
+
+
+def test_any_other_asyncio_warning_still_counts():
+    lost = _asyncio_record("Task exception was never retrieved", level=logging.ERROR)
+    assert _noisy([lost]) == ["asyncio: Task exception was never retrieved"]
 
 
 async def test_wrapped_cover_joins_the_inner_covers_device(
