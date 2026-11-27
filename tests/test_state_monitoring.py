@@ -2895,3 +2895,78 @@ class TestReportedStopDuringStartupDelay:
         assert parked.cancelled()
 
         assert not cover.travel_calc.is_traveling()
+
+    # A stop report that carries no position takes the other branch of the
+    # handler: the same rule must decide whether it ends the parked start.
+    _NO_POSITION_STOPS = pytest.mark.parametrize(
+        "profile,stopped_state",
+        [("unknown_is_stop", "unknown"), ("reliable", "open")],
+    )
+
+    @_NO_POSITION_STOPS
+    @pytest.mark.asyncio
+    async def test_positionless_stop_after_moving_our_way_drops_the_parked_start(
+        self, make_cover, profile, stopped_state
+    ):
+        cover = self._cover(make_cover, profile)
+        with self._no_ha(cover):
+            parked = await self._move_to(cover, 80)
+            _set_wrapped_state(cover, stopped_state)
+            await _dispatch_late(cover, "opening", stopped_state)
+            await self._run_out(parked)
+
+        assert parked.cancelled()
+        assert cover.travel_calc.current_position() == 50
+        assert not cover.travel_calc.is_traveling()
+        assert cover._startup_delay_task is None
+        assert _stop_calls(cover) == []
+        assert cover._travel_motor_stop is not None
+        assert cover._travel_motor_stop[1] == SERVICE_OPEN_COVER
+
+    @_NO_POSITION_STOPS
+    @pytest.mark.asyncio
+    async def test_positionless_stop_after_moving_the_other_way_keeps_the_parked_start(
+        self, make_cover, profile, stopped_state
+    ):
+        """The late stop report of an earlier close (a hub that reports a
+        stop seconds after it happened) must not cancel our open: the open
+        already went to the device and its auto-stop is the only stop the
+        device gets."""
+        cover = self._cover(make_cover, profile)
+        with self._no_ha(cover):
+            parked = await self._move_to(cover, 80)
+            _set_wrapped_state(cover, stopped_state)
+            await _dispatch_late(cover, "closing", stopped_state)
+            await self._run_out(parked)
+
+        assert not parked.cancelled()
+        assert cover.travel_calc.is_traveling()
+        assert cover.travel_calc.is_opening()
+        assert cover._unsubscribe_auto_updater is not None
+
+    @_NO_POSITION_STOPS
+    @pytest.mark.asyncio
+    async def test_positionless_travel_report_leaves_a_parked_tilt_motor_start(
+        self, make_cover, profile, stopped_state
+    ):
+        cover = self._cover(
+            make_cover,
+            profile,
+            tilt_mode="dual_motor",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_startup_delay=self.STARTUP_DELAY,
+        )
+        cover.tilt_calc.set_position(50)
+        with self._no_ha(cover):
+            await cover.async_set_cover_tilt_position(tilt_position=80)
+            assert cover._moving_tilt_motor
+            parked = cover._startup_delay_task
+            assert parked is not None
+            assert not parked.done()
+            _set_wrapped_state(cover, stopped_state)
+            await _dispatch_late(cover, "opening", stopped_state)
+            await self._run_out(parked)
+
+        assert not parked.cancelled()
+        assert cover.tilt_calc.is_traveling()

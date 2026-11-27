@@ -337,7 +337,8 @@ class WrappedCoverTimeBased(CoverTimeBased):
         direction changes. When the wrapped cover settles into a stopped
         state, or (unknown_is_stop profile) goes from opening/closing to
         unknown, we snap to its reported position; for covers without a
-        current_position attribute we fall back to stopping the tracker.
+        current_position attribute we fall back to stopping the tracker
+        (_stop_without_position).
         On an open/closed settle (not the unknown path) we also snap tilt to
         the wrapped cover's reported tilt
         (native-tilt covers only, via _maybe_snap_to_reported_tilt).
@@ -491,11 +492,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
                     " reporting no position, keeping the tracked position"
                 )
             elif old_val in _MOVING_STATES:
-                self._log(
-                    "_handle_external_state_change :: wrapped cover stopped,"
-                    " no position info"
-                )
-                await self.async_stop_cover(supersede=False)
+                await self._stop_without_position(old_val, "stopped")
             await self._maybe_snap_to_reported_tilt()
         elif (
             new_val == STATE_UNKNOWN
@@ -507,11 +504,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
             if target is not None:
                 await self._snap_to_position(target, stopped_from=old_val)
             else:
-                self._log(
-                    "_handle_external_state_change :: wrapped cover stopped"
-                    " partway (reported unknown), no position info"
+                await self._stop_without_position(
+                    old_val, "stopped partway (reported unknown)"
                 )
-                await self.async_stop_cover(supersede=False)
 
     async def _handle_command_state(self, new_val: str) -> None:
         """Reinterpret the wrapped entity's state as a command echo.
@@ -659,6 +654,33 @@ class WrappedCoverTimeBased(CoverTimeBased):
         # The device reporting where it ended up, not a command — it must not
         # cancel a reversal waiting out its settle gap.
         await self.set_known_position(position=target, supersede=False)
+
+    async def _stop_without_position(self, stopped_from: str, how: str) -> None:
+        """Stop the tracker for a stop report that carries no position.
+
+        A start still parked that the report does not end (see
+        _report_ends_parked_start) is left to run: its command already went
+        out and its auto-stop is the only stop the device gets.
+        """
+        task = self._startup_delay_task
+        if (
+            task is not None
+            and not task.done()
+            and not self._report_ends_parked_start(stopped_from)
+        ):
+            self._log(
+                "_handle_external_state_change :: wrapped cover %s after %s,"
+                " no position info; keeping the start waiting out its"
+                " startup delay",
+                how,
+                stopped_from,
+            )
+            return
+        self._log(
+            "_handle_external_state_change :: wrapped cover %s, no position info",
+            how,
+        )
+        await self.async_stop_cover(supersede=False)
 
     def _report_ends_parked_start(self, stopped_from: str | None) -> bool:
         """Whether a settle report ends the move whose start is still parked.
