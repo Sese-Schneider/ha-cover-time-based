@@ -2675,8 +2675,8 @@ class TestReportedStopDuringStartupDelay:
         return cover
 
     @staticmethod
-    async def _open_to_80(cover):
-        await cover.async_set_cover_position(position=80)
+    async def _move_to(cover, position):
+        await cover.async_set_cover_position(position=position)
         assert cover._startup_delay_task is not None
         assert not cover._startup_delay_task.done()
 
@@ -2694,7 +2694,7 @@ class TestReportedStopDuringStartupDelay:
     ):
         cover = self._cover(make_cover, profile, invert=invert)
         with self._no_ha(cover):
-            await self._open_to_80(cover)
+            await self._move_to(cover, 80)
             _set_wrapped_state(cover, stopped_state, current_position=reported)
             await _dispatch_late(cover, moving_state, stopped_state)
             await asyncio.sleep(self.STARTUP_DELAY + 0.2)
@@ -2715,38 +2715,75 @@ class TestReportedStopDuringStartupDelay:
         before ours; our open has yet to start and still has to be tracked."""
         cover = self._cover(make_cover, "reliable")
         with self._no_ha(cover):
-            await self._open_to_80(cover)
+            await self._move_to(cover, 80)
             _set_wrapped_state(cover, "open", current_position=30)
             await _dispatch_late(cover, "closing", "open")
             await asyncio.sleep(self.STARTUP_DELAY + 0.2)
 
         assert cover.travel_calc.is_traveling()
 
+    # Closing as well as opening: a previous state that is not a moving one
+    # (closed, or none at all) would otherwise read as the cover closing.
+    _OUR_MOVES = pytest.mark.parametrize(
+        "target,reported", [(80, 51), (20, 49)], ids=["open", "close"]
+    )
+
+    @_OUR_MOVES
     @pytest.mark.asyncio
-    async def test_stopped_to_stopped_keeps_the_parked_start(self, make_cover):
+    async def test_stopped_to_stopped_keeps_the_parked_start(
+        self, make_cover, target, reported
+    ):
         """closed -> open with a position is a position-only cover starting to
         move, not stopping; the start's auto-stop is the only stop it gets."""
         cover = self._cover(make_cover, "reliable")
         with self._no_ha(cover):
-            await self._open_to_80(cover)
-            _set_wrapped_state(cover, "open", current_position=51)
+            await self._move_to(cover, target)
+            _set_wrapped_state(cover, "open", current_position=reported)
             await _dispatch_late(cover, "closed", "open")
             await asyncio.sleep(self.STARTUP_DELAY + 0.2)
 
         assert cover.travel_calc.is_traveling()
 
+    @_OUR_MOVES
     @pytest.mark.asyncio
-    async def test_attribute_only_report_keeps_the_parked_start(self, make_cover):
+    async def test_attribute_only_report_keeps_the_parked_start(
+        self, make_cover, target, reported
+    ):
         """A position-only cover's attribute report inside the startup window
         says nothing about a stop; the start's auto-stop must survive."""
         cover = self._cover(make_cover, "reliable")
         with self._no_ha(cover):
-            await self._open_to_80(cover)
+            await self._move_to(cover, target)
             cover._last_self_command_time = None
-            _set_wrapped_state(cover, "open", current_position=51)
+            _set_wrapped_state(cover, "open", current_position=reported)
             await cover._handle_external_attribute_change(
-                _make_attribute_event("cover.inner", "open", 51)
+                _make_attribute_event("cover.inner", "open", reported)
             )
             await asyncio.sleep(self.STARTUP_DELAY + 0.2)
 
         assert cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_travel_report_leaves_a_parked_tilt_motor_start(self, make_cover):
+        """A dual-motor tilt move also records open/close as its last command,
+        but the cover's opening -> open speaks for the travel motor; the tilt
+        open already went out and its tracker must still run."""
+        cover = self._cover(
+            make_cover,
+            "reliable",
+            tilt_mode="dual_motor",
+            tilt_time_close=5.0,
+            tilt_time_open=5.0,
+            tilt_startup_delay=self.STARTUP_DELAY,
+        )
+        cover.tilt_calc.set_position(50)
+        with self._no_ha(cover):
+            await cover.async_set_cover_tilt_position(tilt_position=80)
+            assert cover._moving_tilt_motor
+            assert cover._startup_delay_task is not None
+            assert not cover._startup_delay_task.done()
+            _set_wrapped_state(cover, "open", current_position=50)
+            await _dispatch_late(cover, "opening", "open")
+            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+
+        assert cover.tilt_calc.is_traveling()

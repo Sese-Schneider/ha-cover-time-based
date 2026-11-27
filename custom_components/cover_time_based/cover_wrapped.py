@@ -660,12 +660,21 @@ class WrappedCoverTimeBased(CoverTimeBased):
         Left armed, the start would set the tracker travelling after the snap
         while the device stands still. Only a stop that follows movement the
         way that move goes ends it. One following movement the other way is
-        the late end of the move before a reversal; one following a stopped
-        state is a position-only cover starting to move. Either way our start
-        has yet to run, and its auto-stop is the only stop the device gets.
+        the late end of the move before a reversal. One following any other
+        state (a stopped one, a reappearance, or none at all for an
+        attribute-only report) shows no stop of a move: a position-only cover
+        starting to move reports closed -> open. Either way our start has yet
+        to run, and its auto-stop is the only stop the device gets. A parked
+        start on a separate tilt motor is left alone: the cover's state speaks
+        for its travel motor.
         """
         task = self._startup_delay_task
-        if task is None or task.done() or stopped_from not in _MOVING_STATES:
+        if (
+            task is None
+            or task.done()
+            or self._moving_tilt_motor
+            or stopped_from not in _MOVING_STATES
+        ):
             return False
         reported_open = (stopped_from == STATE_OPENING) != self._invert
         return self._last_command == (
