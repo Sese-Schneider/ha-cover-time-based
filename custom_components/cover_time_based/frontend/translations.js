@@ -26,6 +26,9 @@ export const EN = {
   "position_reporting.reliable": "Reliable position feedback",
   "position_reporting.reliable_helper":
     "The wrapped cover reports a trustworthy position and reaches its real open/closed endpoints. The default — the right choice unless the tracked position drifts from where the cover actually is.",
+  "position_reporting.unknown_is_stop": "Reliable, but shows unknown when stopped partway",
+  "position_reporting.unknown_is_stop_helper":
+    "Like Reliable, but when the cover goes from opening or closing to unknown, the position stops there. Choose this for covers (e.g. Fibaro) that report unknown instead of open when stopped mid-travel. Do not use it for covers that report unknown while still moving.",
   "position_reporting.unreliable": "Position unreliable — track by time",
   "position_reporting.unreliable_helper":
     "Track position by time only and ignore the position the wrapped cover reports. Enable this if the underlying cover reports an unreliable position.",
@@ -212,6 +215,9 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Retorno de posição fiável",
     "position_reporting.reliable_helper":
       "O estore envolvido reporta uma posição fiável e alcança os seus extremos reais de aberto/fechado. A predefinição — a escolha certa a menos que a posição rastreada se desvie de onde o estore realmente está.",
+    "position_reporting.unknown_is_stop": "Fiável, mas reporta desconhecido quando parado a meio",
+    "position_reporting.unknown_is_stop_helper":
+      "Como Fiável, mas quando o estore passa de a abrir ou a fechar para desconhecido, a posição para aí. Escolha isto para estores (por exemplo, Fibaro) que reportam desconhecido em vez de aberto quando param a meio do deslocamento. Não o use para estores que reportam desconhecido enquanto ainda se movem.",
     "position_reporting.unreliable": "Posição não fiável — rastrear pelo tempo",
     "position_reporting.unreliable_helper":
       "Rastrear a posição apenas pelo tempo e ignorar a posição reportada pelo estore. Ative isto se o estore subjacente reportar uma posição não fiável.",
@@ -398,6 +404,10 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Wiarygodna informacja zwrotna o pozycji",
     "position_reporting.reliable_helper":
       "Opakowana roleta zgłasza wiarygodną pozycję i osiąga rzeczywiste krańce otwarcia/zamknięcia. Ustawienie domyślne — właściwy wybór, chyba że śledzona pozycja dryfuje względem faktycznego położenia rolety.",
+    "position_reporting.unknown_is_stop":
+      "Wiarygodna, ale zgłasza nieznana po zatrzymaniu w trakcie ruchu",
+    "position_reporting.unknown_is_stop_helper":
+      "Jak Wiarygodna, ale gdy roleta przechodzi z otwierania lub zamykania do stanu nieznana, pozycja zatrzymuje się w tym miejscu. Wybierz dla rolet (np. Fibaro), które po zatrzymaniu w trakcie ruchu zgłaszają nieznana zamiast otwarta. Nie używaj dla rolet, które zgłaszają nieznana jeszcze w trakcie ruchu.",
     "position_reporting.unreliable": "Niewiarygodna pozycja — śledź na podstawie czasu",
     "position_reporting.unreliable_helper":
       "Śledź pozycję wyłącznie na podstawie czasu i ignoruj pozycję zgłaszaną przez roletę. Włącz tę opcję, jeśli roleta zgłasza niewiarygodną pozycję.",
@@ -584,6 +594,10 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Zuverlässige Positionsrückmeldung",
     "position_reporting.reliable_helper":
       "Der eingebundene Rollladen meldet eine zuverlässige Position und erreicht seine echten Endlagen offen/geschlossen. Der Standard — die richtige Wahl, sofern die verfolgte Position nicht von der tatsächlichen Position des Rollladens abdriftet.",
+    "position_reporting.unknown_is_stop":
+      "Zuverlässig, meldet aber unbekannt beim Stoppen mitten in der Fahrt",
+    "position_reporting.unknown_is_stop_helper":
+      "Wie Zuverlässig, aber wenn der Rollladen von öffnet oder schließt zu unbekannt wechselt, bleibt die Position dort stehen. Wähle dies für Rollläden (z. B. Fibaro), die unbekannt statt offen melden, wenn sie mitten in der Fahrt stoppen. Nicht für Rollläden verwenden, die unbekannt melden, während sie sich noch bewegen.",
     "position_reporting.unreliable": "Position unzuverlässig — über die Zeit verfolgen",
     "position_reporting.unreliable_helper":
       "Die Position ausschließlich über die Zeit verfolgen und die vom eingebundenen Rollladen gemeldete Position ignorieren. Aktiviere dies, wenn der zugrunde liegende Rollladen eine unzuverlässige Position meldet.",
@@ -774,6 +788,10 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Retroazione di posizione affidabile",
     "position_reporting.reliable_helper":
       "La tapparella incapsulata riporta una posizione affidabile e raggiunge i suoi veri finecorsa di apertura/chiusura. È l'impostazione predefinita — la scelta giusta a meno che la posizione tracciata non vada alla deriva rispetto a dove si trova realmente la tapparella.",
+    "position_reporting.unknown_is_stop":
+      "Affidabile, ma riporta sconosciuto quando si ferma a metà corsa",
+    "position_reporting.unknown_is_stop_helper":
+      "Come Affidabile, ma quando la tapparella passa da in apertura o in chiusura a sconosciuto, la posizione si ferma lì. Sceglila per le tapparelle (ad esempio Fibaro) che riportano sconosciuto anziché aperta quando si fermano a metà corsa. Non usarla per le tapparelle che riportano sconosciuto mentre sono ancora in movimento.",
     "position_reporting.unreliable": "Posizione non affidabile — traccia in base al tempo",
     "position_reporting.unreliable_helper":
       "Traccia la posizione solo in base al tempo e ignora la posizione riportata dalla tapparella incapsulata. Attiva questa opzione se la tapparella sottostante riporta una posizione non affidabile.",
@@ -961,6 +979,9 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Betrouwbare positieterugkoppeling",
     "position_reporting.reliable_helper":
       "Het ingekapselde rolluik rapporteert een betrouwbare positie en bereikt zijn echte eindstanden voor open en gesloten. De standaard — de juiste keuze, tenzij de gevolgde positie afwijkt van waar het rolluik zich werkelijk bevindt.",
+    "position_reporting.unknown_is_stop": "Betrouwbaar, maar meldt onbekend bij stoppen halverwege",
+    "position_reporting.unknown_is_stop_helper":
+      "Zoals Betrouwbaar, maar wanneer het rolluik van de status openen of sluiten naar onbekend gaat, stopt de positie daar. Kies dit voor rolluiken (bijvoorbeeld Fibaro) die onbekend in plaats van open melden wanneer ze halverwege de beweging stoppen. Gebruik het niet voor rolluiken die onbekend melden terwijl ze nog bewegen.",
     "position_reporting.unreliable": "Positie onbetrouwbaar — volgen op tijd",
     "position_reporting.unreliable_helper":
       "Volg de positie uitsluitend op tijd en negeer de positie die het ingekapselde rolluik rapporteert. Schakel dit in als het onderliggende rolluik een onbetrouwbare positie rapporteert.",
@@ -1148,6 +1169,10 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Retour de position fiable",
     "position_reporting.reliable_helper":
       "Le volet encapsulé rapporte une position fiable et atteint ses véritables fins de course ouvert/fermé. Option par défaut — le bon choix, sauf si la position suivie dérive par rapport à la position réelle du volet.",
+    "position_reporting.unknown_is_stop":
+      "Fiable, mais rapporte inconnu à l'arrêt en pleine course",
+    "position_reporting.unknown_is_stop_helper":
+      "Comme Fiable, mais lorsque le volet passe de l'état en ouverture ou en fermeture à inconnu, la position s'arrête là. Choisissez cette option pour les volets (par exemple Fibaro) qui rapportent inconnu au lieu d'ouvert lorsqu'ils s'arrêtent en pleine course. Ne l'utilisez pas pour les volets qui rapportent inconnu alors qu'ils sont encore en mouvement.",
     "position_reporting.unreliable": "Position peu fiable — suivre d'après le temps",
     "position_reporting.unreliable_helper":
       "Suivre la position uniquement d'après le temps et ignorer la position rapportée par le volet encapsulé. Activez cette option si le volet sous-jacent rapporte une position peu fiable.",
@@ -1334,6 +1359,10 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Realimentación de posición fiable",
     "position_reporting.reliable_helper":
       "La persiana envuelta informa de una posición fiable y alcanza sus finales de carrera reales de apertura y cierre. La opción predeterminada — la elección correcta a menos que la posición rastreada se desvíe de la posición real de la persiana.",
+    "position_reporting.unknown_is_stop":
+      "Fiable, pero informa de desconocido al detenerse a mitad del recorrido",
+    "position_reporting.unknown_is_stop_helper":
+      "Como Fiable, pero cuando la persiana pasa de abriendo o cerrando a desconocido, la posición se detiene ahí. Elígelo para persianas (por ejemplo, Fibaro) que informan de desconocido en lugar de abierto cuando se detienen a mitad del recorrido. No lo uses para persianas que informan de desconocido mientras aún se mueven.",
     "position_reporting.unreliable": "Posición poco fiable — seguir por tiempo",
     "position_reporting.unreliable_helper":
       "Seguir la posición solo por tiempo e ignorar la posición que indica la persiana envuelta. Activa esta opción si la persiana subyacente informa de una posición poco fiable.",
@@ -1523,6 +1552,10 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Realimentació de posició fiable",
     "position_reporting.reliable_helper":
       "La persiana embolcallada informa d'una posició fiable i arriba als seus finals de cursa reals d'obertura i tancament. L'opció per defecte — la tria correcta tret que la posició seguida es desviï d'on és realment la persiana.",
+    "position_reporting.unknown_is_stop":
+      "Fiable, però informa de desconegut en aturar-se a mig recorregut",
+    "position_reporting.unknown_is_stop_helper":
+      "Com Fiable, però quan la persiana passa d'obrint o tancant a desconegut, la posició s'atura allà. Tria-ho per a persianes (per exemple, Fibaro) que informen de desconegut en lloc d'obert quan s'aturen a mig recorregut. No ho facis servir per a persianes que informen de desconegut mentre encara es mouen.",
     "position_reporting.unreliable": "Posició poc fiable — segueix per temps",
     "position_reporting.unreliable_helper":
       "Fes el seguiment de la posició només per temps i ignora la posició que indica la persiana embolcallada. Activa aquesta opció si la persiana subjacent informa d'una posició poc fiable.",
@@ -1712,6 +1745,10 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Spolehlivá zpětná vazba pozice",
     "position_reporting.reliable_helper":
       "Zabalená roleta hlásí důvěryhodnou pozici a dosahuje svých skutečných koncových poloh otevřeno/zavřeno. Výchozí volba — správná, pokud se sledovaná pozice neodchyluje od toho, kde roleta ve skutečnosti je.",
+    "position_reporting.unknown_is_stop":
+      "Spolehlivá, ale při zastavení uprostřed pohybu hlásí neznámý",
+    "position_reporting.unknown_is_stop_helper":
+      "Jako Spolehlivá, ale když roleta přejde ze stavu otevírání nebo zavírání do stavu neznámý, pozice se tam zastaví. Zvolte pro rolety (např. Fibaro), které při zastavení uprostřed pohybu hlásí neznámý místo otevřeno. Nepoužívejte pro rolety, které hlásí neznámý ještě během pohybu.",
     "position_reporting.unreliable": "Pozice nespolehlivá — sledovat podle času",
     "position_reporting.unreliable_helper":
       "Sledovat pozici pouze podle času a ignorovat pozici, kterou hlásí zabalená roleta. Zapněte, pokud podkladová roleta hlásí nespolehlivou pozici.",
@@ -1896,6 +1933,10 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Pouzdana povratna informacija o poziciji",
     "position_reporting.reliable_helper":
       "Omotana roletna prijavljuje pouzdanu poziciju i dostiže svoje stvarne krajnje položaje otvoreno/zatvoreno. Podrazumevana opcija — pravi izbor osim ako praćena pozicija ne odstupa od stvarnog položaja roletne.",
+    "position_reporting.unknown_is_stop":
+      "Pouzdano, ali prijavljuje nepoznato pri zaustavljanju usred kretanja",
+    "position_reporting.unknown_is_stop_helper":
+      "Kao Pouzdano, ali kada roletna pređe iz stanja otvaranja ili zatvaranja u nepoznato, pozicija se tu zaustavlja. Izaberite ovo za roletne (npr. Fibaro) koje prijavljuju nepoznato umesto otvoreno kada se zaustave usred kretanja. Ne koristite ga za roletne koje prijavljuju nepoznato dok se još kreću.",
     "position_reporting.unreliable": "Pozicija nepouzdana — prati po vremenu",
     "position_reporting.unreliable_helper":
       "Prati poziciju samo po vremenu i zanemari poziciju koju prijavljuje omotana roletna. Omogućite ovo ako osnovna roletna prijavljuje nepouzdanu poziciju.",
@@ -2080,6 +2121,9 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "משוב מיקום אמין",
     "position_reporting.reliable_helper":
       "התריס העטוף מדווח על מיקום אמין ומגיע לנקודות הקצה האמיתיות שלו, פתוח וסגור. ברירת המחדל — הבחירה הנכונה, אלא אם המיקום שבמעקב סוטה מהמקום שבו התריס נמצא בפועל.",
+    "position_reporting.unknown_is_stop": "אמין, אך מדווח לא ידוע בעצירה באמצע התנועה",
+    "position_reporting.unknown_is_stop_helper":
+      "כמו אמין, אך כשהתריס עובר ממצב פתיחה או סגירה למצב לא ידוע, המיקום נעצר שם. יש לבחור באפשרות זו עבור תריסים (למשל Fibaro) שמדווחים לא ידוע במקום פתוח כשהם נעצרים באמצע התנועה. אין להשתמש בה עבור תריסים שמדווחים לא ידוע בזמן שהם עדיין בתנועה.",
     "position_reporting.unreliable": "מיקום לא אמין — מעקב לפי זמן",
     "position_reporting.unreliable_helper":
       "מעקב אחר המיקום לפי זמן בלבד, תוך התעלמות מהמיקום שהתריס העטוף מדווח. יש להפעיל אפשרות זו אם התריס העטוף מדווח על מיקום לא אמין.",
@@ -2263,6 +2307,10 @@ export const TRANSLATIONS = {
     "position_reporting.reliable": "Zanesljiva povratna informacija o položaju",
     "position_reporting.reliable_helper":
       "Ovito senčilo sporoča zanesljiv položaj in doseže svoja dejanska končna položaja odprto/zaprto. Privzeta izbira — prava, razen če sledeni položaj odstopa od dejanskega položaja senčila.",
+    "position_reporting.unknown_is_stop":
+      "Zanesljivo, vendar ob ustavitvi sredi poti sporoča neznano",
+    "position_reporting.unknown_is_stop_helper":
+      "Kot Zanesljivo, vendar ko senčilo preide iz odpiranja ali zapiranja v neznano, se položaj tam ustavi. Izberite za senčila (npr. Fibaro), ki ob ustavitvi sredi poti sporočajo neznano namesto odprto. Ne uporabljajte za senčila, ki sporočajo neznano, medtem ko se še premikajo.",
     "position_reporting.unreliable": "Položaj ni zanesljiv — sledi po času",
     "position_reporting.unreliable_helper":
       "Položaju sledi samo po času in prezre položaj, ki ga sporoča ovito senčilo. Vklopite, če osnovno senčilo sporoča nezanesljiv položaj.",

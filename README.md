@@ -190,6 +190,7 @@ how much to believe it. Pick the profile that matches your hardware.
 | Profile | Choose it when |
 | --- | --- |
 | **Reliable position feedback** _(default)_ | The cover reports a trustworthy position and reaches its real open and closed endpoints. Leave it here unless the tracked position drifts from where the cover actually is. |
+| **Reliable, but shows unknown when stopped partway** | The cover reports opening/closing while moving and real open/closed endpoints, but reports "unknown" when stopped partway (as Fibaro / Yubii Home covers do). A change from opening or closing to unknown is read as a stop; everything else is as Reliable. Note that some covers (e.g. Somfy RTS via Overkiz) report unknown while still moving — they must stay on Reliable. |
 | **Position unreliable — track by time** | The cover reports a position, but you cannot trust it. The reported position is ignored and everything is tracked by time, although a reported "closed" is still trusted as the fully-closed point. |
 | **No real endpoints — reports open/closed when stopped** | The cover has no real position feedback and reports "open" or "closed" whenever the motor stops anywhere, not only at the ends. Those reports are ignored, so stopping mid-travel does not snap the position to 0%. |
 | **State mirrors the last command** | The cover has no position feedback and simply echoes the last command: "open" while opening, "closed" while closing, and "unknown" when stopped, as some single-channel Tuya shutters do. Each state is read as an open, close, or stop command and tracked by time. |
@@ -198,8 +199,9 @@ how much to believe it. Pick the profile that matches your hardware.
 <details>
 <summary><strong>Choosing between no-real-endpoints and state-mirrors-last-command</strong></summary>
 
-The last two profiles both suit covers with no position feedback, but they treat
-the device's reports very differently.
+The **No real endpoints** and **State mirrors the last command** profiles both
+suit covers with no position feedback, but they treat the device's reports very
+differently.
 
 **No real endpoints** _ignores_ the device's open/closed reports and relies
 entirely on its own timers. Choose it for modules that periodically re-send a
