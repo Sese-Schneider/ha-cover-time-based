@@ -1330,7 +1330,7 @@ class TestWrappedCommandEchoMode:
         _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_STOP, state="closed")
         with patch.object(cover, "_snap_to_position", new=AsyncMock()) as snap_mock:
             await cover._handle_external_state_change("cover.inner", "open", "closed")
-        snap_mock.assert_awaited_once_with(0)
+        snap_mock.assert_awaited_once_with(0, stopped_from="open")
 
 
 class TestWrappedIgnoreEndpointStates:
@@ -1390,7 +1390,7 @@ class TestWrappedIgnoreEndpointStates:
             await cover._handle_external_state_change(
                 "cover.inner", "closing", "closed"
             )
-        snap_mock.assert_awaited_once_with(0)
+        snap_mock.assert_awaited_once_with(0, stopped_from="closing")
 
     def test_option_flows_through_cover_factory(self, make_cover):
         # The real options -> cover.py -> constructor path wires the flag.
@@ -1853,7 +1853,7 @@ class TestWrappedStaleReappearance:
             await cover._handle_external_state_change(
                 "cover.inner", STATE_UNAVAILABLE, "open"
             )
-        snap_mock.assert_awaited_once_with(70)
+        snap_mock.assert_awaited_once_with(70, stopped_from=STATE_UNAVAILABLE)
 
     @pytest.mark.asyncio
     async def test_reappearing_moving_still_starts_movement(self):

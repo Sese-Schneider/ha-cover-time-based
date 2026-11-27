@@ -5,6 +5,10 @@
 - **The Toggle modes can turn the relay off again after the pulse** ([#331](https://github.com/Sese-Schneider/ha-cover-time-based/issues/331), [#332](https://github.com/Sese-Schneider/ha-cover-time-based/pull/332)), contributed by [@tegola](https://github.com/tegola). They expect a relay that releases itself and only turn it on, so an ordinary relay stayed on after a command from Home Assistant. With the new **Turn the relay off after the pulse** switch on, the relay is turned off once the pulse time has passed. Off by default.
 - **A new Position reporting profile for wrapped covers, "Reliable, but shows unknown when stopped partway"** ([#328](https://github.com/Sese-Schneider/ha-cover-time-based/issues/328)). A cover that reports "unknown" when stopped mid-travel, as Fibaro / Yubii Home covers do, now has its tracked position stop there instead of running on to the endpoint.
 
+### Fixes
+
+- **A wrapped cover that reports it has stopped just after a command now keeps the position it reports** ([#335](https://github.com/Sese-Schneider/ha-cover-time-based/pull/335)). If the cover stopped before the **Travel startup delay** had passed, the tracked position jumped to the reported one and then started moving towards the target anyway, although the cover was standing still.
+
 ## 4.15.0 (2026-11-05)
 
 ### Features

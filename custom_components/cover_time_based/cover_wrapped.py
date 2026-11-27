@@ -11,6 +11,7 @@ from homeassistant.components.cover import (
 )
 from homeassistant.const import (
     ATTR_SUPPORTED_FEATURES,
+    SERVICE_CLOSE_COVER,
     SERVICE_OPEN_COVER,
     STATE_CLOSED,
     STATE_CLOSING,
@@ -477,7 +478,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             came_back = self._came_back_online(old_val)
             target = self._wrapped_reported_position(trust_closed=not came_back)
             if target is not None:
-                await self._snap_to_position(target)
+                await self._snap_to_position(target, stopped_from=old_val)
             elif came_back:
                 # Deliberately not async_stop_cover: a travel still running
                 # when the entity dropped out keeps running here. Its motor
@@ -502,7 +503,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
         ):
             target = self._wrapped_reported_position(trust_closed=False)
             if target is not None:
-                await self._snap_to_position(target)
+                await self._snap_to_position(target, stopped_from=old_val)
             else:
                 self._log(
                     "_handle_external_state_change :: wrapped cover stopped"
@@ -626,22 +627,50 @@ class WrappedCoverTimeBased(CoverTimeBased):
             await self._snap_to_position(target)
         await self._maybe_snap_to_reported_tilt(state=new_state)
 
-    async def _snap_to_position(self, target: int) -> None:
+    async def _snap_to_position(
+        self, target: int, *, stopped_from: str | None = None
+    ) -> None:
         """Snap our tracker to a known position.
 
         Always goes through set_known_position so that a still-running
         auto-updater is stopped even when our calculated position happens to
         match the target at this instant; the caller skips the call only when
         the position matches and no updater is running.
+
+        ``stopped_from`` is the state the device left for the one it settled
+        in. See _report_ends_parked_start for when that ends a move of ours
+        still waiting out its startup delay.
         """
         self._log("_snap_to_position :: snapping to %d", target)
-        if self.travel_calc.is_traveling():
+        ends_parked_start = self._report_ends_parked_start(stopped_from)
+        if ends_parked_start:
+            self._log("_snap_to_position :: device stopped during startup delay")
+            self._cancel_startup_delay_task()
+        if self.travel_calc.is_traveling() or ends_parked_start:
             # The device stopped the motor itself.
             self._note_travel_motor_stop()
         # The device reporting where it ended up, not a command — it must not
         # cancel a reversal waiting out its settle gap.
         await self.set_known_position(position=target, supersede=False)
         self._last_command = None
+
+    def _report_ends_parked_start(self, stopped_from: str | None) -> bool:
+        """Whether a settle report ends the move whose start is still parked.
+
+        Left armed, the start would set the tracker travelling after the snap
+        while the device stands still. Only a stop that follows movement the
+        way that move goes ends it. One following movement the other way is
+        the late end of the move before a reversal; one following a stopped
+        state is a position-only cover starting to move. Either way our start
+        has yet to run, and its auto-stop is the only stop the device gets.
+        """
+        task = self._startup_delay_task
+        if task is None or task.done() or stopped_from not in _MOVING_STATES:
+            return False
+        reported_open = (stopped_from == STATE_OPENING) != self._invert
+        return self._last_command == (
+            SERVICE_OPEN_COVER if reported_open else SERVICE_CLOSE_COVER
+        )
 
     def _is_stale_reappearance(self, old_val, new_val) -> bool:
         """A command-echo cover coming back online is not issuing a command.

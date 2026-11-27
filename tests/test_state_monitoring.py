@@ -9,6 +9,7 @@ External state changes only start tracking movement — they never auto-stop,
 since we can't reliably know when the motor stopped from switch state alone.
 """
 
+import asyncio
 import contextlib
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -2640,3 +2641,112 @@ class TestUnknownAfterMoveIsStop:
 
         assert not cover.travel_calc.is_traveling()
         assert not cover.tilt_calc.is_traveling()
+
+
+class TestReportedStopDuringStartupDelay:
+    """The device reports it has stopped while our own move is still waiting
+    out travel_startup_delay: the snap must not be followed by the parked
+    start setting the tracker travelling again."""
+
+    STARTUP_DELAY = 0.3
+
+    @contextlib.contextmanager
+    def _no_ha(self, cover):
+        with (
+            patch.object(cover, "async_write_ha_state"),
+            patch.object(cover, "async_schedule_update_ha_state"),
+            patch(
+                "custom_components.cover_time_based.cover_base.async_track_time_interval",
+                return_value=MagicMock(),
+            ),
+        ):
+            yield
+
+    def _cover(self, make_cover, profile, **kwargs):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            reporting_profile=profile,
+            force_time_based_position=True,
+            travel_startup_delay=self.STARTUP_DELAY,
+            **kwargs,
+        )
+        cover.travel_calc.set_position(50)
+        _set_wrapped_state(cover, "open", current_position=50)
+        return cover
+
+    @staticmethod
+    async def _open_to_80(cover):
+        await cover.async_set_cover_position(position=80)
+        assert cover._startup_delay_task is not None
+        assert not cover._startup_delay_task.done()
+
+    @pytest.mark.parametrize(
+        "profile,invert,moving_state,stopped_state,reported",
+        [
+            ("unknown_is_stop", False, "opening", "unknown", 30),
+            ("reliable", False, "opening", "open", 30),
+            ("reliable", True, "closing", "open", 70),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_stop_after_moving_our_way_drops_the_parked_start(
+        self, make_cover, profile, invert, moving_state, stopped_state, reported
+    ):
+        cover = self._cover(make_cover, profile, invert=invert)
+        with self._no_ha(cover):
+            await self._open_to_80(cover)
+            _set_wrapped_state(cover, stopped_state, current_position=reported)
+            await _dispatch_late(cover, moving_state, stopped_state)
+            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+
+        assert cover.travel_calc.current_position() == 30
+        assert not cover.travel_calc.is_traveling()
+        assert cover._startup_delay_task is None
+        # The device stopped the motor it was driving open, so a close right
+        # after must wait out the reversal settle.
+        assert cover._travel_motor_stop is not None
+        assert cover._travel_motor_stop[1] == SERVICE_OPEN_COVER
+
+    @pytest.mark.asyncio
+    async def test_stop_after_moving_the_other_way_keeps_the_parked_start(
+        self, make_cover
+    ):
+        """A stop following a closing report is the late end of the move
+        before ours; our open has yet to start and still has to be tracked."""
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            await self._open_to_80(cover)
+            _set_wrapped_state(cover, "open", current_position=30)
+            await _dispatch_late(cover, "closing", "open")
+            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+
+        assert cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_stopped_to_stopped_keeps_the_parked_start(self, make_cover):
+        """closed -> open with a position is a position-only cover starting to
+        move, not stopping; the start's auto-stop is the only stop it gets."""
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            await self._open_to_80(cover)
+            _set_wrapped_state(cover, "open", current_position=51)
+            await _dispatch_late(cover, "closed", "open")
+            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+
+        assert cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_attribute_only_report_keeps_the_parked_start(self, make_cover):
+        """A position-only cover's attribute report inside the startup window
+        says nothing about a stop; the start's auto-stop must survive."""
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            await self._open_to_80(cover)
+            cover._last_self_command_time = None
+            _set_wrapped_state(cover, "open", current_position=51)
+            await cover._handle_external_attribute_change(
+                _make_attribute_event("cover.inner", "open", 51)
+            )
+            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+
+        assert cover.travel_calc.is_traveling()
