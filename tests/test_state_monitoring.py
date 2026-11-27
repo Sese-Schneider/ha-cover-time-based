@@ -12,11 +12,19 @@ since we can't reliably know when the motor stopped from switch state alone.
 import asyncio
 import contextlib
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.components.cover import ATTR_CURRENT_POSITION
-from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
+from homeassistant.components.cover import (
+    ATTR_CURRENT_POSITION,
+    ATTR_CURRENT_TILT_POSITION,
+    CoverEntityFeature,
+)
+from homeassistant.const import (
+    ATTR_SUPPORTED_FEATURES,
+    SERVICE_CLOSE_COVER,
+    SERVICE_OPEN_COVER,
+)
 
 from custom_components.cover_time_based.cover import (
     CONTROL_MODE_PULSE,
@@ -1161,7 +1169,7 @@ class TestToggleE2EThroughStateListener:
                 _make_state_event("switch.open", "on", "off")
             )
 
-        handler.assert_awaited_once_with("switch.open", "on", "off")
+        handler.assert_awaited_once_with("switch.open", "on", "off", new_state=ANY)
 
     @pytest.mark.asyncio
     async def test_triggered_externally_during_handler(self, make_cover):
@@ -1169,7 +1177,7 @@ class TestToggleE2EThroughStateListener:
         cover = make_cover(control_mode=CONTROL_MODE_TOGGLE)
         captured_flag = None
 
-        async def capture_flag(*_args):
+        async def capture_flag(*_args, **_kwargs):
             nonlocal captured_flag
             captured_flag = cover._triggered_externally
 
@@ -1331,7 +1339,7 @@ class TestStartupReappearanceNotTreatedAsPress:
                 _make_state_event("switch.open", "off", "on")
             )
 
-        handler.assert_awaited_once_with("switch.open", "off", "on")
+        handler.assert_awaited_once_with("switch.open", "off", "on", new_state=ANY)
 
     @pytest.mark.asyncio
     async def test_dual_relay_reappearance_no_phantom_reverse(self, make_cover):
@@ -1379,7 +1387,9 @@ class TestStartupReappearanceNotTreatedAsPress:
                 _make_state_event("switch.open", "unavailable", "on")
             )
 
-        handler.assert_awaited_once_with("switch.open", "unavailable", "on")
+        handler.assert_awaited_once_with(
+            "switch.open", "unavailable", "on", new_state=ANY
+        )
 
 
 # ===================================================================
@@ -1827,7 +1837,9 @@ class TestCalibrationSuppressesExternalState:
             )
 
         # Handler should be called (not suppressed by calibration)
-        handler.assert_awaited_once_with("cover.inner", "open", "closing")
+        handler.assert_awaited_once_with(
+            "cover.inner", "open", "closing", new_state=ANY
+        )
 
 
 # ===================================================================
@@ -2465,11 +2477,22 @@ async def _external_change(cover, old_val, new_val):
 
 
 async def _dispatch_late(cover, old_val, new_val):
-    """Dispatch a state event that is neither our own echo nor a bounce."""
+    """Dispatch a state event that is neither our own echo nor a bounce.
+
+    As in Home Assistant, the event carries the attributes of the state the
+    state machine holds (set with _set_wrapped_state).
+    """
     cover._clear_pending_switch("cover.inner")
     cover._last_self_command_time = None
+    stored = cover.hass.states.get("cover.inner")
+    attributes = getattr(stored, "attributes", None)
     await cover._async_switch_state_changed(
-        _make_state_event("cover.inner", old_val, new_val)
+        _make_state_event(
+            "cover.inner",
+            old_val,
+            new_val,
+            new_attributes=attributes if isinstance(attributes, dict) else None,
+        )
     )
 
 
@@ -2641,6 +2664,77 @@ class TestUnknownAfterMoveIsStop:
 
         assert not cover.travel_calc.is_traveling()
         assert not cover.tilt_calc.is_traveling()
+
+
+class TestStopReportReadsItsOwnState:
+    """A stop report is judged by the state it carries. Home Assistant queues
+    a state change made while another one is being handed out, so by the time
+    a listener runs the entity may already hold a newer state."""
+
+    @pytest.mark.parametrize(
+        "profile,stopped_state",
+        [("unknown_is_stop", "unknown"), ("reliable", "open")],
+    )
+    @pytest.mark.asyncio
+    async def test_snaps_to_the_reported_position_not_a_newer_one(
+        self, make_cover, profile, stopped_state
+    ):
+        cover = make_cover(cover_entity_id="cover.inner", reporting_profile=profile)
+        cover.travel_calc.set_position(50)
+        cover.travel_calc.start_travel_up()
+        cover._last_command = SERVICE_OPEN_COVER
+        # The state machine already holds the cover moving again at 75%.
+        _set_wrapped_state(cover, "opening", current_position=75)
+        cover._last_self_command_time = None
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_switch_state_changed(
+                _make_state_event(
+                    "cover.inner",
+                    "opening",
+                    stopped_state,
+                    new_attributes={ATTR_CURRENT_POSITION: 55},
+                )
+            )
+
+        assert cover.travel_calc.current_position() == 55
+        assert not cover.travel_calc.is_traveling()
+
+    @pytest.mark.asyncio
+    async def test_snaps_tilt_to_the_reported_tilt_not_a_newer_one(self, make_cover):
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            tilt_mode="inline",
+            tilt_time_close=5,
+            tilt_time_open=5,
+        )
+        features = (
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.SET_TILT_POSITION
+        )
+        cover.travel_calc.set_position(100)
+        cover.tilt_calc.set_position(60)
+        newer = _set_wrapped_state(cover, "opening", current_position=90)
+        newer.attributes[ATTR_SUPPORTED_FEATURES] = features
+        newer.attributes[ATTR_CURRENT_TILT_POSITION] = 80
+        cover._last_self_command_time = None
+
+        with patch.object(cover, "async_write_ha_state"):
+            await cover._async_switch_state_changed(
+                _make_state_event(
+                    "cover.inner",
+                    "opening",
+                    "open",
+                    new_attributes={
+                        ATTR_SUPPORTED_FEATURES: features,
+                        ATTR_CURRENT_POSITION: 100,
+                        ATTR_CURRENT_TILT_POSITION: 45,
+                    },
+                )
+            )
+
+        assert cover.tilt_calc.current_position() == 45
 
 
 class TestReportedStopDuringStartupDelay:

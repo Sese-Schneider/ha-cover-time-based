@@ -7,7 +7,7 @@ name fallback, _stop_travel_if_traveling with tilt.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.components.cover import (
@@ -856,7 +856,7 @@ class TestSwitchStateChanged:
             await cover._async_switch_state_changed(event)
 
         # Delegates to mode-specific handler (position tracking, not clearing)
-        handler.assert_awaited_once_with("switch.open", "on", "off")
+        handler.assert_awaited_once_with("switch.open", "on", "off", new_state=ANY)
 
     @pytest.mark.asyncio
     async def test_triggered_externally_reset_after_handler(self, make_cover):

@@ -23,7 +23,9 @@ class SwitchModeCover(SwitchCoverTimeBased):
         """
         return False
 
-    async def _handle_external_state_change(self, entity_id, old_val, new_val):
+    async def _handle_external_state_change(
+        self, entity_id, old_val, new_val, *, new_state=None
+    ):
         """Handle external state change in switch (latching) mode.
 
         ON = relay is driving the motor → start tracking.

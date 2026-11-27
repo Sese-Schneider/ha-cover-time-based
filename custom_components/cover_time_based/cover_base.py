@@ -2698,7 +2698,9 @@ class CoverTimeBased(
             # tilt hardware's own stop, so don't echo one back at it.
             await self.async_stop_cover(tilt_axis_reported=True)
 
-    async def _handle_external_state_change(self, entity_id, old_val, new_val):
+    async def _handle_external_state_change(
+        self, entity_id, old_val, new_val, *, new_state=None
+    ):
         """Handle external state change. Override in subclasses for mode-specific behavior."""
 
     async def _handle_external_attribute_change(self, event):

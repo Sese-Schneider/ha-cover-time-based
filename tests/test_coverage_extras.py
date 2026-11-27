@@ -6,7 +6,7 @@ Covers:
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.const import SERVICE_CLOSE_COVER, SERVICE_OPEN_COVER
@@ -1264,7 +1264,7 @@ class TestExternalTiltSwitchStateChange:
         ):
             await cover._async_switch_state_changed(event)
 
-        handler.assert_awaited_once_with("switch.open", "off", "on")
+        handler.assert_awaited_once_with("switch.open", "off", "on", new_state=ANY)
 
     @pytest.mark.asyncio
     async def test_triggered_externally_set_during_handler(self, make_cover):

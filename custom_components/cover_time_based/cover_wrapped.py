@@ -330,7 +330,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
             return False
         return time.monotonic() - self._last_self_command_time < _BOUNCE_GRACE_PERIOD
 
-    async def _handle_external_state_change(self, entity_id, old_val, new_val):
+    async def _handle_external_state_change(
+        self, entity_id, old_val, new_val, *, new_state: State | None = None
+    ):
         """Handle state changes on the wrapped cover entity.
 
         Mirrors the inner cover's state transitions — start, stop, and
@@ -344,6 +346,11 @@ class WrappedCoverTimeBased(CoverTimeBased):
         (native-tilt covers only, via _maybe_snap_to_reported_tilt).
         When self._invert is set, the underlying's opening/closing are
         interpreted as our close/open (swapped).
+
+        ``new_state`` is the event's state. Positions are read from it, not
+        the state machine, which can already hold a newer state: Home
+        Assistant queues a state change made while another is handed out.
+        None (a direct call) reads the state machine.
         """
         # The underlying is a dumb relay whose every report is untrustworthy
         # (issue #248): ignore state, transitions and position alike and track
@@ -478,7 +485,9 @@ class WrappedCoverTimeBased(CoverTimeBased):
             # (100%, when inverted). Trust a position it actually reports; keep
             # the position we tracked before it dropped out otherwise (#160).
             came_back = self._came_back_online(old_val)
-            target = self._wrapped_reported_position(trust_closed=not came_back)
+            target = self._wrapped_reported_position(
+                trust_closed=not came_back, state=new_state
+            )
             if target is not None:
                 await self._snap_to_position(target, stopped_from=old_val)
             elif came_back:
@@ -493,14 +502,16 @@ class WrappedCoverTimeBased(CoverTimeBased):
                 )
             elif old_val in _MOVING_STATES:
                 await self._stop_without_position(old_val, "stopped")
-            await self._maybe_snap_to_reported_tilt()
+            await self._maybe_snap_to_reported_tilt(state=new_state)
         elif (
             new_val == STATE_UNKNOWN
             and old_val in _MOVING_STATES
             and self._reporting.unknown_after_move_is_stop
         ):
             # No tilt snap: _wrapped_features() is None while the entity reads unknown.
-            target = self._wrapped_reported_position(trust_closed=False)
+            target = self._wrapped_reported_position(
+                trust_closed=False, state=new_state
+            )
             if target is not None:
                 await self._snap_to_position(target, stopped_from=old_val)
             else:

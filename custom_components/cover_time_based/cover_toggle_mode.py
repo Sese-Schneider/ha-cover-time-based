@@ -36,7 +36,9 @@ class ToggleModeCover(ToggleBaseCover):
             )
         self._last_tilt_direction = None
 
-    async def _handle_external_state_change(self, entity_id, old_val, new_val):
+    async def _handle_external_state_change(
+        self, entity_id, old_val, new_val, *, new_state=None
+    ):
         """Same-button: a same-direction press while moving stops the motor;
         from idle it starts the movement that way.
 

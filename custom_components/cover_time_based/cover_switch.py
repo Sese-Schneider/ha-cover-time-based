@@ -26,7 +26,9 @@ class SwitchCoverTimeBased(CoverTimeBased):
         """Return True if open and close switch entities are configured."""
         return bool(self._open_switch_entity_id and self._close_switch_entity_id)
 
-    async def _handle_external_state_change(self, entity_id, old_val, new_val):
+    async def _handle_external_state_change(
+        self, entity_id, old_val, new_val, *, new_state=None
+    ):
         """Handle external state change in pulse mode.
 
         In pulse mode, the ON signal is the button press (rising edge).

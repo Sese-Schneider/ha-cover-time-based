@@ -57,7 +57,9 @@ class ToggleOppositeModeCover(ToggleBaseCover):
             )
         self._last_tilt_direction = None
 
-    async def _handle_external_state_change(self, entity_id, old_val, new_val):
+    async def _handle_external_state_change(
+        self, entity_id, old_val, new_val, *, new_state=None
+    ):
         """Opposite-button: an opposite-direction press while moving stops.
 
         A same-direction press while already moving that way is a continuation
