@@ -2787,3 +2787,74 @@ class TestReportedStopDuringStartupDelay:
             await asyncio.sleep(self.STARTUP_DELAY + 0.2)
 
         assert cover.tilt_calc.is_traveling()
+
+    @staticmethod
+    async def _attribute_report(cover, position):
+        cover._last_self_command_time = None
+        _set_wrapped_state(cover, "open", current_position=position)
+        await cover._handle_external_attribute_change(
+            _make_attribute_event("cover.inner", "open", position)
+        )
+        assert cover._startup_delay_task is not None
+        assert not cover._startup_delay_task.done()
+
+    @pytest.mark.parametrize(
+        "profile,stopped_state",
+        [("unknown_is_stop", "unknown"), ("reliable", "open")],
+    )
+    @pytest.mark.asyncio
+    async def test_stop_after_an_attribute_report_drops_the_parked_start(
+        self, make_cover, profile, stopped_state
+    ):
+        """The attribute report keeps the parked start; it must still know
+        which way that start goes, so the stop that follows ends it."""
+        cover = self._cover(make_cover, profile)
+        with self._no_ha(cover):
+            await self._move_to(cover, 80)
+            await self._attribute_report(cover, 51)
+            _set_wrapped_state(cover, stopped_state, current_position=55)
+            await _dispatch_late(cover, "opening", stopped_state)
+            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+
+        assert cover.travel_calc.current_position() == 55
+        assert not cover.travel_calc.is_traveling()
+        assert cover._startup_delay_task is None
+
+    # An attribute report in between must not hide which way the parked open
+    # goes: the close has to be handled exactly as it is without one.
+    _WITH_ATTRIBUTE_REPORT = pytest.mark.parametrize(
+        "attribute_report", [False, True], ids=["plain", "after_attribute_report"]
+    )
+
+    @_WITH_ATTRIBUTE_REPORT
+    @pytest.mark.asyncio
+    async def test_close_asked_for_while_our_open_is_parked_reverses(
+        self, make_cover, attribute_report
+    ):
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            await self._move_to(cover, 80)
+            if attribute_report:
+                await self._attribute_report(cover, 51)
+            await cover.async_close_cover()
+            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+
+        assert _stop_calls(cover)
+        assert cover.travel_calc.is_closing()
+
+    @_WITH_ATTRIBUTE_REPORT
+    @pytest.mark.asyncio
+    async def test_close_reported_while_our_open_is_parked_drops_it(
+        self, make_cover, attribute_report
+    ):
+        """Not our own echo: the cover reports moving the other way."""
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            await self._move_to(cover, 80)
+            if attribute_report:
+                await self._attribute_report(cover, 51)
+            await _dispatch_late(cover, "open", "closing")
+            assert cover._startup_delay_task is None
+            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+
+        assert not cover.travel_calc.is_traveling()
