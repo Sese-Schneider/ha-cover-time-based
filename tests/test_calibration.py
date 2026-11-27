@@ -12,6 +12,12 @@ from custom_components.cover_time_based.cover import (
 )
 from custom_components.cover_time_based.single_button_cycle import Phase
 from tests.helpers import single_button_sleep_patch
+from tests.test_cover_wrapped import (
+    _F_CLOSE,
+    _F_OPEN,
+    _F_SET_TILT,
+    _set_wrapped_features,
+)
 
 
 class TestConfigEntryAccess:
@@ -1581,6 +1587,47 @@ class TestInlineTiltCalibrationMovesPosition:
             await cover.start_calibration(attribute="tilt_time_close", timeout=0.1)
             await asyncio.sleep(0.3)
         assert cover._calibration is None
+        assert cover.travel_calc.current_position() == 50
+
+    @pytest.mark.asyncio
+    async def test_inline_tilt_calibration_timeout_with_times_shifts_position(
+        self, make_cover
+    ):
+        """A timeout measures nothing, so the saved tilt time gives the shift."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_TOGGLE,
+            travel_time_close=20.0,
+            travel_time_open=20.0,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_close", timeout=0.1)
+            await asyncio.sleep(0.3)
+        assert cover._calibration is None
+        assert cover.tilt_calc.current_position() == 0
+        assert cover.travel_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_inline_native_tilt_calibration_leaves_position(self, make_cover):
+        """A wrapped cover that tilts natively owns its own position."""
+        cover = make_cover(
+            cover_entity_id="cover.inner",
+            travel_time_close=20.0,
+            travel_time_open=20.0,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+        )
+        _set_wrapped_features(cover, _F_OPEN | _F_CLOSE | _F_SET_TILT)
+        assert cover._use_native_tilt()
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+        await self._run(cover, "tilt_time_close")
+        assert cover.tilt_calc.current_position() == 0
         assert cover.travel_calc.current_position() == 50
 
     @pytest.mark.asyncio
