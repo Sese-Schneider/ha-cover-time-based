@@ -372,3 +372,112 @@ async def test_wrapped_native_tilt_does_not_shift(clock):
     assert cover.tilt_calc.current_position() == 0
     assert cover.travel_calc.current_position() == 50
     await _cancel_tasks(cover)
+
+
+def _held_startup():
+    """Hold every startup delay until the returned event is set."""
+    release = asyncio.Event()
+
+    async def held(_seconds):
+        await release.wait()
+
+    return release, patch("custom_components.cover_time_based.cover_base.sleep", held)
+
+
+@pytest.mark.parametrize("stop", ["async_stop_cover_tilt", "async_stop_cover"])
+@pytest.mark.asyncio
+async def test_stop_after_slats_arrive_before_auto_stop_shifts(make_cover, clock, stop):
+    cover = _inline(make_cover)
+    _at(cover, 50, 100)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(0)
+        clock.advance(0.3)
+        assert not cover.tilt_calc.is_traveling()
+        await getattr(cover, stop)()
+    assert cover.tilt_calc.current_position() == 0
+    assert cover.travel_calc.current_position() == 40
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_next_slat_move_before_auto_stop_keeps_the_first_turn(make_cover, clock):
+    cover = _inline(make_cover)
+    _at(cover, 50, 100)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(50)
+        clock.advance(0.15)
+        assert not cover.tilt_calc.is_traveling()
+        await cover.set_tilt_position(0)
+        await _to_completion(cover, clock)
+    assert cover.tilt_calc.current_position() == 0
+    assert cover.travel_calc.current_position() == 40
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.parametrize("funnel", ["set_position", "endpoint"])
+@pytest.mark.asyncio
+async def test_travel_request_ignored_in_slat_startup_keeps_the_shift(
+    make_cover, clock, funnel
+):
+    cover = _inline(make_cover, tilt_startup_delay=1.0)
+    _at(cover, 50, 100)
+    release, held = _held_startup()
+    with patch.object(cover, "async_write_ha_state"), held:
+        await cover.set_tilt_position(0)
+        if funnel == "set_position":
+            assert await cover.set_position(20) is False
+        else:
+            await cover._async_move_to_endpoint(target=0)
+        assert not cover.travel_calc.is_traveling()
+        release.set()
+        await _flush()
+        assert cover.tilt_calc.is_traveling()
+        await _to_completion(cover, clock)
+    assert cover.tilt_calc.current_position() == 0
+    assert cover.travel_calc.current_position() == 40
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.parametrize(
+    ("target", "extra"), [(45, {}), (44, {"min_movement_time": 1.0})]
+)
+@pytest.mark.asyncio
+async def test_travel_request_ignored_mid_slat_move_keeps_the_shift(
+    make_cover, clock, target, extra
+):
+    cover = _inline(make_cover, **extra)
+    _at(cover, 50, 100)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(0)
+        await _advance(cover, clock, 0.1)
+        assert cover.tilt_calc.current_position() == 50
+        await cover.set_position(target)
+        assert cover.travel_calc.current_position() == 45
+        assert cover.tilt_calc.is_traveling()
+        await _to_completion(cover, clock)
+    assert cover.tilt_calc.current_position() == 0
+    assert cover.travel_calc.current_position() == 40
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.parametrize("ignored_first", [False, True])
+@pytest.mark.parametrize("target", [80, 20])
+@pytest.mark.asyncio
+async def test_slat_pre_step_and_restore_after_takeover_do_not_shift(
+    make_cover, clock, target, ignored_first
+):
+    cover = _inline(make_cover)
+    _at(cover, 50, 100)
+    with patch.object(cover, "async_write_ha_state"), _no_settle():
+        await cover.set_tilt_position(0)
+        await _advance(cover, clock, 0.1)
+        if ignored_first:
+            await cover.set_position(45)
+            await _advance(cover, clock, 0.02)
+        assert await cover.set_position(target)
+        assert cover.travel_calc.current_position() == (44 if ignored_first else 45)
+        await _to_completion(cover, clock)
+        await _to_completion(cover, clock)
+        await _to_completion(cover, clock)
+    assert cover.travel_calc.current_position() == target
+    await _cancel_tasks(cover)

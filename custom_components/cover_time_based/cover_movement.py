@@ -509,7 +509,7 @@ class MovementMixin(_MixinBase):
         # _release_displaced_tilt_motor.
         was_tilt_motor_move = self._moving_tilt_motor
         await self._abandon_active_lifecycle()
-        self._apply_slat_shift()
+        self._apply_slat_shift(keep_pending=True)
         current = self.travel_calc.current_position()
         target = position
         self._log(
@@ -623,6 +623,7 @@ class MovementMixin(_MixinBase):
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return False
 
+        self._slat_shift_origin = None
         self._last_command = command
 
         # If the cover is already travelling the right way, the motor is
@@ -1095,12 +1096,20 @@ class MovementMixin(_MixinBase):
         """
         if not (self._travel_per_tilt(True) or self._travel_per_tilt(False)):
             return
-        if self._slat_shift_origin is not None and self.tilt_calc.is_traveling():
-            return
+        if self._slat_shift_origin is not None:
+            if self.tilt_calc.is_traveling():
+                return
+            # The last move reached its target but the auto-stop has not run.
+            self._apply_slat_shift()
         self._slat_shift_origin = self.tilt_calc.current_position()
 
-    def _apply_slat_shift(self) -> None:
-        """Move travel by the share of the slat turn made since the origin."""
+    def _apply_slat_shift(self, *, keep_pending: bool = False) -> None:
+        """Move travel by the share of the slat turn made since the origin.
+
+        ``keep_pending`` restarts the origin where the slats are now if the
+        slat move is still running or parked, for a travel request that may yet
+        be ignored; the caller drops it once travel takes over.
+        """
         origin = self._slat_shift_origin
         self._slat_shift_origin = None
         if origin is None or self.travel_calc.is_traveling():
@@ -1109,6 +1118,11 @@ class MovementMixin(_MixinBase):
         tilt = self.tilt_calc.current_position()
         if position is None or tilt is None:
             return
+        parked = self._startup_delay_task is not None and not (
+            self._startup_delay_task.done()
+        )
+        if keep_pending and (self.tilt_calc.is_traveling() or parked):
+            self._slat_shift_origin = tilt
         closing = tilt < origin
         shift = round(abs(tilt - origin) * self._travel_per_tilt(closing))
         if not shift:
