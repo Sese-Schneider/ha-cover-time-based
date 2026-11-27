@@ -105,6 +105,14 @@ test("a wrapped cover has no pair of inputs to hold", async () => {
   expect(actionSelect(card)).toBeNull();
 });
 
+test("switch mode does not offer both inputs: its relays are never on together", async () => {
+  await mount(
+    toggleCfg({ control_mode: "switch", favourite_position: 0, favourite_gesture: "both_inputs" }),
+  );
+  expect(optionValues(gestureSelect(card))).toEqual(["none", "entity"]);
+  expect(gestureSelect(card).value).toBe("none");
+});
+
 test("the gesture fields are captioned fields, not headings of their own", async () => {
   await mount(toggleCfg({ favourite_position: 0, favourite_gesture: "both_inputs" }));
   const headings = [...section(card).querySelectorAll(".field-label")];

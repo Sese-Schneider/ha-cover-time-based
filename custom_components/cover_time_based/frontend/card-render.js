@@ -732,7 +732,9 @@ export function renderTiltMotorSection(card, c) {
 }
 
 // Modes whose open and close inputs are two entities a gesture can read.
-const BOTH_INPUTS_MODES = ["switch", "pulse", "toggle", "toggle_opposite"];
+// Not switch mode: its two entities are the latching direction relays, so both
+// on would energise both motor directions; the backend ignores the gesture there.
+const BOTH_INPUTS_MODES = ["pulse", "toggle", "toggle_opposite"];
 
 export function coverHasTilt(c) {
   return c.control_mode !== "single_button" && (c.tilt_mode || "none") !== "none";

@@ -72,15 +72,25 @@ class FavouriteMixin(_MixinBase):
 
     # -- configuration ----------------------------------------------------
 
+    # Holding both inputs on is only a gesture where the inputs are momentary
+    # contacts. Switch mode overrides this: its two entities are the latching
+    # direction relays themselves, and its interlock must see every transition.
+    _favourite_both_inputs_allowed: bool = True
+
     def _has_favourite(self) -> bool:
-        return (
-            self._favourite_position is not None
-            or self._favourite_tilt_position is not None
+        """Whether there is a favourite this cover can go to right now.
+
+        A stored tilt counts only while the cover has tilt: with tilt turned
+        off, or its times not set yet, a tilt-only favourite is no favourite.
+        """
+        return self._favourite_position is not None or (
+            self._favourite_tilt_position is not None and self._has_tilt_support()
         )
 
     def _favourite_uses_both_inputs(self) -> bool:
         return (
-            self._has_favourite()
+            self._favourite_both_inputs_allowed
+            and self._has_favourite()
             and self._favourite_gesture == FAVOURITE_GESTURE_BOTH_INPUTS
             and bool(getattr(self, "_open_switch_entity_id", None))
             and bool(getattr(self, "_close_switch_entity_id", None))

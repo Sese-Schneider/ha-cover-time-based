@@ -14,6 +14,10 @@ class SwitchModeCover(SwitchCoverTimeBased):
     of the movement. _send_stop turns both direction switches OFF.
     """
 
+    # Both entities on means both motor directions energised: never a gesture
+    # here, always a case for the interlock below.
+    _favourite_both_inputs_allowed = False
+
     def _self_stops_at_endpoints(self) -> bool:
         """Switch mode latches the direction relay ON for the whole travel.
 

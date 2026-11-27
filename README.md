@@ -604,7 +604,9 @@ The favourite can be recalled in three ways:
 - The [`go_to_favourite`](#cover_time_basedgo_to_favourite) action, which always
   moves the cover there.
 - **Both inputs** (`favourite_gesture: both_inputs`): the open and close
-  entities both on for the hold time. Releasing early cancels it.
+  entities both on for the hold time. Releasing early cancels it. Not available
+  in Switch mode, where the two entities are the latching direction relays and
+  are never left on together.
 - **A trigger entity** (`favourite_gesture: entity`): the entity in
   `favourite_trigger_entity_id` holding the state in `favourite_trigger_state`
   for the hold time. Use this for a wrapped cover, or for a relay module that

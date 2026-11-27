@@ -104,6 +104,20 @@ class TestService:
                 blocking=True,
             )
 
+    async def test_a_tilt_only_favourite_without_tilt_is_refused(
+        self, hass, make_cover, mock_clock
+    ):
+        """Tilt was turned off after the favourite was stored."""
+        cover = await make_cover(favourite_tilt_position=40)
+        await cover.set_known_position(position=100)
+        with pytest.raises(HomeAssistantError, match="no favourite"):
+            await hass.services.async_call(
+                DOMAIN,
+                "go_to_favourite",
+                {"entity_id": "cover.test_cover"},
+                blocking=True,
+            )
+
     async def test_drives_the_cover_to_the_favourite(
         self, hass, make_cover, mock_clock
     ):
@@ -190,6 +204,28 @@ class TestBothInputsGesture:
         await _press(hass, OPEN)
         await _advance(hass, mock_clock, 5.0)
 
+        assert cover.current_cover_position != 30
+
+    async def test_switch_mode_keeps_its_interlock_instead_of_the_gesture(
+        self, hass, make_cover, mock_clock
+    ):
+        """Both latching relays on would energise both motor directions."""
+        cover = await make_cover(
+            control_mode="switch",
+            favourite_position=30,
+            favourite_gesture="both_inputs",
+        )
+        await cover.set_known_position(position=100)
+
+        await _press(hass, CLOSE)
+        await _tick(hass, mock_clock, 0.2)
+        await _press(hass, OPEN)
+
+        assert hass.states.get(CLOSE).state == "off", "interlock released it"
+        assert hass.states.get(OPEN).state == "on"
+        assert cover.is_opening
+
+        await _advance(hass, mock_clock, 5.0)
         assert cover.current_cover_position != 30
 
 
