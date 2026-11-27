@@ -649,14 +649,14 @@ class WrappedCoverTimeBased(CoverTimeBased):
         if self.travel_calc.is_traveling() or ends_parked_start:
             # The device stopped the motor itself.
             self._note_travel_motor_stop()
-        # The device reporting where it ended up, not a command — it must not
-        # cancel a reversal waiting out its settle gap.
-        await self.set_known_position(position=target, supersede=False)
         # A start still parked is our command in flight: the echo guard, a
         # direction change and a later stop report all need its direction.
         task = self._startup_delay_task
         if task is None or task.done():
             self._last_command = None
+        # The device reporting where it ended up, not a command — it must not
+        # cancel a reversal waiting out its settle gap.
+        await self.set_known_position(position=target, supersede=False)
 
     def _report_ends_parked_start(self, stopped_from: str | None) -> bool:
         """Whether a settle report ends the move whose start is still parked.

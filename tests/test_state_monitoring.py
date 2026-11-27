@@ -2844,6 +2844,21 @@ class TestReportedStopDuringStartupDelay:
 
     @_WITH_ATTRIBUTE_REPORT
     @pytest.mark.asyncio
+    async def test_position_the_other_way_while_our_open_is_parked_reverses(
+        self, make_cover, attribute_report
+    ):
+        cover = self._cover(make_cover, "reliable")
+        with self._no_ha(cover):
+            await self._move_to(cover, 80)
+            if attribute_report:
+                await self._attribute_report(cover, 51)
+            await cover.async_set_cover_position(position=20)
+            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+
+        assert cover.travel_calc.is_closing()
+
+    @_WITH_ATTRIBUTE_REPORT
+    @pytest.mark.asyncio
     async def test_close_reported_while_our_open_is_parked_drops_it(
         self, make_cover, attribute_report
     ):
