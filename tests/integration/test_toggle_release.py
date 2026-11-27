@@ -23,6 +23,8 @@ from .conftest import DOMAIN
 
 OPEN = "input_boolean.open_switch"
 CLOSE = "input_boolean.close_switch"
+TILT_OPEN = "input_boolean.tilt_open"
+TILT_CLOSE = "input_boolean.tilt_close"
 COVER = "cover.test_cover"
 
 
@@ -206,3 +208,81 @@ async def test_without_a_reported_off_the_relay_is_never_turned_off(
     await hass.async_block_till_done()
 
     assert hass.states.get(CLOSE).state == "on"
+
+
+def _record_edges(hass: HomeAssistant, *entity_ids):
+    """Record every state change of the given relays, in order."""
+    edges = []
+    hass.bus.async_listen(
+        "state_changed",
+        lambda e: (
+            edges.append((e.data["entity_id"], e.data["new_state"].state))
+            if e.data["entity_id"] in entity_ids
+            else None
+        ),
+    )
+    return edges
+
+
+async def test_opposite_stop_inside_the_pulse_releases_the_driving_relay_first(
+    hass, make_cover, mock_clock, pulse_sleep
+):
+    """Both direction contacts must never be closed together."""
+    cover = await make_cover(
+        control_mode="toggle_opposite", release_relay_after_pulse=True
+    )
+    await cover.set_known_position(position=100)
+    edges = _record_edges(hass, OPEN, CLOSE)
+
+    await _call(hass, "close_cover")
+    mock_clock.advance(0.5)
+    await _call(hass, "stop_cover")
+    # Still inside the close pulse: it is released before the open relay taps.
+    assert edges == [(CLOSE, "on"), (CLOSE, "off"), (OPEN, "on")]
+    assert not cover.is_closing
+
+    pulse_sleep.set()
+    await hass.async_block_till_done()
+    assert edges[-1] == (OPEN, "off")
+    assert hass.states.get(CLOSE).state == "off"
+    assert not cover.is_closing and not cover.is_opening
+
+
+async def test_opposite_tilt_stop_inside_the_pulse_releases_the_driving_relay_first(
+    hass, make_cover, mock_clock, pulse_sleep
+):
+    cover = await make_cover(
+        control_mode="toggle_opposite",
+        release_relay_after_pulse=True,
+        tilt_mode="dual_motor",
+        tilt_time_open=5.0,
+        tilt_time_close=5.0,
+        tilt_open_switch=TILT_OPEN,
+        tilt_close_switch=TILT_CLOSE,
+    )
+    await cover.set_known_position(position=0)
+    await cover.set_known_tilt_position(tilt_position=100)
+    edges = _record_edges(hass, TILT_OPEN, TILT_CLOSE)
+
+    await _call(hass, "close_cover_tilt")
+    mock_clock.advance(0.5)
+    await _call(hass, "stop_cover_tilt")
+    assert edges == [(TILT_CLOSE, "on"), (TILT_CLOSE, "off"), (TILT_OPEN, "on")]
+
+    pulse_sleep.set()
+    await hass.async_block_till_done()
+    assert edges[-1] == (TILT_OPEN, "off")
+    assert hass.states.get(TILT_CLOSE).state == "off"
+
+
+async def test_opposite_stop_without_the_option_leaves_the_driving_relay_alone(
+    hass, make_cover, mock_clock, pulse_sleep
+):
+    cover = await make_cover(control_mode="toggle_opposite")
+    await cover.set_known_position(position=100)
+    edges = _record_edges(hass, OPEN, CLOSE)
+
+    await _call(hass, "close_cover")
+    mock_clock.advance(0.5)
+    await _call(hass, "stop_cover")
+    assert edges == [(CLOSE, "on"), (OPEN, "on")]
