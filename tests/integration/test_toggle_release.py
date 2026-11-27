@@ -310,3 +310,30 @@ async def test_a_wall_press_soon_after_a_stop_inside_the_pulse_is_followed(
     await hass.async_block_till_done()
     assert cover.is_closing
     await asyncio.sleep(0.5)
+
+
+async def test_a_wall_press_soon_after_an_opposite_stop_inside_the_pulse_is_followed(
+    hass, make_cover, mock_clock
+):
+    """Releasing the driving relay must drop the echo counted for its release."""
+    cover = await make_cover(
+        control_mode="toggle_opposite", release_relay_after_pulse=True, pulse_time=0.3
+    )
+    await cover.set_known_position(position=100)
+
+    await _call(hass, "close_cover")
+    mock_clock.advance(0.1)
+    await _call(hass, "stop_cover")
+    await asyncio.sleep(0.5)  # the stop pulse's release fires
+    await hass.async_block_till_done()
+    assert hass.states.get(CLOSE).state == "off"
+    assert hass.states.get(OPEN).state == "off"
+    assert not cover.is_closing
+
+    mock_clock.advance(1.0)
+    await hass.services.async_call(
+        "input_boolean", "turn_on", {"entity_id": CLOSE}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert cover.is_closing
+    await asyncio.sleep(0.5)
