@@ -523,3 +523,80 @@ async def test_ignored_request_does_not_round_the_shift_twice(make_cover, clock)
     assert cover.tilt_calc.current_position() == 0
     assert cover.travel_calc.current_position() == 45
     await _cancel_tasks(cover)
+
+
+def _slat_close_calls(control_mode):
+    if control_mode == "toggle":
+        return TOGGLE_SLAT_CLOSE_CALLS
+    return SWITCH_SLAT_CLOSE_CALLS
+
+
+@pytest.mark.parametrize("control_mode", ["switch", "toggle"])
+@pytest.mark.parametrize("start", [6, 0])
+@pytest.mark.parametrize("ignored", [False, True])
+@pytest.mark.asyncio
+async def test_ignored_request_keeps_the_slat_move_stop(
+    make_cover, clock, control_mode, start, ignored
+):
+    cover = _inline(make_cover, control_mode=control_mode, endpoint_runon_time=2.0)
+    _at(cover, start, 100)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(0)
+        await _advance(cover, clock, 0.1)
+        if ignored:
+            # Where the slats have taken the cover so far: a no-op.
+            await cover.set_position(max(0, start - 5))
+            assert not cover.travel_calc.is_traveling()
+        await _to_completion(cover, clock)
+    assert cover.travel_calc.current_position() == 0
+    assert relay_calls(cover) == _slat_close_calls(control_mode)
+    assert cover._delay_task is None or cover._delay_task.done()
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.parametrize("control_mode", ["switch", "toggle"])
+@pytest.mark.parametrize("start", [6, 0])
+@pytest.mark.asyncio
+async def test_endpoint_request_in_slat_startup_keeps_the_slat_move_stop(
+    make_cover, clock, control_mode, start
+):
+    cover = _inline(
+        make_cover,
+        control_mode=control_mode,
+        endpoint_runon_time=2.0,
+        tilt_startup_delay=1.0,
+    )
+    _at(cover, start, 100)
+    release, held = _held_startup()
+    with patch.object(cover, "async_write_ha_state"), held:
+        await cover.set_tilt_position(0)
+        await cover._async_move_to_endpoint(target=0)
+        assert not cover.travel_calc.is_traveling()
+        release.set()
+        await _flush()
+        await _to_completion(cover, clock)
+    assert cover.travel_calc.current_position() == 0
+    assert relay_calls(cover) == _slat_close_calls(control_mode)
+    assert cover._delay_task is None or cover._delay_task.done()
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.parametrize("funnel", ["set_position", "endpoint"])
+@pytest.mark.asyncio
+async def test_travel_taking_over_a_slat_move_gets_the_endpoint_runon(
+    make_cover, clock, funnel
+):
+    cover = _inline(make_cover, endpoint_runon_time=2.0)
+    _at(cover, 50, 100)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(0)
+        await _advance(cover, clock, 0.1)
+        if funnel == "set_position":
+            assert await cover.set_position(0)
+        else:
+            await cover._async_move_to_endpoint(target=0)
+        assert cover.travel_calc.is_traveling()
+        await _to_completion(cover, clock)
+    assert cover.travel_calc.current_position() == 0
+    assert cover._delay_task is not None and not cover._delay_task.done()
+    await _cancel_tasks(cover)

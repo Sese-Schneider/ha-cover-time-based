@@ -90,7 +90,11 @@ class MovementMixin(_MixinBase):
         # Capture before _abandon_active_lifecycle resets it — see
         # _release_displaced_tilt_motor.
         was_tilt_motor_move = self._moving_tilt_motor
+        was_tilt_move = self._moving_tilt
         await self._abandon_active_lifecycle()
+        # Until travel takes over, a slat move this request leaves running
+        # must still stop as a slat move, not as travel at an endpoint.
+        self._moving_tilt = was_tilt_move
 
         closing = target == 0
         command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
@@ -127,6 +131,7 @@ class MovementMixin(_MixinBase):
         # stale. Benign: the cover is fully stopped there and the next funnel
         # call overwrites the flag.
         self._self_initiated_movement = not self._triggered_externally
+        self._moving_tilt = False
 
         self._apply_slat_shift()
         current = self.travel_calc.current_position()
@@ -508,7 +513,10 @@ class MovementMixin(_MixinBase):
         # Capture before _abandon_active_lifecycle resets it — see
         # _release_displaced_tilt_motor.
         was_tilt_motor_move = self._moving_tilt_motor
+        was_tilt_move = self._moving_tilt
         await self._abandon_active_lifecycle()
+        # See _async_move_to_endpoint.
+        self._moving_tilt = was_tilt_move
         # Where a slat move has taken the cover so far. The tracker itself is
         # shifted only once travel takes over, below, so an ignored request
         # leaves the slat move to shift it once when it ends.
@@ -626,6 +634,7 @@ class MovementMixin(_MixinBase):
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return False
 
+        self._moving_tilt = False
         self._apply_slat_shift()
         current = self.travel_calc.current_position()
         assert current is not None
