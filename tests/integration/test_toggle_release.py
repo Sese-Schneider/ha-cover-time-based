@@ -286,3 +286,27 @@ async def test_opposite_stop_without_the_option_leaves_the_driving_relay_alone(
     mock_clock.advance(0.5)
     await _call(hass, "stop_cover")
     assert edges == [(CLOSE, "on"), (OPEN, "on")]
+
+
+async def test_a_wall_press_soon_after_a_stop_inside_the_pulse_is_followed(
+    hass, make_cover, mock_clock
+):
+    """A cancelled release must not leave an echo counted for it."""
+    cover = await make_cover(release_relay_after_pulse=True, pulse_time=0.3)
+    await cover.set_known_position(position=100)
+
+    await _call(hass, "close_cover")
+    mock_clock.advance(0.1)
+    await _call(hass, "stop_cover")
+    await asyncio.sleep(0.5)  # the release fires
+    await hass.async_block_till_done()
+    assert hass.states.get(CLOSE).state == "off"
+    assert not cover.is_closing
+
+    mock_clock.advance(1.0)
+    await hass.services.async_call(
+        "input_boolean", "turn_on", {"entity_id": CLOSE}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert cover.is_closing
+    await asyncio.sleep(0.5)

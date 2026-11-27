@@ -342,6 +342,12 @@ Turn this **on** for such relays: the integration turns the relay off again
 once the [pulse time](#pulse-time) has passed, as Pulse mode does. The pulse
 time field appears in the card while the option is on.
 
+If the relay has an auto-off timer of its own (Shelly's auto-off, Tasmota's
+`PulseTime`, the "inching" setting of many Zigbee relays), set that first and
+leave this option off. The relay then releases itself even if Home Assistant
+stops or the connection drops right after a command, which this option cannot
+do: its release is a command Home Assistant has to send.
+
 It is **off** by default, and it is hidden while
 [Relay reports its own OFF](#relay-reports-its-own-off) is off, because on that
 hardware a "turn off" is another activation pulse.
