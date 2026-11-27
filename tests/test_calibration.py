@@ -1501,3 +1501,99 @@ class TestSingleButtonRefusesSteppedCalibration:
             await cover.start_calibration(attribute="travel_startup_delay", timeout=60)
             assert cover._calibration is not None
             await cover.stop_calibration(cancel=True)
+
+
+class TestInlineTiltCalibrationMovesPosition:
+    """An inline slat test also moves the cover, so the position shifts (#233)."""
+
+    async def _run(self, cover, attribute, elapsed=2.0, cancel=False):
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute=attribute, timeout=120.0)
+            cover._calibration.started_at -= elapsed
+            return await cover.stop_calibration(cancel=cancel)
+
+    @pytest.mark.asyncio
+    async def test_inline_tilt_time_calibration_shifts_position(self, make_cover):
+        cover = make_cover(
+            travel_time_close=20.0,
+            travel_time_open=20.0,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+        result = await self._run(cover, "tilt_time_close")
+        assert result["value"] == pytest.approx(2.0)
+        assert cover.tilt_calc.current_position() == 0
+        assert cover.travel_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_inline_first_tilt_calibration_shifts_position(self, make_cover):
+        cover = make_cover(
+            travel_time_close=20.0, travel_time_open=20.0, tilt_mode="inline"
+        )
+        cover.travel_calc.set_position(50)
+        await self._run(cover, "tilt_time_close")
+        assert cover.travel_calc.current_position() == 40
+
+    @pytest.mark.asyncio
+    async def test_inline_tilt_time_open_calibration_shifts_up(self, make_cover):
+        cover = make_cover(
+            travel_time_close=20.0,
+            travel_time_open=20.0,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(0)
+        await self._run(cover, "tilt_time_open")
+        assert cover.tilt_calc.current_position() == 100
+        assert cover.travel_calc.current_position() == 60
+
+    @pytest.mark.asyncio
+    async def test_inline_tilt_calibration_cancel_leaves_position(self, make_cover):
+        cover = make_cover(
+            travel_time_close=20.0,
+            travel_time_open=20.0,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="inline",
+        )
+        cover.travel_calc.set_position(50)
+        await self._run(cover, "tilt_time_close", cancel=True)
+        assert cover.travel_calc.current_position() == 50
+
+    @pytest.mark.asyncio
+    async def test_inline_tilt_calibration_timeout_without_times_leaves_position(
+        self, make_cover
+    ):
+        """A timeout measures nothing, and with no tilt time there is no shift."""
+        cover = make_cover(
+            control_mode=CONTROL_MODE_TOGGLE,
+            travel_time_close=20.0,
+            travel_time_open=20.0,
+            tilt_mode="inline",
+        )
+        cover.travel_calc.set_position(50)
+        with patch.object(cover, "async_write_ha_state"):
+            await cover.start_calibration(attribute="tilt_time_close", timeout=0.1)
+            await asyncio.sleep(0.3)
+        assert cover._calibration is None
+        assert cover.travel_calc.current_position() == 50
+
+    @pytest.mark.asyncio
+    async def test_sequential_tilt_calibration_leaves_position(self, make_cover):
+        cover = make_cover(
+            travel_time_close=20.0,
+            travel_time_open=20.0,
+            tilt_time_close=2.0,
+            tilt_time_open=2.0,
+            tilt_mode="sequential_close",
+        )
+        cover.travel_calc.set_position(50)
+        cover.tilt_calc.set_position(100)
+        await self._run(cover, "tilt_time_close")
+        assert cover.tilt_calc.current_position() == 0
+        assert cover.travel_calc.current_position() == 50
