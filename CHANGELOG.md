@@ -12,6 +12,11 @@
 - **A wrapped cover that reports a stop is now tracked at the position it reported in that stop** ([#335](https://github.com/Sese-Schneider/ha-cover-time-based/pull/335)), not at a newer reading that arrived straight after it.
 - **A wrapped cover with a Travel startup delay no longer ignores a change of direction just after it reports its position** ([#335](https://github.com/Sese-Schneider/ha-cover-time-based/pull/335)). If the cover sent an updated position while it was still waiting out the **Travel startup delay**, a close after an open (or an open after a close), or a new position the other way, was ignored until the delay had passed. So was the cover reporting that it had started moving the other way. The tracked position then ran on towards the first target.
 
+### Fixes
+
+- **In the "Tilts inline with travel" mode, changing only the slats now also moves the cover's position** ([#233](https://github.com/Sese-Schneider/ha-cover-time-based/issues/233)), as `travel_moves_with_tilt` did before 4.0. One motor turns the slats and moves the cover, so the position moves by how far the slats turned times the slat time divided by the travel time. It moves once, when the slats stop, so a slat change stopped partway moves it only part of the way. Opening the slats on a fully closed cover raises it slightly. The slat-timing calibration test now accounts for the cover moving too.
+- **A slat move on a fully open or fully closed cover is now stopped properly after a position request that changed nothing** ([#333](https://github.com/Sese-Schneider/ha-cover-time-based/pull/333)). A request to go where the cover already is, or one made while the slats were waiting to start, made the end of the slat move look like the cover reaching its limit: switch mode waited out the Endpoint run-on before turning the relay off, and the Toggle modes sent no stop pulse, so the motor could keep running.
+
 ## 4.15.0 (2026-11-05)
 
 ### Features

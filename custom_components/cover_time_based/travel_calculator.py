@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from enum import Enum
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ class TravelCalculator:
         "_name",
         "_position_confirmed",
         "_travel_to_position",
+        "on_stop",
         "position_closed",
         "position_open",
         "travel_direction",
@@ -64,6 +66,9 @@ class TravelCalculator:
         """
         self._name = name
         self.travel_direction = TravelStatus.STOPPED
+        # Called with the stop position when an explicit stop() halts a moving
+        # tracker; a retarget through start_travel does not call it.
+        self.on_stop: Callable[[int], None] | None = None
         self.travel_time_down = travel_time_down
         self.travel_time_up = travel_time_up
 
@@ -146,14 +151,21 @@ class TravelCalculator:
 
     def stop(self) -> None:
         """Stop traveling."""
+        was_moving = self.travel_direction != TravelStatus.STOPPED
+        stop_position = self._halt()
+        if was_moving and stop_position is not None and self.on_stop is not None:
+            self.on_stop(stop_position)
+
+    def _halt(self) -> int | None:
         stop_position = self.current_position()
         if stop_position is None:
-            return
+            return None
         self._last_known_position = stop_position
         self._travel_to_position = stop_position
         self._position_confirmed = False
         self.travel_direction = TravelStatus.STOPPED
         self._log_state("stop")
+        return stop_position
 
     def start_travel(
         self,
@@ -177,7 +189,7 @@ class TravelCalculator:
         if self._last_known_position is None:
             self.set_position(_travel_to_position)
             return
-        self.stop()
+        self._halt()
         base = time.monotonic() if base_monotonic is None else base_monotonic
         self._last_known_position_timestamp = base + delay
         self._travel_to_position = _travel_to_position

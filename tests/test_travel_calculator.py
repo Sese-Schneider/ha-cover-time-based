@@ -246,3 +246,49 @@ class TestArrivalIsDecidedByTime:
         calc.start_travel(0)
         mock_time.monotonic.return_value = 1000.0 + 60 * 0.337  # 66.3 -> 66
         assert calc.current_position() == 66
+
+
+class TestOnStop:
+    """The optional stop hook fires once, with the stop position, only when an
+    explicit stop() halts a moving tracker."""
+
+    def test_fires_with_stop_position_when_moving(self, mock_time):
+        calc = TravelCalculator(travel_time_down=10, travel_time_up=10)
+        calc.set_position(100)
+        stops = []
+        calc.on_stop = stops.append
+        calc.start_travel(0)
+        mock_time.monotonic.return_value = 1005.0
+        calc.stop()
+        assert stops == [50]
+
+    def test_does_not_fire_when_already_stopped(self, mock_time):
+        calc = TravelCalculator(travel_time_down=10, travel_time_up=10)
+        calc.set_position(100)
+        stops = []
+        calc.on_stop = stops.append
+        calc.start_travel(0)
+        calc.stop()
+        calc.stop()
+        assert stops == [100]
+
+    def test_does_not_fire_on_a_never_moved_tracker(self, mock_time):
+        calc = TravelCalculator(travel_time_down=10, travel_time_up=10)
+        calc.set_position(40)
+        stops = []
+        calc.on_stop = stops.append
+        calc.stop()
+        assert stops == []
+
+    def test_does_not_fire_when_start_travel_retargets(self, mock_time):
+        calc = TravelCalculator(travel_time_down=10, travel_time_up=10)
+        calc.set_position(100)
+        stops = []
+        calc.on_stop = stops.append
+        calc.start_travel(50)
+        mock_time.monotonic.return_value = 1002.0
+        calc.start_travel(0)
+        assert stops == []
+
+    def test_defaults_to_none(self):
+        assert TravelCalculator(travel_time_down=10, travel_time_up=10).on_stop is None

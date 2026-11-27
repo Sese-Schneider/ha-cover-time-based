@@ -508,7 +508,7 @@ class CalibrationMixin(_MixinBase):
 
                 # For successful completion, update the tracked position to
                 # reflect where the cover ended up (at an endpoint).
-                self._set_position_after_calibration(self._calibration)
+                self._set_position_after_calibration(self._calibration, value)
         finally:
             # Always undo the startup-delay zeroing and clear the calibration
             # state, even if the relay stop or result computation above
@@ -534,18 +534,24 @@ class CalibrationMixin(_MixinBase):
             return None
         return 0 if move_command == SERVICE_CLOSE_COVER else 100
 
-    def _set_position_after_calibration(self, calibration):
+    def _set_position_after_calibration(
+        self, calibration, measured: float | None = None
+    ):
         """Update tracked position after successful calibration.
 
         For travel/tilt time and startup delay tests, the cover has
         reached an endpoint. For min_movement_time the cover only nudged
-        slightly so we leave the tracked position unchanged.
+        slightly so we leave the tracked position unchanged. An inline slat
+        test also moves the travel position (see
+        _shift_travel_after_inline_tilt_test).
         """
         endpoint = self._calibration_endpoint(calibration)
         if endpoint is None:
             return
 
         is_tilt = "tilt" in calibration.attribute
+        if is_tilt:
+            self._shift_travel_after_inline_tilt_test(calibration, endpoint, measured)
         if is_tilt and not hasattr(self, "tilt_calc"):
             return
         calc = self.tilt_calc if is_tilt else self.travel_calc
@@ -560,6 +566,38 @@ class CalibrationMixin(_MixinBase):
             # A mode that tracks more than the position (single-button's cycle
             # phase) anchors it at the limit the same way a declared position does.
             self._on_known_position(endpoint)
+
+    def _shift_travel_after_inline_tilt_test(
+        self, calibration, endpoint: int, measured: float | None
+    ) -> None:
+        """Move the travel position by how far an inline slat test moved it.
+
+        Decided from the tilt mode rather than the tilt strategy: on a first
+        calibration no tilt times are set yet, so there is no strategy.
+        """
+        if self._tilt_mode_str != "inline":
+            return
+        if self._use_native_tilt():
+            return
+        current = self.travel_calc.current_position()
+        if current is None:
+            return
+        closing = endpoint == 0
+        if measured is not None and calibration.attribute in (
+            "tilt_time_close",
+            "tilt_time_open",
+        ):
+            slat_time = measured
+        else:
+            slat_time = self._tilting_time_close if closing else self._tilting_time_open
+        travel_time = self._travel_time_close if closing else self._travel_time_open
+        if not slat_time or not travel_time:
+            return
+        delta = round(100 * slat_time / travel_time)
+        target = current - delta if closing else current + delta
+        target = max(0, min(100, target))
+        _LOGGER.debug("calibration: inline slat test moved travel to %d", target)
+        self.travel_calc.set_position(target)
 
     def _calculate_calibration_result(self):
         """Calculate the calibration result based on attribute type."""

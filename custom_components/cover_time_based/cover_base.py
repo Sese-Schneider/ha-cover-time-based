@@ -294,6 +294,9 @@ class CoverTimeBased(
         self._feedback_wait_entity: str | None = None
         self._feedback_wait_future: asyncio.Future | None = None
 
+        # Tilt where an inline slat-only move began; see _arm_slat_shift.
+        self._slat_shift_origin: int | None = None
+
         self.travel_calc = TravelCalculator(
             self._travel_time_close,
             self._travel_time_open,
@@ -305,6 +308,7 @@ class CoverTimeBased(
                 self._tilting_time_open,
                 name="tilt",
             )
+            self.tilt_calc.on_stop = self._on_tilt_stopped
 
     def _log(self, msg, *args):
         """Log a debug message prefixed with the entity ID.
@@ -2174,8 +2178,6 @@ class CoverTimeBased(
         past the angle just declared. Wrapped covers pass ``supersede=False`` to
         snap to a tilt the device just reported, which must neither claim the
         movement nor send anything — see _handle_stop.
-
-        The travel position is untouched, so _on_known_position is not called.
         """
         if not self._has_tilt_support():
             return
@@ -2183,6 +2185,7 @@ class CoverTimeBased(
         self._log("set_known_tilt_position: %d", position)
         if supersede:
             await self._halt_for_known_position()
+        self._slat_shift_origin = None
         self.tilt_calc.set_position(position)
         self.async_write_ha_state()
         await self._async_persist_position()
