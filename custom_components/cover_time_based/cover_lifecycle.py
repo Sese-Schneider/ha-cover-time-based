@@ -580,6 +580,8 @@ class MovementLifecycleMixin(_MixinBase):
             self._log("_handle_stop :: button stops tilt movement")
             self.tilt_calc.stop()
             self.stop_auto_updater()
+        # A slat move stopped inside its startup delay never turned the slats.
+        self._slat_shift_origin = None
 
     def _neutralize_tracked_movement(self, *, supersede: bool = True) -> None:
         """Park the tracker and cancel deferred starts, without touching a relay.

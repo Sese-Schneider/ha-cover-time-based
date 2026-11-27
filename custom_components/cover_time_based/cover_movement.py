@@ -15,7 +15,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .errors import CoverNotConfiguredError
 from .recalibration import RecalibrationPlan
-from .tilt_strategies import SequentialTilt
+from .tilt_strategies import InlineTilt, SequentialTilt
 from .tilt_strategies.planning import (
     calculate_pre_step_delay,
     extract_coupled_tilt,
@@ -128,6 +128,7 @@ class MovementMixin(_MixinBase):
         # call overwrites the flag.
         self._self_initiated_movement = not self._triggered_externally
 
+        self._apply_slat_shift()
         current = self.travel_calc.current_position()
         if current is not None and current == target:
             # Resync: send command + endpoint run-on even though tracker
@@ -399,6 +400,7 @@ class MovementMixin(_MixinBase):
                     await self._send_tilt_open()
         elif not suppress_start_command:
             await self._async_handle_command(command)
+        self._arm_slat_shift()
         self._begin_movement(
             target,
             travel_target,
@@ -507,6 +509,7 @@ class MovementMixin(_MixinBase):
         # _release_displaced_tilt_motor.
         was_tilt_motor_move = self._moving_tilt_motor
         await self._abandon_active_lifecycle()
+        self._apply_slat_shift()
         current = self.travel_calc.current_position()
         target = position
         self._log(
@@ -900,6 +903,7 @@ class MovementMixin(_MixinBase):
                 await self._send_tilt_open()
         else:
             await self._async_handle_command(command)
+        self._arm_slat_shift()
         self._begin_movement(
             target,
             travel_target,
@@ -1070,6 +1074,50 @@ class MovementMixin(_MixinBase):
                 "using the Cover Time Based card."
             )
         return travel_time
+
+    def _travel_per_tilt(self, closing: bool) -> float:
+        """Percent of travel per percent of slat turn, for an inline slat move."""
+        if not isinstance(self._tilt_strategy, InlineTilt):
+            return 0.0
+        if closing:
+            tilt_time, travel_time = self._tilting_time_close, self._travel_time_close
+        else:
+            tilt_time, travel_time = self._tilting_time_open, self._travel_time_open
+        if not tilt_time or not travel_time:
+            return 0.0
+        return tilt_time / travel_time
+
+    def _arm_slat_shift(self) -> None:
+        """Remember where a slat-only move starts, to shift travel when it ends.
+
+        A same-direction retarget keeps the first move's origin, so the shift
+        covers the whole turn.
+        """
+        if not (self._travel_per_tilt(True) or self._travel_per_tilt(False)):
+            return
+        if self._slat_shift_origin is not None and self.tilt_calc.is_traveling():
+            return
+        self._slat_shift_origin = self.tilt_calc.current_position()
+
+    def _apply_slat_shift(self) -> None:
+        """Move travel by the share of the slat turn made since the origin."""
+        origin = self._slat_shift_origin
+        self._slat_shift_origin = None
+        if origin is None or self.travel_calc.is_traveling():
+            return
+        position = self.travel_calc.current_position()
+        tilt = self.tilt_calc.current_position()
+        if position is None or tilt is None:
+            return
+        closing = tilt < origin
+        shift = round(abs(tilt - origin) * self._travel_per_tilt(closing))
+        if not shift:
+            return
+        new_position = position - shift if closing else position + shift
+        self.travel_calc.set_position(max(0, min(100, new_position)))
+
+    def _on_tilt_stopped(self, _stop_position: int) -> None:
+        self._apply_slat_shift()
 
     def _are_entities_configured(self) -> bool:
         """Return True if the required input entities are configured.

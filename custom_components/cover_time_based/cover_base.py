@@ -294,6 +294,9 @@ class CoverTimeBased(
         self._feedback_wait_entity: str | None = None
         self._feedback_wait_future: asyncio.Future | None = None
 
+        # Tilt where an inline slat-only move began; see _arm_slat_shift.
+        self._slat_shift_origin: int | None = None
+
         self.travel_calc = TravelCalculator(
             self._travel_time_close,
             self._travel_time_open,
@@ -305,6 +308,7 @@ class CoverTimeBased(
                 self._tilting_time_open,
                 name="tilt",
             )
+            self.tilt_calc.on_stop = self._on_tilt_stopped
 
     def _log(self, msg, *args):
         """Log a debug message prefixed with the entity ID.
@@ -1144,6 +1148,7 @@ class CoverTimeBased(
             opposite,
         )
         snapshot = self.tilt_calc.snapshot()
+        self._slat_shift_origin = None
         self.tilt_calc.set_position(opposite)
         try:
             await self._async_move_tilt_to_endpoint(
@@ -2183,6 +2188,7 @@ class CoverTimeBased(
         self._log("set_known_tilt_position: %d", position)
         if supersede:
             await self._halt_for_known_position()
+        self._slat_shift_origin = None
         self.tilt_calc.set_position(position)
         self.async_write_ha_state()
         await self._async_persist_position()

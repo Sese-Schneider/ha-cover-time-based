@@ -4,6 +4,10 @@
 
 - **The Toggle modes can turn the relay off again after the pulse** ([#331](https://github.com/Sese-Schneider/ha-cover-time-based/issues/331), [#332](https://github.com/Sese-Schneider/ha-cover-time-based/pull/332)), contributed by [@tegola](https://github.com/tegola). They expect a relay that releases itself and only turn it on, so an ordinary relay stayed on after a command from Home Assistant. With the new **Turn the relay off after the pulse** switch on, the relay is turned off once the pulse time has passed. Off by default.
 
+### Fixes
+
+- **In the "Tilts inline with travel" mode, changing only the slats now also moves the cover's position** ([#233](https://github.com/Sese-Schneider/ha-cover-time-based/issues/233)), as `travel_moves_with_tilt` did before 4.0. One motor turns the slats and moves the cover, so the position moves by how far the slats turned times the slat time divided by the travel time. It moves once, when the slats stop, so a slat change stopped partway moves it only part of the way. Opening the slats on a fully closed cover raises it slightly. The slat-timing calibration test now accounts for the cover moving too.
+
 ## 4.15.0 (2026-11-05)
 
 ### Features

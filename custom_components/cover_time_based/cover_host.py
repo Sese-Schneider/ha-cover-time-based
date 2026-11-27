@@ -57,6 +57,7 @@ class _CoverHost:
         _assumed_start_pending: bool
         _moving_tilt: bool
         _moving_tilt_motor: bool
+        _slat_shift_origin: int | None
         _close_includes_tilt: bool
         _force_endpoint_redrive: bool
         _tilt_restore_target: int | None

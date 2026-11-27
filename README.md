@@ -510,7 +510,7 @@ tilt and travel interact.
 | **Closes then tilts closed** | The slats can only tilt at the fully closed position. Closing first travels the cover down, then drives the motor further to tilt the slats closed; opening tilts the slats back first, then travels up. |
 | **Closes then tilts open** | The mirror image, for covers whose slats tilt _open_ when the motor drives past the closed point. Closing travels down, then drives further to tilt the slats open; opening tilts them closed first, then travels up. |
 | **Separate tilt motor** | A dedicated motor drives the tilt, using its own switches. Tilt is allowed only when the cover is in a safe position that you set. |
-| **Tilts inline with travel** | Tilt and travel share one motor and tilt can happen at any position. Closing tilts the slats closed before the cover starts moving; opening tilts them open first. |
+| **Tilts inline with travel** | Tilt and travel share one motor and tilt can happen at any position. Closing tilts the slats closed before the cover starts moving; opening tilts them open first. Because one motor does both, changing only the slats also moves the cover a little: by the slat change times the slat time divided by the travel time. The position moves once, when the slats stop. |
 
 #### Close cover also closes slats
 
@@ -1051,7 +1051,7 @@ listed here, use the card.
 | `travelling_time_up` | float | _Optional_ | Seconds to open the cover. 0.1–600 s. | unset |
 | `tilting_time_down` | float | _Optional_ | Seconds to tilt the cover fully closed. 0.1–600 s. | None |
 | `tilting_time_up` | float | _Optional_ | Seconds to tilt the cover fully open. 0.1–600 s. | None |
-| `travel_moves_with_tilt` | boolean | _Optional_ | Whether tilt movements also change travel proportionally. | false |
+| `travel_moves_with_tilt` | boolean | _Optional_ | Legacy; `true` selects the **Tilts inline with travel** mode, where changing the slats also moves the cover. | false |
 | `endpoint_runon_time` | float | _Optional_ | Extra relay time at the endpoints (in Single button mode, a settle wait instead). Also accepted under its old name `travel_delay_at_end`. 0–600 s. | 2.0 |
 | `min_movement_time` | float | _Optional_ | Minimum movement duration; blocks shorter movements. 0–600 s. | None |
 | `travel_startup_delay` | float | _Optional_ | Startup compensation for travel movements. 0–600 s. | None |
