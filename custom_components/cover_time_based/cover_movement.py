@@ -1213,3 +1213,10 @@ class MovementMixin(_MixinBase):
             and self._tilt_strategy is not None
             and hasattr(self, "tilt_calc")
         )
+
+    def _use_native_tilt(self, *, features: int | None = None) -> bool:
+        """Return True if tilt is forwarded to a device that sets its own slats.
+
+        Only a wrapped cover can do that; it overrides this.
+        """
+        return False

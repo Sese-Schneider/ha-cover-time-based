@@ -30,8 +30,8 @@ INLINE = {
     "tilt_time_open": 0.2,
 }
 
-# Relay calls a 100 -> 0 slat move makes on main (before this change), driven
-# by _drive below.
+# Relay calls for a 100 -> 0 slat move, driven by _drive below; the position
+# shift must not add any.
 SWITCH_SLAT_CLOSE_CALLS = [
     ("turn_off", "switch.open"),
     ("turn_on", "switch.close"),

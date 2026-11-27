@@ -541,7 +541,9 @@ class CalibrationMixin(_MixinBase):
 
         For travel/tilt time and startup delay tests, the cover has
         reached an endpoint. For min_movement_time the cover only nudged
-        slightly so we leave the tracked position unchanged.
+        slightly so we leave the tracked position unchanged. An inline slat
+        test also moves the travel position (see
+        _shift_travel_after_inline_tilt_test).
         """
         endpoint = self._calibration_endpoint(calibration)
         if endpoint is None:
@@ -575,7 +577,7 @@ class CalibrationMixin(_MixinBase):
         """
         if self._tilt_mode_str != "inline":
             return
-        if getattr(self, "_use_native_tilt", lambda: False)():
+        if self._use_native_tilt():
             return
         current = self.travel_calc.current_position()
         if current is None:

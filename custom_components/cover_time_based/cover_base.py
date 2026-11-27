@@ -1148,7 +1148,6 @@ class CoverTimeBased(
             opposite,
         )
         snapshot = self.tilt_calc.snapshot()
-        self._slat_shift_origin = None
         self.tilt_calc.set_position(opposite)
         try:
             await self._async_move_tilt_to_endpoint(
