@@ -407,7 +407,7 @@ export const TRANSLATIONS = {
     "position_reporting.unknown_is_stop":
       "Wiarygodna, ale zgłasza nieznana po zatrzymaniu w trakcie ruchu",
     "position_reporting.unknown_is_stop_helper":
-      "Jak Wiarygodna, ale gdy roleta przechodzi z otwierania lub zamykania do stanu nieznana, pozycja zatrzymuje się w tym miejscu. Wybierz dla rolet (np. Fibaro), które po zatrzymaniu w trakcie ruchu zgłaszają nieznana zamiast otwarta. Nie używaj dla rolet, które zgłaszają nieznana jeszcze w trakcie ruchu.",
+      "Jak Wiarygodna, ale gdy roleta przechodzi z otwierania lub zamykania do stanu nieznana, pozycja zatrzymuje się w tym miejscu. Wybierz tę opcję dla rolet (np. Fibaro), które po zatrzymaniu w trakcie ruchu zgłaszają nieznana zamiast otwarta. Nie używaj dla rolet, które zgłaszają nieznana jeszcze w trakcie ruchu.",
     "position_reporting.unreliable": "Niewiarygodna pozycja — śledź na podstawie czasu",
     "position_reporting.unreliable_helper":
       "Śledź pozycję wyłącznie na podstawie czasu i ignoruj pozycję zgłaszaną przez roletę. Włącz tę opcję, jeśli roleta zgłasza niewiarygodną pozycję.",
@@ -597,7 +597,7 @@ export const TRANSLATIONS = {
     "position_reporting.unknown_is_stop":
       "Zuverlässig, meldet aber unbekannt beim Stoppen mitten in der Fahrt",
     "position_reporting.unknown_is_stop_helper":
-      "Wie Zuverlässig, aber wenn der Rollladen von öffnet oder schließt zu unbekannt wechselt, bleibt die Position dort stehen. Wähle dies für Rollläden (z. B. Fibaro), die unbekannt statt offen melden, wenn sie mitten in der Fahrt stoppen. Nicht für Rollläden verwenden, die unbekannt melden, während sie sich noch bewegen.",
+      "Wie Zuverlässig, aber wenn der Rollladen während des Öffnens oder Schließens auf unbekannt wechselt, bleibt die Position dort stehen. Wähle dies für Rollläden (z. B. Fibaro), die unbekannt statt offen melden, wenn sie mitten in der Fahrt stoppen. Nicht für Rollläden verwenden, die unbekannt melden, während sie sich noch bewegen.",
     "position_reporting.unreliable": "Position unzuverlässig — über die Zeit verfolgen",
     "position_reporting.unreliable_helper":
       "Die Position ausschließlich über die Zeit verfolgen und die vom eingebundenen Rollladen gemeldete Position ignorieren. Aktiviere dies, wenn der zugrunde liegende Rollladen eine unzuverlässige Position meldet.",
@@ -981,7 +981,7 @@ export const TRANSLATIONS = {
       "Het ingekapselde rolluik rapporteert een betrouwbare positie en bereikt zijn echte eindstanden voor open en gesloten. De standaard — de juiste keuze, tenzij de gevolgde positie afwijkt van waar het rolluik zich werkelijk bevindt.",
     "position_reporting.unknown_is_stop": "Betrouwbaar, maar meldt onbekend bij stoppen halverwege",
     "position_reporting.unknown_is_stop_helper":
-      "Zoals Betrouwbaar, maar wanneer het rolluik van de status openen of sluiten naar onbekend gaat, stopt de positie daar. Kies dit voor rolluiken (bijvoorbeeld Fibaro) die onbekend in plaats van open melden wanneer ze halverwege de beweging stoppen. Gebruik het niet voor rolluiken die onbekend melden terwijl ze nog bewegen.",
+      "Net als Betrouwbaar, maar wanneer het rolluik van de status openen of sluiten naar onbekend gaat, stopt de positie daar. Kies dit voor rolluiken (bijvoorbeeld Fibaro) die onbekend in plaats van open melden wanneer ze halverwege de beweging stoppen. Gebruik het niet voor rolluiken die onbekend melden terwijl ze nog bewegen.",
     "position_reporting.unreliable": "Positie onbetrouwbaar — volgen op tijd",
     "position_reporting.unreliable_helper":
       "Volg de positie uitsluitend op tijd en negeer de positie die het ingekapselde rolluik rapporteert. Schakel dit in als het onderliggende rolluik een onbetrouwbare positie rapporteert.",
@@ -1565,7 +1565,7 @@ export const TRANSLATIONS = {
       "Per a persianes sense realimentació de posició que informen d'obert/tancat quan el motor s'atura a mig recorregut en lloc de fer-ho només als finals de cursa físics. Quan s'informa d'un estat de tancat, el seguiment s'atura a la posició calculada en lloc de saltar a 0%.",
     "position_reporting.command_echo": "L'estat reflecteix l'última ordre",
     "position_reporting.command_echo_helper":
-      "Activa-ho per a persianes (per exemple, algunes persianes Tuya) l'estat obert/tancat/desconegut de les quals és un eco de l'ordre en lloc d'un final de cursa real: no informen cap transició d'obertura o tancament ni cap posició. L'estat es tracta com una ordre d'obrir/tancar/aturar i el seguiment de la posició es fa per temps.",
+      "Activa-ho per a persianes (per exemple, algunes persianes Tuya) l'estat obert/tancat/desconegut de les quals és un eco de l'ordre en lloc d'un final de cursa real: no informen de cap transició d'obertura o tancament ni cap posició. L'estat es tracta com una ordre d'obrir/tancar/aturar i el seguiment de la posició es fa per temps.",
     "position_reporting.ignore_all": "Ignora tots els informes del dispositiu",
     "position_reporting.ignore_all_helper":
       "L'estat i la posició del dispositiu no són fiables. Ignora tot el que informa i fes el seguiment de la posició només pels temps d'obertura/tancament. El Home Assistant esdevé l'única manera de moure la persiana; el maneig mitjançant un interruptor de paret o comandament a distància no es fa el seguiment.",
@@ -1936,7 +1936,7 @@ export const TRANSLATIONS = {
     "position_reporting.unknown_is_stop":
       "Pouzdano, ali prijavljuje nepoznato pri zaustavljanju usred kretanja",
     "position_reporting.unknown_is_stop_helper":
-      "Kao Pouzdano, ali kada roletna pređe iz stanja otvaranja ili zatvaranja u nepoznato, pozicija se tu zaustavlja. Izaberite ovo za roletne (npr. Fibaro) koje prijavljuju nepoznato umesto otvoreno kada se zaustave usred kretanja. Ne koristite ga za roletne koje prijavljuju nepoznato dok se još kreću.",
+      "Kao „Pouzdana povratna informacija o poziciji“, ali kada roletna pređe iz stanja otvaranja ili zatvaranja u nepoznato, pozicija se tu zaustavlja. Izaberite ovo za roletne (npr. Fibaro) koje prijavljuju nepoznato umesto otvoreno kada se zaustave usred kretanja. Ne koristite ga za roletne koje prijavljuju nepoznato dok se još kreću.",
     "position_reporting.unreliable": "Pozicija nepouzdana — prati po vremenu",
     "position_reporting.unreliable_helper":
       "Prati poziciju samo po vremenu i zanemari poziciju koju prijavljuje omotana roletna. Omogućite ovo ako osnovna roletna prijavljuje nepouzdanu poziciju.",
@@ -2310,7 +2310,7 @@ export const TRANSLATIONS = {
     "position_reporting.unknown_is_stop":
       "Zanesljivo, vendar ob ustavitvi sredi poti sporoča neznano",
     "position_reporting.unknown_is_stop_helper":
-      "Kot Zanesljivo, vendar ko senčilo preide iz odpiranja ali zapiranja v neznano, se položaj tam ustavi. Izberite za senčila (npr. Fibaro), ki ob ustavitvi sredi poti sporočajo neznano namesto odprto. Ne uporabljajte za senčila, ki sporočajo neznano, medtem ko se še premikajo.",
+      "Kot »Zanesljiva povratna informacija o položaju«, vendar ko senčilo preide iz odpiranja ali zapiranja v neznano, se položaj tam ustavi. Izberite za senčila (npr. Fibaro), ki ob ustavitvi sredi poti sporočajo neznano namesto odprto. Ne uporabljajte za senčila, ki sporočajo neznano, medtem ko se še premikajo.",
     "position_reporting.unreliable": "Položaj ni zanesljiv — sledi po času",
     "position_reporting.unreliable_helper":
       "Položaju sledi samo po času in prezre položaj, ki ga sporoča ovito senčilo. Vklopite, če osnovno senčilo sporoča nezanesljiv položaj.",
