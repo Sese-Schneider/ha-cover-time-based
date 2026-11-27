@@ -18,12 +18,26 @@ class ToggleOppositeModeCover(ToggleBaseCover):
     Stop pulses the OPPOSITE of the last-used direction relay.
     """
 
+    async def _release_driving_pulse(self, entity_id) -> None:
+        """Turn the driving relay off before the opposite relay stops the motor.
+
+        Only with ``release_relay_after_pulse``: a stop inside the pulse time
+        finds the driving relay still ON, and the stop pulse on the opposite
+        relay would hold both direction contacts closed at once. A motor that
+        rejects simultaneous inputs then misses the stop. Without the option
+        the relay releases itself and is left alone.
+        """
+        if self._release_relay_after_pulse:
+            await self._release_relay(entity_id)
+
     async def _send_stop(self) -> None:
         # Halt by pulsing the relay opposite to the last-used direction; the
         # motor stops on that edge (_pulse_relay marks its own echoes).
         if self._last_command == SERVICE_CLOSE_COVER:
+            await self._release_driving_pulse(self._close_switch_entity_id)
             await self._pulse_relay(self._open_switch_entity_id, stop=True)
         elif self._last_command == SERVICE_OPEN_COVER:
+            await self._release_driving_pulse(self._open_switch_entity_id)
             await self._pulse_relay(self._close_switch_entity_id, stop=True)
         else:
             self._log("_send_stop :: opposite toggle with no last command, skipping")
@@ -31,8 +45,10 @@ class ToggleOppositeModeCover(ToggleBaseCover):
     async def _send_tilt_stop(self) -> None:
         # Pulse the opposite tilt relay to halt a moving tilt motor.
         if self._last_tilt_direction == "close":
+            await self._release_driving_pulse(self._tilt_close_switch_id)
             await self._pulse_relay(self._tilt_open_switch_id, stop=True)
         elif self._last_tilt_direction == "open":
+            await self._release_driving_pulse(self._tilt_open_switch_id)
             await self._pulse_relay(self._tilt_close_switch_id, stop=True)
         else:
             self._log(

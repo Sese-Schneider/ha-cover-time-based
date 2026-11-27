@@ -81,6 +81,9 @@ export const EN = {
   "assumed_state.label": "Assumed state",
   "assumed_state.helper":
     "When on, Home Assistant treats the position as estimated and keeps both open and close controls active. Turn off if you trust the time-based calculation and want the UI to grey out unavailable actions (e.g. close when already closed).",
+  "release_relay_after_pulse.label": "Turn the relay off after the pulse",
+  "release_relay_after_pulse.helper":
+    "For ordinary relays that stay on until they are turned off. Leave off for toggle relays that release themselves. When on, the integration turns the relay off again once the pulse time has passed, as Pulse mode does, so a contact is never left closed after a command from Home Assistant.",
   "relay_reports_off.label": "Relay reports its own OFF",
   "relay_reports_off.helper":
     "Leave on for normal toggle relays, which switch themselves off after the pulse and report it. Turn off for hardware-managed pulse modules (e.g. Aqara T2) that pulse internally but never report when they switch off, leaving the switch entity stuck on. With it off, the integration only ever sends a single ON command per press and never an OFF — so each press is exactly one clean activation, with no doubled commands.",
@@ -266,6 +269,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Estado assumido",
     "assumed_state.helper":
       "Quando ativo, o Home Assistant trata a posição como estimada e mantém ativos os controlos de abrir e fechar. Desative se confiar no cálculo por tempo e quiser que a interface desative as ações indisponíveis (por exemplo, fechar quando já está fechado).",
+    "release_relay_after_pulse.label": "Desligar o relé após o pulso",
+    "release_relay_after_pulse.helper":
+      "Para relés comuns que ficam ligados até serem desligados. Deixe desligado para relés de comutação que se libertam sozinhos. Quando ligado, a integração volta a desligar o relé depois de passar a duração do pulso, como faz o modo Pulso, para que um contacto nunca fique fechado após um comando do Home Assistant.",
     "relay_reports_off.label": "O relé reporta o seu próprio OFF",
     "relay_reports_off.helper":
       "Deixe ativo para relés de alternância normais, que se desligam após o pulso e o reportam. Desative para módulos de pulso geridos por hardware (por exemplo, Aqara T2) que pulsam internamente mas nunca reportam quando se desligam, deixando a entidade de interruptor presa em ligado. Com a opção desativada, a integração envia apenas um único comando LIGAR por toque e nunca DESLIGAR — por isso cada toque é exatamente uma ativação limpa, sem comandos duplicados.",
@@ -450,6 +456,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Stan zakładany",
     "assumed_state.helper":
       "Gdy włączone, Home Assistant traktuje pozycję jako szacowaną i pozostawia aktywne przyciski otwierania i zamykania. Wyłącz, jeśli ufasz obliczeniom czasowym i chcesz, aby interfejs wyszarzał niedostępne akcje (np. zamknięcie, gdy roleta jest już zamknięta).",
+    "release_relay_after_pulse.label": "Wyłącz przekaźnik po impulsie",
+    "release_relay_after_pulse.helper":
+      "Dla zwykłych przekaźników, które pozostają włączone, dopóki nie zostaną wyłączone. Pozostaw wyłączone dla przekaźników przełączających, które zwalniają się same. Gdy włączone, integracja wyłącza przekaźnik po upływie czasu impulsu, tak jak tryb Impuls, aby styk nigdy nie pozostawał zwarty po poleceniu z Home Assistant.",
     "relay_reports_off.label": "Przekaźnik zgłasza własne wyłączenie",
     "relay_reports_off.helper":
       "Pozostaw włączone dla zwykłych przekaźników przełączających, które same się wyłączają po impulsie i to zgłaszają. Wyłącz dla modułów impulsowych zarządzanych sprzętowo (np. Aqara T2), które pulsują wewnętrznie, ale nigdy nie zgłaszają wyłączenia, pozostawiając encję przełącznika zablokowaną w stanie włączonym. Po wyłączeniu integracja wysyła tylko jedno polecenie WŁĄCZ na naciśnięcie i nigdy WYŁĄCZ — dzięki czemu każde naciśnięcie to dokładnie jedna czysta aktywacja, bez podwojonych poleceń.",
@@ -633,6 +642,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Angenommener Zustand",
     "assumed_state.helper":
       "Wenn aktiviert, behandelt Home Assistant die Position als geschätzt und hält die Bedienelemente zum Öffnen und Schließen aktiv. Deaktiviere dies, wenn du der zeitbasierten Berechnung vertraust und möchtest, dass die Oberfläche nicht verfügbare Aktionen ausgraut (z. B. Schließen, wenn bereits geschlossen).",
+    "release_relay_after_pulse.label": "Relais nach dem Impuls ausschalten",
+    "release_relay_after_pulse.helper":
+      "Für gewöhnliche Relais, die eingeschaltet bleiben, bis sie ausgeschaltet werden. Für Toggle-Relais, die sich selbst lösen, ausgeschaltet lassen. Wenn aktiviert, schaltet die Integration das Relais nach Ablauf der Impulsdauer wieder aus, wie im Impulsmodus, damit ein Kontakt nach einem Befehl von Home Assistant nie geschlossen bleibt.",
     "relay_reports_off.label": "Relais meldet sein eigenes AUS",
     "relay_reports_off.helper":
       "Für gewöhnliche Relais im Umschaltbetrieb aktiviert lassen: Sie schalten sich nach dem Impuls selbst ab und melden das auch. Deaktiviere dies für hardwaregesteuerte Impulsmodule (z. B. Aqara T2), die intern pulsen, aber nie melden, wenn sie abschalten, sodass die Schalter-Entität dauerhaft auf „an“ hängen bleibt. Deaktiviert sendet die Integration pro Tastendruck nur ein einziges EIN und nie ein AUS — jeder Tastendruck ist also genau eine saubere Auslösung, ohne doppelte Befehle.",
@@ -821,6 +833,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Stato presunto",
     "assumed_state.helper":
       "Quando è attivo, Home Assistant considera la posizione come stimata e mantiene attivi sia il comando di apertura sia quello di chiusura. Disattivalo se ti fidi del calcolo basato sul tempo e vuoi che l'interfaccia disattivi le azioni non disponibili (ad esempio chiudere quando è già chiusa).",
+    "release_relay_after_pulse.label": "Spegni il relè dopo l'impulso",
+    "release_relay_after_pulse.helper":
+      "Per i relè normali, che restano accesi finché non vengono spenti. Lascia disattivato per i relè a commutazione che si rilasciano da soli. Quando è attivo, l'integrazione spegne di nuovo il relè una volta trascorsa la durata dell'impulso, come fa la modalità Impulso, così un contatto non resta mai chiuso dopo un comando da Home Assistant.",
     "relay_reports_off.label": "Il relè segnala il proprio spegnimento",
     "relay_reports_off.helper":
       "Lascialo attivo per i normali relè a commutazione, che si spengono da soli dopo l'impulso e lo segnalano. Disattivalo per i moduli a impulso gestiti via hardware (ad esempio Aqara T2) che generano l'impulso internamente ma non segnalano mai quando si spengono, lasciando l'entità interruttore bloccata su acceso. Con l'opzione disattivata, l'integrazione invia un solo comando di accensione per ogni pressione e mai uno di spegnimento — così ogni pressione è esattamente un'attivazione pulita, senza comandi duplicati.",
@@ -1004,6 +1019,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Aangenomen status",
     "assumed_state.helper":
       "Wanneer dit aanstaat, behandelt Home Assistant de positie als geschat en houdt het zowel de open- als de sluitknop actief. Schakel dit uit als je de tijdgebaseerde berekening vertrouwt en wilt dat de interface niet-beschikbare acties grijs maakt (bijvoorbeeld sluiten wanneer het rolluik al gesloten is).",
+    "release_relay_after_pulse.label": "Relais uitschakelen na de puls",
+    "release_relay_after_pulse.helper":
+      "Voor gewone relais die aan blijven tot ze worden uitgeschakeld. Laat uit voor toggle-relais die zichzelf loslaten. Als dit aan staat, schakelt de integratie het relais weer uit zodra de pulsduur voorbij is, zoals de modus Puls doet, zodat een contact nooit gesloten blijft na een opdracht van Home Assistant.",
     "relay_reports_off.label": "Relais meldt zijn eigen UIT",
     "relay_reports_off.helper":
       "Laat dit aanstaan voor normale omschakelrelais, die zichzelf na de puls uitschakelen en dat ook melden. Schakel het uit voor hardwarematig aangestuurde pulsmodules (bijvoorbeeld de Aqara T2) die intern pulsen maar nooit melden wanneer ze uitschakelen, waardoor de schakelaarentiteit op aan blijft hangen. Als het uitstaat, stuurt de integratie per druk op de knop slechts één AAN-commando en nooit een UIT — zo is elke druk precies één schone activering, zonder dubbele commando's.",
@@ -1188,6 +1206,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "État supposé",
     "assumed_state.helper":
       "Lorsque cette option est activée, Home Assistant considère la position comme estimée et garde actives les commandes d'ouverture et de fermeture. Désactivez-la si vous faites confiance au calcul temporisé et souhaitez que l'interface grise les actions indisponibles (par exemple fermer alors que le volet est déjà fermé).",
+    "release_relay_after_pulse.label": "Désactiver le relais après l'impulsion",
+    "release_relay_after_pulse.helper":
+      "Pour les relais ordinaires, qui restent activés jusqu'à ce qu'on les désactive. Laissez désactivé pour les relais à bascule qui se relâchent seuls. Une fois activé, l'intégration désactive à nouveau le relais lorsque la durée de l'impulsion est écoulée, comme le fait le mode Impulsion, afin qu'un contact ne reste jamais fermé après une commande de Home Assistant.",
     "relay_reports_off.label": "Le relais rapporte sa propre désactivation",
     "relay_reports_off.helper":
       "Laissez cette option activée pour les relais à bascule ordinaires, qui se désactivent d'eux-mêmes après l'impulsion et le rapportent. Désactivez-la pour les modules à impulsion gérés par le matériel (par exemple l'Aqara T2), qui génèrent l'impulsion en interne mais ne rapportent jamais leur désactivation, laissant l'entité d'interrupteur bloquée à l'état activé. Une fois cette option désactivée, l'intégration n'envoie qu'une seule commande ACTIVER par appui, et jamais de commande DÉSACTIVER — chaque appui correspond ainsi exactement à une activation propre, sans commande dupliquée.",
@@ -1371,6 +1392,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Estado supuesto",
     "assumed_state.helper":
       "Cuando está activado, Home Assistant trata la posición como estimada y mantiene activos los controles de apertura y cierre. Desactívalo si confías en el cálculo por tiempo y quieres que la interfaz atenúe las acciones no disponibles (por ejemplo, cerrar cuando ya está cerrada).",
+    "release_relay_after_pulse.label": "Apagar el relé después del impulso",
+    "release_relay_after_pulse.helper":
+      "Para relés corrientes, que siguen encendidos hasta que se apagan. Déjalo desactivado para relés de conmutación que se liberan solos. Cuando está activado, la integración vuelve a apagar el relé una vez transcurrida la duración del impulso, como hace el modo Pulso, para que un contacto nunca quede cerrado tras una orden de Home Assistant.",
     "relay_reports_off.label": "El relé informa de su propio apagado",
     "relay_reports_off.helper":
       "Déjalo activado para los relés de conmutación normales, que se desconectan solos después del impulso y lo informan. Desactívalo para los módulos de impulso gestionados por hardware (por ejemplo, el Aqara T2), que generan el impulso internamente pero nunca informan cuando se desconectan, y dejan la entidad de interruptor bloqueada en encendido. Con la opción desactivada, la integración solo envía un único comando de ENCENDIDO por pulsación y nunca uno de APAGADO, de modo que cada pulsación es exactamente una activación limpia, sin comandos duplicados.",
@@ -1557,6 +1581,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Estat suposat",
     "assumed_state.helper":
       "Quan està activat, Home Assistant tracta la posició com a estimada i manté actius els controls d'obertura i tancament. Desactiva-ho si confies en el càlcul per temps i vols que la interfície atenuï les accions no disponibles (per exemple, tancar quan ja està tancada).",
+    "release_relay_after_pulse.label": "Apaga el relé després de l'impuls",
+    "release_relay_after_pulse.helper":
+      "Per a relés corrents, que continuen engegats fins que s'apaguen. Deixa-ho desactivat per a relés de commutació que s'alliberen sols. Quan està activat, la integració torna a apagar el relé un cop ha passat la durada de l'impuls, com fa el mode Pols, perquè un contacte no quedi mai tancat després d'una ordre de Home Assistant.",
     "relay_reports_off.label": "El relé informa de la seva pròpia desconnexió",
     "relay_reports_off.helper":
       "Deixa-ho activat per als relés de commutació normals, que es desconnecten sols després de l'impuls i ho notifiquen. Desactiva-ho per als mòduls d'impuls gestionats pel maquinari (per exemple, l'Aqara T2), que generen l'impuls internament però no notifiquen mai que s'han desconnectat, i deixen l'entitat d'interruptor encallada en estat activat. Amb l'opció desactivada, la integració només envia una única ordre d'ACTIVACIÓ per pulsació i mai cap de DESACTIVACIÓ, de manera que cada pulsació és exactament una activació neta, sense ordres duplicades.",
@@ -1741,6 +1768,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Předpokládaný stav",
     "assumed_state.helper":
       "Když je zapnuto, Home Assistant považuje pozici za odhadovanou a ponechává ovládací prvky otevření i zavření aktivní. Vypněte, pokud důvěřujete výpočtu podle času a chcete, aby rozhraní zešedlo nedostupné akce (např. zavřít, když je již zavřeno).",
+    "release_relay_after_pulse.label": "Vypnout relé po impulzu",
+    "release_relay_after_pulse.helper":
+      "Pro běžná relé, která zůstávají zapnutá, dokud je něco nevypne. Nechte vypnuté u přepínacích relé, která se uvolní sama. Když je zapnuto, integrace relé po uplynutí doby impulzu znovu vypne, stejně jako režim Impulz, takže kontakt po příkazu z Home Assistant nikdy nezůstane sepnutý.",
     "relay_reports_off.label": "Relé hlásí své vlastní vypnutí (OFF)",
     "relay_reports_off.helper":
       "Ponechte zapnuté pro běžná přepínací relé, která se po impulzu sama vypnou a nahlásí to. Vypněte pro pulzní moduly řízené hardwarem (např. Aqara T2), které pulzují interně, ale nikdy nenahlásí, když se vypnou, takže entita spínače zůstane zaseknutá v zapnutém stavu. Když je vypnuto, integrace odešle na jeden stisk vždy pouze jeden příkaz ZAPNOUT (ON) a nikdy VYPNOUT (OFF) — takže každý stisk je přesně jedna čistá aktivace bez zdvojených příkazů.",
@@ -1923,6 +1953,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Pretpostavljeno stanje",
     "assumed_state.helper":
       "Kada je uključeno, Home Assistant tretira poziciju kao procenjenu i drži i kontrolu za otvaranje i za zatvaranje aktivnima. Isključite ako verujete proračunu na osnovu vremena i želite da interfejs zasivi nedostupne radnje (npr. zatvaranje kada je već zatvoreno).",
+    "release_relay_after_pulse.label": "Isključi relej posle impulsa",
+    "release_relay_after_pulse.helper":
+      "Za obične releje koji ostaju uključeni dok se ne isključe. Ostavite isključeno za preklopne releje koji se sami otpuštaju. Kada je uključeno, integracija ponovo isključuje relej kada istekne trajanje impulsa, kao što radi režim Impuls, tako da kontakt nikada ne ostane zatvoren posle komande iz Home Assistant-a.",
     "relay_reports_off.label": "Relej prijavljuje sopstveno isključenje",
     "relay_reports_off.helper":
       "Ostavite uključeno za uobičajene naizmenične releje, koji se sami isključe nakon impulsa i to prijave. Isključite za hardverski upravljane impulsne module (npr. Aqara T2) koji impuls generišu interno, ali nikada ne prijave kada se isključe, ostavljajući entitet prekidača zaglavljen u uključenom stanju. Kada je isključeno, integracija po svakom pritisku šalje samo jednu komandu UKLJUČI i nikada ISKLJUČI — pa je svaki pritisak tačno jedna čista aktivacija, bez udvostručenih komandi.",
@@ -2102,6 +2135,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "מצב משוער",
     "assumed_state.helper":
       "כשהאפשרות מופעלת, Home Assistant מתייחס למיקום כמשוער ומשאיר את פקדי הפתיחה והסגירה פעילים. יש לכבות אותה אם אפשר לסמוך על החישוב מבוסס הזמן ורצוי שהממשק יציג באפור פעולות לא זמינות (למשל סגירה כשהתריס כבר סגור).",
+    "release_relay_after_pulse.label": "כיבוי הממסר אחרי הפולס",
+    "release_relay_after_pulse.helper":
+      "לממסרים רגילים שנשארים דולקים עד שמכבים אותם. השאירו כבוי לממסרי מיתוג שמשתחררים בעצמם. כשהאפשרות פעילה, האינטגרציה מכבה שוב את הממסר לאחר שמשך הפולס חלף, כמו במצב פולס, כך שמגע לעולם לא נשאר סגור אחרי פקודה מ-Home Assistant.",
     "relay_reports_off.label": "הממסר מדווח על הכיבוי שלו",
     "relay_reports_off.helper":
       "יש להשאיר מופעל עבור ממסרי החלפת מצב רגילים, שנכבים מעצמם לאחר הפולס ומדווחים על כך. יש לכבות עבור מודולי פולס שמנוהלים בחומרה (למשל Aqara T2), שמפיקים את הפולס באופן פנימי אך לעולם אינם מדווחים כשהם נכבים, כך שישות המתג נשארת תקועה במצב פועל. כשהאפשרות כבויה, השילוב שולח פקודת ON אחת בלבד לכל לחיצה ולעולם לא OFF — כך שכל לחיצה היא הפעלה נקייה אחת בדיוק, ללא פקודות כפולות.",
@@ -2285,6 +2321,9 @@ export const TRANSLATIONS = {
     "assumed_state.label": "Predpostavljeno stanje",
     "assumed_state.helper":
       "Ko je vklopljeno, Home Assistant položaj obravnava kot ocenjen in ohrani aktivna oba gumba, za odpiranje in zapiranje. Izklopite, če zaupate časovnemu izračunu in želite, da uporabniški vmesnik onemogoči dejanja, ki niso na voljo (npr. zapiranje, ko je senčilo že zaprto).",
+    "release_relay_after_pulse.label": "Izklopi rele po impulzu",
+    "release_relay_after_pulse.helper":
+      "Za navadne releje, ki ostanejo vklopljeni, dokler jih ne izklopite. Pustite izklopljeno pri preklopnih relejih, ki se sprostijo sami. Ko je vklopljeno, integracija rele po preteku trajanja impulza znova izklopi, tako kot način Impulz, da kontakt po ukazu iz Home Assistanta nikoli ne ostane sklenjen.",
     "relay_reports_off.label": "Rele sam sporoči izklop (OFF)",
     "relay_reports_off.helper":
       "Pustite vklopljeno za običajne preklopne releje, ki se po impulzu sami izklopijo in to sporočijo. Izklopite za impulzne module s strojnim upravljanjem (npr. Aqara T2), ki impulz ustvarijo interno, vendar nikoli ne sporočijo izklopa, zato entiteta stikala obtiči vklopljena. Ko je izklopljeno, integracija ob vsakem pritisku pošlje samo en ukaz VKLOP (ON) in nikoli IZKLOP (OFF) — tako je vsak pritisk natanko ena čista aktivacija, brez podvojenih ukazov.",

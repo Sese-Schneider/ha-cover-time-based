@@ -157,6 +157,7 @@ detail. A blank cell means the option is not shown for that mode.
 | [Show on the wrapped cover's device page](#show-on-the-wrapped-covers-device-page) | ✓ | | | | | |
 | [Pulse time](#pulse-time) | | | ✓ | | | ✓ |
 | [Relay reports its own OFF](#relay-reports-its-own-off) | | | | ✓ | ✓ | ✓ |
+| [Turn the relay off after the pulse](#turn-the-relay-off-after-the-pulse) | | | | ✓ | ✓ | |
 | [Send stop signal at endpoints](#send-stop-signal-at-endpoints) | | | ✓ | | | |
 | [Don't send Stop when already stopped](#dont-send-stop-when-already-stopped) | ✓ | | ✓ | | | |
 | [Wait for relay confirmation](#wait-for-relay-confirmation-before-tracking) | | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -307,7 +308,8 @@ provide.
 In **Pulse** mode, **Pulse time** is how long the switch is held on before it is
 turned off again; in **Single button** mode it is how long each press holds the
 button. It defaults to **1 second**. The Toggle modes do not use it, since a
-toggle relay releases itself after its own brief pulse.
+toggle relay releases itself after its own brief pulse, unless
+[Turn the relay off after the pulse](#turn-the-relay-off-after-the-pulse) is on.
 
 > [!NOTE]
 > Keep any scripts used in Pulse or Single button mode short. When the pulse
@@ -329,6 +331,26 @@ step is a single clean press, and — because the module's off is never reported
 [Wait for relay confirmation](#wait-for-relay-confirmation-before-tracking) no
 longer stalls a multi-press move: only a lone press can be confirmed, so a move
 that needs several presses starts tracking from the command time instead.
+
+#### Turn the relay off after the pulse
+
+Applies to both Toggle modes. A toggle relay is expected to release itself
+after its own brief pulse, so the integration only turns it on. An ordinary
+relay stays on until something turns it off, and a contact left closed after a
+command from Home Assistant can keep the motor from answering the next press.
+Turn this **on** for such relays: the integration turns the relay off again
+once the [pulse time](#pulse-time) has passed, as Pulse mode does. The pulse
+time field appears in the card while the option is on.
+
+If the relay has an auto-off timer of its own (Shelly's auto-off, Tasmota's
+`PulseTime`, the "inching" setting of many Zigbee relays), set that first and
+leave this option off. The relay then releases itself even if Home Assistant
+stops or the connection drops right after a command, which this option cannot
+do: its release is a command Home Assistant has to send.
+
+It is **off** by default, and it is hidden while
+[Relay reports its own OFF](#relay-reports-its-own-off) is off, because on that
+hardware a "turn off" is another activation pulse.
 
 #### Wait for relay confirmation before tracking
 
