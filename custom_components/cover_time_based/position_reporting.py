@@ -29,8 +29,7 @@ class PositionReportingPolicy:
     trusts_endpoint_states: bool  # trust open/closed as real endpoints
     state_is_command: bool  # the wrapped state IS a command echo, not a reading
     ignores_all_transitions: bool  # ignore state/attribute changes entirely
-    # opening/closing -> unknown means the motor stopped partway (Fibaro, #328)
-    unknown_after_move_is_stop: bool = False
+    unknown_after_move_is_stop: bool  # opening/closing -> unknown is a stop
 
     @property
     def trusts_tilt_attr(self) -> bool:
@@ -45,12 +44,12 @@ class PositionReportingPolicy:
         return not (self.state_is_command or self.ignores_all_transitions)
 
 
-RELIABLE = PositionReportingPolicy(True, True, False, False)
+RELIABLE = PositionReportingPolicy(True, True, False, False, False)
 UNKNOWN_IS_STOP = PositionReportingPolicy(True, True, False, False, True)
-UNRELIABLE = PositionReportingPolicy(False, True, False, False)
-NO_ENDPOINTS = PositionReportingPolicy(True, False, False, False)
-COMMAND_ECHO = PositionReportingPolicy(False, False, True, False)
-IGNORE_ALL = PositionReportingPolicy(False, False, False, True)
+UNRELIABLE = PositionReportingPolicy(False, True, False, False, False)
+NO_ENDPOINTS = PositionReportingPolicy(True, False, False, False, False)
+COMMAND_ECHO = PositionReportingPolicy(False, False, True, False, False)
+IGNORE_ALL = PositionReportingPolicy(False, False, False, True, False)
 
 _BY_PROFILE = {
     POSITION_REPORTING_RELIABLE: RELIABLE,

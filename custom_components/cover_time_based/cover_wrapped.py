@@ -501,6 +501,7 @@ class WrappedCoverTimeBased(CoverTimeBased):
             and old_val in _MOVING_STATES
             and self._reporting.unknown_after_move_is_stop
         ):
+            # No tilt snap: _wrapped_features() is None while the entity reads unknown.
             target = self._wrapped_reported_position(trust_closed=False)
             if target is not None:
                 await self._snap_to_position(target, stopped_from=old_val)
