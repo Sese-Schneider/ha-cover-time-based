@@ -1262,7 +1262,7 @@ class TestWrappedCommandEchoMode:
         snap_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_unknown_is_stop_command(self):
+    async def test_command_echo_unknown_is_stop_command(self):
         cover = _make_wrapped_cover(reports_command_not_endpoint=True)
         with patch.object(cover, "async_stop_cover", new=AsyncMock()) as stop_mock:
             await cover._handle_external_state_change(
@@ -2014,12 +2014,14 @@ class TestRedundantReportDuringStartupDelay:
     """A redundant position report inside the travel_startup_delay window must
     not clear the pending move's bookkeeping.
 
-    Snapping runs set_known_position -> _handle_stop and drops _last_command,
-    which is the only record of the pending move's direction while the tracker
-    is still parked. Without it a reversal issued in the window no longer
-    reads as a direction change: async_close_cover sees the tracker settled at
-    0 with nothing to cancel, skips the re-drive, and the delay fires on the
-    original target — the cover runs on instead of stopping.
+    _last_command is the only record of the pending move's direction while the
+    tracker is still parked. Without it a reversal issued in the window no
+    longer reads as a direction change: async_close_cover sees the tracker
+    settled at 0 with nothing to cancel, skips the re-drive, and the delay
+    fires on the original target — the cover runs on instead of stopping.
+    A report of the position the tracker already has is skipped before any
+    snap; a changed one is covered by TestReportedStopDuringStartupDelay in
+    test_state_monitoring.py.
     """
 
     @pytest.mark.asyncio

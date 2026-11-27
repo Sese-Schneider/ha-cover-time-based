@@ -2646,7 +2646,10 @@ class TestUnknownAfterMoveIsStop:
 class TestReportedStopDuringStartupDelay:
     """The device reports it has stopped while our own move is still waiting
     out travel_startup_delay: the snap must not be followed by the parked
-    start setting the tracker travelling again."""
+    start setting the tracker travelling again. A stop report ends the parked
+    start only when the cover had reported moving the same way; any other stop
+    or position-only report leaves it, because the start's automatic stop is
+    the only stop the cover gets."""
 
     STARTUP_DELAY = 0.3
 
