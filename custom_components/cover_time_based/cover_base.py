@@ -2178,8 +2178,6 @@ class CoverTimeBased(
         past the angle just declared. Wrapped covers pass ``supersede=False`` to
         snap to a tilt the device just reported, which must neither claim the
         movement nor send anything — see _handle_stop.
-
-        The travel position is untouched, so _on_known_position is not called.
         """
         if not self._has_tilt_support():
             return

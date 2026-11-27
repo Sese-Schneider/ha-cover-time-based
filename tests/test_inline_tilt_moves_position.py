@@ -452,7 +452,7 @@ async def test_travel_request_ignored_mid_slat_move_keeps_the_shift(
         await _advance(cover, clock, 0.1)
         assert cover.tilt_calc.current_position() == 50
         await cover.set_position(target)
-        assert cover.travel_calc.current_position() == 45
+        assert cover.travel_calc.current_position() == 50
         assert cover.tilt_calc.is_traveling()
         await _to_completion(cover, clock)
     assert cover.tilt_calc.current_position() == 0
@@ -480,4 +480,46 @@ async def test_slat_pre_step_and_restore_after_takeover_do_not_shift(
         await _to_completion(cover, clock)
         await _to_completion(cover, clock)
     assert cover.travel_calc.current_position() == target
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_repeated_ignored_requests_shift_once_by_the_whole_turn(
+    make_cover, clock
+):
+    cover = _inline(make_cover, min_movement_time=1.0)
+    _at(cover, 50, 100)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(0)
+        while cover.tilt_calc.is_traveling():
+            clock.advance(0.01)
+            # Same direction and too short to run: ignored every time.
+            await cover.set_position(40)
+            assert not cover.travel_calc.is_traveling()
+            assert cover.travel_calc.current_position() == 50
+        await _to_completion(cover, clock)
+    assert cover.tilt_calc.current_position() == 0
+    assert cover.travel_calc.current_position() == 40
+    await _cancel_tasks(cover)
+
+
+@pytest.mark.asyncio
+async def test_ignored_request_does_not_round_the_shift_twice(make_cover, clock):
+    cover = _inline(
+        make_cover,
+        travel_time_close=30.0,
+        travel_time_open=30.0,
+        tilt_time_close=1.5,
+        tilt_time_open=1.5,
+    )
+    _at(cover, 50, 100)
+    with patch.object(cover, "async_write_ha_state"):
+        await cover.set_tilt_position(0)
+        await _advance(cover, clock, 0.75)
+        assert cover.tilt_calc.current_position() == 50
+        await cover.set_position(48)
+        assert cover.tilt_calc.is_traveling()
+        await _to_completion(cover, clock)
+    assert cover.tilt_calc.current_position() == 0
+    assert cover.travel_calc.current_position() == 45
     await _cancel_tasks(cover)

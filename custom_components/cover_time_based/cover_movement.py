@@ -509,8 +509,10 @@ class MovementMixin(_MixinBase):
         # _release_displaced_tilt_motor.
         was_tilt_motor_move = self._moving_tilt_motor
         await self._abandon_active_lifecycle()
-        self._apply_slat_shift(keep_pending=True)
-        current = self.travel_calc.current_position()
+        # Where a slat move has taken the cover so far. The tracker itself is
+        # shifted only once travel takes over, below, so an ignored request
+        # leaves the slat move to shift it once when it ends.
+        current = self._slat_shifted_position()
         target = position
         self._log(
             "set_position :: current: %s, target: %d",
@@ -525,6 +527,7 @@ class MovementMixin(_MixinBase):
             closing = target <= 50
             command = SERVICE_CLOSE_COVER if closing else SERVICE_OPEN_COVER
             current = 100 if closing else 0
+            self._slat_shift_origin = None
             self.travel_calc.set_position(current)
             self._assumed_start_pending = True
         elif target < current:
@@ -623,7 +626,9 @@ class MovementMixin(_MixinBase):
             await self._release_displaced_tilt_motor(was_tilt_motor_move)
             return False
 
-        self._slat_shift_origin = None
+        self._apply_slat_shift()
+        current = self.travel_calc.current_position()
+        assert current is not None
         self._last_command = command
 
         # If the cover is already travelling the right way, the motor is
@@ -1103,32 +1108,32 @@ class MovementMixin(_MixinBase):
             self._apply_slat_shift()
         self._slat_shift_origin = self.tilt_calc.current_position()
 
-    def _apply_slat_shift(self, *, keep_pending: bool = False) -> None:
-        """Move travel by the share of the slat turn made since the origin.
-
-        ``keep_pending`` restarts the origin where the slats are now if the
-        slat move is still running or parked, for a travel request that may yet
-        be ignored; the caller drops it once travel takes over.
-        """
+    def _owed_slat_shift(self) -> int:
+        """Signed travel change for the slat turn made since the origin."""
         origin = self._slat_shift_origin
-        self._slat_shift_origin = None
         if origin is None or self.travel_calc.is_traveling():
-            return
-        position = self.travel_calc.current_position()
+            return 0
         tilt = self.tilt_calc.current_position()
-        if position is None or tilt is None:
-            return
-        parked = self._startup_delay_task is not None and not (
-            self._startup_delay_task.done()
-        )
-        if keep_pending and (self.tilt_calc.is_traveling() or parked):
-            self._slat_shift_origin = tilt
+        if tilt is None:
+            return 0
         closing = tilt < origin
         shift = round(abs(tilt - origin) * self._travel_per_tilt(closing))
-        if not shift:
-            return
-        new_position = position - shift if closing else position + shift
-        self.travel_calc.set_position(max(0, min(100, new_position)))
+        return -shift if closing else shift
+
+    def _slat_shifted_position(self) -> int | None:
+        """Travel position once the owed slat shift is applied."""
+        position = self.travel_calc.current_position()
+        if position is None:
+            return None
+        return max(0, min(100, position + self._owed_slat_shift()))
+
+    def _apply_slat_shift(self) -> None:
+        """Move travel by the share of the slat turn made since the origin."""
+        shift = self._owed_slat_shift()
+        self._slat_shift_origin = None
+        position = self.travel_calc.current_position()
+        if shift and position is not None:
+            self.travel_calc.set_position(max(0, min(100, position + shift)))
 
     def _on_tilt_stopped(self, _stop_position: int) -> None:
         self._apply_slat_shift()
