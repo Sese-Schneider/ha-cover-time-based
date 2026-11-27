@@ -623,10 +623,10 @@ class TestWrappedCoverExternalStateChange:
 
     @pytest.mark.asyncio
     async def test_opening_to_unknown_does_not_stop(self, make_cover):
-        """Stateless covers transition to 'unknown' while still moving.
-
-        opening->unknown must NOT be treated as an external stop, because
-        'unknown' means 'no state feedback', not 'stopped'.
+        """Under Reliable (the default), opening->unknown is not a stop: some
+        covers (Somfy RTS via Overkiz) report 'unknown' while still moving
+        (#60). Covers where it does mean stopped opt in with the
+        unknown_is_stop profile.
         """
         cover = make_cover(cover_entity_id="cover.inner")
         cover.travel_calc.set_position(50)
@@ -2677,8 +2677,22 @@ class TestReportedStopDuringStartupDelay:
     @staticmethod
     async def _move_to(cover, position):
         await cover.async_set_cover_position(position=position)
-        assert cover._startup_delay_task is not None
-        assert not cover._startup_delay_task.done()
+        parked = cover._startup_delay_task
+        assert parked is not None
+        assert not parked.done()
+        return parked
+
+    @staticmethod
+    def _parked_reversal(cover):
+        parked = cover._startup_delay_task
+        assert parked is not None
+        return parked
+
+    @staticmethod
+    async def _run_out(parked):
+        """Wait until the parked start has either run or been cancelled."""
+        with contextlib.suppress(asyncio.CancelledError):
+            await parked
 
     @pytest.mark.parametrize(
         "profile,invert,moving_state,stopped_state,reported",
@@ -2694,11 +2708,12 @@ class TestReportedStopDuringStartupDelay:
     ):
         cover = self._cover(make_cover, profile, invert=invert)
         with self._no_ha(cover):
-            await self._move_to(cover, 80)
+            parked = await self._move_to(cover, 80)
             _set_wrapped_state(cover, stopped_state, current_position=reported)
             await _dispatch_late(cover, moving_state, stopped_state)
-            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+            await self._run_out(parked)
 
+        assert parked.cancelled()
         assert cover.travel_calc.current_position() == 30
         assert not cover.travel_calc.is_traveling()
         assert cover._startup_delay_task is None
@@ -2715,10 +2730,10 @@ class TestReportedStopDuringStartupDelay:
         before ours; our open has yet to start and still has to be tracked."""
         cover = self._cover(make_cover, "reliable")
         with self._no_ha(cover):
-            await self._move_to(cover, 80)
+            parked = await self._move_to(cover, 80)
             _set_wrapped_state(cover, "open", current_position=30)
             await _dispatch_late(cover, "closing", "open")
-            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+            await self._run_out(parked)
 
         assert cover.travel_calc.is_traveling()
 
@@ -2737,10 +2752,10 @@ class TestReportedStopDuringStartupDelay:
         move, not stopping; the start's auto-stop is the only stop it gets."""
         cover = self._cover(make_cover, "reliable")
         with self._no_ha(cover):
-            await self._move_to(cover, target)
+            parked = await self._move_to(cover, target)
             _set_wrapped_state(cover, "open", current_position=reported)
             await _dispatch_late(cover, "closed", "open")
-            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+            await self._run_out(parked)
 
         assert cover.travel_calc.is_traveling()
 
@@ -2753,13 +2768,13 @@ class TestReportedStopDuringStartupDelay:
         says nothing about a stop; the start's auto-stop must survive."""
         cover = self._cover(make_cover, "reliable")
         with self._no_ha(cover):
-            await self._move_to(cover, target)
+            parked = await self._move_to(cover, target)
             cover._last_self_command_time = None
             _set_wrapped_state(cover, "open", current_position=reported)
             await cover._handle_external_attribute_change(
                 _make_attribute_event("cover.inner", "open", reported)
             )
-            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+            await self._run_out(parked)
 
         assert cover.travel_calc.is_traveling()
 
@@ -2780,11 +2795,12 @@ class TestReportedStopDuringStartupDelay:
         with self._no_ha(cover):
             await cover.async_set_cover_tilt_position(tilt_position=80)
             assert cover._moving_tilt_motor
-            assert cover._startup_delay_task is not None
-            assert not cover._startup_delay_task.done()
+            parked = cover._startup_delay_task
+            assert parked is not None
+            assert not parked.done()
             _set_wrapped_state(cover, "open", current_position=50)
             await _dispatch_late(cover, "opening", "open")
-            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+            await self._run_out(parked)
 
         assert cover.tilt_calc.is_traveling()
 
@@ -2810,12 +2826,13 @@ class TestReportedStopDuringStartupDelay:
         which way that start goes, so the stop that follows ends it."""
         cover = self._cover(make_cover, profile)
         with self._no_ha(cover):
-            await self._move_to(cover, 80)
+            parked = await self._move_to(cover, 80)
             await self._attribute_report(cover, 51)
             _set_wrapped_state(cover, stopped_state, current_position=55)
             await _dispatch_late(cover, "opening", stopped_state)
-            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+            await self._run_out(parked)
 
+        assert parked.cancelled()
         assert cover.travel_calc.current_position() == 55
         assert not cover.travel_calc.is_traveling()
         assert cover._startup_delay_task is None
@@ -2837,7 +2854,7 @@ class TestReportedStopDuringStartupDelay:
             if attribute_report:
                 await self._attribute_report(cover, 51)
             await cover.async_close_cover()
-            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+            await self._run_out(self._parked_reversal(cover))
 
         assert _stop_calls(cover)
         assert cover.travel_calc.is_closing()
@@ -2853,7 +2870,7 @@ class TestReportedStopDuringStartupDelay:
             if attribute_report:
                 await self._attribute_report(cover, 51)
             await cover.async_set_cover_position(position=20)
-            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+            await self._run_out(self._parked_reversal(cover))
 
         assert cover.travel_calc.is_closing()
 
@@ -2865,11 +2882,13 @@ class TestReportedStopDuringStartupDelay:
         """Not our own echo: the cover reports moving the other way."""
         cover = self._cover(make_cover, "reliable")
         with self._no_ha(cover):
-            await self._move_to(cover, 80)
+            parked = await self._move_to(cover, 80)
             if attribute_report:
                 await self._attribute_report(cover, 51)
             await _dispatch_late(cover, "open", "closing")
             assert cover._startup_delay_task is None
-            await asyncio.sleep(self.STARTUP_DELAY + 0.2)
+            await self._run_out(parked)
+
+        assert parked.cancelled()
 
         assert not cover.travel_calc.is_traveling()
